@@ -36,11 +36,8 @@ export default async function Home({
         documents in one place, and reach a vetted pro the moment something
         breaks.
       </p>
-      <a href="/login" className="btn-primary mt-8 px-6 py-3 text-base">
-        Get started — claim your home
-      </a>
-      <a href="/pro/login" className="mt-3 text-sm text-hearth-700 hover:underline">
-        Are you a contractor? Sign in to Hearth for Pros →
+      <a href="/get-started" className="btn-primary mt-8 px-6 py-3 text-base">
+        Get started
       </a>
       <p className="mt-6 max-w-md text-xs text-stone-400">
         We&apos;re upfront about data: you decide what, if anything, is ever
