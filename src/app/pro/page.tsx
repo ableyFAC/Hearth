@@ -2,8 +2,10 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { labelFor, iconFor, ISSUE_CATEGORIES, TIMING_OPTIONS } from "@/lib/constants";
+import Link from "next/link";
 import { updateLeadStatusAction } from "./actions";
 import LeadChat from "@/components/LeadChat";
+import LeadTabs, { type LeadTab } from "./LeadTabs";
 
 const SEVERITY_STYLE: Record<string, string> = {
   low: "border-stone-200 bg-stone-50 text-stone-600",
@@ -24,7 +26,14 @@ function money(n: number | string | null) {
   return Number.isFinite(v) ? `$${v.toFixed(0)}` : "—";
 }
 
-export default async function ProDashboard() {
+// Valid ?status= values; anything else falls back to "all".
+const FILTERS = ["new", "accepted", "closed", "lost"] as const;
+
+export default async function ProDashboard({
+  searchParams,
+}: {
+  searchParams: { status?: string };
+}) {
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");
 
@@ -42,25 +51,59 @@ export default async function ProDashboard() {
     .filter((l) => !l.paid && l.status !== "lost")
     .reduce((sum, l) => sum + Number(l.payout_amount ?? 0), 0);
 
+  // Resolve the active filter and the list it shows.
+  const active =
+    searchParams.status && (FILTERS as readonly string[]).includes(searchParams.status)
+      ? searchParams.status
+      : "";
+  const visible = active ? all.filter((l) => l.status === active) : all;
+
+  const tabs: LeadTab[] = [
+    { value: "", label: "All", count: all.length },
+    { value: "new", label: "New", count: newCount },
+    { value: "accepted", label: "Active", count: activeCount },
+    {
+      value: "closed",
+      label: "Won",
+      count: all.filter((l) => l.status === "closed").length,
+    },
+    {
+      value: "lost",
+      label: "Lost",
+      count: all.filter((l) => l.status === "lost").length,
+    },
+  ];
+
   return (
     <div className="space-y-8">
       <section className="grid gap-4 sm:grid-cols-3">
-        <div className="card">
+        <Link
+          href="/pro?status=new"
+          className="card transition hover:border-hearth-400 hover:shadow-md"
+        >
           <p className="text-sm font-medium text-stone-500">New leads</p>
           <p className="mt-1 text-4xl font-bold text-stone-900">{newCount}</p>
-        </div>
-        <div className="card">
+        </Link>
+        <Link
+          href="/pro?status=accepted"
+          className="card transition hover:border-hearth-400 hover:shadow-md"
+        >
           <p className="text-sm font-medium text-stone-500">Active jobs</p>
           <p className="mt-1 text-4xl font-bold text-stone-900">{activeCount}</p>
-        </div>
-        <div className="card">
+        </Link>
+        <Link
+          href="/pro/billing"
+          className="card transition hover:border-hearth-400 hover:shadow-md"
+        >
           <p className="text-sm font-medium text-stone-500">Balance owed</p>
           <p className="mt-1 text-4xl font-bold text-stone-900">{money(owed)}</p>
-        </div>
+        </Link>
       </section>
 
       <section className="space-y-3">
         <h1 className="text-2xl font-semibold text-stone-900">Your leads</h1>
+
+        <LeadTabs tabs={tabs} active={active} />
 
         {all.length === 0 ? (
           <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
@@ -68,9 +111,13 @@ export default async function ProDashboard() {
             categories ({(contractor.categories ?? []).join(", ") || "none set"}),
             it&apos;ll show up here.
           </p>
+        ) : visible.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
+            No {tabs.find((t) => t.value === active)?.label.toLowerCase()} leads.
+          </p>
         ) : (
           <ul className="space-y-3">
-            {all.map((l) => (
+            {visible.map((l) => (
               <li key={l.id} className="card space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium text-stone-900">
