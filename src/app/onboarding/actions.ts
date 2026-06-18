@@ -91,7 +91,9 @@ export async function claimPropertyAction(formData: FormData) {
       system_type,
       install_year,
       expected_lifespan_years: lifespan,
-      notes: "Auto-added from your address — update the year if you know it.",
+      // No per-system note — the "auto-estimated" notice lives at the top of
+      // the Home Profile page instead.
+      notes: null as string | null,
     };
   });
   await supabase.from("home_systems").insert(starterRows);

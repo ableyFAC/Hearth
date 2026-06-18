@@ -12,6 +12,7 @@ import {
   SYSTEM_TYPES,
   ISSUE_CATEGORIES,
   REMODEL_PROJECTS,
+  categoryForSystem,
 } from "@/lib/constants";
 
 // Core systems we nudge every owner to add first — they drive the best predictions.
@@ -148,15 +149,23 @@ export default async function DashboardPage() {
                   </span>
                   <p className="text-sm text-stone-600">{m.title}</p>
                 </div>
-                <span
-                  className={`rounded-full border px-2 py-0.5 text-xs ${
-                    m.urgency === "due"
-                      ? "border-red-200 bg-red-50 text-red-700"
-                      : "border-amber-200 bg-amber-50 text-amber-700"
-                  }`}
-                >
-                  {m.urgency === "due" ? "Plan now" : "Aging"}
-                </span>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span
+                    className={`rounded-full border px-2 py-0.5 text-xs ${
+                      m.urgency === "due"
+                        ? "border-red-200 bg-red-50 text-red-700"
+                        : "border-amber-200 bg-amber-50 text-amber-700"
+                    }`}
+                  >
+                    {m.urgency === "due" ? "Plan now" : "Aging"}
+                  </span>
+                  <Link
+                    href={`/contractors?category=${categoryForSystem(m.systemType)}`}
+                    className="text-xs font-medium text-hearth-700 hover:underline"
+                  >
+                    Find a pro →
+                  </Link>
+                </div>
               </li>
             ))}
           </ul>
@@ -222,9 +231,17 @@ export default async function DashboardPage() {
                     <p className="text-sm text-stone-600">{i.description}</p>
                   )}
                 </div>
-                <span className="text-xs uppercase tracking-wide text-stone-400">
-                  {i.severity}
-                </span>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span className="text-xs uppercase tracking-wide text-stone-400">
+                    {i.severity}
+                  </span>
+                  <Link
+                    href={`/contractors?category=${i.category}`}
+                    className="text-xs font-medium text-hearth-700 hover:underline"
+                  >
+                    Find a pro →
+                  </Link>
+                </div>
               </li>
             ))}
           </ul>

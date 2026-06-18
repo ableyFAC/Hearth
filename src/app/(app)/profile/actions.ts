@@ -67,6 +67,30 @@ export async function deleteSystemAction(formData: FormData) {
   revalidatePath("/dashboard");
 }
 
+export async function updateSystemAction(formData: FormData) {
+  const id = formData.get("id") as string;
+  const supabase = createClient();
+  const num = (k: string) => {
+    const v = formData.get(k);
+    return v ? Number(v) : null;
+  };
+  // RLS guarantees the row belongs to the caller's property.
+  const { error } = await supabase
+    .from("home_systems")
+    .update({
+      material_or_model: (formData.get("material_or_model") as string) || null,
+      install_year: num("install_year"),
+      last_serviced: (formData.get("last_serviced") as string) || null,
+      condition_rating: num("condition_rating"),
+      notes: (formData.get("notes") as string) || null,
+    })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  setFlash("System updated");
+  revalidatePath("/profile");
+  revalidatePath("/dashboard");
+}
+
 export async function updatePropertyAction(formData: FormData) {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");

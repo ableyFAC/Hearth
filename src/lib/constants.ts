@@ -19,6 +19,12 @@ export const SYSTEM_TYPES = [
   { value: "fence", label: "Fence", icon: "🧱" },
 ] as const;
 
+// Marker text the auto-seeded starter inventory used to use as a per-system
+// note. We no longer store it (the notice lives at the top of the profile),
+// but we still filter it out so older auto-added rows display cleanly.
+export const STARTER_SYSTEM_NOTE =
+  "Auto-added from your address — update the year if you know it.";
+
 export const ISSUE_CATEGORIES = [
   { value: "roof", label: "Roof", icon: "🏠" },
   { value: "plumbing", label: "Plumbing", icon: "🚰" },
@@ -77,6 +83,31 @@ export const LEAD_FEES: Record<string, number> = {
 
 export function leadFeeFor(category: string): number {
   return LEAD_FEES[category] ?? LEAD_FEES.other;
+}
+
+// Maps a home system to the contractor category, so a "Find a pro" button on a
+// system jumps straight to the right trade.
+export const SYSTEM_CATEGORY: Record<string, string> = {
+  roof: "roof",
+  hvac: "hvac",
+  water_heater: "plumbing",
+  electrical_panel: "electrical",
+  plumbing: "plumbing",
+  windows: "structural",
+  foundation: "structural",
+  appliance: "other",
+  gutters: "roof",
+  siding: "structural",
+  garage_door: "other",
+  deck: "structural",
+  driveway: "other",
+  sump_pump: "plumbing",
+  sewer_line: "plumbing",
+  fence: "structural",
+};
+
+export function categoryForSystem(systemType: string): string {
+  return SYSTEM_CATEGORY[systemType] ?? "other";
 }
 
 // Lead lifecycle on the contractor side.

@@ -4,6 +4,7 @@ import { getActiveProperty } from "@/lib/property";
 import { ISSUE_CATEGORIES, TIMING_OPTIONS, labelFor, iconFor } from "@/lib/constants";
 import { requestProAction } from "./actions";
 import CategoryFilter from "./CategoryFilter";
+import LeadChat from "@/components/LeadChat";
 
 export default async function ContractorsPage({
   searchParams,
@@ -147,20 +148,23 @@ export default async function ContractorsPage({
           <h2 className="text-lg font-semibold text-stone-900">Your requests</h2>
           <ul className="space-y-2">
             {leads.map((l) => (
-              <li key={l.id} className="card flex items-center justify-between">
-                <div>
-                  <span className="font-medium text-stone-900">
-                    {iconFor(ISSUE_CATEGORIES, l.category)}{" "}
-                    {labelFor(ISSUE_CATEGORIES, l.category)}
+              <li key={l.id} className="card">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-medium text-stone-900">
+                      {iconFor(ISSUE_CATEGORIES, l.category)}{" "}
+                      {labelFor(ISSUE_CATEGORIES, l.category)}
+                    </span>
+                    <p className="text-sm text-stone-500">
+                      {/* @ts-expect-error joined relation */}
+                      {l.contractors?.name ?? "Sourcing a pro"}
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs uppercase tracking-wide text-stone-500">
+                    {l.status}
                   </span>
-                  <p className="text-sm text-stone-500">
-                    {/* @ts-expect-error joined relation */}
-                    {l.contractors?.name ?? "Sourcing a pro"}
-                  </p>
                 </div>
-                <span className="rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs uppercase tracking-wide text-stone-500">
-                  {l.status}
-                </span>
+                <LeadChat leadId={l.id} role="homeowner" />
               </li>
             ))}
           </ul>

@@ -1,16 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
-import { assessSystem } from "@/lib/health";
-import { labelFor, iconFor, SYSTEM_TYPES } from "@/lib/constants";
+import { SYSTEM_TYPES } from "@/lib/constants";
 import SystemForm from "./SystemForm";
-import { deleteSystemAction, quickAddSystemAction } from "./actions";
-
-const STAGE_STYLE: Record<string, string> = {
-  healthy: "bg-green-50 text-green-700 border-green-200",
-  aging: "bg-amber-50 text-amber-700 border-amber-200",
-  due: "bg-red-50 text-red-700 border-red-200",
-  unknown: "bg-stone-50 text-stone-500 border-stone-200",
-};
+import SystemRow from "./SystemRow";
+import { quickAddSystemAction } from "./actions";
 
 export default async function ProfilePage({
   searchParams,
@@ -53,6 +46,11 @@ export default async function ProfilePage({
             Systems inventory
           </h2>
         </div>
+        <p className="text-sm text-stone-500">
+          We auto-filled the systems most homes have and estimated their ages
+          from your build year — tap <span className="font-medium">Edit</span> on
+          any to correct a date.
+        </p>
 
         {quickAddTypes.length > 0 && (
           <div className="space-y-2">
@@ -74,39 +72,9 @@ export default async function ProfilePage({
 
         {systems && systems.length > 0 ? (
           <ul className="space-y-3">
-            {systems.map((s) => {
-              const h = assessSystem(s);
-              return (
-                <li key={s.id} className="card flex items-start justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-stone-900">
-                        {iconFor(SYSTEM_TYPES, s.system_type)}{" "}
-                        {labelFor(SYSTEM_TYPES, s.system_type)}
-                      </span>
-                      <span
-                        className={`rounded-full border px-2 py-0.5 text-xs ${STAGE_STYLE[h.stage]}`}
-                      >
-                        {h.stage}
-                      </span>
-                    </div>
-                    {s.material_or_model && (
-                      <p className="text-sm text-stone-500">{s.material_or_model}</p>
-                    )}
-                    <p className="mt-1 text-sm text-stone-600">{h.message}</p>
-                    {s.notes && (
-                      <p className="mt-1 text-xs text-stone-400">{s.notes}</p>
-                    )}
-                  </div>
-                  <form action={deleteSystemAction}>
-                    <input type="hidden" name="id" value={s.id} />
-                    <button className="text-xs text-stone-400 hover:text-red-600">
-                      Remove
-                    </button>
-                  </form>
-                </li>
-              );
-            })}
+            {systems.map((s) => (
+              <SystemRow key={s.id} system={s} />
+            ))}
           </ul>
         ) : (
           <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">

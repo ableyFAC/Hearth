@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { labelFor, iconFor, ISSUE_CATEGORIES, TIMING_OPTIONS } from "@/lib/constants";
 import { updateLeadStatusAction } from "./actions";
+import LeadChat from "@/components/LeadChat";
 
 const SEVERITY_STYLE: Record<string, string> = {
   low: "border-stone-200 bg-stone-50 text-stone-600",
@@ -139,6 +140,8 @@ export default async function ProDashboard() {
                     <StatusButton id={l.id} status="new" label="Reopen" />
                   )}
                 </div>
+
+                <LeadChat leadId={l.id} role="contractor" />
               </li>
             ))}
           </ul>
