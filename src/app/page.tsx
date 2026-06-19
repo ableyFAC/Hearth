@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { isContractor } from "@/lib/contractor";
+import { getRole } from "@/lib/contractor";
 
 // Root: route signed-in users into the app, everyone else to the marketing-lite
 // landing. Kept server-side so there's no flash of the wrong screen.
@@ -22,7 +22,7 @@ export default async function Home({
   } = await supabase.auth.getUser();
 
   if (user) {
-    redirect((await isContractor()) ? "/pro" : "/dashboard");
+    redirect((await getRole()) === "contractor" ? "/pro" : "/dashboard");
   }
 
   return (
@@ -38,6 +38,9 @@ export default async function Home({
       </p>
       <a href="/get-started" className="btn-primary mt-8 px-6 py-3 text-base">
         Get started
+      </a>
+      <a href="/signin" className="mt-3 text-sm text-hearth-700 hover:underline">
+        Already have an account? Sign in
       </a>
       <p className="mt-6 max-w-md text-xs text-stone-400">
         We&apos;re upfront about data: you decide what, if anything, is ever

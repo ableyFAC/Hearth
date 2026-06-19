@@ -13,7 +13,7 @@ export async function saveCompanyAction(formData: FormData) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/pro/login");
+  if (!user) redirect("/signin");
 
   const categories = formData.getAll("categories").map(String).filter(Boolean);
   const fields = {
@@ -52,7 +52,7 @@ export async function saveCompanyAction(formData: FormData) {
 
 async function assertContractor() {
   const contractor = await getCurrentContractor();
-  if (!contractor) redirect("/pro/login");
+  if (!contractor) redirect("/signin");
   return contractor;
 }
 

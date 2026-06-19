@@ -5,7 +5,8 @@ import type { Database } from "@/lib/database.types";
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
 // Refreshes the auth session on every request and guards app routes.
-// Public routes: "/", "/login", "/auth/*". Everything else requires a session.
+// Public routes: "/", "/get-started", "/signin", the sign-up pages,
+// "/preview", "/auth/*". Everything else requires a session.
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
@@ -39,15 +40,16 @@ export async function updateSession(request: NextRequest) {
   const isPublic =
     path === "/" ||
     path.startsWith("/get-started") ||
-    path.startsWith("/login") ||
-    path.startsWith("/pro/login") ||
+    path.startsWith("/signin") ||
+    path.startsWith("/homeowner-signup") ||
+    path.startsWith("/contractor-signup") ||
     path.startsWith("/preview") ||
     path.startsWith("/auth");
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
-    // Send unauthenticated pros to their own login, everyone else to /login.
-    url.pathname = path.startsWith("/pro") ? "/pro/login" : "/login";
+    // One unified sign-in for everyone; "/" routes by role after login.
+    url.pathname = "/signin";
     return NextResponse.redirect(url);
   }
 

@@ -1,5 +1,6 @@
+import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import { getCurrentContractor } from "@/lib/contractor";
+import { getCurrentContractor, getRole } from "@/lib/contractor";
 import { createClient } from "@/lib/supabase/server";
 import ProNav from "@/components/ProNav";
 
@@ -61,6 +62,11 @@ export default async function ProLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Keep homeowners off the contractor side (and prevent them from accidentally
+  // creating a company at /pro/onboarding). Contractors without a company yet
+  // still pass, so they can finish onboarding.
+  if ((await getRole()) === "homeowner") redirect("/dashboard");
+
   const contractor = await getCurrentContractor();
   const unread = contractor ? await unreadCount(contractor.id) : 0;
 

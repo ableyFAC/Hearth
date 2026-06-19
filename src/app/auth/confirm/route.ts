@@ -19,5 +19,5 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.redirect(new URL("/login?error=link_invalid", request.url));
+  return NextResponse.redirect(new URL("/signin?error=link_invalid", request.url));
 }

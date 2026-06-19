@@ -14,7 +14,7 @@ export async function requestProAction(formData: FormData) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/signin");
 
   const category = formData.get("category") as string;
   const issueId = (formData.get("issue_id") as string) || null;

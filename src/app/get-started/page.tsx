@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { isContractor } from "@/lib/contractor";
+import { getRole } from "@/lib/contractor";
 
-// Role chooser. After "Get started" the user tells us whether they're a
-// homeowner or a contractor, and we route them to the matching sign-in.
-// Already-signed-in users skip straight into their side of the app.
+// Role chooser for NEW users. After "Get started" they pick homeowner or
+// contractor and we send them to the matching sign-up (which tags the account's
+// role). Already-signed-in users skip straight into their side of the app.
 export default async function GetStarted() {
   const supabase = createClient();
   const {
@@ -12,7 +12,7 @@ export default async function GetStarted() {
   } = await supabase.auth.getUser();
 
   if (user) {
-    redirect((await isContractor()) ? "/pro" : "/dashboard");
+    redirect((await getRole()) === "contractor" ? "/pro" : "/dashboard");
   }
 
   return (
@@ -26,7 +26,7 @@ export default async function GetStarted() {
 
       <div className="mt-10 grid w-full grid-cols-1 gap-4 sm:grid-cols-2">
         <a
-          href="/login"
+          href="/homeowner-signup"
           className="flex flex-col items-center justify-center rounded-2xl border border-stone-200 bg-white px-6 py-12 shadow-sm transition hover:border-hearth-400 hover:shadow-md"
         >
           <div className="text-4xl">🏡</div>
@@ -39,7 +39,7 @@ export default async function GetStarted() {
         </a>
 
         <a
-          href="/pro/login"
+          href="/contractor-signup"
           className="flex flex-col items-center justify-center rounded-2xl border border-stone-200 bg-white px-6 py-12 shadow-sm transition hover:border-hearth-400 hover:shadow-md"
         >
           <div className="text-4xl">🛠️</div>
@@ -52,7 +52,13 @@ export default async function GetStarted() {
         </a>
       </div>
 
-      <a href="/" className="mt-8 text-sm text-stone-400 hover:underline">
+      <p className="mt-8 text-sm text-stone-500">
+        Already have an account?{" "}
+        <a href="/signin" className="font-medium text-hearth-700 hover:underline">
+          Sign in
+        </a>
+      </p>
+      <a href="/" className="mt-3 text-sm text-stone-400 hover:underline">
         ← Back
       </a>
     </main>
