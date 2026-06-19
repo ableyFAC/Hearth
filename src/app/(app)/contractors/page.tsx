@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
@@ -46,7 +47,8 @@ export default async function ContractorsPage({
 }: {
   searchParams: { issue?: string; category?: string; requested?: string };
 }) {
-  const property = (await getActiveProperty())!;
+  const property = await getActiveProperty();
+  if (!property) redirect("/onboarding");
   const supabase = createClient();
 
   const category = searchParams.category ?? "";

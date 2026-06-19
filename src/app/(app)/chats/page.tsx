@@ -38,7 +38,8 @@ export default async function HomeownerChatsPage({
 }: {
   searchParams: { lead?: string };
 }) {
-  const property = (await getActiveProperty())!;
+  const property = await getActiveProperty();
+  if (!property) redirect("/onboarding");
   const supabase = createClient();
 
   // The homeowner's conversations are their requests for the active home.
