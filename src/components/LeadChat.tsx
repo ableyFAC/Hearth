@@ -13,8 +13,30 @@ type Msg = {
 
 // System-message markers used to open/close a thread. They're stored as normal
 // rows (sender_role = "system") so both sides see them with no schema change.
-const CLOSE_BODY = "Chat closed by the contractor.";
-const REOPEN_BODY = "Chat reopened.";
+// A close marker starts with CLOSE_PREFIX and embeds who closed it + the reason.
+const CLOSE_PREFIX = "Conversation closed";
+const LEGACY_CLOSE = "Chat closed by the contractor.";
+const REOPEN_BODY = "Conversation reopened.";
+const isCloseMarker = (body: string) =>
+  body.startsWith(CLOSE_PREFIX) || body === LEGACY_CLOSE;
+
+// Reasons offered when finishing a conversation, per role.
+const CLOSE_REASONS: Record<"homeowner" | "contractor", string[]> = {
+  contractor: [
+    "Job completed",
+    "Quote sent — awaiting decision",
+    "Couldn't agree on price/scope",
+    "Homeowner unresponsive",
+    "Other",
+  ],
+  homeowner: [
+    "Job completed",
+    "Hired this pro",
+    "Went with another pro",
+    "No longer need the work",
+    "Other",
+  ],
+};
 
 // Messaging thread for a lead. Both the homeowner and the assigned contractor
 // see the same thread (RLS enforces only those two can read/post). Polls every
@@ -40,6 +62,8 @@ export default function LeadChat({
   const [reporting, setReporting] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [reported, setReported] = useState(false);
+  const [confirmingClose, setConfirmingClose] = useState(false);
+  const [closeReason, setCloseReason] = useState("");
   const uidRef = useRef<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -70,7 +94,7 @@ export default function LeadChat({
   // Closed if the most recent system marker is a "close" (not a "reopen").
   const closed = useMemo(() => {
     const sys = messages.filter((m) => m.sender_role === "system");
-    return sys.length ? sys[sys.length - 1].body === CLOSE_BODY : false;
+    return sys.length ? isCloseMarker(sys[sys.length - 1].body) : false;
   }, [messages]);
 
   async function ensureUid() {
@@ -122,6 +146,14 @@ export default function LeadChat({
     load();
   }
 
+  // End the conversation with a reason (after confirmation).
+  async function confirmClose() {
+    const reason = closeReason || "Other";
+    await postSystem(`${CLOSE_PREFIX} by the ${role} — ${reason}`);
+    setConfirmingClose(false);
+    setCloseReason("");
+  }
+
   // Flag this conversation for the Hearth team to review.
   async function submitReport() {
     setBusy(true);
@@ -171,27 +203,69 @@ export default function LeadChat({
         </div>
       )}
 
-      {/* Contractor-only close/reopen control (shown in the inbox thread). */}
-      {embedded && role === "contractor" && (
-        <div className="mb-2 flex justify-end">
-          {closed ? (
-            <button
-              type="button"
-              onClick={() => postSystem(REOPEN_BODY)}
-              disabled={busy}
-              className="text-xs font-medium text-hearth-700 hover:underline disabled:opacity-50"
-            >
-              Reopen chat
-            </button>
+      {/* Either side can finish/reopen the conversation (shown in the inbox). */}
+      {embedded && (
+        <div className="mb-2">
+          {confirmingClose ? (
+            <div className="rounded-lg border border-stone-200 bg-white p-3">
+              <p className="text-xs font-medium text-stone-700">
+                End this conversation? Pick a reason:
+              </p>
+              <select
+                value={closeReason}
+                onChange={(e) => setCloseReason(e.target.value)}
+                className="input mt-2 w-full text-sm"
+              >
+                <option value="">Select a reason…</option>
+                {CLOSE_REASONS[role].map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+              <div className="mt-2 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={confirmClose}
+                  disabled={!closeReason || busy}
+                  className="rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+                >
+                  End conversation
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirmingClose(false);
+                    setCloseReason("");
+                  }}
+                  className="text-xs text-stone-400 hover:text-stone-600"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : closed ? (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => postSystem(REOPEN_BODY)}
+                disabled={busy}
+                className="text-xs font-medium text-hearth-700 hover:underline disabled:opacity-50"
+              >
+                Reopen conversation
+              </button>
+            </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => postSystem(CLOSE_BODY)}
-              disabled={busy}
-              className="text-xs font-medium text-stone-400 hover:text-red-600 disabled:opacity-50"
-            >
-              Close chat
-            </button>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setConfirmingClose(true)}
+                disabled={busy}
+                className="text-xs font-medium text-stone-400 hover:text-red-600 disabled:opacity-50"
+              >
+                Finish conversation
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -240,8 +314,7 @@ export default function LeadChat({
 
       {closed ? (
         <p className="mt-2 rounded-lg bg-stone-100 px-3 py-2 text-center text-xs text-stone-500">
-          This chat is closed.
-          {role === "contractor" ? " Reopen it to send more messages." : ""}
+          This conversation is finished. Reopen it to send more messages.
         </p>
       ) : (
         <div className="mt-2">

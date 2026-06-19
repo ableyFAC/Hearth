@@ -9,8 +9,9 @@ import CategoryFilter from "./CategoryFilter";
 import LeadChat from "@/components/LeadChat";
 import ReviewPopup from "./ReviewPopup";
 
-// Must match the marker LeadChat posts when a contractor closes a thread.
-const CLOSE_BODY = "Chat closed by the contractor.";
+// Must match the markers LeadChat posts when either side closes a thread.
+const isCloseMarker = (b: string) =>
+  b.startsWith("Conversation closed") || b === "Chat closed by the contractor.";
 
 // Save a homeowner's star rating + comment for a finished job. RLS ensures only
 // the property owner can review; a DB trigger updates the contractor's average.
@@ -86,7 +87,8 @@ export default async function ContractorsPage({
       .order("created_at", { ascending: false });
     const lastSys = new Map<string, any>();
     for (const m of sys ?? []) if (!lastSys.has(m.lead_id)) lastSys.set(m.lead_id, m);
-    for (const [lid, m] of lastSys) if (m.body === CLOSE_BODY) closedIds.add(lid);
+    for (const [lid, m] of lastSys)
+      if (isCloseMarker(m.body)) closedIds.add(lid);
   }
   // The first closed-but-unreviewed job gets the rating popup.
   const pending = (leads ?? []).find(
