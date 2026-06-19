@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { labelFor, iconFor, ISSUE_CATEGORIES, TIMING_OPTIONS } from "@/lib/constants";
+import { setFlash } from "@/lib/flash";
 import Link from "next/link";
 import { updateLeadStatusAction } from "./actions";
 import LeadChat from "@/components/LeadChat";
@@ -21,13 +24,65 @@ const STATUS_STYLE: Record<string, string> = {
 };
 
 function money(n: number | string | null) {
-  // Postgres returns numeric columns as strings — coerce before formatting.
   const v = Number(n);
   return Number.isFinite(v) ? `$${v.toFixed(0)}` : "—";
 }
 
-// Valid ?status= values; anything else falls back to "all".
-const FILTERS = ["new", "accepted", "closed", "lost"] as const;
+// -----------------------------------------------------------------------------
+// Wallet (cookie-backed, no database needed).
+// The real wallet lives in the DB (migration 0008), but to keep everything in
+// this one file and avoid any Supabase setup, the test balance and which leads
+// are unlocked are tracked in browser cookies. Swap to the DB RPCs later.
+// -----------------------------------------------------------------------------
+const WALLET_COOKIE = "hearth_wallet_balance";
+const UNLOCKED_COOKIE = "hearth_unlocked_leads";
+const DEFAULT_BALANCE = 999; // start with test funds so there's money to spend
+
+function readBalance(): number {
+  const raw = cookies().get(WALLET_COOKIE)?.value;
+  const n = Number(raw);
+  return raw != null && Number.isFinite(n) ? n : DEFAULT_BALANCE;
+}
+
+function readUnlockedSet(): Set<string> {
+  const raw = cookies().get(UNLOCKED_COOKIE)?.value;
+  return new Set(raw ? raw.split(",").filter(Boolean) : []);
+}
+
+// Pay a lead's fee from the wallet to unlock its contact + messaging.
+async function unlockLeadAction(formData: FormData) {
+  "use server";
+  const id = String(formData.get("id"));
+  const fee = Number(formData.get("fee")) || 0;
+  const jar = cookies();
+  const rawBal = Number(jar.get(WALLET_COOKIE)?.value);
+  const balance = Number.isFinite(rawBal) ? rawBal : DEFAULT_BALANCE;
+
+  if (balance < fee) {
+    setFlash("Insufficient balance — add funds first", "error");
+    return;
+  }
+  const set = new Set(
+    (jar.get(UNLOCKED_COOKIE)?.value || "").split(",").filter(Boolean)
+  );
+  set.add(id);
+  jar.set(WALLET_COOKIE, String(balance - fee), { path: "/" });
+  jar.set(UNLOCKED_COOKIE, Array.from(set).join(","), { path: "/" });
+  setFlash("Lead unlocked — homeowner contact revealed", "success");
+  revalidatePath("/pro");
+}
+
+// ---- Dev/testing helpers (remove before launch) -------------------------
+// Drop $100 of test funds into the wallet cookie.
+async function addTestFundsAction() {
+  "use server";
+  const jar = cookies();
+  const rawBal = Number(jar.get(WALLET_COOKIE)?.value);
+  const balance = Number.isFinite(rawBal) ? rawBal : DEFAULT_BALANCE;
+  jar.set(WALLET_COOKIE, String(balance + 100), { path: "/" });
+  setFlash("Added $100 in test funds", "success");
+  revalidatePath("/pro");
+}
 
 export default async function ProDashboard({
   searchParams,
@@ -44,157 +99,276 @@ export default async function ProDashboard({
     .eq("contractor_id", contractor.id)
     .order("created_at", { ascending: false });
 
-  const all = leads ?? [];
-  const newCount = all.filter((l) => l.status === "new").length;
-  const activeCount = all.filter((l) => l.status === "accepted").length;
-  const owed = all
-    .filter((l) => !l.paid && l.status !== "lost")
-    .reduce((sum, l) => sum + Number(l.payout_amount ?? 0), 0);
+  const balance = readBalance();
+  const unlockedSet = readUnlockedSet();
+  // A lead counts as unlocked if the DB says paid OR we've unlocked it locally.
+  const isUnlocked = (l: any) => Boolean(l.paid) || unlockedSet.has(l.id);
 
-  // Resolve the active filter and the list it shows.
+  // Drop invalid legacy leads: "accepted" with no unlock can't happen in the
+  // unlock flow (you pay before you can accept), so hide that stale state.
+  const all = (leads ?? []).filter(
+    (l) => !(l.status === "accepted" && !isUnlocked(l))
+  );
+
+  // Split the two groups.
+  const potential = all.filter((l) => l.status === "new" && !isUnlocked(l));
+  const mine = all.filter((l) => !(l.status === "new" && !isUnlocked(l)));
+
+  const activeCount = mine.filter((l) => l.status === "accepted").length;
+  const wonCount = mine.filter((l) => l.status === "closed").length;
+  const lostCount = mine.filter((l) => l.status === "lost" && isUnlocked(l)).length;
+  const declinedCount = mine.filter(
+    (l) => l.status === "lost" && !isUnlocked(l)
+  ).length;
+
+  // Filters inside "Your leads". "lost" = unlocked then job fell through;
+  // "declined" = passed on without ever unlocking.
+  const matches = (l: any, key: string) =>
+    key === "accepted"
+      ? l.status === "accepted"
+      : key === "closed"
+        ? l.status === "closed"
+        : key === "lost"
+          ? l.status === "lost" && isUnlocked(l)
+          : key === "declined"
+            ? l.status === "lost" && !isUnlocked(l)
+            : true;
+
+  const FILTER_KEYS = ["accepted", "closed", "lost", "declined"];
   const active =
-    searchParams.status && (FILTERS as readonly string[]).includes(searchParams.status)
+    searchParams.status && FILTER_KEYS.includes(searchParams.status)
       ? searchParams.status
       : "";
-  const visible = active ? all.filter((l) => l.status === active) : all;
+  const visibleMine = active ? mine.filter((l) => matches(l, active)) : mine;
 
   const tabs: LeadTab[] = [
-    { value: "", label: "All", count: all.length },
-    { value: "new", label: "New", count: newCount },
+    { value: "", label: "All", count: mine.length },
     { value: "accepted", label: "Active", count: activeCount },
-    {
-      value: "closed",
-      label: "Won",
-      count: all.filter((l) => l.status === "closed").length,
-    },
-    {
-      value: "lost",
-      label: "Lost",
-      count: all.filter((l) => l.status === "lost").length,
-    },
+    { value: "closed", label: "Won", count: wonCount },
+    { value: "lost", label: "Lost", count: lostCount },
+    { value: "declined", label: "Declined", count: declinedCount },
   ];
 
   return (
     <div className="space-y-8">
-      <section className="grid gap-4 sm:grid-cols-3">
-        <Link
-          href="/pro?status=new"
-          className="card transition hover:border-hearth-400 hover:shadow-md"
-        >
-          <p className="text-sm font-medium text-stone-500">New leads</p>
-          <p className="mt-1 text-4xl font-bold text-stone-900">{newCount}</p>
-        </Link>
-        <Link
-          href="/pro?status=accepted"
-          className="card transition hover:border-hearth-400 hover:shadow-md"
-        >
-          <p className="text-sm font-medium text-stone-500">Active jobs</p>
-          <p className="mt-1 text-4xl font-bold text-stone-900">{activeCount}</p>
-        </Link>
-        <Link
-          href="/pro/billing"
-          className="card transition hover:border-hearth-400 hover:shadow-md"
-        >
-          <p className="text-sm font-medium text-stone-500">Balance owed</p>
-          <p className="mt-1 text-4xl font-bold text-stone-900">{money(owed)}</p>
-        </Link>
+      {/* ---- Dev tools: testing only, remove before launch ---- */}
+      <section className="rounded-xl border border-dashed border-stone-300 bg-stone-50 p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs font-semibold uppercase tracking-wide text-stone-400">
+            Dev tools
+          </span>
+          <form action={addTestFundsAction}>
+            <button className="btn-secondary">+ $100 test funds</button>
+          </form>
+          <span className="text-xs text-stone-400">
+            Testing only — remove before launch.
+          </span>
+        </div>
       </section>
 
+      <section className="grid gap-4 sm:grid-cols-3">
+        <div className="card">
+          <p className="text-sm font-medium text-stone-500">Potential leads</p>
+          <p className="mt-1 text-4xl font-bold text-stone-900">{potential.length}</p>
+        </div>
+        <div className="card">
+          <p className="text-sm font-medium text-stone-500">Active jobs</p>
+          <p className="mt-1 text-4xl font-bold text-stone-900">{activeCount}</p>
+        </div>
+        <div className="card">
+          <p className="text-sm font-medium text-stone-500">Wallet balance</p>
+          <p className="mt-1 text-4xl font-bold text-stone-900">
+            ${balance.toFixed(2)}
+          </p>
+        </div>
+      </section>
+
+      {/* ---- Potential leads: new opportunities, locked until unlocked ---- */}
       <section className="space-y-3">
-        <h1 className="text-2xl font-semibold text-stone-900">Your leads</h1>
+        <div>
+          <h1 className="text-2xl font-semibold text-stone-900">
+            Potential leads{" "}
+            <span className="text-stone-400">({potential.length})</span>
+          </h1>
+          <p className="text-sm text-stone-500">
+            New requests in your area. Unlock one to see the homeowner&apos;s
+            contact and reach out.
+          </p>
+        </div>
 
-        <LeadTabs tabs={tabs} active={active} />
-
-        {all.length === 0 ? (
+        {potential.length === 0 ? (
           <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
-            No leads yet. When a homeowner requests a pro in one of your
+            No new leads right now. When a homeowner requests a pro in one of your
             categories ({(contractor.categories ?? []).join(", ") || "none set"}),
             it&apos;ll show up here.
           </p>
-        ) : visible.length === 0 ? (
+        ) : (
+          <ul className="space-y-3">
+            {potential.map((l) => (
+              <LeadCard
+                key={l.id}
+                l={l}
+                balance={balance}
+                unlocked={isUnlocked(l)}
+              />
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* ---- Your leads: the pro's own pipeline ---- */}
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-2xl font-semibold text-stone-900">
+            Your leads <span className="text-stone-400">({mine.length})</span>
+          </h2>
+          <p className="text-sm text-stone-500">
+            Leads you&apos;ve unlocked. Track each one through your pipeline.
+          </p>
+        </div>
+
+        <LeadTabs tabs={tabs} active={active} />
+
+        {mine.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
+            You haven&apos;t unlocked any leads yet. Unlock one above to get
+            started.
+          </p>
+        ) : visibleMine.length === 0 ? (
           <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
             No {tabs.find((t) => t.value === active)?.label.toLowerCase()} leads.
           </p>
         ) : (
           <ul className="space-y-3">
-            {visible.map((l) => (
-              <li key={l.id} className="card space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium text-stone-900">
-                    {iconFor(ISSUE_CATEGORIES, l.category)}{" "}
-                    {labelFor(ISSUE_CATEGORIES, l.category)}
-                  </span>
-                  {l.issue_severity && (
-                    <span
-                      className={`rounded-full border px-2 py-0.5 text-xs ${SEVERITY_STYLE[l.issue_severity] ?? ""}`}
-                    >
-                      {l.issue_severity}
-                    </span>
-                  )}
-                  <span
-                    className={`rounded-full border px-2 py-0.5 text-xs ${STATUS_STYLE[l.status] ?? ""}`}
-                  >
-                    {l.status}
-                  </span>
-                  <span className="ml-auto text-sm font-semibold text-stone-700">
-                    Lead fee {money(l.payout_amount)}
-                    {l.paid && (
-                      <span className="ml-1 text-green-600">· paid</span>
-                    )}
-                  </span>
-                </div>
-
-                {l.issue_description && (
-                  <p className="text-sm text-stone-600">{l.issue_description}</p>
-                )}
-
-                <div className="rounded-lg bg-stone-50 p-3 text-sm text-stone-600">
-                  <p>
-                    <span className="text-stone-400">Homeowner:</span>{" "}
-                    {l.homeowner_name || "—"}
-                  </p>
-                  <p>
-                    <span className="text-stone-400">Address:</span>{" "}
-                    {l.property_address || "—"}
-                  </p>
-                  <p>
-                    <span className="text-stone-400">Contact:</span>{" "}
-                    {l.homeowner_email || "—"}
-                    {l.homeowner_phone ? ` · ${l.homeowner_phone}` : ""}
-                  </p>
-                  {l.timing && (
-                    <p>
-                      <span className="text-stone-400">Timing:</span>{" "}
-                      {labelFor(TIMING_OPTIONS, l.timing)}
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {l.status === "new" && (
-                    <>
-                      <StatusButton id={l.id} status="accepted" label="Accept" primary />
-                      <StatusButton id={l.id} status="lost" label="Decline" />
-                    </>
-                  )}
-                  {l.status === "accepted" && (
-                    <>
-                      <StatusButton id={l.id} status="closed" label="Mark won" primary />
-                      <StatusButton id={l.id} status="lost" label="Mark lost" />
-                    </>
-                  )}
-                  {(l.status === "closed" || l.status === "lost") && (
-                    <StatusButton id={l.id} status="new" label="Reopen" />
-                  )}
-                </div>
-
-                <LeadChat leadId={l.id} role="contractor" />
-              </li>
+            {visibleMine.map((l) => (
+              <LeadCard
+                key={l.id}
+                l={l}
+                balance={balance}
+                unlocked={isUnlocked(l)}
+              />
             ))}
           </ul>
         )}
       </section>
     </div>
+  );
+}
+
+// One lead card — used by both the "Potential" and "Your leads" lists.
+function LeadCard({
+  l,
+  balance,
+  unlocked,
+}: {
+  l: any;
+  balance: number;
+  unlocked: boolean;
+}) {
+  const fee = Number(l.payout_amount ?? 0);
+  const canAfford = balance >= fee;
+
+  return (
+    <li className="card space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-medium text-stone-900">
+          {iconFor(ISSUE_CATEGORIES, l.category)}{" "}
+          {labelFor(ISSUE_CATEGORIES, l.category)}
+        </span>
+        {l.issue_severity && (
+          <span
+            className={`rounded-full border px-2 py-0.5 text-xs ${SEVERITY_STYLE[l.issue_severity] ?? ""}`}
+          >
+            {l.issue_severity}
+          </span>
+        )}
+        <span
+          className={`rounded-full border px-2 py-0.5 text-xs ${STATUS_STYLE[l.status] ?? ""}`}
+        >
+          {l.status}
+        </span>
+        <span className="ml-auto text-sm font-semibold text-stone-700">
+          Lead fee {money(l.payout_amount)}
+          {unlocked && <span className="ml-1 text-green-600">· unlocked</span>}
+        </span>
+      </div>
+
+      {l.issue_description && (
+        <p className="text-sm text-stone-600">{l.issue_description}</p>
+      )}
+
+      {l.timing && (
+        <p className="text-sm text-stone-500">
+          <span className="text-stone-400">Timing:</span>{" "}
+          {labelFor(TIMING_OPTIONS, l.timing)}
+        </p>
+      )}
+
+      {unlocked ? (
+        // Unlocked — reveal the homeowner's contact details.
+        <div className="rounded-lg bg-stone-50 p-3 text-sm text-stone-600">
+          <p>
+            <span className="text-stone-400">Homeowner:</span>{" "}
+            {l.homeowner_name || "—"}
+          </p>
+          <p>
+            <span className="text-stone-400">Address:</span>{" "}
+            {l.property_address || "—"}
+          </p>
+          <p>
+            <span className="text-stone-400">Contact:</span>{" "}
+            {l.homeowner_email || "—"}
+            {l.homeowner_phone ? ` · ${l.homeowner_phone}` : ""}
+          </p>
+        </div>
+      ) : (
+        // Locked — contact stays hidden until the fee is paid.
+        <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+          🔒 Contact hidden. Unlock this lead to see the homeowner&apos;s name,
+          address, phone &amp; email — and to message them.
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        {/* Any locked open lead must be unlocked first — no lead gets stuck. */}
+        {!unlocked && (l.status === "new" || l.status === "accepted") && (
+          <>
+            {canAfford ? (
+              <form action={unlockLeadAction}>
+                <input type="hidden" name="id" value={l.id} />
+                <input type="hidden" name="fee" value={fee} />
+                <button className="btn-primary">
+                  Unlock for {money(l.payout_amount)}
+                </button>
+              </form>
+            ) : (
+              <Link href="/pro/billing" className="btn-primary">
+                Add funds to unlock ({money(l.payout_amount)})
+              </Link>
+            )}
+            <StatusButton id={l.id} status="lost" label="Decline" />
+          </>
+        )}
+        {unlocked && l.status === "new" && (
+          <>
+            <StatusButton id={l.id} status="accepted" label="Accept" primary />
+            <StatusButton id={l.id} status="lost" label="Mark lost" />
+          </>
+        )}
+        {unlocked && l.status === "accepted" && (
+          <>
+            <StatusButton id={l.id} status="closed" label="Mark won" primary />
+            <StatusButton id={l.id} status="lost" label="Mark lost" />
+          </>
+        )}
+        {(l.status === "closed" || l.status === "lost") && (
+          <StatusButton id={l.id} status="new" label="Reopen" />
+        )}
+      </div>
+
+      {/* Messaging is only available once the lead is unlocked. */}
+      {unlocked && <LeadChat leadId={l.id} role="contractor" />}
+    </li>
   );
 }
 

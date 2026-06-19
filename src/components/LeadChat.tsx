@@ -13,15 +13,20 @@ type Msg = {
 // Messaging thread for a lead. Both the homeowner and the assigned contractor
 // see the same thread (RLS enforces only those two can read/post). Polls every
 // few seconds so the other side's replies show up without a refresh.
+//
+// `embedded` renders the thread always-open and full-height (no toggle button),
+// for use as the right-hand pane of the /pro/chats inbox.
 export default function LeadChat({
   leadId,
   role,
+  embedded = false,
 }: {
   leadId: string;
   role: "homeowner" | "contractor";
+  embedded?: boolean;
 }) {
   const supabase = createClient();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(embedded);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
@@ -68,7 +73,7 @@ export default function LeadChat({
     load();
   }
 
-  if (!open) {
+  if (!embedded && !open) {
     return (
       <button
         type="button"
@@ -81,21 +86,35 @@ export default function LeadChat({
   }
 
   return (
-    <div className="mt-2 rounded-lg border border-stone-200 bg-stone-50 p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs font-medium uppercase tracking-wide text-stone-500">
-          Messages
-        </span>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="text-xs text-stone-400 hover:text-stone-600"
-        >
-          Close
-        </button>
-      </div>
+    <div
+      className={
+        embedded
+          ? "flex h-full flex-col"
+          : "mt-2 rounded-lg border border-stone-200 bg-stone-50 p-3"
+      }
+    >
+      {!embedded && (
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-xs font-medium uppercase tracking-wide text-stone-500">
+            Messages
+          </span>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="text-xs text-stone-400 hover:text-stone-600"
+          >
+            Close
+          </button>
+        </div>
+      )}
 
-      <div className="max-h-48 space-y-2 overflow-y-auto">
+      <div
+        className={
+          embedded
+            ? "flex-1 space-y-2 overflow-y-auto"
+            : "max-h-48 space-y-2 overflow-y-auto"
+        }
+      >
         {messages.length === 0 ? (
           <p className="text-xs text-stone-400">No messages yet — say hello.</p>
         ) : (

@@ -3,6 +3,7 @@ import NavLinks from "@/components/NavLinks";
 
 const LINKS = [
   { href: "/pro", label: "Leads" },
+  { href: "/pro/chats", label: "Chats" },
   { href: "/pro/billing", label: "Billing" },
   { href: "/pro/profile", label: "Company" },
 ];
