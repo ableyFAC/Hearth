@@ -335,6 +335,48 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["messages"]["Insert"]>;
         Relationships: [];
       };
+      reviews: {
+        Row: {
+          id: string;
+          lead_id: string;
+          contractor_id: string;
+          property_id: string | null;
+          rating: number;
+          comment: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          lead_id: string;
+          contractor_id: string;
+          property_id?: string | null;
+          rating: number;
+          comment?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["reviews"]["Insert"]>;
+        Relationships: [];
+      };
+      reports: {
+        Row: {
+          id: string;
+          lead_id: string;
+          reporter_id: string | null;
+          reporter_role: string;
+          reason: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          lead_id: string;
+          reporter_id?: string | null;
+          reporter_role: string;
+          reason?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["reports"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: {
       lead_previews: {

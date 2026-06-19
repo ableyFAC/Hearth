@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { getActiveProperty, getProperties } from "@/lib/property";
-import { isContractor } from "@/lib/contractor";
+import { getRole } from "@/lib/contractor";
 import { createClient } from "@/lib/supabase/server";
 import Nav from "@/components/Nav";
 
@@ -55,7 +55,7 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  if (await isContractor()) redirect("/pro");
+  if ((await getRole()) === "contractor") redirect("/pro");
 
   const [active, homes] = await Promise.all([
     getActiveProperty(),

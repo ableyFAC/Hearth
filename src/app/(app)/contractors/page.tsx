@@ -100,7 +100,7 @@ export default async function ContractorsPage({
       {pending && (
         <ReviewPopup
           leadId={pending.id}
-          contractorId={pending.contractor_id}
+          contractorId={pending.contractor_id ?? ""}
           propertyId={property.id}
           /* @ts-expect-error joined relation */
           contractorName={pending.contractors?.name ?? "your pro"}

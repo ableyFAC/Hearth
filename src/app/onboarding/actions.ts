@@ -35,7 +35,7 @@ export async function claimPropertyAction(formData: FormData) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/signin");
 
   const num = (key: string) => {
     const v = formData.get(key);

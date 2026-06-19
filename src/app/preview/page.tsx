@@ -31,7 +31,7 @@ export default async function PreviewPage() {
           want quotes on. Create a free account to see contact details and claim
           them.
         </p>
-        <Link href="/pro/login" className="btn-primary mt-4 inline-flex">
+        <Link href="/contractor-signup" className="btn-primary mt-4 inline-flex">
           Create a free account to access leads
         </Link>
       </div>
@@ -68,7 +68,7 @@ export default async function PreviewPage() {
               {/* Locked contact */}
               <div className="flex items-center gap-2 rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-400">
                 🔒 Homeowner contact —{" "}
-                <Link href="/pro/login" className="text-hearth-700 hover:underline">
+                <Link href="/contractor-signup" className="text-hearth-700 hover:underline">
                   sign up to unlock
                 </Link>
               </div>

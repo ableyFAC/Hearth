@@ -4,7 +4,7 @@ import Toaster from "@/components/Toaster";
 import { readFlash } from "@/lib/flash";
 
 export const metadata: Metadata = {
-  title: "Hearth — your home, looked after",
+  title: "Hearth: Your home, looked after",
   description:
     "Keep your house in good shape, know what needs attention, store your home docs, and reach a trustworthy pro when something breaks.",
 };
