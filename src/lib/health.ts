@@ -33,7 +33,7 @@ export interface SystemHealth {
   message: string;
 }
 
-const CURRENT_YEAR = 2026; // injected statically; bump per release.
+const CURRENT_YEAR = new Date().getFullYear();
 
 export function assessSystem(system: HomeSystem): SystemHealth {
   const lifespan =
