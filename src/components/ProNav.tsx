@@ -1,14 +1,20 @@
 import Link from "next/link";
 import NavLinks from "@/components/NavLinks";
 
-const LINKS = [
-  { href: "/pro", label: "Leads" },
-  { href: "/pro/chats", label: "Chats" },
-  { href: "/pro/billing", label: "Billing" },
-  { href: "/pro/profile", label: "Company" },
-];
+export default function ProNav({
+  company,
+  unread = 0,
+}: {
+  company: string | null;
+  unread?: number;
+}) {
+  const LINKS = [
+    { href: "/pro", label: "Leads" },
+    { href: "/pro/chats", label: "Chats", badge: unread || undefined },
+    { href: "/pro/billing", label: "Billing" },
+    { href: "/pro/profile", label: "Company" },
+  ];
 
-export default function ProNav({ company }: { company: string | null }) {
   return (
     <header className="border-b border-stone-200 bg-white">
       <div className="mx-auto flex max-w-5xl flex-col gap-3 px-6 py-3 sm:flex-row sm:items-center sm:justify-between">

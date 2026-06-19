@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 export default function NavLinks({
   links,
 }: {
-  links: { href: string; label: string }[];
+  links: { href: string; label: string; badge?: number }[];
 }) {
   const pathname = usePathname();
 
@@ -24,13 +24,18 @@ export default function NavLinks({
             key={l.href}
             href={l.href}
             aria-current={active ? "page" : undefined}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${
               active
                 ? "bg-hearth-100 text-hearth-800"
                 : "text-stone-600 hover:bg-hearth-50 hover:text-hearth-700"
             }`}
           >
             {l.label}
+            {l.badge ? (
+              <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-hearth-600 px-1.5 text-xs font-semibold text-white">
+                {l.badge}
+              </span>
+            ) : null}
           </Link>
         );
       })}

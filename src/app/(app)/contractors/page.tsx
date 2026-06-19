@@ -1,10 +1,44 @@
 import Link from "next/link";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { ISSUE_CATEGORIES, TIMING_OPTIONS, labelFor, iconFor } from "@/lib/constants";
+import { setFlash } from "@/lib/flash";
 import { requestProAction } from "./actions";
 import CategoryFilter from "./CategoryFilter";
 import LeadChat from "@/components/LeadChat";
+import ReviewPopup from "./ReviewPopup";
+
+// Must match the marker LeadChat posts when a contractor closes a thread.
+const CLOSE_BODY = "Chat closed by the contractor.";
+
+// Save a homeowner's star rating + comment for a finished job. RLS ensures only
+// the property owner can review; a DB trigger updates the contractor's average.
+async function saveReviewAction(formData: FormData) {
+  "use server";
+  const supabase = createClient();
+  const lead_id = String(formData.get("lead_id"));
+  const contractor_id = String(formData.get("contractor_id"));
+  const property_id = String(formData.get("property_id") || "") || null;
+  const rating = Number(formData.get("rating"));
+  const comment = String(formData.get("comment") || "").trim();
+  if (!rating || rating < 1 || rating > 5) {
+    setFlash("Please pick a star rating.", "error");
+    return;
+  }
+  const { error } = await supabase.from("reviews").insert({
+    lead_id,
+    contractor_id,
+    property_id,
+    rating,
+    comment: comment || null,
+  });
+  setFlash(
+    error ? error.message : "Thanks for your review!",
+    error ? "error" : "success"
+  );
+  revalidatePath("/contractors");
+}
 
 export default async function ContractorsPage({
   searchParams,
@@ -33,8 +67,44 @@ export default async function ContractorsPage({
     .eq("property_id", property.id)
     .order("created_at", { ascending: false });
 
+  // Figure out which finished (chat-closed) jobs still need a review.
+  const leadIds = (leads ?? []).map((l) => l.id);
+  const reviewedIds = new Set<string>();
+  const closedIds = new Set<string>();
+  if (leadIds.length) {
+    const { data: revs } = await supabase
+      .from("reviews")
+      .select("lead_id")
+      .in("lead_id", leadIds);
+    for (const r of revs ?? []) reviewedIds.add(r.lead_id);
+
+    const { data: sys } = await supabase
+      .from("messages")
+      .select("lead_id, body, created_at")
+      .eq("sender_role", "system")
+      .in("lead_id", leadIds)
+      .order("created_at", { ascending: false });
+    const lastSys = new Map<string, any>();
+    for (const m of sys ?? []) if (!lastSys.has(m.lead_id)) lastSys.set(m.lead_id, m);
+    for (const [lid, m] of lastSys) if (m.body === CLOSE_BODY) closedIds.add(lid);
+  }
+  // The first closed-but-unreviewed job gets the rating popup.
+  const pending = (leads ?? []).find(
+    (l) => closedIds.has(l.id) && !reviewedIds.has(l.id)
+  );
+
   return (
     <div className="space-y-8">
+      {pending && (
+        <ReviewPopup
+          leadId={pending.id}
+          contractorId={pending.contractor_id}
+          propertyId={property.id}
+          /* @ts-expect-error joined relation */
+          contractorName={pending.contractors?.name ?? "your pro"}
+          action={saveReviewAction}
+        />
+      )}
       <div>
         <h1 className="text-2xl font-semibold text-stone-900">Find a Pro</h1>
         <p className="mt-1 text-sm text-stone-500">

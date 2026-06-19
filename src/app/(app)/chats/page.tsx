@@ -3,19 +3,13 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentContractor } from "@/lib/contractor";
+import { getActiveProperty } from "@/lib/property";
 import { labelFor, iconFor, ISSUE_CATEGORIES } from "@/lib/constants";
 import LeadChat from "@/components/LeadChat";
 import MarkChatSeen from "@/components/MarkChatSeen";
 
-// Cookies shared with the leads page / layout.
-const UNLOCKED_COOKIE = "hearth_unlocked_leads";
-const SEEN_COOKIE = "hearth_chat_seen"; // { [leadId]: ISO timestamp last viewed }
-
-function readUnlockedSet(): Set<string> {
-  const raw = cookies().get(UNLOCKED_COOKIE)?.value;
-  return new Set(raw ? raw.split(",").filter(Boolean) : []);
-}
+// Homeowner-side "seen" cookie (kept separate from the contractor's).
+const SEEN_COOKIE = "hearth_ho_chat_seen";
 
 function readSeenMap(): Record<string, string> {
   try {
@@ -25,7 +19,6 @@ function readSeenMap(): Record<string, string> {
   }
 }
 
-// Mark a conversation as read (called from the open thread).
 async function markChatSeenAction(leadId: string) {
   "use server";
   const jar = cookies();
@@ -37,33 +30,29 @@ async function markChatSeenAction(leadId: string) {
   }
   map[leadId] = new Date().toISOString();
   jar.set(SEEN_COOKIE, JSON.stringify(map), { path: "/" });
-  revalidatePath("/pro/chats");
+  revalidatePath("/chats");
 }
 
-export default async function ProChatsPage({
+export default async function HomeownerChatsPage({
   searchParams,
 }: {
   searchParams: { lead?: string };
 }) {
-  const contractor = await getCurrentContractor();
-  if (!contractor) redirect("/pro/onboarding");
-
+  const property = (await getActiveProperty())!;
   const supabase = createClient();
+
+  // The homeowner's conversations are their requests for the active home.
   const { data: leads } = await supabase
     .from("contractor_leads")
-    .select("*")
-    .eq("contractor_id", contractor.id)
+    .select("*, contractors(name)")
+    .eq("property_id", property.id)
     .order("created_at", { ascending: false });
 
-  const unlockedSet = readUnlockedSet();
+  const convos = leads ?? [];
   const seen = readSeenMap();
-  const isUnlocked = (l: any) => Boolean(l.paid) || unlockedSet.has(l.id);
+  const nameOf = (l: any) => l.contractors?.name ?? "Sourcing a pro";
 
-  // You can only message a homeowner once the lead is unlocked, so the inbox is
-  // the set of unlocked leads.
-  const convos = (leads ?? []).filter(isUnlocked);
-
-  // Pull the latest message per conversation for the list preview + unread.
+  // Latest message per conversation, for preview + unread.
   const ids = convos.map((l) => l.id);
   const lastByLead = new Map<string, any>();
   if (ids.length) {
@@ -77,42 +66,38 @@ export default async function ProChatsPage({
     }
   }
 
-  // A conversation is unread if its latest message is from the homeowner and is
-  // newer than the last time we viewed that thread.
+  // Unread if the latest message is from the contractor and newer than last seen.
   const isUnread = (leadId: string) => {
     const last = lastByLead.get(leadId);
-    if (!last || last.sender_role !== "homeowner") return false;
+    if (!last || last.sender_role !== "contractor") return false;
     const seenAt = seen[leadId];
     return !seenAt || seenAt < last.created_at;
   };
 
-  // Sort: conversations with the most recent message first, then newest leads.
   convos.sort((a, b) => {
     const ta = lastByLead.get(a.id)?.created_at ?? a.created_at;
     const tb = lastByLead.get(b.id)?.created_at ?? b.created_at;
     return tb < ta ? -1 : tb > ta ? 1 : 0;
   });
 
-  // Which thread is open? The one in the URL, else the first conversation.
   const selected =
     convos.find((l) => l.id === searchParams.lead) ?? convos[0] ?? null;
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold text-stone-900">Chats</h1>
+      <h1 className="text-2xl font-semibold text-stone-900">Messages</h1>
 
-      {/* Mark the open conversation as read. */}
       {selected && (
         <MarkChatSeen leadId={selected.id} action={markChatSeenAction} />
       )}
 
       {convos.length === 0 ? (
         <p className="rounded-xl border border-dashed border-stone-300 p-8 text-center text-sm text-stone-500">
-          No conversations yet. Unlock a lead on the{" "}
-          <Link href="/pro" className="font-medium text-hearth-700 underline">
-            Leads
+          No conversations yet. Request a pro on{" "}
+          <Link href="/contractors" className="font-medium text-hearth-700 underline">
+            Find a Pro
           </Link>{" "}
-          page to start messaging the homeowner.
+          and you can message them here.
         </p>
       ) : (
         <div className="grid gap-4 md:grid-cols-[280px_1fr]">
@@ -125,7 +110,7 @@ export default async function ProChatsPage({
               return (
                 <li key={l.id}>
                   <Link
-                    href={`/pro/chats?lead=${l.id}`}
+                    href={`/chats?lead=${l.id}`}
                     className={`block px-4 py-3 transition ${
                       isActive ? "bg-hearth-50" : "hover:bg-stone-50"
                     }`}
@@ -138,7 +123,7 @@ export default async function ProChatsPage({
                             : "font-medium text-stone-900"
                         }`}
                       >
-                        {l.homeowner_name || "Homeowner"}
+                        {nameOf(l)}
                       </span>
                       {unread ? (
                         <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-hearth-600" />
@@ -154,7 +139,7 @@ export default async function ProChatsPage({
                       }`}
                     >
                       {last
-                        ? `${last.sender_role === "contractor" ? "You: " : ""}${last.body}`
+                        ? `${last.sender_role === "homeowner" ? "You: " : ""}${last.body}`
                         : labelFor(ISSUE_CATEGORIES, l.category)}
                     </p>
                   </Link>
@@ -167,23 +152,17 @@ export default async function ProChatsPage({
           {selected ? (
             <div className="flex h-[60vh] flex-col rounded-xl border border-stone-200 bg-white">
               <div className="border-b border-stone-100 px-4 py-3">
-                <p className="font-semibold text-stone-900">
-                  {selected.homeowner_name || "Homeowner"}
-                </p>
+                <p className="font-semibold text-stone-900">{nameOf(selected)}</p>
                 <p className="text-xs text-stone-500">
                   {iconFor(ISSUE_CATEGORIES, selected.category)}{" "}
                   {labelFor(ISSUE_CATEGORIES, selected.category)}
-                  {selected.property_address
-                    ? ` · ${selected.property_address}`
-                    : ""}
                 </p>
               </div>
               <div className="flex-1 overflow-hidden p-3">
-                {/* `key` forces a fresh thread when switching conversations. */}
                 <LeadChat
                   key={selected.id}
                   leadId={selected.id}
-                  role="contractor"
+                  role="homeowner"
                   embedded
                 />
               </div>

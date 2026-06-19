@@ -3,20 +3,23 @@ import HomeSwitcher from "@/components/HomeSwitcher";
 import NavLinks from "@/components/NavLinks";
 import type { Property } from "@/lib/database.types";
 
-const LINKS = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/profile", label: "Home Profile" },
-  { href: "/issues", label: "Issues" },
-  { href: "/contractors", label: "Find a Pro" },
-];
-
 export default function Nav({
   homes,
   activeId,
+  unread = 0,
 }: {
   homes: Property[];
   activeId: string;
+  unread?: number;
 }) {
+  const LINKS = [
+    { href: "/dashboard", label: "Dashboard" },
+    { href: "/profile", label: "Home Profile" },
+    { href: "/issues", label: "Issues" },
+    { href: "/contractors", label: "Find a Pro" },
+    { href: "/chats", label: "Messages", badge: unread || undefined },
+  ];
+
   return (
     <header className="border-b border-stone-200 bg-white">
       <div className="mx-auto flex max-w-5xl flex-col gap-3 px-6 py-3 sm:flex-row sm:items-center sm:justify-between">
