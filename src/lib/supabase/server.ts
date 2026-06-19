@@ -1,10 +1,19 @@
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
+
+type CookieToSet = { name: string; value: string; options: CookieOptions };
 
 // Supabase client for Server Components, Server Actions, and Route Handlers.
 // Reads/writes the auth session from Next's cookie store.
-export function createClient() {
+//
+// The return type is annotated explicitly: @supabase/ssr@0.5.x's createServerClient
+// signature predates supabase-js@2.107's reworked SupabaseClient generics, so its
+// inferred type collapses query results to `never`. supabase-js's own
+// SupabaseClient<Database> resolves correctly, and at runtime the ssr client IS
+// exactly that, so we cast to it. Remove the cast once ssr is upgraded to match.
+export function createClient(): SupabaseClient<Database> {
   const cookieStore = cookies();
 
   return createServerClient<Database>(
@@ -15,7 +24,7 @@ export function createClient() {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: CookieToSet[]) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options)
@@ -27,5 +36,5 @@ export function createClient() {
         },
       },
     }
-  );
+  ) as unknown as SupabaseClient<Database>;
 }

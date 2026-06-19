@@ -20,7 +20,7 @@ const STARTER_SYSTEMS = [
   "water_heater",
   "windows",
 ];
-const CURRENT_YEAR = 2026; // keep in sync with src/lib/health.ts
+const CURRENT_YEAR = new Date().getFullYear();
 
 // Step 1: pull baseline facts from the parcel layer for the entered address.
 export async function lookupParcelAction(
