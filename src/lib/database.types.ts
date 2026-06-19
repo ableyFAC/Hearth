@@ -217,6 +217,7 @@ export interface Database {
           contact_phone: string | null;
           vetted: boolean;
           rating: number | null;
+          balance: number;
           created_at: string;
         };
         Insert: {
@@ -230,9 +231,32 @@ export interface Database {
           contact_phone?: string | null;
           vetted?: boolean;
           rating?: number | null;
+          balance?: number;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["contractors"]["Insert"]>;
+        Relationships: [];
+      };
+      wallet_transactions: {
+        Row: {
+          id: string;
+          contractor_id: string;
+          amount: number;
+          kind: string;
+          lead_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          contractor_id: string;
+          amount: number;
+          kind: string;
+          lead_id?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["wallet_transactions"]["Insert"]
+        >;
         Relationships: [];
       };
       contractor_leads: {
@@ -395,6 +419,18 @@ export interface Database {
       owns_property: {
         Args: { p_property_id: string };
         Returns: boolean;
+      };
+      can_access_lead: {
+        Args: { p_lead_id: string };
+        Returns: boolean;
+      };
+      add_deposit: {
+        Args: { p_amount: number };
+        Returns: undefined;
+      };
+      unlock_lead: {
+        Args: { p_lead_id: string };
+        Returns: undefined;
       };
     };
     Enums: Record<string, never>;

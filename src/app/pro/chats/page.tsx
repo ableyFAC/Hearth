@@ -8,14 +8,8 @@ import { labelFor, iconFor, ISSUE_CATEGORIES } from "@/lib/constants";
 import LeadChat from "@/components/LeadChat";
 import MarkChatSeen from "@/components/MarkChatSeen";
 
-// Cookies shared with the leads page / layout.
-const UNLOCKED_COOKIE = "hearth_unlocked_leads";
+// Seen-state cookie shared with the layout's unread badge.
 const SEEN_COOKIE = "hearth_chat_seen"; // { [leadId]: ISO timestamp last viewed }
-
-function readUnlockedSet(): Set<string> {
-  const raw = cookies().get(UNLOCKED_COOKIE)?.value;
-  return new Set(raw ? raw.split(",").filter(Boolean) : []);
-}
 
 function readSeenMap(): Record<string, string> {
   try {
@@ -55,13 +49,11 @@ export default async function ProChatsPage({
     .eq("contractor_id", contractor.id)
     .order("created_at", { ascending: false });
 
-  const unlockedSet = readUnlockedSet();
   const seen = readSeenMap();
-  const isUnlocked = (l: any) => Boolean(l.paid) || unlockedSet.has(l.id);
 
-  // You can only message a homeowner once the lead is unlocked, so the inbox is
-  // the set of unlocked leads.
-  const convos = (leads ?? []).filter(isUnlocked);
+  // You can only message a homeowner once the lead is unlocked (paid), so the
+  // inbox is the set of paid leads.
+  const convos = (leads ?? []).filter((l) => Boolean(l.paid));
 
   // Pull the latest message per conversation for the list preview + unread.
   const ids = convos.map((l) => l.id);

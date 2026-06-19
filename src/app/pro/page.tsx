@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { labelFor, iconFor, ISSUE_CATEGORIES, TIMING_OPTIONS } from "@/lib/constants";
@@ -28,60 +27,21 @@ function money(n: number | string | null) {
   return Number.isFinite(v) ? `$${v.toFixed(0)}` : "—";
 }
 
-// -----------------------------------------------------------------------------
-// Wallet (cookie-backed, no database needed).
-// The real wallet lives in the DB (migration 0008), but to keep everything in
-// this one file and avoid any Supabase setup, the test balance and which leads
-// are unlocked are tracked in browser cookies. Swap to the DB RPCs later.
-// -----------------------------------------------------------------------------
-const WALLET_COOKIE = "hearth_wallet_balance";
-const UNLOCKED_COOKIE = "hearth_unlocked_leads";
-const DEFAULT_BALANCE = 999; // start with test funds so there's money to spend
-
-function readBalance(): number {
-  const raw = cookies().get(WALLET_COOKIE)?.value;
-  const n = Number(raw);
-  return raw != null && Number.isFinite(n) ? n : DEFAULT_BALANCE;
-}
-
-function readUnlockedSet(): Set<string> {
-  const raw = cookies().get(UNLOCKED_COOKIE)?.value;
-  return new Set(raw ? raw.split(",").filter(Boolean) : []);
-}
-
-// Pay a lead's fee from the wallet to unlock its contact + messaging.
+// Pay a lead's fee from the prepaid wallet to unlock its contact + messaging.
+// The unlock_lead RPC (migration 0008) runs atomically in the DB: it checks the
+// balance, deducts the fee, marks the lead paid, and logs a wallet transaction.
 async function unlockLeadAction(formData: FormData) {
   "use server";
   const id = String(formData.get("id"));
-  const fee = Number(formData.get("fee")) || 0;
-  const jar = cookies();
-  const rawBal = Number(jar.get(WALLET_COOKIE)?.value);
-  const balance = Number.isFinite(rawBal) ? rawBal : DEFAULT_BALANCE;
-
-  if (balance < fee) {
-    setFlash("Insufficient balance — add funds first", "error");
-    return;
-  }
-  const set = new Set(
-    (jar.get(UNLOCKED_COOKIE)?.value || "").split(",").filter(Boolean)
+  const supabase = createClient();
+  const { error } = await supabase.rpc("unlock_lead", { p_lead_id: id });
+  setFlash(
+    error ? error.message : "Lead unlocked — homeowner contact revealed",
+    error ? "error" : "success"
   );
-  set.add(id);
-  jar.set(WALLET_COOKIE, String(balance - fee), { path: "/" });
-  jar.set(UNLOCKED_COOKIE, Array.from(set).join(","), { path: "/" });
-  setFlash("Lead unlocked — homeowner contact revealed", "success");
   revalidatePath("/pro");
-}
-
-// ---- Dev/testing helpers (remove before launch) -------------------------
-// Drop $100 of test funds into the wallet cookie.
-async function addTestFundsAction() {
-  "use server";
-  const jar = cookies();
-  const rawBal = Number(jar.get(WALLET_COOKIE)?.value);
-  const balance = Number.isFinite(rawBal) ? rawBal : DEFAULT_BALANCE;
-  jar.set(WALLET_COOKIE, String(balance + 100), { path: "/" });
-  setFlash("Added $100 in test funds", "success");
-  revalidatePath("/pro");
+  revalidatePath("/pro/billing");
+  revalidatePath("/pro/chats");
 }
 
 export default async function ProDashboard({
@@ -99,10 +59,9 @@ export default async function ProDashboard({
     .eq("contractor_id", contractor.id)
     .order("created_at", { ascending: false });
 
-  const balance = readBalance();
-  const unlockedSet = readUnlockedSet();
-  // A lead counts as unlocked if the DB says paid OR we've unlocked it locally.
-  const isUnlocked = (l: any) => Boolean(l.paid) || unlockedSet.has(l.id);
+  const balance = Number(contractor.balance ?? 0);
+  // Unlocked = the lead's fee has been paid from the wallet (set by unlock_lead).
+  const isUnlocked = (l: any) => Boolean(l.paid);
 
   // Drop invalid legacy leads: "accepted" with no unlock can't happen in the
   // unlock flow (you pay before you can accept), so hide that stale state.
@@ -151,21 +110,6 @@ export default async function ProDashboard({
 
   return (
     <div className="space-y-8">
-      {/* ---- Dev tools: testing only, remove before launch ---- */}
-      <section className="rounded-xl border border-dashed border-stone-300 bg-stone-50 p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs font-semibold uppercase tracking-wide text-stone-400">
-            Dev tools
-          </span>
-          <form action={addTestFundsAction}>
-            <button className="btn-secondary">+ $100 test funds</button>
-          </form>
-          <span className="text-xs text-stone-400">
-            Testing only — remove before launch.
-          </span>
-        </div>
-      </section>
-
       <section className="grid gap-4 sm:grid-cols-3">
         <div className="card">
           <p className="text-sm font-medium text-stone-500">Potential leads</p>
@@ -175,12 +119,16 @@ export default async function ProDashboard({
           <p className="text-sm font-medium text-stone-500">Active jobs</p>
           <p className="mt-1 text-4xl font-bold text-stone-900">{activeCount}</p>
         </div>
-        <div className="card">
+        <Link
+          href="/pro/billing"
+          className="card transition hover:border-hearth-400 hover:shadow-md"
+        >
           <p className="text-sm font-medium text-stone-500">Wallet balance</p>
           <p className="mt-1 text-4xl font-bold text-stone-900">
             ${balance.toFixed(2)}
           </p>
-        </div>
+          <p className="mt-1 text-xs font-medium text-hearth-700">Add funds →</p>
+        </Link>
       </section>
 
       {/* ---- Potential leads: new opportunities, locked until unlocked ---- */}

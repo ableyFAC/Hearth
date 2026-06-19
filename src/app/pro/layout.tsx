@@ -4,16 +4,12 @@ import { getCurrentContractor, getRole } from "@/lib/contractor";
 import { createClient } from "@/lib/supabase/server";
 import ProNav from "@/components/ProNav";
 
-// Cookies shared with the chats page.
-const UNLOCKED_COOKIE = "hearth_unlocked_leads";
+// Seen-state cookie shared with the chats page.
 const SEEN_COOKIE = "hearth_chat_seen";
 
 // Count conversations with an unread homeowner message (for the nav badge).
 async function unreadCount(contractorId: string): Promise<number> {
   const jar = cookies();
-  const unlocked = new Set(
-    (jar.get(UNLOCKED_COOKIE)?.value || "").split(",").filter(Boolean)
-  );
   let seen: Record<string, string> = {};
   try {
     seen = JSON.parse(jar.get(SEEN_COOKIE)?.value || "{}");
@@ -28,7 +24,7 @@ async function unreadCount(contractorId: string): Promise<number> {
     .eq("contractor_id", contractorId);
 
   const ids = (leads ?? [])
-    .filter((l: any) => l.paid || unlocked.has(l.id))
+    .filter((l: any) => l.paid)
     .map((l: any) => l.id);
   if (!ids.length) return 0;
 

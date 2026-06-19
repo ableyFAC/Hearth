@@ -5,12 +5,11 @@ import { getCurrentContractor } from "@/lib/contractor";
 import { setFlash } from "@/lib/flash";
 
 // Add funds to the wallet via the secure add_deposit() RPC ($5–$100, enforced
-// in the DB too). `as any` is used for the new wallet column/table/RPC so this
-// stays a single self-contained file; regenerate types later with `npm run db:types`.
+// in the DB too).
 async function addDepositAction(formData: FormData) {
   "use server";
   const amount = Number(formData.get("amount"));
-  const supabase = createClient() as any;
+  const supabase = createClient();
   const { error } = await supabase.rpc("add_deposit", { p_amount: amount });
   setFlash(
     error ? error.message : `Added $${amount.toFixed(0)} to your balance`,
@@ -32,7 +31,7 @@ export default async function ProBillingPage() {
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");
 
-  const supabase = createClient() as any;
+  const supabase = createClient();
   const { data: txns } = await supabase
     .from("wallet_transactions")
     .select("*")
@@ -40,7 +39,7 @@ export default async function ProBillingPage() {
     .order("created_at", { ascending: false })
     .limit(50);
 
-  const balance = Number((contractor as any).balance ?? 0);
+  const balance = Number(contractor.balance ?? 0);
 
   return (
     <div className="space-y-8">
