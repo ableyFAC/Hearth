@@ -1,13 +1,11 @@
 import Link from "next/link";
 import NavLinks from "@/components/NavLinks";
+import ProMenu from "@/components/ProMenu";
 
 export default function ProNav({ company }: { company: string | null }) {
-  // Mirror the homeowner nav: content links first, then "Messages" (with the
-  // unread badge) sitting last, just before Sign out.
+  // Company / Billing / Sign out now live in the profile menu (ProMenu).
   const LINKS = [
     { href: "/pro", label: "Leads" },
-    { href: "/pro/billing", label: "Billing" },
-    { href: "/pro/profile", label: "Company" },
     { href: "/pro/chats", label: "Messages", liveBadge: "contractor" as const },
   ];
 
@@ -18,20 +16,13 @@ export default function ProNav({ company }: { company: string | null }) {
           <Link href="/pro" className="text-lg font-semibold text-stone-900">
             🛠️ Hearth for Pros
           </Link>
-          {company && (
-            <span className="hidden text-sm text-stone-400 sm:inline">
-              · {company}
-            </span>
-          )}
         </div>
-        <nav className="-mx-1 flex items-center gap-1 overflow-x-auto px-1">
-          <NavLinks links={LINKS} />
-          <form action="/auth/signout" method="post">
-            <button className="ml-1 whitespace-nowrap rounded-md px-3 py-1.5 text-sm text-stone-400 hover:text-stone-700">
-              Sign out
-            </button>
-          </form>
-        </nav>
+        <div className="flex items-center gap-1">
+          <nav className="-mx-1 flex items-center gap-1 overflow-x-auto px-1">
+            <NavLinks links={LINKS} />
+          </nav>
+          <ProMenu company={company} />
+        </div>
       </div>
     </header>
   );
