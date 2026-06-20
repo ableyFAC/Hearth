@@ -4,7 +4,13 @@ import { saveAccountAction } from "./actions";
 import type { UserProfile } from "@/lib/database.types";
 
 // Edit personal account details: name, phone, email, and password.
-export default function AccountForm({ profile }: { profile: UserProfile }) {
+export default function AccountForm({
+  profile,
+  name,
+}: {
+  profile: UserProfile;
+  name: string;
+}) {
   return (
     <form action={saveAccountAction} className="card space-y-4">
       <div>
@@ -12,7 +18,7 @@ export default function AccountForm({ profile }: { profile: UserProfile }) {
         <input
           name="full_name"
           className="input"
-          defaultValue={profile.full_name ?? ""}
+          defaultValue={name}
           placeholder="e.g. Alex Rivera"
         />
       </div>

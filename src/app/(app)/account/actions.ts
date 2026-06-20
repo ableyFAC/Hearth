@@ -19,34 +19,39 @@ export async function saveAccountAction(formData: FormData) {
   const email = (formData.get("email") as string)?.trim() || null;
   const password = (formData.get("password") as string) || "";
 
-  // Name + phone — the public profile row.
+  // Name + phone — the public profile row (best effort).
   const { error: profileError } = await supabase
     .from("users")
     .update({ full_name, phone })
     .eq("id", user.id);
   if (profileError) throw new Error(profileError.message);
 
-  // Email and password go through Auth. Email changes trigger a confirmation
-  // link to the new address, so the change isn't live until they click it.
-  const authChanges: { email?: string; password?: string } = {};
+  // Mirror the name into auth metadata too. This is what the toolbar reads, so
+  // it's reliable even if the users-table write didn't land — and it's always
+  // writable (no RLS). Email/password go through Auth as well; an email change
+  // triggers a confirmation link, so it isn't live until the user clicks it.
+  const authChanges: {
+    email?: string;
+    password?: string;
+    data: { full_name: string | null };
+  } = { data: { full_name } };
   if (email && email !== user.email) authChanges.email = email;
   if (password) authChanges.password = password;
 
-  let emailPending = false;
-  if (Object.keys(authChanges).length > 0) {
-    const { error: authError } = await supabase.auth.updateUser(authChanges);
-    if (authError) {
-      setFlash(authError.message, "error");
-      redirect("/account");
-    }
-    emailPending = Boolean(authChanges.email);
+  const { error: authError } = await supabase.auth.updateUser(authChanges);
+  if (authError) {
+    setFlash(authError.message, "error");
+    redirect("/account");
   }
+  const emailPending = Boolean(authChanges.email);
 
   setFlash(
     emailPending
       ? "Saved. Check your new email to confirm the change."
       : "Account updated."
   );
-  revalidatePath("/account");
+  // Revalidate the whole layout tree so the toolbar (in the app layout, not the
+  // page) picks up the new name everywhere.
+  revalidatePath("/", "layout");
   redirect("/account");
 }

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getActiveProperty, getProperties } from "@/lib/property";
 import { getRole } from "@/lib/contractor";
 import { getUserProfile } from "@/lib/user";
+import { getUser } from "@/lib/auth";
 import Nav from "@/components/Nav";
 import NewMessageNotifier from "@/components/NewMessageNotifier";
 
@@ -14,14 +15,18 @@ export default async function AppLayout({
 }) {
   if ((await getRole()) === "contractor") redirect("/pro");
 
-  const [active, homes, profile] = await Promise.all([
+  const [active, homes, profile, user] = await Promise.all([
     getActiveProperty(),
     getProperties(),
     getUserProfile(),
+    getUser(),
   ]);
   if (!active) redirect("/onboarding");
 
-  const name = profile?.full_name || profile?.email || null;
+  // Prefer the name from auth metadata (set at sign-up, always present) and fall
+  // back to the profile row, then email.
+  const metaName = (user?.user_metadata?.full_name as string | undefined)?.trim();
+  const name = metaName || profile?.full_name || profile?.email || null;
 
   return (
     <div className="min-h-screen">

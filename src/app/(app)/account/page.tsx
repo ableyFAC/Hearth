@@ -1,10 +1,16 @@
 import { redirect } from "next/navigation";
 import { getUserProfile } from "@/lib/user";
+import { getUser } from "@/lib/auth";
 import AccountForm from "./AccountForm";
 
 export default async function AccountPage() {
   const profile = await getUserProfile();
   if (!profile) redirect("/signin");
+
+  // Mirror the toolbar's name resolution so the field shows the same value.
+  const user = await getUser();
+  const metaName = (user?.user_metadata?.full_name as string | undefined)?.trim();
+  const name = profile.full_name || metaName || "";
 
   return (
     <div className="mx-auto max-w-xl space-y-6">
@@ -15,7 +21,7 @@ export default async function AccountPage() {
         </p>
       </div>
 
-      <AccountForm profile={profile} />
+      <AccountForm profile={profile} name={name} />
     </div>
   );
 }
