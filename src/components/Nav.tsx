@@ -6,18 +6,16 @@ import type { Property } from "@/lib/database.types";
 export default function Nav({
   homes,
   activeId,
-  unread = 0,
 }: {
   homes: Property[];
   activeId: string;
-  unread?: number;
 }) {
   const LINKS = [
     { href: "/dashboard", label: "Dashboard" },
     { href: "/profile", label: "Home Profile" },
     { href: "/issues", label: "Issues" },
     { href: "/contractors", label: "Find a Pro" },
-    { href: "/chats", label: "Messages", badge: unread || undefined },
+    { href: "/chats", label: "Messages", liveBadge: "homeowner" as const },
   ];
 
   return (

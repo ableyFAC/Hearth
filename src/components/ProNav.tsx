@@ -1,20 +1,14 @@
 import Link from "next/link";
 import NavLinks from "@/components/NavLinks";
 
-export default function ProNav({
-  company,
-  unread = 0,
-}: {
-  company: string | null;
-  unread?: number;
-}) {
+export default function ProNav({ company }: { company: string | null }) {
   // Mirror the homeowner nav: content links first, then "Messages" (with the
   // unread badge) sitting last, just before Sign out.
   const LINKS = [
     { href: "/pro", label: "Leads" },
     { href: "/pro/billing", label: "Billing" },
     { href: "/pro/profile", label: "Company" },
-    { href: "/pro/chats", label: "Messages", badge: unread || undefined },
+    { href: "/pro/chats", label: "Messages", liveBadge: "contractor" as const },
   ];
 
   return (
