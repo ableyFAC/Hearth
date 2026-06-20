@@ -237,21 +237,107 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["contractors"]["Insert"]>;
         Relationships: [];
       };
-      wallet_transactions: {
+      wallet_config: {
+        Row: {
+          id: number;
+          min_bonus_deposit_cents: number;
+          bonus_expiry_days: number;
+          spend_cash_first: boolean;
+        };
+        Insert: {
+          id?: number;
+          min_bonus_deposit_cents?: number;
+          bonus_expiry_days?: number;
+          spend_cash_first?: boolean;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["wallet_config"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      deposit_tiers: {
+        Row: {
+          id: string;
+          min_cents: number;
+          max_cents: number | null;
+          bonus_pct: number;
+        };
+        Insert: {
+          id?: string;
+          min_cents: number;
+          max_cents?: number | null;
+          bonus_pct: number;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["deposit_tiers"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      wallets: {
         Row: {
           id: string;
           contractor_id: string;
-          amount: number;
-          kind: string;
-          lead_id: string | null;
+          cash_balance_cents: number;
+          bonus_balance_cents: number;
           created_at: string;
+          updated_at: string;
         };
         Insert: {
           id?: string;
           contractor_id: string;
-          amount: number;
-          kind: string;
+          cash_balance_cents?: number;
+          bonus_balance_cents?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["wallets"]["Insert"]>;
+        Relationships: [];
+      };
+      bonus_grants: {
+        Row: {
+          id: string;
+          wallet_id: string;
+          amount_cents: number;
+          remaining_cents: number;
+          expires_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          wallet_id: string;
+          amount_cents: number;
+          remaining_cents: number;
+          expires_at: string;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["bonus_grants"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      wallet_transactions: {
+        Row: {
+          id: string;
+          wallet_id: string;
+          type: string;
+          cash_delta_cents: number;
+          bonus_delta_cents: number;
+          cash_balance_after_cents: number;
+          bonus_balance_after_cents: number;
+          lead_id: string | null;
+          note: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          wallet_id: string;
+          type: string;
+          cash_delta_cents?: number;
+          bonus_delta_cents?: number;
+          cash_balance_after_cents: number;
+          bonus_balance_after_cents: number;
           lead_id?: string | null;
+          note?: string | null;
           created_at?: string;
         };
         Update: Partial<
@@ -462,12 +548,24 @@ export interface Database {
         Args: { p_lead_id: string };
         Returns: boolean;
       };
-      add_deposit: {
-        Args: { p_amount: number };
+      get_or_create_wallet: {
+        Args: { p_contractor: string };
+        Returns: string;
+      };
+      bonus_for_deposit: {
+        Args: { p_deposit_cents: number };
+        Returns: number;
+      };
+      apply_deposit: {
+        Args: { p_contractor: string; p_deposit_cents: number };
         Returns: undefined;
       };
-      unlock_lead: {
-        Args: { p_lead_id: string };
+      charge_lead: {
+        Args: { p_lead: string };
+        Returns: boolean;
+      };
+      expire_bonus: {
+        Args: Record<string, never>;
         Returns: undefined;
       };
     };
@@ -478,6 +576,7 @@ export interface Database {
 
 // Convenience row aliases used across the app.
 type T = Database["public"]["Tables"];
+export type UserProfile = T["users"]["Row"];
 export type Property = T["properties"]["Row"];
 export type HomeSystem = T["home_systems"]["Row"];
 export type MaintenanceTask = T["maintenance_tasks"]["Row"];
