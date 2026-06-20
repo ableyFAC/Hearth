@@ -37,11 +37,14 @@ export default function LiveUnreadBadge({
     async function poll() {
       if (typeof document !== "undefined" && document.hidden) return;
       const seen = readSeen(SEEN_COOKIE[role]);
-      // RLS limits this to the user's own conversations.
+      // Only the most recent messages — unread ones are always recent, and this
+      // keeps the query bounded (and from hogging a DB connection).
       const { data } = await supabase
         .from("messages")
         .select("lead_id, sender_role, created_at")
-        .eq("sender_role", OTHER[role]);
+        .eq("sender_role", OTHER[role])
+        .order("created_at", { ascending: false })
+        .limit(50);
       let c = 0;
       for (const m of data ?? []) {
         const s = seen[m.lead_id];
@@ -50,7 +53,7 @@ export default function LiveUnreadBadge({
       if (active) setCount(c);
     }
     poll();
-    const t = setInterval(poll, 10000);
+    const t = setInterval(poll, 30000);
     return () => {
       active = false;
       clearInterval(t);

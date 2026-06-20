@@ -61,7 +61,7 @@ export default function NewMessageNotifier({
     }
 
     poll();
-    const interval = setInterval(poll, 8000);
+    const interval = setInterval(poll, 20000);
     return () => {
       active = false;
       clearInterval(interval);
