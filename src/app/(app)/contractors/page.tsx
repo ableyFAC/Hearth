@@ -45,7 +45,12 @@ async function saveReviewAction(formData: FormData) {
 export default async function ContractorsPage({
   searchParams,
 }: {
-  searchParams: { issue?: string; category?: string; requested?: string };
+  searchParams: {
+    issue?: string;
+    category?: string;
+    requested?: string;
+    already?: string;
+  };
 }) {
   const property = await getActiveProperty();
   if (!property) redirect("/onboarding");
@@ -97,6 +102,14 @@ export default async function ContractorsPage({
     (l) => closedIds.has(l.id) && !reviewedIds.has(l.id)
   );
 
+  // Pros this home has already requested (one request per pro is allowed).
+  const requestedIds = new Set(
+    (leads ?? []).map((l: any) => l.contractor_id).filter(Boolean)
+  );
+  const firstAvailableId = (contractors ?? []).find(
+    (c) => !requestedIds.has(c.id)
+  )?.id;
+
   return (
     <div className="space-y-8">
       {pending && (
@@ -120,6 +133,13 @@ export default async function ContractorsPage({
       {searchParams.requested && (
         <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
           ✅ Request sent. A vetted pro will be in touch. You can track it below.
+        </div>
+      )}
+
+      {searchParams.already && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          You&apos;ve already sent a request to that pro. Message them in your
+          requests below.
         </div>
       )}
 
@@ -175,31 +195,44 @@ export default async function ContractorsPage({
           </label>
           {contractors && contractors.length > 0 ? (
             <div className="space-y-2">
-              {contractors.map((c, idx) => (
-                <label
-                  key={c.id}
-                  className="flex cursor-pointer items-center gap-3 rounded-lg border border-stone-200 p-3 hover:border-hearth-400"
-                >
-                  <input
-                    type="radio"
-                    name="contractor_id"
-                    value={c.id}
-                    defaultChecked={idx === 0}
-                    className="accent-hearth-600"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-stone-900">{c.name}</span>
-                      {c.rating && (
-                        <span className="text-xs text-amber-600">★ {c.rating}</span>
-                      )}
+              {contractors.map((c) => {
+                const requested = requestedIds.has(c.id);
+                return (
+                  <label
+                    key={c.id}
+                    className={`flex items-center gap-3 rounded-lg border border-stone-200 p-3 ${
+                      requested
+                        ? "cursor-not-allowed opacity-60"
+                        : "cursor-pointer hover:border-hearth-400"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="contractor_id"
+                      value={c.id}
+                      defaultChecked={c.id === firstAvailableId}
+                      disabled={requested}
+                      className="accent-hearth-600"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-stone-900">{c.name}</span>
+                        {c.rating && (
+                          <span className="text-xs text-amber-600">★ {c.rating}</span>
+                        )}
+                        {requested && (
+                          <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
+                            Already requested
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-stone-500">
+                        {c.service_area} · Lic. {c.license_number ?? "—"}
+                      </p>
                     </div>
-                    <p className="text-xs text-stone-500">
-                      {c.service_area} · Lic. {c.license_number ?? "—"}
-                    </p>
-                  </div>
-                </label>
-              ))}
+                  </label>
+                );
+              })}
             </div>
           ) : (
             <p className="rounded-lg border border-dashed border-stone-300 p-4 text-sm text-stone-500">

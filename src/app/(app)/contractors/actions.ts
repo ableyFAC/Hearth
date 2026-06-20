@@ -44,6 +44,21 @@ export async function requestProAction(formData: FormData) {
     .filter(Boolean)
     .join(", ");
 
+  // One request per pro: block a duplicate request to the same contractor for
+  // this home. Requesting other pros is still fine.
+  if (contractorId) {
+    const { data: existing } = await supabase
+      .from("contractor_leads")
+      .select("id")
+      .eq("property_id", property.id)
+      .eq("contractor_id", contractorId)
+      .limit(1)
+      .maybeSingle();
+    if (existing) {
+      redirect("/contractors?already=1");
+    }
+  }
+
   const { error } = await supabase.from("contractor_leads").insert({
     property_id: property.id,
     issue_id: issueId,

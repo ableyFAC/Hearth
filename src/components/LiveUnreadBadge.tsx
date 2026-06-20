@@ -45,12 +45,13 @@ export default function LiveUnreadBadge({
         .eq("sender_role", OTHER[role])
         .order("created_at", { ascending: false })
         .limit(50);
-      let c = 0;
+      // Count one per person (conversation), not one per message.
+      const unread = new Set<string>();
       for (const m of data ?? []) {
         const s = seen[m.lead_id];
-        if (!s || s < m.created_at) c++;
+        if (!s || s < m.created_at) unread.add(m.lead_id);
       }
-      if (active) setCount(c);
+      if (active) setCount(unread.size);
     }
     poll();
     const t = setInterval(poll, 30000);

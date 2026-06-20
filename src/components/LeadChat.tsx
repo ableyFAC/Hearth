@@ -33,10 +33,14 @@ export default function LeadChat({
   leadId,
   role,
   embedded = false,
+  title,
+  subtitle,
 }: {
   leadId: string;
   role: "homeowner" | "contractor";
   embedded?: boolean;
+  title?: string;
+  subtitle?: string;
 }) {
   const supabase = createClient();
   const [open, setOpen] = useState(embedded);
@@ -399,44 +403,61 @@ export default function LeadChat({
         </div>
       )}
 
-      {/* Finish conversation, top-right of the chat box. */}
-      {embedded &&
-        !closed &&
-        (confirmingClose ? (
-          <div className="mb-2 rounded-lg border border-red-300 bg-red-50 p-3">
-            <p className="text-xs font-medium text-stone-700">
-              End this conversation?
-            </p>
-            <div className="mt-2 flex items-center gap-3">
+      {/* Conversation header: name on the left, end/reopen on the same line. */}
+      {embedded && (
+        <div className="mb-2 flex items-center justify-between gap-2 border-b border-stone-100 pb-2">
+          <div className="min-w-0">
+            {title && (
+              <p className="truncate font-semibold text-stone-900">{title}</p>
+            )}
+            {subtitle && (
+              <p className="truncate text-xs text-stone-500">{subtitle}</p>
+            )}
+          </div>
+          <div className="shrink-0">
+            {closed ? (
+              canReopen ? (
+                <button
+                  type="button"
+                  onClick={() => postSystem(REOPEN_BODY)}
+                  disabled={busy}
+                  className="text-xs font-medium text-hearth-700 hover:underline disabled:opacity-50"
+                >
+                  Reopen
+                </button>
+              ) : null
+            ) : confirmingClose ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-stone-700">End?</span>
+                <button
+                  type="button"
+                  onClick={confirmClose}
+                  disabled={busy}
+                  className="rounded-md bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  Yes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingClose(false)}
+                  className="text-xs font-medium text-stone-900 hover:text-stone-600"
+                >
+                  No
+                </button>
+              </div>
+            ) : (
               <button
                 type="button"
-                onClick={confirmClose}
+                onClick={() => setConfirmingClose(true)}
                 disabled={busy}
-                className="rounded-md bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
               >
-                End conversation
+                Finish conversation
               </button>
-              <button
-                type="button"
-                onClick={() => setConfirmingClose(false)}
-                className="text-xs font-medium text-stone-900 hover:text-stone-600"
-              >
-                Cancel
-              </button>
-            </div>
+            )}
           </div>
-        ) : (
-          <div className="mb-2 flex justify-end">
-            <button
-              type="button"
-              onClick={() => setConfirmingClose(true)}
-              disabled={busy}
-              className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
-            >
-              Finish conversation
-            </button>
-          </div>
-        ))}
+        </div>
+      )}
 
       <div
         className={
@@ -615,24 +636,12 @@ export default function LeadChat({
       )}
 
       {closed ? (
-        <div className="mt-2 space-y-2">
-          <p className="rounded-lg bg-stone-100 px-3 py-2 text-center text-xs text-stone-500">
-            This conversation is finished.
-            {canReopen
-              ? " Reopen it to send more messages."
-              : " Only the person who ended it can reopen it."}
-          </p>
-          {embedded && canReopen && (
-            <button
-              type="button"
-              onClick={() => postSystem(REOPEN_BODY)}
-              disabled={busy}
-              className="w-full rounded-lg border border-hearth-300 bg-hearth-50 px-3 py-2 text-sm font-medium text-hearth-700 hover:bg-hearth-100 disabled:opacity-50"
-            >
-              Reopen conversation
-            </button>
-          )}
-        </div>
+        <p className="mt-2 rounded-lg bg-stone-100 px-3 py-2 text-center text-xs text-stone-500">
+          This conversation is finished.
+          {canReopen
+            ? " Reopen it above to send more messages."
+            : " Only the person who ended it can reopen it."}
+        </p>
       ) : (
         <div className="mt-2 space-y-2">
           {replyingTo && (

@@ -109,7 +109,7 @@ export default async function ProChatsPage({
       ) : (
         <div className="grid gap-4 md:grid-cols-[280px_1fr]">
           {/* ---- Conversation list ---- */}
-          <ul className="divide-y divide-stone-100 overflow-hidden rounded-xl border border-stone-200 bg-white">
+          <ul className="max-h-[40vh] divide-y divide-stone-100 overflow-y-auto rounded-xl border border-stone-200 bg-white md:h-[calc(100vh-13rem)] md:max-h-none">
             {convos.map((l) => {
               const last = lastByLead.get(l.id);
               const isActive = selected?.id === l.id;
@@ -118,22 +118,28 @@ export default async function ProChatsPage({
                 <li key={l.id}>
                   <Link
                     href={`/pro/chats?lead=${l.id}`}
-                    className={`block px-4 py-3 transition ${
-                      isActive ? "bg-hearth-50" : "hover:bg-stone-50"
+                    className={`block border-l-4 px-4 py-3 transition ${
+                      isActive
+                        ? "border-hearth-500 bg-hearth-50"
+                        : unread
+                          ? "border-hearth-400 bg-hearth-50/60 hover:bg-hearth-50"
+                          : "border-transparent hover:bg-stone-50"
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span
                         className={`truncate ${
                           unread
-                            ? "font-semibold text-stone-900"
+                            ? "font-bold text-stone-900"
                             : "font-medium text-stone-900"
                         }`}
                       >
                         {l.homeowner_name || "Homeowner"}
                       </span>
                       {unread ? (
-                        <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-hearth-600" />
+                        <span className="shrink-0 rounded-full bg-hearth-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                          New
+                        </span>
                       ) : (
                         <span className="shrink-0 text-xs text-stone-400">
                           {iconFor(ISSUE_CATEGORIES, l.category)}
@@ -142,7 +148,7 @@ export default async function ProChatsPage({
                     </div>
                     <p
                       className={`truncate text-xs ${
-                        unread ? "text-stone-700" : "text-stone-500"
+                        unread ? "font-medium text-stone-800" : "text-stone-500"
                       }`}
                     >
                       {last
@@ -157,31 +163,21 @@ export default async function ProChatsPage({
 
           {/* ---- Open thread ---- */}
           {selected ? (
-            <div className="flex h-[60vh] flex-col rounded-xl border border-stone-200 bg-white">
-              <div className="border-b border-stone-100 px-4 py-3">
-                <p className="font-semibold text-stone-900">
-                  {selected.homeowner_name || "Homeowner"}
-                </p>
-                <p className="text-xs text-stone-500">
-                  {iconFor(ISSUE_CATEGORIES, selected.category)}{" "}
-                  {labelFor(ISSUE_CATEGORIES, selected.category)}
-                  {selected.property_address
-                    ? ` · ${selected.property_address}`
-                    : ""}
-                </p>
-              </div>
-              <div className="flex-1 overflow-hidden p-3">
-                {/* `key` forces a fresh thread when switching conversations. */}
-                <LeadChat
-                  key={selected.id}
-                  leadId={selected.id}
-                  role="contractor"
-                  embedded
-                />
-              </div>
+            <div className="h-[60vh] rounded-xl border border-stone-200 bg-white p-3 md:h-[calc(100vh-13rem)]">
+              {/* `key` forces a fresh thread when switching conversations. */}
+              <LeadChat
+                key={selected.id}
+                leadId={selected.id}
+                role="contractor"
+                embedded
+                title={selected.homeowner_name || "Homeowner"}
+                subtitle={`${labelFor(ISSUE_CATEGORIES, selected.category)}${
+                  selected.property_address ? ` · ${selected.property_address}` : ""
+                }`}
+              />
             </div>
           ) : (
-            <div className="flex h-[60vh] items-center justify-center rounded-xl border border-dashed border-stone-300 text-sm text-stone-400">
+            <div className="flex h-[60vh] items-center justify-center rounded-xl border border-dashed border-stone-300 text-sm text-stone-400 md:h-[calc(100vh-13rem)]">
               Select a conversation
             </div>
           )}
