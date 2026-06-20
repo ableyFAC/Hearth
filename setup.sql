@@ -455,7 +455,16 @@ create policy "leads contractor update" on public.contractor_leads
 -- =====================================================================
 -- file: supabase/migrations/0006_lead_previews.sql
 -- =====================================================================
--- Public, PII-free preview of available leads (contact stays locked behind signup).
+-- =============================================================================
+-- Hearth — public lead previews
+-- Lets contractors see THAT demand exists (category, coarse area, severity, fee)
+-- before creating an account, while homeowner PII stays locked behind signup.
+--
+-- This view intentionally exposes only non-PII columns and is readable by anon.
+-- It runs with the view owner's rights, so it surfaces all "new" leads for the
+-- teaser — but never name / email / phone / street address.
+-- =============================================================================
+
 create or replace view public.lead_previews as
 select
   l.id,
@@ -473,7 +482,12 @@ grant select on public.lead_previews to anon, authenticated;
 -- =====================================================================
 -- file: supabase/migrations/0007_messages.sql
 -- =====================================================================
--- Lead messaging (homeowner <-> contractor).
+-- =============================================================================
+-- Hearth — lead messaging (homeowner <-> contractor)
+-- A thread is attached to a contractor_lead. Only the homeowner who owns the
+-- lead's property and the contractor assigned to it can read/post.
+-- =============================================================================
+
 create table public.messages (
   id           uuid primary key default gen_random_uuid(),
   lead_id      uuid not null references public.contractor_leads (id) on delete cascade,
@@ -486,6 +500,7 @@ create index messages_lead_idx on public.messages (lead_id, created_at);
 
 alter table public.messages enable row level security;
 
+-- Can the current user see this lead (either side of it)?
 create or replace function public.can_access_lead(p_lead_id uuid)
 returns boolean
 language sql
@@ -512,3 +527,230 @@ create policy "messages select" on public.messages
 create policy "messages insert" on public.messages
   for insert to authenticated
   with check (public.can_access_lead(lead_id) and sender_id = auth.uid());
+
+
+-- =====================================================================
+-- file: supabase/migrations/0008_wallet.sql
+-- =====================================================================
+-- =============================================================================
+-- Hearth — contractor prepaid wallet
+-- Pros add funds, then PAY per lead (from their balance) to unlock it — which
+-- reveals the homeowner's contact and enables messaging. Replaces "balance
+-- owed" so a pro can't grab a lead and skip paying.
+-- `contractor_leads.paid` (from 0005) now means "unlocked/charged".
+-- =============================================================================
+
+alter table public.contractors
+  add column if not exists balance numeric(10,2) not null default 0;
+
+create table if not exists public.wallet_transactions (
+  id            uuid primary key default gen_random_uuid(),
+  contractor_id uuid not null references public.contractors (id) on delete cascade,
+  amount        numeric(10,2) not null,   -- + deposit, - lead charge
+  kind          text not null,            -- deposit, lead_charge
+  lead_id       uuid references public.contractor_leads (id) on delete set null,
+  created_at    timestamptz not null default now()
+);
+create index if not exists wallet_tx_contractor_idx
+  on public.wallet_transactions (contractor_id, created_at desc);
+
+alter table public.wallet_transactions enable row level security;
+create policy "wallet tx owner select" on public.wallet_transactions
+  for select to authenticated
+  using (contractor_id in (select id from public.contractors where user_id = auth.uid()));
+
+-- Add funds (simulated — no real charge yet). UI enforces $5–$100; enforced here too.
+create or replace function public.add_deposit(p_amount numeric)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_cid uuid;
+begin
+  if p_amount < 5 or p_amount > 100 then
+    raise exception 'Deposit must be between $5 and $100';
+  end if;
+  select id into v_cid from public.contractors where user_id = auth.uid();
+  if v_cid is null then raise exception 'Not a contractor'; end if;
+  update public.contractors set balance = balance + p_amount where id = v_cid;
+  insert into public.wallet_transactions (contractor_id, amount, kind)
+    values (v_cid, p_amount, 'deposit');
+end;
+$$;
+
+-- Pay a lead's fee from the wallet to unlock contact + messaging.
+create or replace function public.unlock_lead(p_lead_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_cid uuid; v_fee numeric; v_balance numeric; v_paid boolean;
+begin
+  select id, balance into v_cid, v_balance
+    from public.contractors where user_id = auth.uid();
+  if v_cid is null then raise exception 'Not a contractor'; end if;
+
+  select payout_amount, paid into v_fee, v_paid
+    from public.contractor_leads
+    where id = p_lead_id and contractor_id = v_cid;
+  if v_fee is null then raise exception 'Lead not found'; end if;
+  if v_paid then return; end if;
+  if v_balance < v_fee then
+    raise exception 'Insufficient balance — add funds first';
+  end if;
+
+  update public.contractors set balance = balance - v_fee where id = v_cid;
+  update public.contractor_leads set paid = true, paid_at = now() where id = p_lead_id;
+  insert into public.wallet_transactions (contractor_id, amount, kind, lead_id)
+    values (v_cid, -v_fee, 'lead_charge', p_lead_id);
+end;
+$$;
+
+grant execute on function public.add_deposit(numeric) to authenticated;
+grant execute on function public.unlock_lead(uuid) to authenticated;
+
+
+-- =====================================================================
+-- file: supabase/migrations/0009_social.sql
+-- =====================================================================
+-- =============================================================================
+-- Hearth — social & engagement tables
+--   reviews            homeowner rates a contractor after a finished job
+--   reports            either party flags a conversation for the Hearth team
+--   message_reactions  emoji reactions on a chat message
+--   lead_reads         per-side read receipts for a lead's thread
+--
+-- These were originally created by hand in the Supabase dashboard; this brings
+-- them under version control. Written idempotently (IF NOT EXISTS / drop policy
+-- first) so it is safe to run against an existing database as well as a fresh
+-- one. Depends on can_access_lead() (0007) and owns_property() (0002).
+-- =============================================================================
+
+-- ---------------------------------------------------------------------------
+-- Reviews
+-- ---------------------------------------------------------------------------
+create table if not exists public.reviews (
+  id            uuid primary key default gen_random_uuid(),
+  lead_id       uuid not null references public.contractor_leads (id) on delete cascade,
+  contractor_id uuid not null references public.contractors (id) on delete cascade,
+  property_id   uuid references public.properties (id) on delete set null,
+  rating        smallint not null check (rating between 1 and 5),
+  comment       text,
+  created_at    timestamptz not null default now()
+);
+create index if not exists reviews_contractor_idx on public.reviews (contractor_id);
+create index if not exists reviews_lead_idx on public.reviews (lead_id);
+
+alter table public.reviews enable row level security;
+
+-- Either party to the lead can read it; a contractor can also read reviews
+-- written about them.
+drop policy if exists "reviews select" on public.reviews;
+create policy "reviews select" on public.reviews
+  for select to authenticated
+  using (
+    public.can_access_lead(lead_id)
+    or contractor_id in (select id from public.contractors where user_id = auth.uid())
+  );
+
+-- Only someone on the lead (the homeowner) can leave the review.
+drop policy if exists "reviews insert" on public.reviews;
+create policy "reviews insert" on public.reviews
+  for insert to authenticated
+  with check (public.can_access_lead(lead_id));
+
+-- ---------------------------------------------------------------------------
+-- Reports
+-- ---------------------------------------------------------------------------
+create table if not exists public.reports (
+  id            uuid primary key default gen_random_uuid(),
+  lead_id       uuid not null references public.contractor_leads (id) on delete cascade,
+  reporter_id   uuid references auth.users (id) on delete set null,
+  reporter_role text not null,           -- homeowner, contractor
+  reason        text,
+  created_at    timestamptz not null default now()
+);
+create index if not exists reports_lead_idx on public.reports (lead_id, created_at desc);
+
+alter table public.reports enable row level security;
+
+-- Reporters can file a report and see their own; the Hearth team reviews
+-- everything via the service role (which bypasses RLS).
+drop policy if exists "reports insert" on public.reports;
+create policy "reports insert" on public.reports
+  for insert to authenticated
+  with check (public.can_access_lead(lead_id) and reporter_id = auth.uid());
+
+drop policy if exists "reports select" on public.reports;
+create policy "reports select" on public.reports
+  for select to authenticated
+  using (reporter_id = auth.uid());
+
+-- ---------------------------------------------------------------------------
+-- Message reactions
+-- ---------------------------------------------------------------------------
+create table if not exists public.message_reactions (
+  id          uuid primary key default gen_random_uuid(),
+  message_id  uuid not null references public.messages (id) on delete cascade,
+  lead_id     uuid not null references public.contractor_leads (id) on delete cascade,
+  user_id     uuid references auth.users (id) on delete set null,
+  emoji       text not null,
+  created_at  timestamptz not null default now()
+);
+-- One reaction of a given emoji per user per message (supports the toggle).
+create unique index if not exists message_reactions_unique
+  on public.message_reactions (message_id, user_id, emoji);
+create index if not exists message_reactions_lead_idx
+  on public.message_reactions (lead_id);
+
+alter table public.message_reactions enable row level security;
+
+drop policy if exists "reactions select" on public.message_reactions;
+create policy "reactions select" on public.message_reactions
+  for select to authenticated
+  using (public.can_access_lead(lead_id));
+
+drop policy if exists "reactions insert" on public.message_reactions;
+create policy "reactions insert" on public.message_reactions
+  for insert to authenticated
+  with check (public.can_access_lead(lead_id) and user_id = auth.uid());
+
+drop policy if exists "reactions delete" on public.message_reactions;
+create policy "reactions delete" on public.message_reactions
+  for delete to authenticated
+  using (user_id = auth.uid());
+
+-- ---------------------------------------------------------------------------
+-- Lead read receipts
+-- ---------------------------------------------------------------------------
+create table if not exists public.lead_reads (
+  id         uuid primary key default gen_random_uuid(),
+  lead_id    uuid not null references public.contractor_leads (id) on delete cascade,
+  role       text not null,          -- homeowner, contractor
+  read_at    timestamptz not null default now()
+);
+-- One row per side; the app upserts on (lead_id, role).
+create unique index if not exists lead_reads_unique
+  on public.lead_reads (lead_id, role);
+
+alter table public.lead_reads enable row level security;
+
+drop policy if exists "lead_reads select" on public.lead_reads;
+create policy "lead_reads select" on public.lead_reads
+  for select to authenticated
+  using (public.can_access_lead(lead_id));
+
+-- Upsert needs both insert and update permission.
+drop policy if exists "lead_reads insert" on public.lead_reads;
+create policy "lead_reads insert" on public.lead_reads
+  for insert to authenticated
+  with check (public.can_access_lead(lead_id));
+
+drop policy if exists "lead_reads update" on public.lead_reads;
+create policy "lead_reads update" on public.lead_reads
+  for update to authenticated
+  using (public.can_access_lead(lead_id))
+  with check (public.can_access_lead(lead_id));
+
