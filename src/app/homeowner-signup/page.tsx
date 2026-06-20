@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 // immediately and sent to claim their home; if it's ON, we tell them to verify.
 export default function HomeownerSignUpPage() {
   const supabase = createClient();
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<string | null>(null);
@@ -27,7 +28,7 @@ export default function HomeownerSignUpPage() {
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: { data: { role: "homeowner" } },
+      options: { data: { role: "homeowner", full_name: fullName.trim() } },
     });
 
     if (error) {
@@ -68,6 +69,22 @@ export default function HomeownerSignUpPage() {
 
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
+            <label className="label" htmlFor="full_name">
+              Full name
+            </label>
+            <input
+              id="full_name"
+              className="input"
+              type="text"
+              autoComplete="name"
+              placeholder="e.g. Alex Rivera"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              autoFocus
+              required
+            />
+          </div>
+          <div>
             <label className="label" htmlFor="email">
               Email
             </label>
@@ -79,7 +96,6 @@ export default function HomeownerSignUpPage() {
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              autoFocus
               required
             />
           </div>
