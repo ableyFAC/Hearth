@@ -39,8 +39,9 @@ export async function saveCompanyAction(formData: FormData) {
       .update(fields)
       .eq("id", existing.id);
     if (error) throw new Error(error.message);
+    setFlash("Profile saved.");
     revalidatePath("/pro/profile");
-    redirect("/pro/profile?saved=1");
+    redirect("/pro/profile");
   }
 
   // First-time setup. vetted = true so the company is matchable immediately
