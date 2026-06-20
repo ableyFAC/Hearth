@@ -33,12 +33,13 @@ function money(n: number | string | null) {
 async function unlockLeadAction(formData: FormData) {
   "use server";
   const id = String(formData.get("id"));
-  const supabase = createClient();
-  const { error } = await supabase.rpc("unlock_lead", { p_lead_id: id });
-  setFlash(
-    error ? error.message : "Lead unlocked — homeowner contact revealed",
-    error ? "error" : "success"
-  );
+  const supabase = createClient() as any;
+  // charge_lead spends cash first, then bonus (FIFO). Returns false if broke.
+  const { data, error } = await supabase.rpc("charge_lead", { p_lead: id });
+  if (error) setFlash(error.message, "error");
+  else if (data === false)
+    setFlash("Not enough balance. Add funds to unlock.", "error");
+  else setFlash("Lead unlocked.", "success");
   revalidatePath("/pro");
   revalidatePath("/pro/billing");
   revalidatePath("/pro/chats");
@@ -59,7 +60,15 @@ export default async function ProDashboard({
     .eq("contractor_id", contractor.id)
     .order("created_at", { ascending: false });
 
-  const balance = Number(contractor.balance ?? 0);
+  const { data: wallet } = await (supabase as any)
+    .from("wallets")
+    .select("cash_balance_cents, bonus_balance_cents")
+    .eq("contractor_id", contractor.id)
+    .maybeSingle();
+  const balance =
+    (Number(wallet?.cash_balance_cents ?? 0) +
+      Number(wallet?.bonus_balance_cents ?? 0)) /
+    100;
   // Unlocked = the lead's fee has been paid from the wallet (set by unlock_lead).
   const isUnlocked = (l: any) => Boolean(l.paid);
 
@@ -284,7 +293,6 @@ function LeadCard({
             {canAfford ? (
               <form action={unlockLeadAction}>
                 <input type="hidden" name="id" value={l.id} />
-                <input type="hidden" name="fee" value={fee} />
                 <button className="btn-primary">
                   Unlock for {money(l.payout_amount)}
                 </button>

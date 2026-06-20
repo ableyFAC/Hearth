@@ -1,101 +1,120 @@
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
-import { setFlash } from "@/lib/flash";
+import { createClient } from "@/lib/supabase/server";
+import DepositForm from "./DepositForm";
+import Confetti from "@/components/Confetti";
+import FadingBanner from "@/components/FadingBanner";
 
-// Add funds to the wallet via the secure add_deposit() RPC ($5–$100, enforced
-// in the DB too).
-async function addDepositAction(formData: FormData) {
-  "use server";
-  const amount = Number(formData.get("amount"));
-  const supabase = createClient();
-  const { error } = await supabase.rpc("add_deposit", { p_amount: amount });
-  setFlash(
-    error ? error.message : `Added $${amount.toFixed(0)} to your balance`,
-    error ? "error" : "success"
-  );
-  revalidatePath("/pro/billing");
-  revalidatePath("/pro");
+function dollars(cents: number | string | null) {
+  const v = Number(cents ?? 0);
+  return `$${((Number.isFinite(v) ? v : 0) / 100).toFixed(2)}`;
 }
 
-function money(n: number | string | null) {
-  const v = Number(n ?? 0);
-  return `$${(Number.isFinite(v) ? v : 0).toFixed(2)}`;
-}
+const TX_LABEL: Record<string, string> = {
+  deposit: "Deposit",
+  bonus_grant: "Bonus credit",
+  lead_charge: "Lead unlocked",
+  bonus_expiry: "Bonus expired",
+  adjustment: "Adjustment",
+};
 
-// Deposit presets. Minimum $5; custom is $5–$100.
-const PRESETS = [5, 10, 25, 50];
-
-export default async function ProBillingPage() {
+export default async function ProBillingPage({
+  searchParams,
+}: {
+  searchParams: { paid?: string; canceled?: string };
+}) {
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");
 
   const supabase = createClient();
-  const { data: txns } = await supabase
-    .from("wallet_transactions")
-    .select("*")
-    .eq("contractor_id", contractor.id)
-    .order("created_at", { ascending: false })
-    .limit(50);
 
-  const balance = Number(contractor.balance ?? 0);
+  const { data: wallet } = await supabase
+    .from("wallets")
+    .select("id, cash_balance_cents, bonus_balance_cents")
+    .eq("contractor_id", contractor.id)
+    .maybeSingle();
+
+  const cash = Number((wallet as any)?.cash_balance_cents ?? 0);
+  const bonus = Number((wallet as any)?.bonus_balance_cents ?? 0);
+
+  const { data: tiers } = await supabase
+    .from("deposit_tiers")
+    .select("min_cents, max_cents, bonus_pct")
+    .order("min_cents", { ascending: true });
+
+  let txns: any[] = [];
+  if ((wallet as any)?.id) {
+    const { data } = await supabase
+      .from("wallet_transactions")
+      .select("*")
+      .eq("wallet_id", (wallet as any).id)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    txns = data ?? [];
+  }
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-stone-900">Wallet</h1>
+        <h1 className="text-2xl font-semibold text-stone-900">Billing</h1>
         <p className="mt-1 text-sm text-stone-500">
-          Add funds, then pay per lead to unlock the homeowner&apos;s contact.
-          (Demo — no real charge is processed yet.)
+          Deposit credit, then spend it unlocking leads. Lead prices vary by
+          service.
         </p>
       </div>
 
+      {searchParams.paid && (
+        <>
+          <Confetti />
+          <FadingBanner className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+            ✅ Payment received. Your wallet has been credited.
+          </FadingBanner>
+        </>
+      )}
+      {searchParams.canceled && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          Checkout canceled — no charge was made.
+        </div>
+      )}
+
+      {/* Balances */}
       <section className="grid gap-4 sm:grid-cols-2">
         <div className="card border-hearth-200 bg-hearth-50">
-          <p className="text-sm font-medium text-hearth-800">Wallet balance</p>
-          <p className="mt-1 text-4xl font-bold text-hearth-900">{money(balance)}</p>
+          <p className="text-sm font-medium text-hearth-800">Cash balance</p>
+          <p className="mt-1 text-4xl font-bold text-hearth-900">
+            {dollars(cash)}
+          </p>
+          <p className="mt-1 text-xs text-hearth-700">Never expires.</p>
         </div>
-
-        <div className="card space-y-3">
-          <p className="text-sm font-medium text-stone-500">Add funds</p>
-          <div className="flex flex-wrap gap-2">
-            {PRESETS.map((a) => (
-              <form key={a} action={addDepositAction}>
-                <input type="hidden" name="amount" value={a} />
-                <button className="btn-secondary">+ ${a}</button>
-              </form>
-            ))}
-          </div>
-          <form action={addDepositAction} className="flex gap-2">
-            <input
-              name="amount"
-              type="number"
-              min={5}
-              max={100}
-              step={1}
-              required
-              placeholder="Custom ($5–$100)"
-              className="input max-w-[180px]"
-            />
-            <button className="btn-primary">Add</button>
-          </form>
-          <p className="text-xs text-stone-400">
-            Minimum $5 · maximum $100 per deposit.
+        <div className="card border-amber-200 bg-amber-50">
+          <p className="text-sm font-medium text-amber-800">Bonus credit</p>
+          <p className="mt-1 text-4xl font-bold text-amber-900">
+            {dollars(bonus)}
+          </p>
+          <p className="mt-1 text-xs text-amber-700">
+            Promotional · expires 60 days after each grant.
           </p>
         </div>
       </section>
 
+      {/* Deposit */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-stone-900">Add credit</h2>
+        <DepositForm tiers={(tiers as any) ?? []} />
+      </section>
+
+      {/* Activity */}
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-stone-900">Activity</h2>
-        {!txns || txns.length === 0 ? (
+        {txns.length === 0 ? (
           <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
-            No activity yet. Add funds to get started.
+            No activity yet. Add credit to get started.
           </p>
         ) : (
           <ul className="space-y-2">
-            {txns.map((t: any) => {
-              const credit = Number(t.amount) >= 0;
+            {txns.map((t) => {
+              const net = Number(t.cash_delta_cents) + Number(t.bonus_delta_cents);
+              const positive = net >= 0;
               return (
                 <li
                   key={t.id}
@@ -103,7 +122,7 @@ export default async function ProBillingPage() {
                 >
                   <div>
                     <span className="font-medium text-stone-900">
-                      {t.kind === "deposit" ? "Funds added" : "Lead unlocked"}
+                      {TX_LABEL[t.type] ?? t.type}
                     </span>
                     <p className="text-xs text-stone-400">
                       {new Date(t.created_at).toLocaleString()}
@@ -111,11 +130,11 @@ export default async function ProBillingPage() {
                   </div>
                   <span
                     className={`font-semibold ${
-                      credit ? "text-green-600" : "text-stone-700"
+                      positive ? "text-green-600" : "text-stone-700"
                     }`}
                   >
-                    {credit ? "+" : "−"}
-                    {money(Math.abs(Number(t.amount)))}
+                    {positive ? "+" : "−"}
+                    {dollars(Math.abs(net))}
                   </span>
                 </li>
               );
