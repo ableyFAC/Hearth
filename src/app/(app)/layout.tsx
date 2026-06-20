@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getActiveProperty, getProperties } from "@/lib/property";
 import { getRole } from "@/lib/contractor";
+import { getUserProfile } from "@/lib/user";
 import Nav from "@/components/Nav";
 import NewMessageNotifier from "@/components/NewMessageNotifier";
 
@@ -13,15 +14,18 @@ export default async function AppLayout({
 }) {
   if ((await getRole()) === "contractor") redirect("/pro");
 
-  const [active, homes] = await Promise.all([
+  const [active, homes, profile] = await Promise.all([
     getActiveProperty(),
     getProperties(),
+    getUserProfile(),
   ]);
   if (!active) redirect("/onboarding");
 
+  const name = profile?.full_name || profile?.email || null;
+
   return (
     <div className="min-h-screen">
-      <Nav homes={homes} activeId={active.id} />
+      <Nav homes={homes} activeId={active.id} name={name} />
       <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
       <NewMessageNotifier role="homeowner" />
     </div>

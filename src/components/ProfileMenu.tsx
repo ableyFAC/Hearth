@@ -3,9 +3,19 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
-// Profile avatar + dropdown in the top-right of the contractor nav. Replaces the
-// separate Company / Billing / Sign out buttons with a single menu.
-export default function ProMenu({ company }: { company: string | null }) {
+type MenuLink = { href: string; label: string };
+
+// Avatar + dropdown shown in the top-right of both navs. The menu links differ
+// per side (contractor: company listing + billing; homeowner: account), but the
+// chrome — avatar, name, chevron, and the Log out form — is shared so the two
+// toolbars can't drift apart.
+export default function ProfileMenu({
+  name,
+  links,
+}: {
+  name: string | null;
+  links: MenuLink[];
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -47,10 +57,8 @@ export default function ProMenu({ company }: { company: string | null }) {
             <path d="M4 20c0-3.6 3.6-6 8-6s8 2.4 8 6v1H4v-1z" />
           </svg>
         </span>
-        {company && (
-          <span className="hidden max-w-[12rem] truncate sm:inline">
-            {company}
-          </span>
+        {name && (
+          <span className="hidden max-w-[12rem] truncate sm:inline">{name}</span>
         )}
         {/* Dropdown indicator. */}
         <svg
@@ -74,22 +82,17 @@ export default function ProMenu({ company }: { company: string | null }) {
           role="menu"
           className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg"
         >
-          <Link
-            href="/pro/profile"
-            role="menuitem"
-            onClick={() => setOpen(false)}
-            className="block px-4 py-2 text-sm text-stone-700 hover:bg-hearth-50"
-          >
-            Edit profile
-          </Link>
-          <Link
-            href="/pro/billing"
-            role="menuitem"
-            onClick={() => setOpen(false)}
-            className="block px-4 py-2 text-sm text-stone-700 hover:bg-hearth-50"
-          >
-            Billing
-          </Link>
+          {links.map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="block px-4 py-2 text-sm text-stone-700 hover:bg-hearth-50"
+            >
+              {l.label}
+            </Link>
+          ))}
           <form
             action="/auth/signout"
             method="post"

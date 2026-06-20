@@ -1,14 +1,17 @@
 import Link from "next/link";
 import HomeSwitcher from "@/components/HomeSwitcher";
 import NavLinks from "@/components/NavLinks";
+import ProfileMenu from "@/components/ProfileMenu";
 import type { Property } from "@/lib/database.types";
 
 export default function Nav({
   homes,
   activeId,
+  name,
 }: {
   homes: Property[];
   activeId: string;
+  name: string | null;
 }) {
   const LINKS = [
     { href: "/dashboard", label: "Dashboard" },
@@ -28,14 +31,13 @@ export default function Nav({
           <span className="hidden text-stone-300 sm:inline">·</span>
           <HomeSwitcher homes={homes} activeId={activeId} />
         </div>
-        <nav className="-mx-1 flex items-center gap-1 overflow-x-auto px-1">
-          <NavLinks links={LINKS} />
-          <form action="/auth/signout" method="post">
-            <button className="ml-1 whitespace-nowrap rounded-md px-3 py-1.5 text-sm text-stone-400 hover:text-stone-700">
-              Sign out
-            </button>
-          </form>
-        </nav>
+        <div className="flex items-center gap-1">
+          <nav className="-mx-1 flex items-center gap-1 overflow-x-auto px-1">
+            <NavLinks links={LINKS} />
+          </nav>
+          {/* Account / Log out — mirrors the contractor profile menu. */}
+          <ProfileMenu name={name} links={[{ href: "/account", label: "Edit profile" }]} />
+        </div>
       </div>
     </header>
   );
