@@ -259,6 +259,44 @@ export interface Database {
         >;
         Relationships: [];
       };
+      message_reactions: {
+        Row: {
+          id: string;
+          message_id: string;
+          lead_id: string;
+          user_id: string | null;
+          emoji: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          message_id: string;
+          lead_id: string;
+          user_id?: string | null;
+          emoji: string;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["message_reactions"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      lead_reads: {
+        Row: {
+          id: string;
+          lead_id: string;
+          role: string;
+          read_at: string;
+        };
+        Insert: {
+          id?: string;
+          lead_id: string;
+          role: string;
+          read_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["lead_reads"]["Insert"]>;
+        Relationships: [];
+      };
       contractor_leads: {
         Row: {
           id: string;

@@ -2,12 +2,18 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import LiveUnreadBadge from "@/components/LiveUnreadBadge";
 
 // Highlights whichever link matches the current route.
 export default function NavLinks({
   links,
 }: {
-  links: { href: string; label: string; badge?: number }[];
+  links: {
+    href: string;
+    label: string;
+    badge?: number;
+    liveBadge?: "homeowner" | "contractor";
+  }[];
 }) {
   const pathname = usePathname();
 
@@ -31,8 +37,10 @@ export default function NavLinks({
             }`}
           >
             {l.label}
-            {l.badge ? (
-              <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-hearth-600 px-1.5 text-xs font-semibold text-white">
+            {l.liveBadge ? (
+              <LiveUnreadBadge role={l.liveBadge} />
+            ) : l.badge ? (
+              <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1.5 text-xs font-semibold text-white">
                 {l.badge}
               </span>
             ) : null}
