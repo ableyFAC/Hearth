@@ -28,6 +28,12 @@ export async function saveCompanyAction(formData: FormData) {
   const existing = await getCurrentContractor();
 
   if (existing) {
+    // The license is a verified legal identifier — once set it's locked and
+    // can't be changed from the profile. Keep the existing value so a missing
+    // (read-only) field can't wipe or swap it.
+    if (existing.license_number) {
+      fields.license_number = existing.license_number;
+    }
     const { error } = await supabase
       .from("contractors")
       .update(fields)

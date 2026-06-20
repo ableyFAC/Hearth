@@ -285,6 +285,7 @@ export default function LeadChat({
   // persists to the DB (and syncs on the next load).
   async function react(messageId: string, emoji: string) {
     const uid = await ensureUid();
+    if (!uid) return;
     const mineAlready = (reactions[messageId] ?? []).some(
       (r) => r.emoji === emoji && r.user_id === uid
     );

@@ -14,6 +14,11 @@ export default function CompanyForm({
 }) {
   const cats = contractor?.categories ?? [];
 
+  // Once a license number is on file it's locked — it's a legal identifier we
+  // verify, so it can't be edited from the profile. During onboarding (no
+  // contractor yet) the field is open so they can enter it the first time.
+  const licenseLocked = Boolean(contractor?.license_number);
+
   return (
     <form action={saveCompanyAction} className="card space-y-4">
       <div>
@@ -61,13 +66,38 @@ export default function CompanyForm({
           />
         </div>
         <div>
-          <label className="label">License #</label>
-          <input
-            name="license_number"
-            className="input"
-            defaultValue={contractor?.license_number ?? ""}
-            placeholder="CA-PL-000000"
-          />
+          <div className="flex items-center justify-between">
+            <label className="label">License #</label>
+            {licenseLocked &&
+              (contractor?.vetted ? (
+                <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                  Verified ✓
+                </span>
+              ) : (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                  Pending review
+                </span>
+              ))}
+          </div>
+          {licenseLocked ? (
+            <>
+              {/* Read-only display. Locked so the license can't be edited here. */}
+              <div className="input cursor-not-allowed bg-stone-100 text-stone-400 select-none">
+                {contractor?.license_number}
+              </div>
+              <p className="mt-1 text-xs text-stone-400">
+                Your license is verified and can&apos;t be edited. Contact
+                support to make a correction.
+              </p>
+            </>
+          ) : (
+            <input
+              name="license_number"
+              className="input"
+              defaultValue={contractor?.license_number ?? ""}
+              placeholder="CA-PL-000000"
+            />
+          )}
         </div>
         <div>
           <label className="label">Contact phone</label>
