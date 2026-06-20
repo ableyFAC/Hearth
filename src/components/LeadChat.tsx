@@ -149,7 +149,7 @@ export default function LeadChat({
   // End the conversation with a reason (after confirmation).
   async function confirmClose() {
     const reason = closeReason || "Other";
-    await postSystem(`${CLOSE_PREFIX} by the ${role} — ${reason}`);
+    await postSystem(`${CLOSE_PREFIX} by the ${role}. ${reason}`);
     setConfirmingClose(false);
     setCloseReason("");
   }
