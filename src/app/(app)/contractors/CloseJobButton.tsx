@@ -16,6 +16,8 @@ const REASONS = [
 // to yet. The panel expands downward, so nothing shifts horizontally.
 export default function CloseJobButton({ leadId }: { leadId: string }) {
   const [confirming, setConfirming] = useState(false);
+  const [reason, setReason] = useState("");
+  const [other, setOther] = useState("");
 
   if (!confirming) {
     return (
@@ -31,15 +33,13 @@ export default function CloseJobButton({ leadId }: { leadId: string }) {
     );
   }
 
-  // Right-aligned so it opens exactly where the "Close job" button was - the
-  // reason dropdown lands under the cursor, no mouse travel.
   return (
     <form action={closeJobAction} className="flex flex-col items-end gap-2">
       <input type="hidden" name="lead_id" value={leadId} />
       <select
-        name="reason"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
         className="select w-auto text-sm"
-        defaultValue=""
         required
       >
         <option value="" disabled>
@@ -51,6 +51,18 @@ export default function CloseJobButton({ leadId }: { leadId: string }) {
           </option>
         ))}
       </select>
+      {reason === "Other" ? (
+        <input
+          name="reason"
+          value={other}
+          onChange={(e) => setOther(e.target.value)}
+          placeholder="Tell us why"
+          className="input w-56 text-sm"
+          required
+        />
+      ) : (
+        <input type="hidden" name="reason" value={reason} />
+      )}
       <div className="flex gap-2">
         <button
           type="button"

@@ -47,6 +47,24 @@ export async function reportIssueAction(formData: FormData) {
   redirect(`/contractors?issue=${issue.id}&category=${category}`);
 }
 
+export async function updateIssueAction(formData: FormData) {
+  const id = formData.get("id") as string;
+  const supabase = createClient();
+  // RLS limits the update to an issue on a property the caller owns.
+  const { error } = await supabase
+    .from("issues")
+    .update({
+      category: formData.get("category") as string,
+      severity: formData.get("severity") as string,
+      description: (formData.get("description") as string) || null,
+    })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  setFlash("Issue updated");
+  revalidatePath("/issues");
+  revalidatePath("/dashboard");
+}
+
 export async function resolveIssueAction(formData: FormData) {
   const id = formData.get("id") as string;
   const supabase = createClient();
@@ -56,6 +74,30 @@ export async function resolveIssueAction(formData: FormData) {
     .eq("id", id);
   if (error) throw new Error(error.message);
   setFlash("Issue resolved");
+  revalidatePath("/issues");
+  revalidatePath("/dashboard");
+}
+
+// Undo: reopen a resolved issue (accidental check-off).
+export async function reopenIssueAction(id: string) {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("issues")
+    .update({ status: "open" })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/issues");
+  revalidatePath("/dashboard");
+}
+
+// Resolve via the checkbox toggle (takes an id, not FormData).
+export async function checkResolveIssueAction(id: string) {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("issues")
+    .update({ status: "resolved" })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
   revalidatePath("/issues");
   revalidatePath("/dashboard");
 }

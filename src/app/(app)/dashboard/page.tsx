@@ -7,9 +7,20 @@ import {
   systemPriority,
   assessSystem,
 } from "@/lib/health";
-import { REMODEL_PROJECTS, categoryForSystem } from "@/lib/constants";
+import {
+  REMODEL_PROJECTS,
+  categoryForSystem,
+  labelFor,
+  SYSTEM_TYPES,
+  ISSUE_CATEGORIES,
+  SEASONAL_TASKS,
+  seasonForMonth,
+} from "@/lib/constants";
 import SystemForm from "../profile/SystemForm";
 import SystemRow from "../profile/SystemRow";
+import SeasonalChecklist from "@/components/SeasonalChecklist";
+import ChecklistProvider from "@/components/ChecklistProvider";
+import ReminderItem from "./ReminderItem";
 
 export default async function HomePage({
   searchParams,
@@ -41,7 +52,7 @@ export default async function HomePage({
       .from("maintenance_tasks")
       .select("*")
       .eq("property_id", property.id)
-      .eq("status", "open")
+      .in("status", ["open", "done"])
       .order("due_date", { ascending: true }),
     supabase
       .from("photos")
@@ -82,7 +93,8 @@ export default async function HomePage({
   // Order: must-do (failing or reported issue) pinned to the very top, then by
   // maintenance status - needs maintenance (due), then plan ahead (aging), then
   // healthy, then unknown. systemPriority breaks ties within a stage.
-  const isMust = (s: any) => s.condition_rating === 1 || !!issueForSystem(s);
+  const isMust = (s: any) =>
+    s.condition_rating === 1 || issueForSystem(s)?.severity === "urgent";
   const STAGE_RANK: Record<string, number> = {
     due: 3,
     aging: 2,
@@ -101,6 +113,60 @@ export default async function HomePage({
 
   const mustCount = sortedSys.filter(isMust).length;
 
+  // Seasonal task content, but the checklist resets per month (year-month key).
+  const now = new Date();
+  const season = seasonForMonth(now.getMonth());
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  // The single thing to focus on, with "Get started" prefilled from the issue or
+  // system it points to.
+  const focus = (() => {
+    const i = openIssues[0];
+    if (i) {
+      const desc =
+        `Need help with a ${labelFor(ISSUE_CATEGORIES, i.category)} issue.` +
+        (i.description ? ` ${i.description}` : "");
+      return {
+        text: `Take care of your ${labelFor(ISSUE_CATEGORIES, i.category)} issue.`,
+        href:
+          `/contractors?category=${i.category}` +
+          `&desc=${encodeURIComponent(desc)}` +
+          (i.severity === "urgent" ? "&timing=asap" : ""),
+      };
+    }
+    const u = sortedSys.find(
+      (s) => isMust(s) || assessSystem(s).stage === "due"
+    );
+    if (u) {
+      const desc =
+        `Need help with my ${labelFor(SYSTEM_TYPES, u.system_type)}.` +
+        (u.install_year ? ` Installed ${u.install_year}.` : "") +
+        (u.material_or_model ? ` Material/model: ${u.material_or_model}.` : "") +
+        (u.condition_rating
+          ? ` I rated its condition ${u.condition_rating} of 5.`
+          : "");
+      const urgent = u.condition_rating != null && u.condition_rating <= 2;
+      return {
+        text: `Plan ahead for your ${labelFor(SYSTEM_TYPES, u.system_type)}. It needs attention.`,
+        href:
+          `/contractors?category=${categoryForSystem(u.system_type)}` +
+          `&desc=${encodeURIComponent(desc)}` +
+          (urgent ? "&timing=asap" : ""),
+      };
+    }
+    return { text: SEASONAL_TASKS[season][0], href: null as string | null };
+  })();
+
+  // Reminders: open ones always; a done (crossed-out) one lingers for 30 days
+  // after it was set, then drops off.
+  const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+  const nowMs = Date.now();
+  const reminders = (tasks ?? []).filter(
+    (t) =>
+      t.status === "open" ||
+      (t.status === "done" &&
+        nowMs - new Date(t.created_at).getTime() < THIRTY_DAYS)
+  );
   return (
     <div className="space-y-8">
       {searchParams.welcome && (
@@ -120,6 +186,47 @@ export default async function HomePage({
           Built {property.year_built ?? "-"} · {property.sqft ?? "-"} sqft ·{" "}
           {property.beds ?? "-"} bd / {property.baths ?? "-"} ba
         </p>
+      </section>
+
+      {/* This month: focus + one merged checklist (reminders + seasonal) */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-stone-900">This month</h2>
+        <div className="card space-y-3">
+          <div className="rounded-lg bg-hearth-50 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-hearth-700">
+              Focus
+            </p>
+            <p className="mt-0.5 text-sm text-stone-900">
+              {focus.text}
+              {focus.href && (
+                <Link
+                  href={focus.href}
+                  className="ml-1 font-medium text-hearth-700 hover:underline"
+                >
+                  Get started →
+                </Link>
+              )}
+            </p>
+          </div>
+
+          <ChecklistProvider>
+            <ul className="space-y-2 border-t border-stone-100 pt-3">
+              {reminders.map((t) => (
+                <ReminderItem
+                  key={t.id}
+                  id={t.id}
+                  title={t.title}
+                  due={t.due_date}
+                  initialDone={t.status === "done"}
+                />
+              ))}
+              <SeasonalChecklist
+                period={monthKey}
+                tasks={SEASONAL_TASKS[season]}
+              />
+            </ul>
+          </ChecklistProvider>
+        </div>
       </section>
 
       {/* Key stats */}
@@ -222,23 +329,6 @@ export default async function HomePage({
         </div>
       </section>
 
-      {tasks && tasks.length > 0 && (
-        <details className="space-y-3">
-          <summary className="w-fit cursor-pointer text-lg font-semibold text-stone-900 marker:text-stone-400">
-            Your tasks ({tasks.length})
-          </summary>
-          <ul className="space-y-2">
-            {tasks.map((t) => (
-              <li key={t.id} className="card flex items-center justify-between">
-                <span className="text-stone-800">{t.title}</span>
-                <span className="text-xs text-stone-400">
-                  {t.due_date ?? "no date"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
     </div>
   );
 }

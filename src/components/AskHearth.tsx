@@ -2,28 +2,53 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { logIssueFromChat, setReminderFromChat } from "@/lib/ask-actions";
 
 type Msg = { role: "user" | "assistant"; content: string };
 type Job = { category: string; timing: string; summary: string };
 
-// The assistant appends a [[POSTJOB]]{...}[[/POSTJOB]] block when the owner wants
-// to hire. Pull it out so we can show a prefilled "Post this job" button and not
-// render the raw block.
-function parseJob(content: string): { text: string; job: Job | null } {
-  const m = content.match(/\[\[POSTJOB\]\]([\s\S]*?)\[\[\/POSTJOB\]\]/);
-  if (!m) return { text: content, job: null };
-  let job: Job | null = null;
+// The assistant can append machine-readable [[TAG]]{...}[[/TAG]] blocks for
+// actions (hire a pro, log an issue, set a reminder). Pull each out of the
+// visible text and turn it into a button.
+function extractBlock(
+  content: string,
+  tag: string
+): { content: string; data: any } {
+  const re = new RegExp(`\\[\\[${tag}\\]\\]([\\s\\S]*?)\\[\\[\\/${tag}\\]\\]`);
+  const m = content.match(re);
+  if (!m) return { content, data: null };
+  let data: any = null;
   try {
-    const p = JSON.parse(m[1].trim());
-    job = {
-      category: String(p.category ?? "other"),
-      timing: String(p.timing ?? ""),
-      summary: String(p.summary ?? ""),
-    };
+    data = JSON.parse(m[1].trim());
   } catch {
     /* ignore malformed block */
   }
-  return { text: content.replace(m[0], "").trim(), job };
+  return { content: content.replace(m[0], "").trim(), data };
+}
+
+function parseAssistant(content: string): {
+  text: string;
+  job: Job | null;
+  issue: any;
+  reminder: any;
+} {
+  let text = content;
+  let r = extractBlock(text, "POSTJOB");
+  text = r.content;
+  const job: Job | null = r.data
+    ? {
+        category: String(r.data.category ?? "other"),
+        timing: String(r.data.timing ?? ""),
+        summary: String(r.data.summary ?? ""),
+      }
+    : null;
+  r = extractBlock(text, "LOGISSUE");
+  text = r.content;
+  const issue = r.data;
+  r = extractBlock(text, "REMINDER");
+  text = r.content;
+  const reminder = r.data;
+  return { text, job, issue, reminder };
 }
 
 function jobHref(job: Job): string {
@@ -34,14 +59,79 @@ function jobHref(job: Job): string {
   return `/contractors?${params.toString()}`;
 }
 
-function PostJobButton({ job }: { job: Job }) {
+// A button that runs a server action once, then shows a confirmation.
+function ActionButton({
+  label,
+  doneLabel,
+  onApply,
+}: {
+  label: string;
+  doneLabel: string;
+  onApply: () => Promise<void>;
+}) {
+  const [done, setDone] = useState(false);
+  const [busy, setBusy] = useState(false);
+  if (done)
+    return (
+      <span className="inline-block text-xs font-medium text-green-600">
+        {doneLabel}
+      </span>
+    );
   return (
-    <Link
-      href={jobHref(job)}
-      className="mt-1 inline-block rounded-lg bg-hearth-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-hearth-700"
+    <button
+      type="button"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          await onApply();
+          setDone(true);
+        } catch {
+          setBusy(false);
+        }
+      }}
+      className="inline-block rounded-lg bg-hearth-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-hearth-700 disabled:opacity-50"
     >
-      📋 Post this job
-    </Link>
+      {busy ? "…" : label}
+    </button>
+  );
+}
+
+function MessageActions({
+  job,
+  issue,
+  reminder,
+}: {
+  job: Job | null;
+  issue: any;
+  reminder: any;
+}) {
+  if (!job && !issue && !reminder) return null;
+  return (
+    <div className="mt-1 flex flex-wrap gap-2">
+      {job && (
+        <Link
+          href={jobHref(job)}
+          className="inline-block rounded-lg bg-hearth-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-hearth-700"
+        >
+          📋 Post this job
+        </Link>
+      )}
+      {issue && (
+        <ActionButton
+          label="✅ Log to home record"
+          doneLabel="✓ Logged to home record"
+          onApply={() => logIssueFromChat(issue)}
+        />
+      )}
+      {reminder && (
+        <ActionButton
+          label="🔔 Set a reminder"
+          doneLabel="✓ Reminder set"
+          onApply={() => setReminderFromChat(reminder)}
+        />
+      )}
+    </div>
   );
 }
 
@@ -166,7 +256,7 @@ export default function AskHearth({ fill = false }: { fill?: boolean }) {
     const lastRaw =
       [...messages].reverse().find((m) => m.role === "assistant")?.content ??
       null;
-    const last = lastRaw ? parseJob(lastRaw) : null;
+    const last = lastRaw ? parseAssistant(lastRaw) : null;
     return (
       <div className="card border-hearth-200 bg-hearth-50">
         <div className="flex items-start justify-between gap-2">
@@ -198,7 +288,11 @@ export default function AskHearth({ fill = false }: { fill?: boolean }) {
         ) : last ? (
           <div className="mt-3 rounded-lg border border-stone-200 bg-white p-3 text-sm text-stone-700">
             <p className="whitespace-pre-wrap">{last.text}</p>
-            {last.job && <PostJobButton job={last.job} />}
+            <MessageActions
+              job={last.job}
+              issue={last.issue}
+              reminder={last.reminder}
+            />
           </div>
         ) : null}
       </div>
@@ -225,10 +319,10 @@ export default function AskHearth({ fill = false }: { fill?: boolean }) {
 
       <div className="flex-1 space-y-2 overflow-y-auto py-2">
         {messages.map((m, i) => {
-          const { text, job } =
+          const parsed =
             m.role === "assistant"
-              ? parseJob(m.content)
-              : { text: m.content, job: null };
+              ? parseAssistant(m.content)
+              : { text: m.content, job: null, issue: null, reminder: null };
           return (
             <div
               key={i}
@@ -243,9 +337,13 @@ export default function AskHearth({ fill = false }: { fill?: boolean }) {
                     : "border border-stone-200 bg-white text-stone-700"
                 }`}
               >
-                {text}
+                {parsed.text}
               </span>
-              {job && <PostJobButton job={job} />}
+              <MessageActions
+                job={parsed.job}
+                issue={parsed.issue}
+                reminder={parsed.reminder}
+              />
             </div>
           );
         })}

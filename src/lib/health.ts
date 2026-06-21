@@ -22,6 +22,101 @@ export const DEFAULT_LIFESPANS: Record<string, number> = {
   fence: 18,
 };
 
+// Rough national replacement cost RANGES (USD) plus a plain explanation of what
+// drives the price. Ballpark planning figures, not quotes.
+export interface ReplacementInfo {
+  low: number;
+  high: number;
+  why: string;
+}
+
+export const REPLACEMENT_INFO: Record<string, ReplacementInfo> = {
+  roof: {
+    low: 8000,
+    high: 18000,
+    why: "Mostly the size and pitch of the roof, the material (asphalt shingles are cheapest; metal, tile, and slate cost much more), tearing off the old roof, and repairing any rotted decking underneath.",
+  },
+  hvac: {
+    low: 5000,
+    high: 10000,
+    why: "The unit size your home needs, its efficiency rating, whether the ductwork needs work, and the labor to install it and charge the refrigerant.",
+  },
+  water_heater: {
+    low: 1200,
+    high: 3500,
+    why: "Tank vs tankless (tankless costs more upfront), gas vs electric, the capacity, and any venting or plumbing changes.",
+  },
+  electrical_panel: {
+    low: 1500,
+    high: 4000,
+    why: "The amperage (200A costs more than 100A), whether the meter or wiring also needs upgrading, permits, and an electrician's labor.",
+  },
+  plumbing: {
+    low: 4000,
+    high: 15000,
+    why: "A whole-home repipe scales with the home's size, number of bathrooms, pipe material (copper costs more than PEX), and how much wall access is needed.",
+  },
+  windows: {
+    low: 5000,
+    high: 15000,
+    why: "The number of windows, frame material, glass type (double vs triple pane), and any frame or trim repairs.",
+  },
+  foundation: {
+    low: 3000,
+    high: 12000,
+    why: "The type and extent of the damage, how accessible it is, and whether it's minor crack sealing or major structural work like piers.",
+  },
+  appliance: {
+    low: 600,
+    high: 3000,
+    why: "The appliance type and brand, its capacity and features, and installation or haul-away of the old unit.",
+  },
+  gutters: {
+    low: 1000,
+    high: 3000,
+    why: "The linear footage, material (aluminum vs copper), seamless vs sectional, and the number of downspouts.",
+  },
+  siding: {
+    low: 8000,
+    high: 20000,
+    why: "The home's square footage, material (vinyl is cheapest; fiber cement and wood cost more), removing the old siding, and any house wrap or insulation.",
+  },
+  garage_door: {
+    low: 800,
+    high: 2500,
+    why: "Single vs double, the material and insulation, and whether the opener and springs are replaced too.",
+  },
+  deck: {
+    low: 4000,
+    high: 12000,
+    why: "The size, material (pressure-treated wood vs composite), railings, and any footings or permits.",
+  },
+  driveway: {
+    low: 3000,
+    high: 8000,
+    why: "The square footage, material (concrete vs asphalt vs pavers), demolition of the old surface, and grading.",
+  },
+  sump_pump: {
+    low: 400,
+    high: 1200,
+    why: "The pump type, whether a battery backup is added, and any work on the pit or discharge line.",
+  },
+  sewer_line: {
+    low: 3000,
+    high: 8000,
+    why: "The length and depth of the line, the method (traditional dig vs trenchless), and whether it runs under landscaping or the driveway.",
+  },
+  fence: {
+    low: 2000,
+    high: 7000,
+    why: "The linear footage, material (wood, vinyl, metal), height, and how hard the terrain is to set posts in.",
+  },
+};
+
+export function replacementInfoFor(systemType: string): ReplacementInfo | null {
+  return REPLACEMENT_INFO[systemType] ?? null;
+}
+
 export type LifeStage = "healthy" | "aging" | "due" | "unknown";
 
 export interface SystemHealth {
@@ -72,6 +167,21 @@ export function assessSystem(system: HomeSystem): SystemHealth {
   }
 
   return { system, age, lifespan, remaining, stage, message };
+}
+
+// Years until likely replacement, ADJUSTED for the owner-reported condition.
+// Age alone isn't enough - a system rated failing (1) or worn (2) needs action
+// much sooner than its typical lifespan implies, so we cap the years left.
+export function effectiveYearsLeft(system: HomeSystem): number | null {
+  const ageBased = assessSystem(system).remaining;
+  const c = system.condition_rating;
+  let cap: number | null = null;
+  if (c === 1) cap = 0; // failing - now
+  else if (c === 2) cap = 2; // worn - within ~2 years
+  else if (c === 3) cap = 5; // fair - within ~5 years
+  if (cap == null) return ageBased; // good / unknown: no adjustment
+  if (ageBased == null) return cap; // no install year: condition drives it
+  return Math.min(ageBased, cap);
 }
 
 // Sort weight for the systems list - higher = more urgent. Combines the

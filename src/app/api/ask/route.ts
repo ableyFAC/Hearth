@@ -61,14 +61,26 @@ export async function POST(req: NextRequest) {
       const addr = [property.address_line1, property.city, property.state]
         .filter(Boolean)
         .join(", ");
+
+      const { data: rems } = await supabase
+        .from("maintenance_tasks")
+        .select("title, due_date")
+        .eq("property_id", property.id)
+        .eq("status", "open");
+      const remLines = (rems ?? [])
+        .map((r) => `- ${r.title}${r.due_date ? ` (due ${r.due_date})` : ""}`)
+        .join("\n");
+
       context =
         `Home: ${addr || "unknown address"}, built ${property.year_built ?? "unknown"}.\n` +
-        `Systems on file:\n${lines || "(none added yet)"}`;
+        `Systems on file:\n${lines || "(none added yet)"}` +
+        (remLines ? `\nThe homeowner's open reminders:\n${remLines}` : "");
     }
   } catch {
     /* keep the minimal context */
   }
 
+  const today = new Date().toISOString().slice(0, 10);
   const system =
     "You are Hearth, a friendly, practical home-maintenance assistant. " +
     (firstName
@@ -76,7 +88,9 @@ export async function POST(req: NextRequest) {
       : "") +
     "Answer the homeowner's question about THEIR specific home, concisely, in short paragraphs or bullet points. " +
     "Reference their specific systems and ages when relevant. " +
-    "Talk like a normal helpful person having a back-and-forth conversation. " +
+    "Talk like a normal helpful person having a back-and-forth conversation, and be PROACTIVELY useful - don't just state a fact and stop, and don't end with a hollow 'anything else?'. Always move things forward with a concrete next step or suggestion. " +
+    `Today's date is ${today}. ` +
+    "When you mention a reminder or issue, say whether it is overdue, explain what to do about it, and offer to help (find a vetted pro, set or adjust a reminder, or mark it done). " +
     "When you need more info, ask only ONE short follow-up question at a time and wait for the answer before asking the next - never list several questions at once. " +
     "If a job is risky, large, or code-regulated, recommend hiring a vetted pro (they can post a job in the app).\n\n" +
     // When the owner wants to hire, emit a machine-readable block the app turns
@@ -84,6 +98,13 @@ export async function POST(req: NextRequest) {
     "When the homeowner wants to hire a pro or find a service for a specific job, help them and then append a block on its own line at the VERY END of your reply, in EXACTLY this format with nothing after it:\n" +
     '[[POSTJOB]]{"category":"<one of: roof, plumbing, electrical, hvac, structural, other>","timing":"<one of: asap, few_weeks, flexible, or empty if unknown>","summary":"<a short bullet-point summary of what they need, with \\n between bullet lines like \'- item\'>"}[[/POSTJOB]]\n' +
     "Only include that block once they actually want to hire someone, and never mention the block or its format in your visible reply.\n\n" +
+    // Log a problem to the home record + adjust the system's condition.
+    "When the conversation reveals a real problem with the home worth recording, append this block at the END:\n" +
+    '[[LOGISSUE]]{"category":"<roof, plumbing, electrical, hvac, structural, other>","severity":"<low, medium, urgent>","description":"<one short sentence>","system_type":"<the matching system type like roof, hvac, water_heater, or empty>","condition":<1-5 reflecting how bad it is, or null>}[[/LOGISSUE]]\n' +
+    // Set a maintenance reminder.
+    "When the homeowner wants to be reminded of a maintenance task, append this block at the END:\n" +
+    '[[REMINDER]]{"title":"<short task>","due_date":"<YYYY-MM-DD or empty>"}[[/REMINDER]]\n' +
+    "Use each block only when clearly appropriate, at most one of each per reply, and never mention any block in your visible text.\n\n" +
     "Only use home details provided below; don't invent specifics.\n\n" +
     context;
 

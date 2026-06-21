@@ -330,3 +330,39 @@ export function iconFor(
   if (!value) return "";
   return list.find((o) => o.value === value)?.icon ?? "";
 }
+
+// Short seasonal maintenance checklist, shown on Home for the current season.
+export const SEASONAL_TASKS: Record<string, string[]> = {
+  spring: [
+    "Book an HVAC tune-up before summer.",
+    "Clear gutters of winter debris.",
+    "Inspect the roof for winter damage.",
+    "Test the sprinkler / irrigation system.",
+  ],
+  summer: [
+    "Replace or clean the AC filter.",
+    "Reseal the deck and check for loose boards.",
+    "Rinse the siding and check for damage.",
+    "Check window screens and weatherstripping.",
+  ],
+  fall: [
+    "Clean the gutters before the rains.",
+    "Book a furnace / heating tune-up.",
+    "Drain and shut off outdoor faucets.",
+    "Test the sump pump before storm season.",
+  ],
+  winter: [
+    "Check for drafts around windows and doors.",
+    "Watch the roof for ice dams after storms.",
+    "Test smoke and carbon monoxide detectors.",
+    "Know where your main water shutoff is.",
+  ],
+};
+
+// Calendar month (0-11) to season.
+export function seasonForMonth(month: number): keyof typeof SEASONAL_TASKS {
+  if (month === 11 || month <= 1) return "winter";
+  if (month <= 4) return "spring";
+  if (month <= 7) return "summer";
+  return "fall";
+}

@@ -1,15 +1,8 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
-import { labelFor, iconFor, ISSUE_CATEGORIES, SEVERITIES } from "@/lib/constants";
+import { labelFor, ISSUE_CATEGORIES } from "@/lib/constants";
 import IssueForm from "./IssueForm";
-import { resolveIssueAction } from "./actions";
-
-const SEVERITY_STYLE: Record<string, string> = {
-  low: "border-stone-200 bg-stone-50 text-stone-600",
-  medium: "border-amber-200 bg-amber-50 text-amber-700",
-  urgent: "border-red-200 bg-red-50 text-red-700",
-};
+import IssueRow from "./IssueRow";
 
 export default async function IssuesPage() {
   const property = (await getActiveProperty())!;
@@ -45,45 +38,7 @@ export default async function IssuesPage() {
         {open.length ? (
           <ul className="space-y-2">
             {open.map((i) => (
-              <li key={i.id} className="card space-y-2">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-stone-900">
-                        {iconFor(ISSUE_CATEGORIES, i.category)}{" "}
-                        {labelFor(ISSUE_CATEGORIES, i.category)}
-                      </span>
-                      <span
-                        className={`rounded-full border px-2 py-0.5 text-xs ${SEVERITY_STYLE[i.severity]}`}
-                      >
-                        {labelFor(SEVERITIES, i.severity)}
-                      </span>
-                      {i.converted_to_lead && (
-                        <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs text-green-700">
-                          pro requested
-                        </span>
-                      )}
-                    </div>
-                    {i.description && (
-                      <p className="mt-1 text-sm text-stone-600">{i.description}</p>
-                    )}
-                  </div>
-                  <form action={resolveIssueAction}>
-                    <input type="hidden" name="id" value={i.id} />
-                    <button className="text-xs text-stone-400 hover:text-green-700">
-                      Mark resolved
-                    </button>
-                  </form>
-                </div>
-                {!i.converted_to_lead && (
-                  <Link
-                    href={`/contractors?issue=${i.id}&category=${i.category}`}
-                    className="inline-block text-sm font-medium text-hearth-700 hover:underline"
-                  >
-                    Connect me with a vetted pro →
-                  </Link>
-                )}
-              </li>
+              <IssueRow key={i.id} issue={i} />
             ))}
           </ul>
         ) : (

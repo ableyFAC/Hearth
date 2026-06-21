@@ -93,7 +93,9 @@ export async function postJobAction(formData: FormData) {
 
   revalidatePath("/contractors");
   revalidatePath("/issues");
-  redirect("/contractors?posted=1");
+  // Unique token so the post form remounts and the job fields reset for the next
+  // posting (contact stays, since it's prefilled from the profile).
+  redirect(`/contractors?posted=${Date.now()}`);
 }
 
 // Homeowner edits a posted job (category, timing, details, contact). RLS limits

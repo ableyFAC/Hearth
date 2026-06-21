@@ -160,7 +160,11 @@ export default async function ContractorsPage({
         </FadingBanner>
       )}
 
-      <form action={postJobAction} className="card space-y-4">
+      <form
+        key={searchParams.posted ?? "new"}
+        action={postJobAction}
+        className="card space-y-4"
+      >
         <input type="hidden" name="issue_id" value={issueId} />
         <div className="grid gap-3 sm:grid-cols-2">
           <div>

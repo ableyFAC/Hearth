@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { assessSystem } from "@/lib/health";
+import {
+  assessSystem,
+  replacementInfoFor,
+  effectiveYearsLeft,
+} from "@/lib/health";
 import {
   labelFor,
   iconFor,
@@ -42,7 +46,11 @@ function dateToMmYyyy(d: string | null | undefined): string {
   return m ? `${m[2]}/${m[1]}` : "";
 }
 
-type OpenIssue = { category: string; description: string | null } | null;
+type OpenIssue = {
+  category: string;
+  description: string | null;
+  severity?: string | null;
+} | null;
 
 export default function SystemRow({
   system: s,
@@ -57,20 +65,31 @@ export default function SystemRow({
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const h = assessSystem(s);
-  // A system to deal with now: reported failing, or with an open reported issue.
-  const mustDo = s.condition_rating === 1 || !!openIssue;
-  // Red-bordered if it needs attention now: must-do, or due for maintenance.
-  const needsBorder = mustDo || h.stage === "due";
+  // A system to deal with now: reported failing, or with an URGENT reported
+  // issue. A low/medium issue shouldn't blare red (it lines up with the Issues
+  // tab severity instead).
+  const issueSeverity = openIssue?.severity ?? null;
+  const mustDo = s.condition_rating === 1 || issueSeverity === "urgent";
+  // Red-bordered if it needs attention: must-do, due, or a medium issue.
+  const needsBorder =
+    mustDo || h.stage === "due" || issueSeverity === "medium";
 
   // Plain-language detail lines shown when the owner expands a system.
   const ageText =
     h.age != null ? `${h.age} years` : "Unknown, add an install year";
+  // Years left adjusted for condition: a failing/worn system needs action sooner
+  // than age alone implies.
+  const eff = effectiveYearsLeft(s);
   const lifeLeftText =
-    h.remaining == null
+    eff == null
       ? "Add an install year to estimate"
-      : h.remaining > 0
-        ? `about ${h.remaining} more years`
-        : `past due by ${Math.abs(h.remaining)} years`;
+      : eff <= 0
+        ? s.condition_rating === 1
+          ? "Failing. Replace now."
+          : "Past due. Replace now."
+        : eff < 1
+          ? "Less than a year"
+          : `about ${Math.round(eff)} more year${Math.round(eff) === 1 ? "" : "s"}`;
   const lastServicedText = dateToMmYyyy(s.last_serviced) || "Not recorded";
   const conditionText = s.condition_rating
     ? `${s.condition_rating} of 5`
@@ -93,6 +112,33 @@ export default function SystemRow({
     whyParts.push("You marked its condition as worn.");
   whyParts.push(h.message);
   const whyText = whyParts.join(" ");
+
+  // Estimated replacement cost range + a monthly set-aside over the condition-
+  // adjusted years until it's likely due.
+  const cost = replacementInfoFor(s.system_type);
+  const costMid = cost ? Math.round((cost.low + cost.high) / 2) : 0;
+  const yearsAway = eff != null ? Math.max(0, Math.round(eff)) : null;
+  const monthly =
+    cost && yearsAway && yearsAway > 0
+      ? Math.round(costMid / (yearsAway * 12))
+      : null;
+  const money = (n: number) => "$" + n.toLocaleString();
+
+  // Prefill a job posting from this system's card info when "Find a pro" is tapped.
+  const proDesc =
+    `Need help with my ${labelFor(SYSTEM_TYPES, s.system_type)}.` +
+    (h.age != null ? ` It is about ${h.age} years old.` : "") +
+    (s.material_or_model ? ` Material/model: ${s.material_or_model}.` : "") +
+    (s.condition_rating
+      ? ` I rated its condition ${s.condition_rating} of 5.`
+      : "");
+  // A worn/failing system (2 or under) or one already due needs someone ASAP.
+  const urgent =
+    (s.condition_rating != null && s.condition_rating <= 2) || yearsAway === 0;
+  const findProHref =
+    `/contractors?category=${categoryForSystem(s.system_type)}` +
+    `&desc=${encodeURIComponent(proDesc)}` +
+    (urgent ? "&timing=asap" : "");
 
   if (editing) {
     return (
@@ -226,16 +272,17 @@ export default function SystemRow({
             {iconFor(SYSTEM_TYPES, s.system_type)}{" "}
             {labelFor(SYSTEM_TYPES, s.system_type)}
           </span>
+          {/* One status badge. Must-do overrides the age-based stage, so a
+              failing/urgent system can never read "Healthy". */}
           <span
-            className={`rounded-full border px-2 py-0.5 text-xs ${STAGE_STYLE[h.stage]}`}
+            className={`rounded-full border px-2 py-0.5 text-xs ${
+              mustDo
+                ? "border-red-300 bg-red-100 font-semibold text-red-700"
+                : STAGE_STYLE[h.stage]
+            }`}
           >
-            {STAGE_LABEL[h.stage] ?? h.stage}
+            {mustDo ? "🚨 Must do" : (STAGE_LABEL[h.stage] ?? h.stage)}
           </span>
-          {mustDo && (
-            <span className="rounded-full border border-red-300 bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
-              🚨 Must do
-            </span>
-          )}
         </div>
         <button
           type="button"
@@ -248,7 +295,10 @@ export default function SystemRow({
           Edit
         </button>
         {expanded && (
-          <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg bg-stone-50 p-3 text-xs">
+          <dl
+            onClick={(e) => e.stopPropagation()}
+            className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg bg-stone-50 p-3 text-xs"
+          >
             <div className="col-span-2 mb-2 border-b border-stone-200 pb-3">
               <dt className="font-medium text-stone-800">Why this status</dt>
               <dd className="mt-1 text-stone-500">{whyText}</dd>
@@ -293,10 +343,38 @@ export default function SystemRow({
               <dt className="font-medium text-stone-800">Maintenance tip</dt>
               <dd className="text-stone-500">{tipForSystem(s.system_type)}</dd>
             </div>
+            {cost && (
+              <div className="col-span-2 mt-1 border-t border-stone-200 pt-2 text-right">
+                <dt className="font-medium text-stone-800">
+                  Estimated replacement cost
+                </dt>
+                <dd className="text-stone-500">
+                  {money(cost.low)}–{money(cost.high)}
+                  {yearsAway === 0
+                    ? " · due now"
+                    : monthly
+                      ? ` · ~${money(monthly)}/mo over ${yearsAway} yr${
+                          yearsAway === 1 ? "" : "s"
+                        }`
+                      : ""}
+                  <span className="block text-[10px] text-stone-400">
+                    Based on this system&apos;s age and condition
+                  </span>
+                </dd>
+              </div>
+            )}
           </dl>
         )}
         {openIssue && (
-          <p className="mt-1 text-xs font-medium text-red-600">
+          <p
+            className={`mt-1 text-xs font-medium ${
+              issueSeverity === "urgent"
+                ? "text-red-600"
+                : issueSeverity === "medium"
+                  ? "text-amber-600"
+                  : "text-stone-500"
+            }`}
+          >
             ⚠ You reported a{" "}
             {labelFor(ISSUE_CATEGORIES, openIssue.category)} issue
             {openIssue.description ? `: ${openIssue.description}` : ""}.
@@ -322,7 +400,7 @@ export default function SystemRow({
         onClick={(e) => e.stopPropagation()}
       >
         <Link
-          href={`/contractors?category=${categoryForSystem(s.system_type)}`}
+          href={findProHref}
           className="rounded-md bg-hearth-600 px-2 py-1 text-xs font-medium text-white hover:bg-hearth-700"
         >
           Find a pro
