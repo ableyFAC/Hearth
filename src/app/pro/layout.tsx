@@ -17,9 +17,26 @@ export default async function ProLayout({
 
   const contractor = await getCurrentContractor();
 
+  // No company yet → the user is still onboarding. Show a bare, link-free top bar
+  // so they can't navigate into pages that assume a set-up company exists.
+  if (!contractor) {
+    return (
+      <div className="min-h-screen">
+        <header className="border-b border-stone-200 bg-white">
+          <div className="mx-auto flex max-w-5xl items-center px-6 py-3">
+            <span className="text-lg font-semibold text-stone-900">
+              🛠️ Hearth for Pros
+            </span>
+          </div>
+        </header>
+        <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen">
-      <ProNav company={contractor?.name ?? null} />
+      <ProNav company={contractor.name} />
       <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
       <NewMessageNotifier role="contractor" />
     </div>
