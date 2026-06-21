@@ -18,11 +18,11 @@ export default function OnboardingCompanyForm({
       action={saveCompanyAction}
       className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm"
     >
-      {/* Filled blue header, attached to the form below */}
-      <div className="bg-blue-600 px-6 py-8 text-center text-white">
+      {/* Filled brown header, attached to the form below */}
+      <div className="bg-hearth-600 px-6 py-8 text-center text-white">
         <div className="text-3xl">🛠️</div>
         <h1 className="mt-2 text-2xl font-bold">Set up your company</h1>
-        <p className="mt-1 text-sm text-blue-100">
+        <p className="mt-1 text-sm text-hearth-100">
           Tell us what you do so we can match you with the right homeowner leads.
         </p>
       </div>
@@ -144,7 +144,7 @@ export default function OnboardingCompanyForm({
         <div className="mt-8 flex justify-end border-t border-stone-100 pt-5">
           <button
             type="submit"
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+            className="inline-flex items-center gap-2 rounded-lg bg-hearth-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-hearth-700"
           >
             Start receiving leads
           </button>

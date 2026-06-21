@@ -18,7 +18,7 @@ export default function PublicProfileForm({
   return (
     <form action={saveCompanyAction} className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
       {/* Cover banner + avatar */}
-      <div className="relative h-32 bg-gradient-to-r from-blue-600 to-indigo-600 sm:h-40">
+      <div className="relative h-32 bg-gradient-to-r from-hearth-500 to-hearth-700 sm:h-40">
         <button
           type="button"
           className="absolute right-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white backdrop-blur hover:bg-white/30"
@@ -190,7 +190,7 @@ export default function PublicProfileForm({
           </a>
           <button
             type="submit"
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            className="inline-flex items-center gap-2 rounded-lg bg-hearth-600 px-4 py-2 text-sm font-semibold text-white hover:bg-hearth-700"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />

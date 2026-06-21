@@ -81,13 +81,13 @@ export default function CategoryPicker({
             aria-pressed={on}
             className={`relative flex items-center gap-3 rounded-xl border px-3 py-3 text-left transition-colors ${
               on
-                ? "border-blue-500 bg-blue-50 ring-1 ring-blue-500"
+                ? "border-hearth-500 bg-hearth-50 ring-1 ring-hearth-500"
                 : "border-stone-200 bg-white hover:bg-stone-50"
             }`}
           >
             <span
               className={`flex h-8 w-8 items-center justify-center rounded-lg ${
-                on ? "bg-blue-600 text-white" : "bg-stone-100 text-stone-500"
+                on ? "bg-hearth-600 text-white" : "bg-stone-100 text-stone-500"
               }`}
             >
               <svg
@@ -104,13 +104,13 @@ export default function CategoryPicker({
             </span>
             <span
               className={`text-sm font-medium ${
-                on ? "text-blue-700" : "text-stone-700"
+                on ? "text-hearth-700" : "text-stone-700"
               }`}
             >
               {c.label}
             </span>
             {on && (
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-600">
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-hearth-600">
                 <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor">
                   <path
                     fillRule="evenodd"
@@ -128,13 +128,13 @@ export default function CategoryPicker({
       <div
         className={`col-span-2 flex items-center gap-3 rounded-xl border px-3 py-3 transition-colors ${
           otherActive
-            ? "border-blue-500 bg-blue-50 ring-1 ring-blue-500"
+            ? "border-hearth-500 bg-hearth-50 ring-1 ring-hearth-500"
             : "border-stone-200 bg-white"
         }`}
       >
         <span
           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-            otherActive ? "bg-blue-600 text-white" : "bg-stone-100 text-stone-500"
+            otherActive ? "bg-hearth-600 text-white" : "bg-stone-100 text-stone-500"
           }`}
         >
           <svg
@@ -151,7 +151,7 @@ export default function CategoryPicker({
         </span>
         <span
           className={`text-sm font-medium ${
-            otherActive ? "text-blue-700" : "text-stone-700"
+            otherActive ? "text-hearth-700" : "text-stone-700"
           }`}
         >
           Other
