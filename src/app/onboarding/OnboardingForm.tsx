@@ -59,7 +59,7 @@ export default function OnboardingForm() {
               Does this look right?
             </h2>
             <p className="mt-1 text-sm text-stone-500">
-              We auto-filled what we could from public records — edit anything
+              We auto-filled what we could from public records. Edit anything
               that&apos;s off.
             </p>
           </div>

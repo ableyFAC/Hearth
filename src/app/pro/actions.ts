@@ -28,7 +28,7 @@ export async function saveCompanyAction(formData: FormData) {
   const existing = await getCurrentContractor();
 
   if (existing) {
-    // The license is a verified legal identifier — once set it's locked and
+    // The license is a verified legal identifier - once set it's locked and
     // can't be changed from the profile. Keep the existing value so a missing
     // (read-only) field can't wipe or swap it.
     if (existing.license_number) {
@@ -52,7 +52,7 @@ export async function saveCompanyAction(formData: FormData) {
     vetted: true,
   });
   if (error) throw new Error(error.message);
-  setFlash("You're all set — leads will appear here");
+  setFlash("You're all set. Leads will appear here.");
   revalidatePath("/", "layout");
   redirect("/pro");
 }

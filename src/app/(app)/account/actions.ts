@@ -19,7 +19,7 @@ export async function saveAccountAction(formData: FormData) {
   const email = (formData.get("email") as string)?.trim() || null;
   const password = (formData.get("password") as string) || "";
 
-  // Name + phone — the public profile row (best effort).
+  // Name + phone - the public profile row (best effort).
   const { error: profileError } = await supabase
     .from("users")
     .update({ full_name, phone })
@@ -27,7 +27,7 @@ export async function saveAccountAction(formData: FormData) {
   if (profileError) throw new Error(profileError.message);
 
   // Mirror the name into auth metadata too. This is what the toolbar reads, so
-  // it's reliable even if the users-table write didn't land — and it's always
+  // it's reliable even if the users-table write didn't land - and it's always
   // writable (no RLS). Email/password go through Auth as well; an email change
   // triggers a confirmation link, so it isn't live until the user clicks it.
   const authChanges: {

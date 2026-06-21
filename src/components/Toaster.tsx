@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-// Type-only import — erased at compile time, so this client component never
+// Type-only import - erased at compile time, so this client component never
 // pulls flash.ts (and its next/headers dependency) into the browser bundle.
 import type { Flash } from "@/lib/flash";
 

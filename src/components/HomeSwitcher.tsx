@@ -5,7 +5,7 @@ import { setActiveHomeAction } from "@/lib/homeActions";
 import RemoveHomeButton from "@/components/RemoveHomeButton";
 import type { Property } from "@/lib/database.types";
 
-// Dropdown of the owner's homes — switch, remove, or add. Closes on outside
+// Dropdown of the owner's homes - switch, remove, or add. Closes on outside
 // click or Escape (no need to click the toggle again).
 export default function HomeSwitcher({
   homes,

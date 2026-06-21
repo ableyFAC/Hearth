@@ -1,30 +1,31 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
+import { scoreBreakdown, scoreBand, systemPriority } from "@/lib/health";
 import {
-  scoreBreakdown,
-  scoreBand,
-  derivedMaintenance,
-} from "@/lib/health";
-import {
-  labelFor,
-  iconFor,
   SYSTEM_TYPES,
-  ISSUE_CATEGORIES,
   REMODEL_PROJECTS,
   categoryForSystem,
 } from "@/lib/constants";
+import SystemForm from "../profile/SystemForm";
+import SystemRow from "../profile/SystemRow";
+import { quickAddSystemAction } from "../profile/actions";
 
-// Core systems we nudge every owner to add first — they drive the best predictions.
-const CORE_SETUP = ["roof", "hvac", "water_heater", "electrical_panel", "plumbing"];
-
-export default async function DashboardPage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: { welcome?: string };
+}) {
   const property = (await getActiveProperty())!;
   const supabase = createClient();
 
-  const [{ data: systems }, { data: issues }, { data: tasks }] =
+  const [{ data: systems }, { data: issues }, { data: tasks }, { data: pics }] =
     await Promise.all([
-      supabase.from("home_systems").select("*").eq("property_id", property.id),
+      supabase
+        .from("home_systems")
+        .select("*")
+        .eq("property_id", property.id)
+        .order("created_at", { ascending: true }),
       supabase
         .from("issues")
         .select("*")
@@ -37,57 +38,71 @@ export default async function DashboardPage() {
         .eq("property_id", property.id)
         .eq("status", "open")
         .order("due_date", { ascending: true }),
+      supabase
+        .from("photos")
+        .select("related_id, url")
+        .eq("property_id", property.id)
+        .eq("related_type", "system"),
     ]);
+
+  // Group system photos by system id so each row can show its own thumbnails.
+  const photosBySystem = new Map<string, string[]>();
+  for (const p of pics ?? []) {
+    const list = photosBySystem.get(p.related_id) ?? [];
+    list.push(p.url);
+    photosBySystem.set(p.related_id, list);
+  }
 
   const sys = systems ?? [];
   const openIssues = issues ?? [];
   const { score, lines: scoreLines } = scoreBreakdown(sys, openIssues);
   const band = scoreBand(score);
-  const upcoming = derivedMaintenance(sys);
+
+  // Link reported issues to systems by category - a reported roof issue shows on
+  // the roof system and pushes it to the top.
+  const openIssueByCat = new Map<string, any>();
+  for (const i of openIssues) {
+    if (!openIssueByCat.has(i.category)) openIssueByCat.set(i.category, i);
+  }
+  const issueForSystem = (s: any) =>
+    openIssueByCat.get(categoryForSystem(s.system_type)) ?? null;
+
+  // Must-do (failing or with a reported issue) pinned to the very top; the rest
+  // sorted healthy-first.
+  const isMust = (s: any) => s.condition_rating === 1 || !!issueForSystem(s);
+  const sortedSys = [...sys].sort((a, b) => {
+    const mustDiff = (isMust(b) ? 1 : 0) - (isMust(a) ? 1 : 0);
+    if (mustDiff !== 0) return mustDiff;
+    return systemPriority(a) - systemPriority(b);
+  });
 
   const haveTypes = new Set(sys.map((s) => s.system_type));
-  const setupItems = SYSTEM_TYPES.filter((t) =>
-    CORE_SETUP.includes(t.value)
-  ).map((t) => ({ ...t, done: haveTypes.has(t.value) }));
-  const setupComplete = setupItems.every((i) => i.done);
+  const quickAddTypes = SYSTEM_TYPES.filter((t) => !haveTypes.has(t.value));
+  const mustCount = sortedSys.filter(isMust).length;
 
   return (
     <div className="space-y-8">
-      {!setupComplete && (
-        <section className="card border-hearth-200 bg-hearth-50">
-          <h2 className="font-semibold text-hearth-900">
-            Finish setting up your home
-          </h2>
-          <p className="mt-1 text-sm text-hearth-800">
-            Add your core systems so Hearth can predict repairs and score your
-            home.
-          </p>
-          <ul className="mt-3 space-y-1.5">
-            {setupItems.map((i) => (
-              <li key={i.value} className="flex items-center gap-2 text-sm">
-                <span>{i.done ? "✅" : "⬜"}</span>
-                <span
-                  className={
-                    i.done ? "text-stone-400 line-through" : "text-stone-700"
-                  }
-                >
-                  {i.icon} {i.label}
-                </span>
-                {!i.done && (
-                  <Link
-                    href="/profile"
-                    className="ml-auto font-medium text-hearth-700 hover:underline"
-                  >
-                    Add →
-                  </Link>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
+      {searchParams.welcome && (
+        <div className="rounded-xl border border-hearth-200 bg-hearth-50 p-4 text-sm text-hearth-800">
+          🎉 Your home is claimed. Add your systems below. It&apos;s what powers
+          your maintenance reminders and your Home Health Score.
+        </div>
       )}
 
-      <section className="grid gap-4 sm:grid-cols-3">
+      {/* Property header */}
+      <section>
+        <h1 className="text-2xl font-semibold text-stone-900">
+          🏡 {property.address_line1}
+          {property.city ? `, ${property.city}` : ""}
+        </h1>
+        <p className="mt-1 text-sm text-stone-500">
+          Built {property.year_built ?? "-"} · {property.sqft ?? "-"} sqft ·{" "}
+          {property.beds ?? "-"} bd / {property.baths ?? "-"} ba
+        </p>
+      </section>
+
+      {/* Key stats */}
+      <section className="grid gap-4 sm:grid-cols-2">
         <div className={`card border ${band.tone}`}>
           <p className="text-sm font-medium">Home Health Score</p>
           <p className="mt-1 text-4xl font-bold">{score}</p>
@@ -108,17 +123,10 @@ export default async function DashboardPage() {
                 </li>
               ))}
               {scoreLines.length === 0 && (
-                <li className="opacity-80">No deductions — all healthy. 🎉</li>
+                <li className="opacity-80">No deductions. Everything looks healthy. 🎉</li>
               )}
             </ul>
           </details>
-        </div>
-        <div className="card">
-          <p className="text-sm font-medium text-stone-500">Systems tracked</p>
-          <p className="mt-1 text-4xl font-bold text-stone-900">{sys.length}</p>
-          <Link href="/profile" className="text-sm text-hearth-700 hover:underline">
-            Manage profile →
-          </Link>
         </div>
         <div className="card">
           <p className="text-sm font-medium text-stone-500">Open issues</p>
@@ -131,61 +139,64 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-stone-900">
-          Upcoming maintenance
-        </h2>
-        {upcoming.length > 0 ? (
-          <ul className="space-y-2">
-            {upcoming.map((m) => (
-              <li
-                key={m.systemId}
-                className="card flex items-center justify-between gap-4"
-              >
-                <div>
-                  <span className="font-medium text-stone-900">
-                    {iconFor(SYSTEM_TYPES, m.systemType)}{" "}
-                    {labelFor(SYSTEM_TYPES, m.systemType)}
-                  </span>
-                  <p className="text-sm text-stone-600">{m.title}</p>
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-1">
-                  <span
-                    className={`rounded-full border px-2 py-0.5 text-xs ${
-                      m.urgency === "due"
-                        ? "border-red-200 bg-red-50 text-red-700"
-                        : "border-amber-200 bg-amber-50 text-amber-700"
-                    }`}
-                  >
-                    {m.urgency === "due" ? "Plan now" : "Aging"}
-                  </span>
-                  <Link
-                    href={`/contractors?category=${categoryForSystem(m.systemType)}`}
-                    className="text-xs font-medium text-hearth-700 hover:underline"
-                  >
-                    Find a pro →
-                  </Link>
-                </div>
-              </li>
+      {/* Systems inventory (the old Home Profile) */}
+      <details id="systems" open className="space-y-4">
+        <summary className="cursor-pointer text-lg font-semibold text-stone-900 marker:text-stone-400">
+          Your systems{sortedSys.length > 0 ? ` (${sortedSys.length})` : ""}
+          {mustCount > 0 ? (
+            <span className="ml-2 rounded-full border border-red-300 bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+              {mustCount} must do
+            </span>
+          ) : null}
+        </summary>
+
+        {sortedSys.length > 0 ? (
+          <ul className="space-y-3">
+            {sortedSys.map((s) => (
+              <SystemRow
+                key={s.id}
+                system={s}
+                openIssue={issueForSystem(s)}
+                photos={photosBySystem.get(s.id) ?? []}
+              />
             ))}
           </ul>
         ) : (
           <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
-            Nothing flagged yet. Add your systems in the{" "}
-            <Link href="/profile" className="text-hearth-700 underline">
-              Home Profile
-            </Link>{" "}
-            to get predictions.
+            No systems yet. Add your roof, HVAC, and water heater first. Those
+            drive the most useful reminders.
           </p>
         )}
-      </section>
 
+        <div className="flex flex-wrap items-center gap-3">
+          <SystemForm propertyId={property.id} />
+          {quickAddTypes.length > 0 && (
+            <details className="relative">
+              <summary className="btn-secondary inline-block cursor-pointer list-none text-sm [&::-webkit-details-marker]:hidden">
+                Quick add a system
+              </summary>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {quickAddTypes.map((t) => (
+                  <form key={t.value} action={quickAddSystemAction}>
+                    <input type="hidden" name="system_type" value={t.value} />
+                    <button className="btn-secondary text-sm">
+                      {t.icon} + {t.label}
+                    </button>
+                  </form>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      </details>
+
+      {/* Project ideas - always open, not collapsible. */}
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-stone-900">
           Thinking about a project?
         </h2>
         <p className="text-sm text-stone-500">
-          Popular upgrades — tap one to get matched with a vetted pro.
+          Popular upgrades. Tap one to get matched with a vetted pro.
         </p>
         <div className="flex flex-wrap gap-2">
           {REMODEL_PROJECTS.map((p) => (
@@ -201,8 +212,10 @@ export default async function DashboardPage() {
       </section>
 
       {tasks && tasks.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-stone-900">Your tasks</h2>
+        <details className="space-y-3">
+          <summary className="cursor-pointer text-lg font-semibold text-stone-900 marker:text-stone-400">
+            Your tasks ({tasks.length})
+          </summary>
           <ul className="space-y-2">
             {tasks.map((t) => (
               <li key={t.id} className="card flex items-center justify-between">
@@ -213,39 +226,7 @@ export default async function DashboardPage() {
               </li>
             ))}
           </ul>
-        </section>
-      )}
-
-      {openIssues.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-stone-900">Open issues</h2>
-          <ul className="space-y-2">
-            {openIssues.map((i) => (
-              <li key={i.id} className="card flex items-center justify-between gap-4">
-                <div>
-                  <span className="font-medium text-stone-900">
-                    {iconFor(ISSUE_CATEGORIES, i.category)}{" "}
-                    {labelFor(ISSUE_CATEGORIES, i.category)}
-                  </span>
-                  {i.description && (
-                    <p className="text-sm text-stone-600">{i.description}</p>
-                  )}
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-1">
-                  <span className="text-xs uppercase tracking-wide text-stone-400">
-                    {i.severity}
-                  </span>
-                  <Link
-                    href={`/contractors?category=${i.category}`}
-                    className="text-xs font-medium text-hearth-700 hover:underline"
-                  >
-                    Find a pro →
-                  </Link>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
+        </details>
       )}
     </div>
   );

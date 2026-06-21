@@ -126,7 +126,7 @@ export default async function ContractorsPage({
         <h1 className="text-2xl font-semibold text-stone-900">Find a Pro</h1>
         <p className="mt-1 text-sm text-stone-500">
           Vetted, licensed local contractors. Request a quote and they&apos;ll
-          reach out — no obligation.
+          reach out. There is no obligation.
         </p>
       </div>
 
@@ -227,7 +227,7 @@ export default async function ContractorsPage({
                         )}
                       </div>
                       <p className="text-xs text-stone-500">
-                        {c.service_area} · Lic. {c.license_number ?? "—"}
+                        {c.service_area} · Lic. {c.license_number ?? "-"}
                       </p>
                     </div>
                   </label>
@@ -237,7 +237,7 @@ export default async function ContractorsPage({
           ) : (
             <p className="rounded-lg border border-dashed border-stone-300 p-4 text-sm text-stone-500">
               {category
-                ? "No vetted pros in this category yet — submit anyway and we'll source one."
+                ? "No vetted pros in this category yet. Submit anyway and we'll source one."
                 : "Pick a category to see matched pros."}
             </p>
           )}

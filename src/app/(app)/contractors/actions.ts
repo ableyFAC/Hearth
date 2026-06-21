@@ -22,7 +22,7 @@ export async function requestProAction(formData: FormData) {
   const timing = (formData.get("timing") as string) || null;
 
   // Homeowners share one gate account, so we can't derive a real identity from
-  // auth — capture contact on the request form and snapshot it onto the lead.
+  // auth - capture contact on the request form and snapshot it onto the lead.
   const homeownerName = (formData.get("homeowner_name") as string) || null;
   const homeownerEmail =
     (formData.get("homeowner_email") as string) || user.email || null;

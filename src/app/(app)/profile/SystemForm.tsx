@@ -3,8 +3,9 @@
 import { useRef, useState } from "react";
 import { addSystemAction } from "./actions";
 import { SYSTEM_TYPES } from "@/lib/constants";
+import PhotoUpload from "@/components/PhotoUpload";
 
-export default function SystemForm() {
+export default function SystemForm({ propertyId }: { propertyId: string }) {
   const [open, setOpen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -40,7 +41,7 @@ export default function SystemForm() {
           </select>
         </div>
         <div>
-          <label className="label">Material / model</label>
+          <label className="label">Material / model (optional)</label>
           <input
             name="material_or_model"
             className="input"
@@ -53,17 +54,23 @@ export default function SystemForm() {
         </div>
         <div>
           <label className="label">Last serviced</label>
-          <input name="last_serviced" type="date" className="input" />
+          <input
+            name="last_serviced"
+            type="text"
+            inputMode="numeric"
+            placeholder="MM/YYYY"
+            className="input"
+          />
         </div>
         <div>
-          <label className="label">Condition (1–5)</label>
+          <label className="label">Condition</label>
           <select name="condition_rating" className="select" defaultValue="">
             <option value="">Not sure</option>
-            <option value="5">5 — like new</option>
-            <option value="4">4 — good</option>
-            <option value="3">3 — fair</option>
-            <option value="2">2 — worn</option>
-            <option value="1">1 — failing</option>
+            <option value="5">5 (like new)</option>
+            <option value="4">4 (good)</option>
+            <option value="3">3 (fair)</option>
+            <option value="2">2 (worn)</option>
+            <option value="1">1 (failing)</option>
           </select>
         </div>
       </div>
@@ -72,6 +79,8 @@ export default function SystemForm() {
         <label className="label">Notes</label>
         <textarea name="notes" className="textarea" rows={2} />
       </div>
+
+      <PhotoUpload propertyId={propertyId} />
 
       <div className="flex gap-3">
         <button type="button" className="btn-secondary" onClick={() => setOpen(false)}>

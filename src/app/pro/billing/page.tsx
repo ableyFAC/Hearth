@@ -73,7 +73,7 @@ export default async function ProBillingPage({
       )}
       {searchParams.canceled && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-          Checkout canceled — no charge was made.
+          Checkout canceled. No charge was made.
         </div>
       )}
 

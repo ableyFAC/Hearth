@@ -47,7 +47,7 @@ export default function ChatDock({
             title={minimized ? "Open" : "Minimize"}
             className="leading-none hover:text-stone-700"
           >
-            {minimized ? "▢" : "—"}
+            {minimized ? "▢" : "-"}
           </button>
           <button
             type="button"

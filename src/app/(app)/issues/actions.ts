@@ -39,7 +39,7 @@ export async function reportIssueAction(formData: FormData) {
     );
   }
 
-  setFlash("Issue logged — let's find you a pro");
+  setFlash("Issue logged. Let's find you a pro.");
   revalidatePath("/issues");
   revalidatePath("/dashboard");
 

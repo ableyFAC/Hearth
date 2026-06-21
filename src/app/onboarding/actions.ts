@@ -8,7 +8,7 @@ import { ACTIVE_HOME_COOKIE } from "@/lib/property";
 import { lookupParcel, type ParcelFacts } from "@/lib/parcel";
 import { DEFAULT_LIFESPANS } from "@/lib/health";
 
-// Systems virtually every home has — auto-added so the owner doesn't start from
+// Systems virtually every home has - auto-added so the owner doesn't start from
 // a blank inventory. Install years are ESTIMATED from the build year; real
 // install/repair/remodel dates come from permit data once that API is wired.
 const STARTER_SYSTEMS = [
@@ -91,7 +91,7 @@ export async function claimPropertyAction(formData: FormData) {
       system_type,
       install_year,
       expected_lifespan_years: lifespan,
-      // No per-system note — the "auto-estimated" notice lives at the top of
+      // No per-system note - the "auto-estimated" notice lives at the top of
       // the Home Profile page instead.
       notes: null as string | null,
     };
@@ -99,6 +99,6 @@ export async function claimPropertyAction(formData: FormData) {
   await supabase.from("home_systems").insert(starterRows);
 
   revalidatePath("/", "layout");
-  // Send them to build their Home Profile next.
-  redirect("/profile?welcome=1");
+  // Send them to their Home page to add systems next.
+  redirect("/dashboard?welcome=1");
 }

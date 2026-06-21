@@ -8,7 +8,7 @@ const SEVERITY_STYLE: Record<string, string> = {
   urgent: "border-red-200 bg-red-50 text-red-700",
 };
 
-// Public — no account needed. Shows that demand exists; contact is locked.
+// Public - no account needed. Shows that demand exists; contact is locked.
 export default async function PreviewPage() {
   const supabase = createClient();
   const { data: previews } = await supabase
@@ -38,7 +38,7 @@ export default async function PreviewPage() {
 
       {leads.length === 0 ? (
         <p className="mt-8 rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
-          No open leads right now — check back soon.
+          No open leads right now. Check back soon.
         </p>
       ) : (
         <div className="mt-8 grid gap-3 sm:grid-cols-2">
@@ -67,7 +67,7 @@ export default async function PreviewPage() {
               </p>
               {/* Locked contact */}
               <div className="flex items-center gap-2 rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-400">
-                🔒 Homeowner contact —{" "}
+                🔒 Homeowner contact -{" "}
                 <Link href="/contractor-signup" className="text-hearth-700 hover:underline">
                   sign up to unlock
                 </Link>

@@ -1,9 +1,9 @@
-// Chat censorship — masks profanity, slurs, and hate speech before a message is
+// Chat censorship - masks profanity, slurs, and hate speech before a message is
 // stored. Best-effort client-side filter (not a substitute for real moderation).
 // Catches common evasion: leet substitutions (f3=e, 1=i, $=s, @=a …) and
 // separators between letters (f u c k, f-u-c-k, f.u.c.k).
 
-// General profanity — masked, but not severe enough to auto-report.
+// General profanity - masked, but not severe enough to auto-report.
 const PROFANITY = [
   "fuck",
   "motherfuck",
@@ -22,7 +22,7 @@ const PROFANITY = [
   "goddamn",
 ];
 
-// Slurs / hate speech — masked AND auto-flagged for review.
+// Slurs / hate speech - masked AND auto-flagged for review.
 const SLURS = [
   // racist
   "nigger",
@@ -93,7 +93,7 @@ const PROFANITY_RE = buildRe(PROFANITY);
 const mask = (m: string) => "*".repeat(m.length);
 
 // Returns the cleaned text, whether anything was masked (`flagged`), and whether
-// a slur/hate term was used (`slur`) — the latter triggers an auto-report.
+// a slur/hate term was used (`slur`) - the latter triggers an auto-report.
 export function censor(input: string): {
   clean: string;
   flagged: boolean;

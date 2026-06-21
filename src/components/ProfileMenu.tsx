@@ -7,7 +7,7 @@ type MenuLink = { href: string; label: string };
 
 // Avatar + dropdown shown in the top-right of both navs. The menu links differ
 // per side (contractor: company listing + billing; homeowner: account), but the
-// chrome — avatar, name, chevron, and the Log out form — is shared so the two
+// chrome - avatar, name, chevron, and the Log out form - is shared so the two
 // toolbars can't drift apart.
 export default function ProfileMenu({
   name,
@@ -45,7 +45,7 @@ export default function ProfileMenu({
         aria-expanded={open}
         className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 text-sm font-medium text-stone-700 hover:bg-hearth-50"
       >
-        {/* Placeholder avatar — blank humanoid head + torso. */}
+        {/* Placeholder avatar - blank humanoid head + torso. */}
         <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-stone-200 text-stone-400">
           <svg
             viewBox="0 0 24 24"

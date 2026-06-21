@@ -14,8 +14,7 @@ export default function Nav({
   name: string | null;
 }) {
   const LINKS = [
-    { href: "/dashboard", label: "Dashboard" },
-    { href: "/profile", label: "Home Profile" },
+    { href: "/dashboard", label: "Home" },
     { href: "/issues", label: "Issues" },
     { href: "/contractors", label: "Find a Pro" },
     { href: "/chats", label: "Messages", liveBadge: "homeowner" as const },
@@ -35,7 +34,7 @@ export default function Nav({
           <nav className="-mx-1 flex items-center gap-1 overflow-x-auto px-1">
             <NavLinks links={LINKS} />
           </nav>
-          {/* Account / Log out — mirrors the contractor profile menu. */}
+          {/* Account / Log out - mirrors the contractor profile menu. */}
           <ProfileMenu name={name} links={[{ href: "/account", label: "Edit profile" }]} />
         </div>
       </div>

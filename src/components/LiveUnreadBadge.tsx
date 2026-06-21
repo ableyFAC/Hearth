@@ -37,7 +37,7 @@ export default function LiveUnreadBadge({
     async function poll() {
       if (typeof document !== "undefined" && document.hidden) return;
       const seen = readSeen(SEEN_COOKIE[role]);
-      // Only the most recent messages — unread ones are always recent, and this
+      // Only the most recent messages - unread ones are always recent, and this
       // keeps the query bounded (and from hogging a DB connection).
       const { data } = await supabase
         .from("messages")

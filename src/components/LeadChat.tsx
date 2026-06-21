@@ -211,7 +211,7 @@ export default function LeadChat({
       setBusy(false);
       load();
     } catch {
-      // Couldn't deliver (bad connection, etc.) — keep it as a failed message.
+      // Couldn't deliver (bad connection, etc.) - keep it as a failed message.
       setBusy(false);
       setFailed((f) => [
         ...f,

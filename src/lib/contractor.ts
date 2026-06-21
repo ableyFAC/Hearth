@@ -22,7 +22,7 @@ export const getCurrentContractor = cache(
   }
 );
 
-// Cheap role check — reuses the cached contractor lookup.
+// Cheap role check - reuses the cached contractor lookup.
 export async function isContractor(): Promise<boolean> {
   return (await getCurrentContractor()) !== null;
 }

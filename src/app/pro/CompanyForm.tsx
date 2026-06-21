@@ -14,7 +14,7 @@ export default function CompanyForm({
 }) {
   const cats = contractor?.categories ?? [];
 
-  // Once a license number is on file it's locked — it's a legal identifier we
+  // Once a license number is on file it's locked - it's a legal identifier we
   // verify, so it can't be edited from the profile. During onboarding (no
   // contractor yet) the field is open so they can enter it the first time.
   const licenseLocked = Boolean(contractor?.license_number);

@@ -59,19 +59,39 @@ export function assessSystem(system: HomeSystem): SystemHealth {
 
   if (remaining <= 0) {
     stage = "due";
-    message = `${age} yrs old — past the typical ${lifespan}-yr lifespan. Plan a replacement.`;
+    message = `This system is ${age} years old. It is past the typical ${lifespan} year lifespan, so plan a replacement.`;
   } else if (remaining <= 3) {
     stage = "due";
-    message = `${age} yrs old — typical lifespan ${lifespan} yrs. Budget for a replacement soon.`;
+    message = `This system is ${age} years old. The typical lifespan is ${lifespan} years, so budget for a replacement soon.`;
   } else if (remaining <= lifespan * 0.4) {
     stage = "aging";
-    message = `${age} yrs old — roughly ${remaining} yrs of typical life left.`;
+    message = `This system is ${age} years old. It has roughly ${remaining} years of typical life left.`;
   } else {
     stage = "healthy";
-    message = `${age} yrs old — in good shape (typical lifespan ${lifespan} yrs).`;
+    message = `This system is ${age} years old and in good shape. The typical lifespan is ${lifespan} years.`;
   }
 
   return { system, age, lifespan, remaining, stage, message };
+}
+
+// Sort weight for the systems list - higher = more urgent. Combines the
+// owner-reported condition (1 = failing) with the age-based stage, so failing /
+// past-lifespan systems float to the top and healthy ones sink to the bottom.
+export function systemPriority(system: HomeSystem): number {
+  const h = assessSystem(system);
+  let r = 0;
+  const c = system.condition_rating ?? 0;
+  if (c === 1) r += 100; // failing
+  else if (c === 2) r += 40; // worn
+  else if (c === 3) r += 10; // fair
+  if (h.stage === "due") r += 50;
+  else if (h.stage === "aging") r += 20;
+  return r;
+}
+
+// A system the owner must deal with: reported failing, or well past its life.
+export function isMustDo(system: HomeSystem): boolean {
+  return system.condition_rating === 1 || assessSystem(system).stage === "due";
 }
 
 // 0-100 Home Health Score. Starts at 100, then deducts for aging/overdue
@@ -138,7 +158,7 @@ export function scoreBand(score: number): { label: string; tone: string } {
   return { label: "Several items overdue", tone: "text-red-700 bg-red-50 border-red-200" };
 }
 
-// Derive upcoming maintenance prompts from system ages (read-only, computed —
+// Derive upcoming maintenance prompts from system ages (read-only, computed -
 // not persisted). Screen 3 surfaces these alongside any saved maintenance_tasks.
 export interface MaintenancePrompt {
   systemId: string;

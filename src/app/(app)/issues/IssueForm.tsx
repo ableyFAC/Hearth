@@ -54,7 +54,7 @@ export default function IssueForm({
         <div>
           <label className="label">Related system (optional)</label>
           <select name="system_id" className="select" defaultValue="">
-            <option value="">— none —</option>
+            <option value="">- none -</option>
             {systems.map((s) => (
               <option key={s.id} value={s.id}>
                 {labelFor(SYSTEM_TYPES, s.system_type)}

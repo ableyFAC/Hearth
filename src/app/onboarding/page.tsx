@@ -5,10 +5,10 @@ import { isContractor } from "@/lib/contractor";
 import OnboardingForm from "./OnboardingForm";
 
 export default async function OnboardingPage() {
-  // Contractors belong in /pro — don't let them create a homeowner property.
+  // Contractors belong in /pro - don't let them create a homeowner property.
   if (await isContractor()) redirect("/pro");
 
-  // First home vs. adding another — onboarding stays reachable either way.
+  // First home vs. adding another - onboarding stays reachable either way.
   const homes = await getProperties();
   const isFirst = homes.length === 0;
 

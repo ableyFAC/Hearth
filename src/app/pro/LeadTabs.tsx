@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 // Status filter tabs for the leads list. Plain links that set ?status= so the
-// server query re-runs — no client JS needed. `active` is the current filter.
+// server query re-runs - no client JS needed. `active` is the current filter.
 export type LeadTab = {
   value: string; // "" = all
   label: string;

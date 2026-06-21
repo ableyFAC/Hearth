@@ -24,7 +24,7 @@ const STATUS_STYLE: Record<string, string> = {
 
 function money(n: number | string | null) {
   const v = Number(n);
-  return Number.isFinite(v) ? `$${v.toFixed(0)}` : "—";
+  return Number.isFinite(v) ? `$${v.toFixed(0)}` : "-";
 }
 
 // Pay a lead's fee from the prepaid wallet to unlock its contact + messaging.
@@ -212,7 +212,7 @@ export default async function ProDashboard({
   );
 }
 
-// One lead card — used by both the "Potential" and "Your leads" lists.
+// One lead card - used by both the "Potential" and "Your leads" lists.
 function LeadCard({
   l,
   balance,
@@ -262,32 +262,32 @@ function LeadCard({
       )}
 
       {unlocked ? (
-        // Unlocked — reveal the homeowner's contact details.
+        // Unlocked - reveal the homeowner's contact details.
         <div className="rounded-lg bg-stone-50 p-3 text-sm text-stone-600">
           <p>
             <span className="text-stone-400">Homeowner:</span>{" "}
-            {l.homeowner_name || "—"}
+            {l.homeowner_name || "-"}
           </p>
           <p>
             <span className="text-stone-400">Address:</span>{" "}
-            {l.property_address || "—"}
+            {l.property_address || "-"}
           </p>
           <p>
             <span className="text-stone-400">Contact:</span>{" "}
-            {l.homeowner_email || "—"}
+            {l.homeowner_email || "-"}
             {l.homeowner_phone ? ` · ${l.homeowner_phone}` : ""}
           </p>
         </div>
       ) : (
-        // Locked — contact stays hidden until the fee is paid.
+        // Locked - contact stays hidden until the fee is paid.
         <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
           🔒 Contact hidden. Unlock this lead to see the homeowner&apos;s name,
-          address, phone &amp; email — and to message them.
+          address, phone and email, and to message them.
         </div>
       )}
 
       <div className="flex flex-wrap gap-2">
-        {/* Any locked open lead must be unlocked first — no lead gets stuck. */}
+        {/* Any locked open lead must be unlocked first - no lead gets stuck. */}
         {!unlocked && (l.status === "new" || l.status === "accepted") && (
           <>
             {canAfford ? (

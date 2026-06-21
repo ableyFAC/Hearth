@@ -1,6 +1,6 @@
 // Parcel pre-fill (Screen 1). Looks up baseline property facts from a parcel
 // layer so onboarding feels magic. In Phase 1 this returns mock data unless a
-// REGRID_API_TOKEN is configured — wire the real lookup in fetchFromRegrid().
+// REGRID_API_TOKEN is configured - wire the real lookup in fetchFromRegrid().
 
 export interface ParcelFacts {
   parcel_id: string | null;
@@ -30,8 +30,8 @@ export async function lookupParcel(rawAddress: string): Promise<ParcelFacts> {
   return mockParcel(rawAddress);
 }
 
-// TODO (needs API key): autofill ALL property facts from a real source —
-// Zillow / Regrid / county records — keyed off the entered address:
+// TODO (needs API key): autofill ALL property facts from a real source -
+// Zillow / Regrid / county records - keyed off the entered address:
 //   - year built, sqft, beds/baths, lot size, property type
 //   - city -> ZIP (geocode) so ZIP autofills when the city is entered
 //   - permit history -> last install / repair / remodel dates per system

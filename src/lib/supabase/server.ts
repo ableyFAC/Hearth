@@ -31,7 +31,7 @@ export function createClient(): SupabaseClient<Database> {
             );
           } catch {
             // Called from a Server Component where cookies are read-only.
-            // Safe to ignore — middleware refreshes the session cookie.
+            // Safe to ignore - middleware refreshes the session cookie.
           }
         },
       },

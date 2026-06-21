@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 
 // Unified sign-in for everyone. After authentication we send the user to "/",
 // which reads their role and routes homeowners to /dashboard and contractors
-// to /pro — so a single sign-in works for both sides.
+// to /pro - so a single sign-in works for both sides.
 export default function SignInPage() {
   const supabase = createClient();
   const [email, setEmail] = useState("");

@@ -28,7 +28,7 @@ const PRESETS = [50, 100, 250, 500];
 export default function DepositForm({ tiers }: { tiers: Tier[] }) {
   // Committed amount (string so the field can be cleared); default $100.
   const [amount, setAmount] = useState("100");
-  // Preview while hovering a preset — reverts to the committed amount on leave.
+  // Preview while hovering a preset - reverts to the committed amount on leave.
   const [hover, setHover] = useState<number | null>(null);
   const [agreed, setAgreed] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -90,7 +90,7 @@ export default function DepositForm({ tiers }: { tiers: Tier[] }) {
             step={10}
             value={shown}
             placeholder="0"
-            // Digits only — no letters, symbols, or emojis.
+            // Digits only - no letters, symbols, or emojis.
             onChange={(e) => setAmount(e.target.value.replace(/[^0-9]/g, ""))}
             className="input max-w-[120px]"
           />
