@@ -35,9 +35,8 @@ export default function Toaster({ flash }: { flash: Flash | null }) {
     <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">
       <div
         role="status"
-        className={`pointer-events-auto flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium shadow-lg ${tone}`}
+        className={`pointer-events-auto rounded-xl border px-4 py-3 text-sm font-medium shadow-lg ${tone}`}
       >
-        <span>{shown.type === "error" ? "⚠️" : "✓"}</span>
         {shown.message}
       </div>
     </div>

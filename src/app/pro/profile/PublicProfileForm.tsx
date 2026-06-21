@@ -1,50 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { saveCompanyAction } from "../actions";
-import { ISSUE_CATEGORIES } from "@/lib/constants";
+import CategoryPicker from "../CategoryPicker";
+import FieldIcon from "../FieldIcon";
 import type { Contractor } from "@/lib/database.types";
-
-// Per-category line icons, mirroring the design (monochrome, turn white when the
-// card is selected).
-const CATEGORY_ICON: Record<string, JSX.Element> = {
-  roof: (
-    <path d="M3 11l9-7 9 7M5 10v9h14v-9" />
-  ),
-  plumbing: (
-    <path d="M12 3s5 5.5 5 9a5 5 0 11-10 0c0-3.5 5-9 5-9z" />
-  ),
-  electrical: (
-    <path d="M13 3L5 13h5l-1 8 8-11h-5l1-7z" />
-  ),
-  hvac: (
-    <path d="M12 3v18M4.5 7.5l15 9M19.5 7.5l-15 9" />
-  ),
-  structural: (
-    <path d="M4 21V5l8-2 8 2v16M9 9h.01M9 13h.01M15 9h.01M15 13h.01M10 21v-4h4v4" />
-  ),
-  other: (
-    <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" />
-  ),
-};
-
-function FieldIcon({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400">
-      <svg
-        viewBox="0 0 24 24"
-        className="h-4 w-4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        {children}
-      </svg>
-    </span>
-  );
-}
 
 // Redesigned contractor profile editor. Posts to the same saveCompanyAction the
 // onboarding form uses, so field names must stay: name, contact_email,
@@ -55,22 +14,11 @@ export default function PublicProfileForm({
   contractor: Contractor;
 }) {
   const licenseLocked = Boolean(contractor.license_number);
-  const [selected, setSelected] = useState<Set<string>>(
-    new Set(contractor.categories ?? [])
-  );
-  function toggleCategory(value: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(value)) next.delete(value);
-      else next.add(value);
-      return next;
-    });
-  }
 
   return (
     <form action={saveCompanyAction} className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
       {/* Cover banner + avatar */}
-      <div className="relative h-32 bg-gradient-to-r from-blue-600 to-indigo-600 sm:h-40">
+      <div className="relative h-32 bg-gradient-to-r from-hearth-500 to-hearth-700 sm:h-40">
         <button
           type="button"
           className="absolute right-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white backdrop-blur hover:bg-white/30"
@@ -108,7 +56,12 @@ export default function PublicProfileForm({
 
             <div className="space-y-4">
               <div>
-                <label className="label">Company Name</label>
+                <label className="label">
+                  Company Name{" "}
+                  <span className="font-normal text-stone-400">
+                    (as it appears on your license)
+                  </span>
+                </label>
                 <div className="relative">
                   <FieldIcon>
                     <path d="M4 21V5l8-2 8 2v16M9 9h.01M9 13h.01M15 9h.01M15 13h.01M10 21v-4h4v4" />
@@ -223,64 +176,7 @@ export default function PublicProfileForm({
               homeowners find you.
             </p>
 
-            <div className="grid grid-cols-2 gap-3">
-              {ISSUE_CATEGORIES.map((c) => {
-                const on = selected.has(c.value);
-                return (
-                  <button
-                    key={c.value}
-                    type="button"
-                    onClick={() => toggleCategory(c.value)}
-                    aria-pressed={on}
-                    className={`relative flex items-center gap-3 rounded-xl border px-3 py-3 text-left transition-colors ${
-                      on
-                        ? "border-blue-500 bg-blue-50 ring-1 ring-blue-500"
-                        : "border-stone-200 bg-white hover:bg-stone-50"
-                    }`}
-                  >
-                    <span
-                      className={`flex h-8 w-8 items-center justify-center rounded-lg ${
-                        on ? "bg-blue-600 text-white" : "bg-stone-100 text-stone-500"
-                      }`}
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        className="h-4 w-4"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        {CATEGORY_ICON[c.value] ?? CATEGORY_ICON.other}
-                      </svg>
-                    </span>
-                    <span
-                      className={`text-sm font-medium ${
-                        on ? "text-blue-700" : "text-stone-700"
-                      }`}
-                    >
-                      {c.label}
-                    </span>
-                    {on && (
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-600">
-                        <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor">
-                          <path
-                            fillRule="evenodd"
-                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.7-9.3a1 1 0 00-1.4-1.4L9 10.6 7.7 9.3a1 1 0 00-1.4 1.4l2 2a1 1 0 001.4 0l4-4z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-              {/* Submit the selected categories with the form. */}
-              {[...selected].map((v) => (
-                <input key={v} type="hidden" name="categories" value={v} />
-              ))}
-            </div>
+            <CategoryPicker defaultSelected={contractor.categories ?? []} />
           </div>
         </div>
 
@@ -294,7 +190,7 @@ export default function PublicProfileForm({
           </a>
           <button
             type="submit"
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            className="inline-flex items-center gap-2 rounded-lg bg-hearth-600 px-4 py-2 text-sm font-semibold text-white hover:bg-hearth-700"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
