@@ -23,6 +23,12 @@ const isCloseMarker = (body: string) =>
 // Quick reactions offered in the message menu.
 const EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "👎"];
 
+// Photo messages reuse the same text `body` column: an uploaded image is stored
+// as "[img]<public-url>" so both sides can render it without a schema change.
+const IMG_PREFIX = "[img]";
+const isImageBody = (b: string) => b.startsWith(IMG_PREFIX);
+const imageUrl = (b: string) => b.slice(IMG_PREFIX.length);
+
 // Messaging thread for a lead. Both the homeowner and the assigned contractor
 // see the same thread (RLS enforces only those two can read/post). Polls every
 // few seconds so the other side's replies show up without a refresh.
@@ -248,6 +254,36 @@ export default function LeadChat({
 
   function deleteFailed(tempId: string) {
     setFailed((f) => f.filter((x) => x.tempId !== tempId));
+  }
+
+  // Upload an image to the home-photos bucket, then post it as a photo message.
+  async function sendImage(file: File) {
+    if (!file.type.startsWith("image/")) return;
+    setBusy(true);
+    try {
+      const uid = await ensureUid();
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `chat/${leadId}/${crypto.randomUUID()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("home-photos")
+        .upload(path, file, { upsert: false });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage
+        .from("home-photos")
+        .getPublicUrl(path);
+      const { error } = await supabase.from("messages").insert({
+        lead_id: leadId,
+        sender_role: role,
+        sender_id: uid,
+        body: `${IMG_PREFIX}${pub.publicUrl}`,
+      });
+      if (error) throw error;
+      setBusy(false);
+      load();
+    } catch {
+      setBusy(false);
+      setNotice("Could not send the photo. Please try again.");
+    }
   }
 
   // Post a system marker to close or reopen the thread.
@@ -564,15 +600,31 @@ export default function LeadChat({
                     </div>
                   </div>
 
-                  <span
-                    className={`block whitespace-pre-wrap break-words rounded-lg px-3 py-1.5 text-sm ${
-                      mine
-                        ? "bg-hearth-600 text-white"
-                        : "border border-stone-200 bg-white text-stone-700"
-                    }`}
-                  >
-                    {m.body}
-                  </span>
+                  {isImageBody(m.body) ? (
+                    <a
+                      href={imageUrl(m.body)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={imageUrl(m.body)}
+                        alt="shared photo"
+                        className="max-h-60 w-auto rounded-lg border border-stone-200 object-cover"
+                      />
+                    </a>
+                  ) : (
+                    <span
+                      className={`block whitespace-pre-wrap break-words rounded-lg px-3 py-1.5 text-sm ${
+                        mine
+                          ? "bg-hearth-600 text-white"
+                          : "border border-stone-200 bg-white text-stone-700"
+                      }`}
+                    >
+                      {m.body}
+                    </span>
+                  )}
                 </div>
 
                 {chips.length > 0 && (
@@ -659,6 +711,23 @@ export default function LeadChat({
             </div>
           )}
           <form onSubmit={send} className="flex gap-2">
+            <label
+              title="Send a photo"
+              className="flex cursor-pointer items-center rounded-lg border border-stone-200 px-3 text-lg text-stone-500 hover:border-hearth-400 hover:text-hearth-700"
+            >
+              🖼
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={busy}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) sendImage(f);
+                  e.target.value = "";
+                }}
+              />
+            </label>
             <input
               ref={inputRef}
               className="input"

@@ -5,8 +5,12 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { leadFeeFor } from "@/lib/constants";
+import { setFlash } from "@/lib/flash";
 
-export async function requestProAction(formData: FormData) {
+// Homeowner posts a job (Indeed-style). No pro is picked here: the lead is left
+// unassigned (contractor_id null) so matching pros can apply to it. The chosen
+// pro is selected later from the applicants.
+export async function postJobAction(formData: FormData) {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
   const supabase = createClient();
@@ -18,17 +22,19 @@ export async function requestProAction(formData: FormData) {
 
   const category = formData.get("category") as string;
   const issueId = (formData.get("issue_id") as string) || null;
-  const contractorId = (formData.get("contractor_id") as string) || null;
   const timing = (formData.get("timing") as string) || null;
+  const message = ((formData.get("message") as string) || "").trim() || null;
 
   // Homeowners share one gate account, so we can't derive a real identity from
-  // auth - capture contact on the request form and snapshot it onto the lead.
+  // auth - capture contact on the form and snapshot it onto the job.
   const homeownerName = (formData.get("homeowner_name") as string) || null;
   const homeownerEmail =
     (formData.get("homeowner_email") as string) || user.email || null;
   const homeownerPhone = (formData.get("homeowner_phone") as string) || null;
 
-  let issueDescription: string | null = null;
+  // The job description pros see: the homeowner's own words, falling back to the
+  // linked issue's text.
+  let issueDescription: string | null = message;
   let issueSeverity: string | null = null;
   if (issueId) {
     const { data: issue } = await supabase
@@ -36,7 +42,7 @@ export async function requestProAction(formData: FormData) {
       .select("description, severity")
       .eq("id", issueId)
       .maybeSingle();
-    issueDescription = issue?.description ?? null;
+    issueDescription = message ?? issue?.description ?? null;
     issueSeverity = issue?.severity ?? null;
   }
 
@@ -44,25 +50,10 @@ export async function requestProAction(formData: FormData) {
     .filter(Boolean)
     .join(", ");
 
-  // One request per pro: block a duplicate request to the same contractor for
-  // this home. Requesting other pros is still fine.
-  if (contractorId) {
-    const { data: existing } = await supabase
-      .from("contractor_leads")
-      .select("id")
-      .eq("property_id", property.id)
-      .eq("contractor_id", contractorId)
-      .limit(1)
-      .maybeSingle();
-    if (existing) {
-      redirect("/contractors?already=1");
-    }
-  }
-
   const { error } = await supabase.from("contractor_leads").insert({
     property_id: property.id,
     issue_id: issueId,
-    contractor_id: contractorId,
+    contractor_id: null, // open job: pros apply, homeowner picks later
     category,
     status: "new",
     payout_amount: leadFeeFor(category),
@@ -86,5 +77,22 @@ export async function requestProAction(formData: FormData) {
 
   revalidatePath("/contractors");
   revalidatePath("/issues");
-  redirect("/contractors?requested=1");
+  redirect("/contractors?posted=1");
+}
+
+// Homeowner picks a pro from the applicants. The DB function assigns + unlocks
+// the chosen pro (they get contact + chat) and declines the rest.
+export async function chooseApplicantAction(formData: FormData) {
+  const supabase = createClient() as any;
+  const applicationId = String(formData.get("application_id"));
+  const { error } = await supabase.rpc("choose_applicant", {
+    p_application: applicationId,
+  });
+  if (error) setFlash(error.message, "error");
+  else
+    setFlash(
+      "Pro selected. They now have your contact and can message you.",
+      "success"
+    );
+  revalidatePath("/contractors");
 }

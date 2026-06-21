@@ -1,13 +1,18 @@
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
-import { labelFor, iconFor, ISSUE_CATEGORIES, TIMING_OPTIONS } from "@/lib/constants";
-import { setFlash } from "@/lib/flash";
+import {
+  labelFor,
+  iconFor,
+  ISSUE_CATEGORIES,
+  TIMING_OPTIONS,
+} from "@/lib/constants";
 import Link from "next/link";
 import { updateLeadStatusAction } from "./actions";
-import LeadChat from "@/components/LeadChat";
-import LeadTabs, { type LeadTab } from "./LeadTabs";
+import OpenChatButton from "@/components/OpenChatButton";
+import ChatDrawer from "@/components/ChatDrawer";
+import LeadsRealtime from "./LeadsRealtime";
+import ApplyJobButton from "./ApplyJobButton";
 
 const SEVERITY_STYLE: Record<string, string> = {
   low: "border-stone-200 bg-stone-50 text-stone-600",
@@ -16,7 +21,6 @@ const SEVERITY_STYLE: Record<string, string> = {
 };
 
 const STATUS_STYLE: Record<string, string> = {
-  new: "border-hearth-200 bg-hearth-50 text-hearth-700",
   accepted: "border-blue-200 bg-blue-50 text-blue-700",
   closed: "border-green-200 bg-green-50 text-green-700",
   lost: "border-stone-200 bg-stone-100 text-stone-500",
@@ -27,38 +31,34 @@ function money(n: number | string | null) {
   return Number.isFinite(v) ? `$${v.toFixed(0)}` : "-";
 }
 
-// Pay a lead's fee from the prepaid wallet to unlock its contact + messaging.
-// The unlock_lead RPC (migration 0008) runs atomically in the DB: it checks the
-// balance, deducts the fee, marks the lead paid, and logs a wallet transaction.
-async function unlockLeadAction(formData: FormData) {
-  "use server";
-  const id = String(formData.get("id"));
-  const supabase = createClient() as any;
-  // charge_lead spends cash first, then bonus (FIFO). Returns false if broke.
-  const { data, error } = await supabase.rpc("charge_lead", { p_lead: id });
-  if (error) setFlash(error.message, "error");
-  else if (data === false)
-    setFlash("Not enough balance. Add funds to unlock.", "error");
-  else setFlash("Lead unlocked.", "success");
-  revalidatePath("/pro");
-  revalidatePath("/pro/billing");
-  revalidatePath("/pro/chats");
-}
-
-export default async function ProDashboard({
-  searchParams,
-}: {
-  searchParams: { status?: string };
-}) {
+export default async function ProDashboard() {
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");
 
   const supabase = createClient();
-  const { data: leads } = await supabase
-    .from("contractor_leads")
-    .select("*")
-    .eq("contractor_id", contractor.id)
-    .order("created_at", { ascending: false });
+
+  // Open jobs to apply to (safe fields only, category-matched, not yet applied),
+  // the pro's own applications, and the jobs they were chosen for (full detail).
+  const [{ data: openJobs }, { data: myApps }, { data: assignedData }] =
+    await Promise.all([
+      (supabase as any).rpc("open_jobs_for_me"),
+      (supabase as any).rpc("my_applications"),
+      supabase
+        .from("contractor_leads")
+        .select("*")
+        .eq("contractor_id", contractor.id)
+        .order("created_at", { ascending: false }),
+    ]);
+
+  const open = (openJobs ?? []) as any[];
+  const apps = (myApps ?? []) as any[];
+  const assigned = (assignedData ?? []) as any[];
+
+  // Applications still waiting on the homeowner (not yet chosen for the job).
+  const pendingApps = apps.filter((a) => a.status === "applied");
+  const declinedApps = apps.filter((a) => a.status === "declined");
+
+  const activeCount = assigned.filter((l) => l.status === "accepted").length;
 
   const { data: wallet } = await (supabase as any)
     .from("wallets")
@@ -69,60 +69,16 @@ export default async function ProDashboard({
     (Number(wallet?.cash_balance_cents ?? 0) +
       Number(wallet?.bonus_balance_cents ?? 0)) /
     100;
-  // Unlocked = the lead's fee has been paid from the wallet (set by unlock_lead).
-  const isUnlocked = (l: any) => Boolean(l.paid);
-
-  // Drop invalid legacy leads: "accepted" with no unlock can't happen in the
-  // unlock flow (you pay before you can accept), so hide that stale state.
-  const all = (leads ?? []).filter(
-    (l) => !(l.status === "accepted" && !isUnlocked(l))
-  );
-
-  // Split the two groups.
-  const potential = all.filter((l) => l.status === "new" && !isUnlocked(l));
-  const mine = all.filter((l) => !(l.status === "new" && !isUnlocked(l)));
-
-  const activeCount = mine.filter((l) => l.status === "accepted").length;
-  const wonCount = mine.filter((l) => l.status === "closed").length;
-  const lostCount = mine.filter((l) => l.status === "lost" && isUnlocked(l)).length;
-  const declinedCount = mine.filter(
-    (l) => l.status === "lost" && !isUnlocked(l)
-  ).length;
-
-  // Filters inside "Your leads". "lost" = unlocked then job fell through;
-  // "declined" = passed on without ever unlocking.
-  const matches = (l: any, key: string) =>
-    key === "accepted"
-      ? l.status === "accepted"
-      : key === "closed"
-        ? l.status === "closed"
-        : key === "lost"
-          ? l.status === "lost" && isUnlocked(l)
-          : key === "declined"
-            ? l.status === "lost" && !isUnlocked(l)
-            : true;
-
-  const FILTER_KEYS = ["accepted", "closed", "lost", "declined"];
-  const active =
-    searchParams.status && FILTER_KEYS.includes(searchParams.status)
-      ? searchParams.status
-      : "";
-  const visibleMine = active ? mine.filter((l) => matches(l, active)) : mine;
-
-  const tabs: LeadTab[] = [
-    { value: "", label: "All", count: mine.length },
-    { value: "accepted", label: "Active", count: activeCount },
-    { value: "closed", label: "Won", count: wonCount },
-    { value: "lost", label: "Lost", count: lostCount },
-    { value: "declined", label: "Declined", count: declinedCount },
-  ];
 
   return (
     <div className="space-y-8">
+      <LeadsRealtime contractorId={contractor.id} />
+      <ChatDrawer role="contractor" />
+
       <section className="grid gap-4 sm:grid-cols-3">
         <div className="card">
-          <p className="text-sm font-medium text-stone-500">Potential leads</p>
-          <p className="mt-1 text-4xl font-bold text-stone-900">{potential.length}</p>
+          <p className="text-sm font-medium text-stone-500">Open jobs</p>
+          <p className="mt-1 text-4xl font-bold text-stone-900">{open.length}</p>
         </div>
         <div className="card">
           <p className="text-sm font-medium text-stone-500">Active jobs</p>
@@ -140,91 +96,162 @@ export default async function ProDashboard({
         </Link>
       </section>
 
-      {/* ---- Potential leads: new opportunities, locked until unlocked ---- */}
+      {/* ---- Open jobs: posted by homeowners, pay the fee to apply ---- */}
       <section className="space-y-3">
         <div>
           <h1 className="text-2xl font-semibold text-stone-900">
-            Potential leads{" "}
-            <span className="text-stone-400">({potential.length})</span>
+            Open jobs <span className="text-stone-400">({open.length})</span>
           </h1>
           <p className="text-sm text-stone-500">
-            New requests in your area. Unlock one to see the homeowner&apos;s
-            contact and reach out.
+            Jobs homeowners posted in your categories. Apply to one and the
+            homeowner reviews you. If they pick you, you get their contact.
           </p>
         </div>
 
-        {potential.length === 0 ? (
+        {open.length === 0 ? (
           <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
-            No new leads right now. When a homeowner requests a pro in one of your
-            categories ({(contractor.categories ?? []).join(", ") || "none set"}),
-            it&apos;ll show up here.
+            No open jobs right now. When a homeowner posts one in your categories
+            ({(contractor.categories ?? []).join(", ") || "none set"}), it shows
+            up here.
           </p>
         ) : (
           <ul className="space-y-3">
-            {potential.map((l) => (
-              <LeadCard
-                key={l.id}
-                l={l}
-                balance={balance}
-                unlocked={isUnlocked(l)}
-              />
-            ))}
+            {open.map((j) => {
+              const fee = money(j.payout_amount);
+              return (
+                <li key={j.id} className="card space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-stone-900">
+                      {iconFor(ISSUE_CATEGORIES, j.category)}{" "}
+                      {labelFor(ISSUE_CATEGORIES, j.category)}
+                    </span>
+                    {j.issue_severity && (
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-xs ${SEVERITY_STYLE[j.issue_severity] ?? ""}`}
+                      >
+                        {j.issue_severity}
+                      </span>
+                    )}
+                    <span className="ml-auto text-sm font-semibold text-stone-700">
+                      Apply fee {fee}
+                    </span>
+                  </div>
+
+                  {j.issue_description && (
+                    <p className="text-sm text-stone-600">
+                      {j.issue_description}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-4 text-xs text-stone-500">
+                    {j.timing && (
+                      <span>Timing: {labelFor(TIMING_OPTIONS, j.timing)}</span>
+                    )}
+                    <span>
+                      {j.application_count} applicant
+                      {Number(j.application_count) === 1 ? "" : "s"} so far
+                    </span>
+                  </div>
+
+                  <ApplyJobButton
+                    leadId={j.id}
+                    fee={fee}
+                    canAfford={balance >= Number(j.payout_amount ?? 0)}
+                  />
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
 
-      {/* ---- Your leads: the pro's own pipeline ---- */}
+      {/* ---- Active jobs: ones the homeowner picked you for ---- */}
       <section className="space-y-3">
         <div>
           <h2 className="text-2xl font-semibold text-stone-900">
-            Your leads <span className="text-stone-400">({mine.length})</span>
+            Your jobs <span className="text-stone-400">({assigned.length})</span>
           </h2>
           <p className="text-sm text-stone-500">
-            Leads you&apos;ve unlocked. Track each one through your pipeline.
+            Jobs a homeowner chose you for. Their contact is unlocked and you can
+            message them.
           </p>
         </div>
 
-        <LeadTabs tabs={tabs} active={active} />
-
-        {mine.length === 0 ? (
+        {assigned.length === 0 ? (
           <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
-            You haven&apos;t unlocked any leads yet. Unlock one above to get
-            started.
-          </p>
-        ) : visibleMine.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
-            No {tabs.find((t) => t.value === active)?.label.toLowerCase()} leads.
+            No jobs yet. Apply to an open job above and a homeowner can pick you.
           </p>
         ) : (
           <ul className="space-y-3">
-            {visibleMine.map((l) => (
-              <LeadCard
-                key={l.id}
-                l={l}
-                balance={balance}
-                unlocked={isUnlocked(l)}
-              />
+            {assigned.map((l) => (
+              <AssignedJobCard key={l.id} l={l} />
             ))}
           </ul>
         )}
       </section>
+
+      {/* ---- Applications still waiting on a homeowner's decision ---- */}
+      {pendingApps.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-stone-900">
+            Pending applications{" "}
+            <span className="text-stone-400">({pendingApps.length})</span>
+          </h2>
+          <ul className="space-y-2">
+            {pendingApps.map((a) => (
+              <li
+                key={a.application_id}
+                className="card flex items-center justify-between gap-3"
+              >
+                <div>
+                  <span className="font-medium text-stone-900">
+                    {iconFor(ISSUE_CATEGORIES, a.category)}{" "}
+                    {labelFor(ISSUE_CATEGORIES, a.category)}
+                  </span>
+                  {a.issue_description && (
+                    <p className="text-sm text-stone-500">
+                      {a.issue_description}
+                    </p>
+                  )}
+                </div>
+                <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                  Waiting for homeowner
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {declinedApps.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-stone-900">
+            Not selected{" "}
+            <span className="text-stone-400">({declinedApps.length})</span>
+          </h2>
+          <ul className="space-y-2">
+            {declinedApps.map((a) => (
+              <li
+                key={a.application_id}
+                className="card flex items-center justify-between gap-3 opacity-70"
+              >
+                <span className="font-medium text-stone-700">
+                  {iconFor(ISSUE_CATEGORIES, a.category)}{" "}
+                  {labelFor(ISSUE_CATEGORIES, a.category)}
+                </span>
+                <span className="shrink-0 rounded-full border border-stone-200 bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
+                  Homeowner chose another pro
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }
 
-// One lead card - used by both the "Potential" and "Your leads" lists.
-function LeadCard({
-  l,
-  balance,
-  unlocked,
-}: {
-  l: any;
-  balance: number;
-  unlocked: boolean;
-}) {
-  const fee = Number(l.payout_amount ?? 0);
-  const canAfford = balance >= fee;
-
+// A job the homeowner picked this pro for: contact revealed + chat + pipeline.
+function AssignedJobCard({ l }: { l: any }) {
   return (
     <li className="card space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -244,86 +271,44 @@ function LeadCard({
         >
           {l.status}
         </span>
-        <span className="ml-auto text-sm font-semibold text-stone-700">
-          Lead fee {money(l.payout_amount)}
-          {unlocked && <span className="ml-1 text-green-600">· unlocked</span>}
-        </span>
       </div>
 
       {l.issue_description && (
         <p className="text-sm text-stone-600">{l.issue_description}</p>
       )}
 
-      {l.timing && (
-        <p className="text-sm text-stone-500">
-          <span className="text-stone-400">Timing:</span>{" "}
-          {labelFor(TIMING_OPTIONS, l.timing)}
+      <div className="rounded-lg bg-stone-50 p-3 text-sm text-stone-600">
+        <p>
+          <span className="text-stone-400">Homeowner:</span>{" "}
+          {l.homeowner_name || "-"}
         </p>
-      )}
+        <p>
+          <span className="text-stone-400">Address:</span>{" "}
+          {l.property_address || "-"}
+        </p>
+        <p>
+          <span className="text-stone-400">Contact:</span>{" "}
+          {l.homeowner_email || "-"}
+          {l.homeowner_phone ? ` · ${l.homeowner_phone}` : ""}
+        </p>
+      </div>
 
-      {unlocked ? (
-        // Unlocked - reveal the homeowner's contact details.
-        <div className="rounded-lg bg-stone-50 p-3 text-sm text-stone-600">
-          <p>
-            <span className="text-stone-400">Homeowner:</span>{" "}
-            {l.homeowner_name || "-"}
-          </p>
-          <p>
-            <span className="text-stone-400">Address:</span>{" "}
-            {l.property_address || "-"}
-          </p>
-          <p>
-            <span className="text-stone-400">Contact:</span>{" "}
-            {l.homeowner_email || "-"}
-            {l.homeowner_phone ? ` · ${l.homeowner_phone}` : ""}
-          </p>
-        </div>
-      ) : (
-        // Locked - contact stays hidden until the fee is paid.
-        <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-          🔒 Contact hidden. Unlock this lead to see the homeowner&apos;s name,
-          address, phone and email, and to message them.
-        </div>
-      )}
-
-      <div className="flex flex-wrap gap-2">
-        {/* Any locked open lead must be unlocked first - no lead gets stuck. */}
-        {!unlocked && (l.status === "new" || l.status === "accepted") && (
-          <>
-            {canAfford ? (
-              <form action={unlockLeadAction}>
-                <input type="hidden" name="id" value={l.id} />
-                <button className="btn-primary">
-                  Unlock for {money(l.payout_amount)}
-                </button>
-              </form>
-            ) : (
-              <Link href="/pro/billing" className="btn-primary">
-                Add funds to unlock ({money(l.payout_amount)})
-              </Link>
-            )}
-            <StatusButton id={l.id} status="lost" label="Decline" />
-          </>
-        )}
-        {unlocked && l.status === "new" && (
-          <>
-            <StatusButton id={l.id} status="accepted" label="Accept" primary />
-            <StatusButton id={l.id} status="lost" label="Mark lost" />
-          </>
-        )}
-        {unlocked && l.status === "accepted" && (
+      <div className="flex flex-wrap items-center gap-2">
+        <OpenChatButton
+          leadId={l.id}
+          name={l.homeowner_name || "Homeowner"}
+          label="💬 Message"
+        />
+        {l.status === "accepted" && (
           <>
             <StatusButton id={l.id} status="closed" label="Mark won" primary />
             <StatusButton id={l.id} status="lost" label="Mark lost" />
           </>
         )}
         {(l.status === "closed" || l.status === "lost") && (
-          <StatusButton id={l.id} status="new" label="Reopen" />
+          <StatusButton id={l.id} status="accepted" label="Reopen" />
         )}
       </div>
-
-      {/* Messaging is only available once the lead is unlocked. */}
-      {unlocked && <LeadChat leadId={l.id} role="contractor" />}
     </li>
   );
 }
@@ -343,7 +328,13 @@ function StatusButton({
     <form action={updateLeadStatusAction}>
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="status" value={status} />
-      <button className={primary ? "btn-primary" : "btn-secondary"}>
+      <button
+        className={
+          primary
+            ? "btn-primary text-sm"
+            : "rounded-lg border border-stone-200 px-3 py-1.5 text-sm text-stone-600 hover:border-stone-300"
+        }
+      >
         {label}
       </button>
     </form>

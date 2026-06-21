@@ -78,6 +78,26 @@ export async function updateLeadStatusAction(formData: FormData) {
   revalidatePath("/pro");
 }
 
+// Apply to an open job. The DB function charges the per-category fee from the
+// wallet (cash first, then bonus) and records the application. Returns false if
+// the wallet balance is short.
+export async function applyToJobAction(formData: FormData) {
+  await assertContractor();
+  const leadId = String(formData.get("id"));
+  const message = (formData.get("message") as string) || "";
+  const supabase = createClient() as any;
+  const { data, error } = await supabase.rpc("apply_to_lead", {
+    p_lead: leadId,
+    p_message: message,
+  });
+  if (error) setFlash(error.message, "error");
+  else if (data === false)
+    setFlash("Not enough balance. Add funds to apply.", "error");
+  else setFlash("Applied. The homeowner will review your application.", "success");
+  revalidatePath("/pro");
+  revalidatePath("/pro/billing");
+}
+
 export async function markLeadPaidAction(formData: FormData) {
   const leadId = formData.get("id") as string;
   const paid = formData.get("paid") === "true";

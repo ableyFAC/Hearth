@@ -94,11 +94,11 @@ export default async function HomeownerChatsPage({
 
       {convos.length === 0 ? (
         <p className="rounded-xl border border-dashed border-stone-300 p-8 text-center text-sm text-stone-500">
-          No conversations yet. Request a pro on{" "}
+          No conversations yet. Post a job on{" "}
           <Link href="/contractors" className="font-medium text-hearth-700 underline">
-            Find a Pro
+            Post a Job
           </Link>{" "}
-          and you can message them here.
+          and once you pick a pro you can message them here.
         </p>
       ) : (
         <div className="grid gap-4 md:grid-cols-[280px_1fr]">

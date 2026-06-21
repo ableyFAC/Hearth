@@ -5,9 +5,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { ISSUE_CATEGORIES, TIMING_OPTIONS, labelFor, iconFor } from "@/lib/constants";
 import { setFlash } from "@/lib/flash";
-import { requestProAction } from "./actions";
+import { postJobAction, chooseApplicantAction } from "./actions";
 import CategoryFilter from "./CategoryFilter";
 import LeadChat from "@/components/LeadChat";
+import PhoneInput from "@/components/PhoneInput";
 import ReviewPopup from "./ReviewPopup";
 
 // Must match the markers LeadChat posts when either side closes a thread.
@@ -48,8 +49,7 @@ export default async function ContractorsPage({
   searchParams: {
     issue?: string;
     category?: string;
-    requested?: string;
-    already?: string;
+    posted?: string;
   };
 }) {
   const property = await getActiveProperty();
@@ -59,24 +59,20 @@ export default async function ContractorsPage({
   const category = searchParams.category ?? "";
   const issueId = searchParams.issue ?? "";
 
-  // Match vetted contractors whose categories include the requested one.
-  const query = supabase
-    .from("contractors")
-    .select("*")
-    .eq("vetted", true)
-    .order("rating", { ascending: false });
-  if (category) query.contains("categories", [category]);
-  const { data: contractors } = await query;
-
-  // Show the owner their existing requests too.
-  const { data: leads } = await supabase
+  // The owner's posted jobs (with the chosen pro's info, if one is picked yet).
+  // Cast to any[]: the generated types don't model the contractor_leads ->
+  // contractors join, so the nested relation reads as an error type otherwise.
+  const { data: leadsData } = await supabase
     .from("contractor_leads")
-    .select("*, contractors(name)")
+    .select(
+      "*, contractors(name, rating, service_area, license_number, contact_phone, contact_email)"
+    )
     .eq("property_id", property.id)
     .order("created_at", { ascending: false });
+  const leads = (leadsData ?? []) as any[];
 
   // Figure out which finished (chat-closed) jobs still need a review.
-  const leadIds = (leads ?? []).map((l) => l.id);
+  const leadIds = leads.map((l) => l.id);
   const reviewedIds = new Set<string>();
   const closedIds = new Set<string>();
   if (leadIds.length) {
@@ -98,17 +94,25 @@ export default async function ContractorsPage({
       if (isCloseMarker(m.body)) closedIds.add(lid);
   }
   // The first closed-but-unreviewed job gets the rating popup.
-  const pending = (leads ?? []).find(
+  const pending = leads.find(
     (l) => closedIds.has(l.id) && !reviewedIds.has(l.id)
   );
 
-  // Pros this home has already requested (one request per pro is allowed).
-  const requestedIds = new Set(
-    (leads ?? []).map((l: any) => l.contractor_id).filter(Boolean)
-  );
-  const firstAvailableId = (contractors ?? []).find(
-    (c) => !requestedIds.has(c.id)
-  )?.id;
+  // Applications on the owner's jobs, with each applying pro's public info.
+  // lead_applications isn't in the generated types yet, so query via any.
+  const appsByLead = new Map<string, any[]>();
+  if (leadIds.length) {
+    const { data: apps } = await (supabase as any)
+      .from("lead_applications")
+      .select("*, contractors(name, rating, service_area, license_number)")
+      .in("lead_id", leadIds)
+      .order("created_at", { ascending: true });
+    for (const a of (apps ?? []) as any[]) {
+      const list = appsByLead.get(a.lead_id) ?? [];
+      list.push(a);
+      appsByLead.set(a.lead_id, list);
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -117,33 +121,26 @@ export default async function ContractorsPage({
           leadId={pending.id}
           contractorId={pending.contractor_id ?? ""}
           propertyId={property.id}
-          /* @ts-expect-error joined relation */
           contractorName={pending.contractors?.name ?? "your pro"}
           action={saveReviewAction}
         />
       )}
       <div>
-        <h1 className="text-2xl font-semibold text-stone-900">Find a Pro</h1>
+        <h1 className="text-2xl font-semibold text-stone-900">Post a job</h1>
         <p className="mt-1 text-sm text-stone-500">
-          Vetted, licensed local contractors. Request a quote and they&apos;ll
-          reach out. There is no obligation.
+          Describe what you need and post it. Vetted local pros apply, then you
+          review them and pick the one you want.
         </p>
       </div>
 
-      {searchParams.requested && (
+      {searchParams.posted && (
         <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
-          ✅ Request sent. A vetted pro will be in touch. You can track it below.
+          ✅ Job posted. Matching pros can now apply. Their applications show up
+          under your jobs below.
         </div>
       )}
 
-      {searchParams.already && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-          You&apos;ve already sent a request to that pro. Message them in your
-          requests below.
-        </div>
-      )}
-
-      <form action={requestProAction} className="card space-y-4">
+      <form action={postJobAction} className="card space-y-4">
         <input type="hidden" name="issue_id" value={issueId} />
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
@@ -178,102 +175,131 @@ export default async function ContractorsPage({
           </div>
           <div>
             <label className="label">Phone</label>
-            <input
-              name="homeowner_phone"
-              type="tel"
-              className="input"
-              placeholder="+1 415 555 0123"
-            />
+            <PhoneInput name="homeowner_phone" />
           </div>
         </div>
 
         <div>
-          <label className="label">
-            {category
-              ? `Matched pros for ${labelFor(ISSUE_CATEGORIES, category)} (${contractors?.length ?? 0})`
-              : "Matched pros"}
-          </label>
-          {contractors && contractors.length > 0 ? (
-            <div className="space-y-2">
-              {contractors.map((c) => {
-                const requested = requestedIds.has(c.id);
-                return (
-                  <label
-                    key={c.id}
-                    className={`flex items-center gap-3 rounded-lg border border-stone-200 p-3 ${
-                      requested
-                        ? "cursor-not-allowed opacity-60"
-                        : "cursor-pointer hover:border-hearth-400"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="contractor_id"
-                      value={c.id}
-                      defaultChecked={c.id === firstAvailableId}
-                      disabled={requested}
-                      className="accent-hearth-600"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-stone-900">{c.name}</span>
-                        {c.rating && (
-                          <span className="text-xs text-amber-600">★ {c.rating}</span>
-                        )}
-                        {requested && (
-                          <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
-                            Already requested
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-stone-500">
-                        {c.service_area} · Lic. {c.license_number ?? "-"}
-                      </p>
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="rounded-lg border border-dashed border-stone-300 p-4 text-sm text-stone-500">
-              {category
-                ? "No vetted pros in this category yet. Submit anyway and we'll source one."
-                : "Pick a category to see matched pros."}
-            </p>
-          )}
+          <label className="label">Describe the job</label>
+          <textarea
+            name="message"
+            className="textarea"
+            rows={3}
+            placeholder="What needs doing? Pros see this when deciding whether to apply."
+          />
         </div>
 
-        <button className="btn-primary w-full">Request quotes</button>
+        <button className="btn-primary w-full">Post job</button>
         <p className="text-xs text-stone-400">
-          We share your name, address, and request details with the pro so they
-          can quote the job. Nothing else.
+          Your contact stays private. Only the pro you choose from the applicants
+          gets your name, address, and contact details.
         </p>
       </form>
 
       {leads && leads.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-stone-900">Your requests</h2>
-          <ul className="space-y-2">
-            {leads.map((l) => (
-              <li key={l.id} className="card">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="font-medium text-stone-900">
-                      {iconFor(ISSUE_CATEGORIES, l.category)}{" "}
-                      {labelFor(ISSUE_CATEGORIES, l.category)}
+          <h2 className="text-lg font-semibold text-stone-900">Your jobs</h2>
+          <ul className="space-y-3">
+            {leads.map((l) => {
+              const apps = appsByLead.get(l.id) ?? [];
+              const chosen = Boolean(l.contractor_id);
+              return (
+                <li key={l.id} className="card space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <span className="font-medium text-stone-900">
+                        {iconFor(ISSUE_CATEGORIES, l.category)}{" "}
+                        {labelFor(ISSUE_CATEGORIES, l.category)}
+                      </span>
+                      {l.issue_description && (
+                        <p className="text-sm text-stone-500">
+                          {l.issue_description}
+                        </p>
+                      )}
+                    </div>
+                    <span className="shrink-0 rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-medium text-stone-500">
+                      {chosen
+                        ? "Pro selected"
+                        : `${apps.length} applicant${apps.length === 1 ? "" : "s"}`}
                     </span>
-                    <p className="text-sm text-stone-500">
-                      {/* @ts-expect-error joined relation */}
-                      {l.contractors?.name ?? "Sourcing a pro"}
-                    </p>
                   </div>
-                  <span className="rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs uppercase tracking-wide text-stone-500">
-                    {l.status}
-                  </span>
-                </div>
-                <LeadChat leadId={l.id} role="homeowner" />
-              </li>
-            ))}
+
+                  {chosen ? (
+                    // A pro has been picked: show them + open the message thread.
+                    <div className="space-y-2">
+                      <div className="rounded-lg bg-stone-50 p-3 text-sm">
+                        <p className="font-medium text-stone-900">
+                          {l.contractors?.name ?? "Your pro"}
+                          {l.contractors?.rating ? (
+                            <span className="ml-2 text-xs text-amber-600">
+                              ★ {l.contractors.rating}
+                            </span>
+                          ) : null}
+                        </p>
+                        <p className="text-stone-500">
+                          {l.contractors?.contact_phone || ""}
+                          {l.contractors?.contact_email
+                            ? ` · ${l.contractors.contact_email}`
+                            : ""}
+                        </p>
+                      </div>
+                      <LeadChat leadId={l.id} role="homeowner" />
+                    </div>
+                  ) : apps.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-stone-300 p-4 text-sm text-stone-500">
+                      No applications yet. Matching pros in your area can see this
+                      job and apply.
+                    </p>
+                  ) : (
+                    // Review the applicants and pick one.
+                    <ul className="space-y-2">
+                      {apps.map((a) => (
+                        <li
+                          key={a.id}
+                          className="rounded-lg border border-stone-200 p-3"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-stone-900">
+                                  {a.contractors?.name ?? "A pro"}
+                                </span>
+                                {a.contractors?.rating && (
+                                  <span className="text-xs text-amber-600">
+                                    ★ {a.contractors.rating}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-stone-500">
+                                {a.contractors?.service_area ?? ""}
+                                {a.contractors?.license_number
+                                  ? ` · Lic. ${a.contractors.license_number}`
+                                  : ""}
+                              </p>
+                              {a.message && (
+                                <p className="mt-1 text-sm text-stone-600">
+                                  {a.message}
+                                </p>
+                              )}
+                            </div>
+                            <form action={chooseApplicantAction}>
+                              <input
+                                type="hidden"
+                                name="application_id"
+                                value={a.id}
+                              />
+                              <button className="btn-primary shrink-0 text-sm">
+                                Choose
+                              </button>
+                            </form>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}

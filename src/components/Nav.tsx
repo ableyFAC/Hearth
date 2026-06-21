@@ -16,7 +16,7 @@ export default function Nav({
   const LINKS = [
     { href: "/dashboard", label: "Home" },
     { href: "/issues", label: "Issues" },
-    { href: "/contractors", label: "Find a Pro" },
+    { href: "/contractors", label: "Post a Job" },
     { href: "/chats", label: "Messages", liveBadge: "homeowner" as const },
   ];
 

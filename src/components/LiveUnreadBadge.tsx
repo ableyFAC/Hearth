@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 // Loads the unread-message count on the client (after render) so it never
-// blocks page navigation. Polls every 10s.
+// blocks page navigation. A realtime subscription bumps the badge the instant a
+// message arrives from the other side; a 30s poll and a focus refresh back it up.
 const SEEN_COOKIE: Record<string, string> = {
   homeowner: "hearth_ho_chat_seen",
   contractor: "hearth_chat_seen",
@@ -54,9 +55,29 @@ export default function LiveUnreadBadge({
       if (active) setCount(unread.size);
     }
     poll();
+
+    // Realtime: a new message from the other role updates the badge instantly.
+    const channel = supabase
+      .channel(`unread-${role}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `sender_role=eq.${OTHER[role]}`,
+        },
+        () => poll()
+      )
+      .subscribe();
+
+    const onFocus = () => poll();
+    window.addEventListener("focus", onFocus);
     const t = setInterval(poll, 30000);
     return () => {
       active = false;
+      supabase.removeChannel(channel);
+      window.removeEventListener("focus", onFocus);
       clearInterval(t);
     };
   }, [role]);

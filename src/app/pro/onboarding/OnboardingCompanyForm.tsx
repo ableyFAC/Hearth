@@ -3,6 +3,7 @@
 import { saveCompanyAction } from "../actions";
 import CategoryPicker from "../CategoryPicker";
 import FieldIcon from "../FieldIcon";
+import PhoneInput from "@/components/PhoneInput";
 
 // First-time company setup. Same visual language as the edit-profile form
 // (matching fields + category cards) but lean: no tabs, no account-security, no
@@ -79,12 +80,7 @@ export default function OnboardingCompanyForm({
                   <FieldIcon>
                     <path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012 4.2 2 2 0 014 2h3a2 2 0 012 1.7c.1.9.4 1.8.7 2.6a2 2 0 01-.5 2.1L8.1 9.8a16 16 0 006 6l1.4-1.1a2 2 0 012.1-.5c.8.3 1.7.6 2.6.7a2 2 0 011.7 2z" />
                   </FieldIcon>
-                  <input
-                    name="contact_phone"
-                    type="tel"
-                    className="input pl-9"
-                    placeholder="(555) 123-4567"
-                  />
+                  <PhoneInput name="contact_phone" className="input pl-9" />
                 </div>
               </div>
 

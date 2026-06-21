@@ -1,6 +1,7 @@
 "use client";
 
 import { saveAccountAction } from "./actions";
+import PhoneInput from "@/components/PhoneInput";
 import type { UserProfile } from "@/lib/database.types";
 
 // Edit personal account details: name, phone, email, and password.
@@ -25,13 +26,7 @@ export default function AccountForm({
 
       <div>
         <label className="label">Phone</label>
-        <input
-          name="phone"
-          type="tel"
-          className="input"
-          defaultValue={profile.phone ?? ""}
-          placeholder="(555) 123-4567"
-        />
+        <PhoneInput name="phone" defaultValue={profile.phone ?? ""} />
       </div>
 
       <div>

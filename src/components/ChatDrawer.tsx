@@ -1,0 +1,64 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import LeadChat from "@/components/LeadChat";
+
+type ActiveChat = { leadId: string; name: string };
+
+// A right-side, full-height slide-in chat panel. Opens when an
+// "hearth:open-chat" event fires (see OpenChatButton). Render once per page;
+// the page sets the role. Closes on the backdrop, the X, or Escape.
+export default function ChatDrawer({
+  role = "contractor",
+}: {
+  role?: "homeowner" | "contractor";
+}) {
+  const [chat, setChat] = useState<ActiveChat | null>(null);
+
+  useEffect(() => {
+    function onOpen(e: Event) {
+      setChat((e as CustomEvent).detail as ActiveChat);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setChat(null);
+    }
+    window.addEventListener("hearth:open-chat", onOpen);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("hearth:open-chat", onOpen);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, []);
+
+  if (!chat) return null;
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div
+        className="absolute inset-0 bg-black/30"
+        onClick={() => setChat(null)}
+      />
+      <div className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l border-stone-200 bg-white shadow-2xl">
+        <div className="flex items-center justify-between gap-2 border-b border-stone-100 bg-stone-50 px-4 py-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-stone-900">
+              {chat.name}
+            </p>
+            <p className="text-xs text-stone-400">Messages</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setChat(null)}
+            title="Close"
+            className="text-lg leading-none text-stone-400 hover:text-red-600"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="flex-1 overflow-hidden p-3">
+          <LeadChat key={chat.leadId} leadId={chat.leadId} role={role} embedded />
+        </div>
+      </div>
+    </div>
+  );
+}
