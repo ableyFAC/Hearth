@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createJsClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { setFlash } from "@/lib/flash";
 
 // Update the current homeowner's personal account: name + phone live in the
@@ -54,4 +56,74 @@ export async function saveAccountAction(formData: FormData) {
   // page) picks up the new name everywhere.
   revalidatePath("/", "layout");
   redirect("/account");
+}
+
+// Change the signed-in user's password. Verifies the current password first by
+// re-authenticating with a throwaway client (so the live session/cookies aren't
+// touched), then checks the new password matches its confirmation.
+export async function updatePasswordAction(formData: FormData) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user?.email) redirect("/signin");
+
+  const current = (formData.get("current_password") as string) || "";
+  const next = (formData.get("new_password") as string) || "";
+  const confirm = (formData.get("confirm_password") as string) || "";
+
+  if (next.length < 6) {
+    setFlash("New password must be at least 6 characters.", "error");
+    redirect("/account");
+  }
+  if (next !== confirm) {
+    setFlash("New passwords don't match.", "error");
+    redirect("/account");
+  }
+
+  // Verify the current password without disturbing the active session.
+  const verifier = createJsClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { persistSession: false } }
+  );
+  const { error: verifyError } = await verifier.auth.signInWithPassword({
+    email: user.email,
+    password: current,
+  });
+  if (verifyError) {
+    setFlash("Current password is incorrect.", "error");
+    redirect("/account");
+  }
+
+  const { error } = await supabase.auth.updateUser({ password: next });
+  if (error) {
+    setFlash(error.message, "error");
+    redirect("/account");
+  }
+
+  setFlash("Password updated.");
+  redirect("/account");
+}
+
+// Permanently delete the signed-in homeowner's account. Uses the service role
+// to remove the auth user (cascading to their public.users row and the homes /
+// systems keyed to it), then clears the session.
+export async function deleteAccountAction() {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/signin");
+
+  const admin = createAdminClient();
+  const { error } = await admin.auth.admin.deleteUser(user.id);
+  if (error) {
+    setFlash(error.message, "error");
+    redirect("/account");
+  }
+
+  await supabase.auth.signOut();
+  setFlash("Your account has been deleted.");
+  redirect("/");
 }
