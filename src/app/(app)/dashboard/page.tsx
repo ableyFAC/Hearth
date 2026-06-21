@@ -1,15 +1,15 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
-import { scoreBreakdown, scoreBand, systemPriority } from "@/lib/health";
 import {
-  SYSTEM_TYPES,
-  REMODEL_PROJECTS,
-  categoryForSystem,
-} from "@/lib/constants";
+  scoreBreakdown,
+  scoreBand,
+  systemPriority,
+  assessSystem,
+} from "@/lib/health";
+import { REMODEL_PROJECTS, categoryForSystem } from "@/lib/constants";
 import SystemForm from "../profile/SystemForm";
 import SystemRow from "../profile/SystemRow";
-import { quickAddSystemAction } from "../profile/actions";
 
 export default async function HomePage({
   searchParams,
@@ -19,31 +19,43 @@ export default async function HomePage({
   const property = (await getActiveProperty())!;
   const supabase = createClient();
 
-  const [{ data: systems }, { data: issues }, { data: tasks }, { data: pics }] =
-    await Promise.all([
-      supabase
-        .from("home_systems")
-        .select("*")
-        .eq("property_id", property.id)
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("issues")
-        .select("*")
-        .eq("property_id", property.id)
-        .eq("status", "open")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("maintenance_tasks")
-        .select("*")
-        .eq("property_id", property.id)
-        .eq("status", "open")
-        .order("due_date", { ascending: true }),
-      supabase
-        .from("photos")
-        .select("related_id, url")
-        .eq("property_id", property.id)
-        .eq("related_type", "system"),
-    ]);
+  const [
+    { data: systems },
+    { data: issues },
+    { data: tasks },
+    { data: pics },
+    { data: jobs },
+  ] = await Promise.all([
+    supabase
+      .from("home_systems")
+      .select("*")
+      .eq("property_id", property.id)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("issues")
+      .select("*")
+      .eq("property_id", property.id)
+      .eq("status", "open")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("maintenance_tasks")
+      .select("*")
+      .eq("property_id", property.id)
+      .eq("status", "open")
+      .order("due_date", { ascending: true }),
+    supabase
+      .from("photos")
+      .select("related_id, url")
+      .eq("property_id", property.id)
+      .eq("related_type", "system"),
+    supabase
+      .from("contractor_leads")
+      .select("id, contractor_id")
+      .eq("property_id", property.id),
+  ]);
+
+  // Open jobs = postings the owner has put up that no pro has been picked for yet.
+  const openJobsCount = (jobs ?? []).filter((j) => !j.contractor_id).length;
 
   // Group system photos by system id so each row can show its own thumbnails.
   const photosBySystem = new Map<string, string[]>();
@@ -67,17 +79,26 @@ export default async function HomePage({
   const issueForSystem = (s: any) =>
     openIssueByCat.get(categoryForSystem(s.system_type)) ?? null;
 
-  // Must-do (failing or with a reported issue) pinned to the very top; the rest
-  // sorted healthy-first.
+  // Order: must-do (failing or reported issue) pinned to the very top, then by
+  // maintenance status - needs maintenance (due), then plan ahead (aging), then
+  // healthy, then unknown. systemPriority breaks ties within a stage.
   const isMust = (s: any) => s.condition_rating === 1 || !!issueForSystem(s);
+  const STAGE_RANK: Record<string, number> = {
+    due: 3,
+    aging: 2,
+    healthy: 1,
+    unknown: 0,
+  };
   const sortedSys = [...sys].sort((a, b) => {
     const mustDiff = (isMust(b) ? 1 : 0) - (isMust(a) ? 1 : 0);
     if (mustDiff !== 0) return mustDiff;
-    return systemPriority(a) - systemPriority(b);
+    const stageDiff =
+      (STAGE_RANK[assessSystem(b).stage] ?? 0) -
+      (STAGE_RANK[assessSystem(a).stage] ?? 0);
+    if (stageDiff !== 0) return stageDiff;
+    return systemPriority(b) - systemPriority(a);
   });
 
-  const haveTypes = new Set(sys.map((s) => s.system_type));
-  const quickAddTypes = SYSTEM_TYPES.filter((t) => !haveTypes.has(t.value));
   const mustCount = sortedSys.filter(isMust).length;
 
   return (
@@ -129,19 +150,22 @@ export default async function HomePage({
           </details>
         </div>
         <div className="card">
-          <p className="text-sm font-medium text-stone-500">Open issues</p>
+          <p className="text-sm font-medium text-stone-500">Open jobs</p>
           <p className="mt-1 text-4xl font-bold text-stone-900">
-            {openIssues.length}
+            {openJobsCount}
           </p>
-          <Link href="/issues" className="text-sm text-hearth-700 hover:underline">
-            View issues →
+          <Link
+            href="/contractors"
+            className="text-sm text-hearth-700 hover:underline"
+          >
+            View job postings →
           </Link>
         </div>
       </section>
 
       {/* Systems inventory (the old Home Profile) */}
       <details id="systems" open className="space-y-4">
-        <summary className="cursor-pointer text-lg font-semibold text-stone-900 marker:text-stone-400">
+        <summary className="w-fit cursor-pointer text-lg font-semibold text-stone-900 marker:text-stone-400">
           Your systems{sortedSys.length > 0 ? ` (${sortedSys.length})` : ""}
           {mustCount > 0 ? (
             <span className="ml-2 rounded-full border border-red-300 bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
@@ -168,26 +192,7 @@ export default async function HomePage({
           </p>
         )}
 
-        <div className="flex flex-wrap items-center gap-3">
-          <SystemForm propertyId={property.id} />
-          {quickAddTypes.length > 0 && (
-            <details className="relative">
-              <summary className="btn-secondary inline-block cursor-pointer list-none text-sm [&::-webkit-details-marker]:hidden">
-                Quick add a system
-              </summary>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {quickAddTypes.map((t) => (
-                  <form key={t.value} action={quickAddSystemAction}>
-                    <input type="hidden" name="system_type" value={t.value} />
-                    <button className="btn-secondary text-sm">
-                      {t.icon} + {t.label}
-                    </button>
-                  </form>
-                ))}
-              </div>
-            </details>
-          )}
-        </div>
+        <SystemForm propertyId={property.id} />
       </details>
 
       {/* Project ideas - always open, not collapsible. */}
@@ -208,12 +213,18 @@ export default async function HomePage({
               {p.icon} {p.label}
             </Link>
           ))}
+          <Link
+            href="/contractors?category=other"
+            className="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-hearth-400 hover:text-hearth-700"
+          >
+            🔧 Other
+          </Link>
         </div>
       </section>
 
       {tasks && tasks.length > 0 && (
         <details className="space-y-3">
-          <summary className="cursor-pointer text-lg font-semibold text-stone-900 marker:text-stone-400">
+          <summary className="w-fit cursor-pointer text-lg font-semibold text-stone-900 marker:text-stone-400">
             Your tasks ({tasks.length})
           </summary>
           <ul className="space-y-2">

@@ -35,7 +35,13 @@ export default function Nav({
             <NavLinks links={LINKS} />
           </nav>
           {/* Account / Log out - mirrors the contractor profile menu. */}
-          <ProfileMenu name={name} links={[{ href: "/account", label: "Edit profile" }]} />
+          <ProfileMenu
+          name={name}
+          links={[
+            { href: "/account", label: "Edit profile" },
+            { href: "/learn", label: "Learn" },
+          ]}
+        />
         </div>
       </div>
     </header>

@@ -11,10 +11,13 @@ import {
   STARTER_SYSTEM_NOTE,
   categoryForSystem,
   tipForSystem,
+  materialLabel,
 } from "@/lib/constants";
 import type { HomeSystem } from "@/lib/database.types";
 import { updateSystemAction, deleteSystemAction } from "./actions";
 import PhotoUpload from "@/components/PhotoUpload";
+import MonthYearInput from "@/components/MonthYearInput";
+import MaterialSelect from "@/components/MaterialSelect";
 
 const STAGE_STYLE: Record<string, string> = {
   healthy: "bg-green-50 text-green-700 border-green-200",
@@ -56,6 +59,8 @@ export default function SystemRow({
   const h = assessSystem(s);
   // A system to deal with now: reported failing, or with an open reported issue.
   const mustDo = s.condition_rating === 1 || !!openIssue;
+  // Red-bordered if it needs attention now: must-do, or due for maintenance.
+  const needsBorder = mustDo || h.stage === "due";
 
   // Plain-language detail lines shown when the owner expands a system.
   const ageText =
@@ -71,9 +76,63 @@ export default function SystemRow({
     ? `${s.condition_rating} of 5`
     : "Not set";
 
+  // Plain explanation of why this system has its current status (must do / needs
+  // maintenance / plan ahead / healthy), combining any reported issue, the
+  // owner-set condition, and the age-based assessment.
+  const whyParts: string[] = [];
+  if (openIssue) {
+    whyParts.push(
+      `You reported a ${labelFor(ISSUE_CATEGORIES, openIssue.category)} issue${
+        openIssue.description ? `: ${openIssue.description}` : ""
+      }.`
+    );
+  }
+  if (s.condition_rating === 1)
+    whyParts.push("You marked its condition as failing.");
+  else if (s.condition_rating === 2)
+    whyParts.push("You marked its condition as worn.");
+  whyParts.push(h.message);
+  const whyText = whyParts.join(" ");
+
   if (editing) {
     return (
-      <li className="card">
+      <li className="card space-y-3">
+        {/* Header + Remove sit OUTSIDE the update form (a separate delete form
+            can't be nested inside another form). */}
+        <div className="flex items-center justify-between gap-2">
+          <p className="font-medium text-stone-900">
+            {iconFor(SYSTEM_TYPES, s.system_type)}{" "}
+            {labelFor(SYSTEM_TYPES, s.system_type)}
+          </p>
+          <form action={deleteSystemAction}>
+            <input type="hidden" name="id" value={s.id} />
+            {confirmRemove ? (
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmRemove(false)}
+                  className="text-xs text-stone-500 hover:text-stone-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="text-xs font-semibold text-red-600 hover:text-red-700"
+                >
+                  Confirm remove?
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmRemove(true)}
+                className="text-xs text-stone-400 hover:text-red-600"
+              >
+                Remove
+              </button>
+            )}
+          </form>
+        </div>
         <form
           action={async (fd) => {
             await updateSystemAction(fd);
@@ -82,10 +141,6 @@ export default function SystemRow({
           className="space-y-3"
         >
           <input type="hidden" name="id" value={s.id} />
-          <p className="font-medium text-stone-900">
-            {iconFor(SYSTEM_TYPES, s.system_type)}{" "}
-            {labelFor(SYSTEM_TYPES, s.system_type)}
-          </p>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -100,20 +155,17 @@ export default function SystemRow({
             </div>
             <div>
               <label className="label">Last serviced</label>
-              <input
+              <MonthYearInput
                 name="last_serviced"
-                type="text"
-                inputMode="numeric"
-                placeholder="MM/YYYY"
-                className="input"
                 defaultValue={dateToMmYyyy(s.last_serviced)}
               />
             </div>
             <div>
-              <label className="label">Material / model (optional)</label>
-              <input
-                name="material_or_model"
-                className="input"
+              <label className="label">
+                {materialLabel(s.system_type)} (optional)
+              </label>
+              <MaterialSelect
+                systemType={s.system_type}
                 defaultValue={s.material_or_model ?? ""}
               />
             </div>
@@ -165,7 +217,7 @@ export default function SystemRow({
     <li
       onClick={() => setExpanded((v) => !v)}
       className={`card flex cursor-pointer items-start justify-between gap-4 ${
-        mustDo ? "!border-2 !border-red-400" : ""
+        needsBorder ? "!border !border-red-400" : ""
       }`}
     >
       <div className="min-w-0 flex-1">
@@ -184,9 +236,6 @@ export default function SystemRow({
               🚨 Must do
             </span>
           )}
-          <span className="ml-auto text-xs text-stone-400">
-            {expanded ? "▴" : "▾"}
-          </span>
         </div>
         <button
           type="button"
@@ -200,45 +249,49 @@ export default function SystemRow({
         </button>
         {expanded && (
           <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg bg-stone-50 p-3 text-xs">
-            <div>
-              <dt className="text-stone-400">How old it is</dt>
-              <dd className="font-medium text-stone-700">{ageText}</dd>
+            <div className="col-span-2 mb-2 border-b border-stone-200 pb-3">
+              <dt className="font-medium text-stone-800">Why this status</dt>
+              <dd className="mt-1 text-stone-500">{whyText}</dd>
             </div>
             <div>
-              <dt className="text-stone-400">Typical replacement</dt>
-              <dd className="font-medium text-stone-700">
+              <dt className="font-medium text-stone-800">How old it is</dt>
+              <dd className="text-stone-500">{ageText}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-stone-800">Typical replacement</dt>
+              <dd className="text-stone-500">
                 every {h.lifespan} years
               </dd>
             </div>
             <div>
-              <dt className="text-stone-400">Life left</dt>
-              <dd className="font-medium text-stone-700">{lifeLeftText}</dd>
+              <dt className="font-medium text-stone-800">Life left</dt>
+              <dd className="text-stone-500">{lifeLeftText}</dd>
             </div>
             <div>
-              <dt className="text-stone-400">Last serviced</dt>
-              <dd className="font-medium text-stone-700">{lastServicedText}</dd>
+              <dt className="font-medium text-stone-800">Last serviced</dt>
+              <dd className="text-stone-500">{lastServicedText}</dd>
             </div>
             <div>
-              <dt className="text-stone-400">Condition</dt>
-              <dd className="font-medium text-stone-700">{conditionText}</dd>
+              <dt className="font-medium text-stone-800">Condition</dt>
+              <dd className="text-stone-500">{conditionText}</dd>
             </div>
             {s.material_or_model && (
               <div className="col-span-2">
-                <dt className="text-stone-400">Material / model</dt>
-                <dd className="font-medium text-stone-700">
+                <dt className="font-medium text-stone-800">{materialLabel(s.system_type)}</dt>
+                <dd className="text-stone-500">
                   {s.material_or_model}
                 </dd>
               </div>
             )}
             {s.notes && s.notes !== STARTER_SYSTEM_NOTE && (
               <div className="col-span-2">
-                <dt className="text-stone-400">Notes</dt>
-                <dd className="text-stone-700">{s.notes}</dd>
+                <dt className="font-medium text-stone-800">Notes</dt>
+                <dd className="text-stone-500">{s.notes}</dd>
               </div>
             )}
             <div className="col-span-2">
-              <dt className="text-stone-400">Maintenance tip</dt>
-              <dd className="text-stone-700">{tipForSystem(s.system_type)}</dd>
+              <dt className="font-medium text-stone-800">Maintenance tip</dt>
+              <dd className="text-stone-500">{tipForSystem(s.system_type)}</dd>
             </div>
           </dl>
         )}
@@ -265,7 +318,7 @@ export default function SystemRow({
       </div>
 
       <div
-        className="flex shrink-0 flex-col items-end gap-1"
+        className="flex shrink-0 flex-col items-end justify-center self-stretch"
         onClick={(e) => e.stopPropagation()}
       >
         <Link
@@ -274,28 +327,6 @@ export default function SystemRow({
         >
           Find a pro
         </Link>
-        <form action={deleteSystemAction}>
-          <input type="hidden" name="id" value={s.id} />
-          {/* Always a submit button so React never mutates its `type` mid-click
-              (that would submit on the first click). The first click is gated
-              with preventDefault; only the second click actually submits. */}
-          <button
-            type="submit"
-            onClick={(e) => {
-              if (!confirmRemove) {
-                e.preventDefault();
-                setConfirmRemove(true);
-              }
-            }}
-            className={
-              confirmRemove
-                ? "text-xs font-semibold text-red-600 hover:text-red-700"
-                : "text-xs text-stone-400 hover:text-red-600"
-            }
-          >
-            {confirmRemove ? "Confirm remove?" : "Remove"}
-          </button>
-        </form>
       </div>
     </li>
   );

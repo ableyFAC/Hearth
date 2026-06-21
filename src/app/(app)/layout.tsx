@@ -5,6 +5,7 @@ import { getUserProfile } from "@/lib/user";
 import { getUser } from "@/lib/auth";
 import Nav from "@/components/Nav";
 import NewMessageNotifier from "@/components/NewMessageNotifier";
+import AskHearthDock from "@/components/AskHearthDock";
 
 // Shell for all signed-in homeowner screens. Pros are bounced to their own area;
 // then we guarantee a claimed home exists.
@@ -32,6 +33,7 @@ export default async function AppLayout({
     <div className="min-h-screen">
       <Nav homes={homes} activeId={active.id} name={name} />
       <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
+      <AskHearthDock />
       <NewMessageNotifier role="homeowner" />
     </div>
   );

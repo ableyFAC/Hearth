@@ -47,6 +47,18 @@ export const REMODEL_PROJECTS = [
   { label: "Garage door", icon: "🚪", category: "other" },
   { label: "Roof replacement", icon: "🏠", category: "roof" },
   { label: "Panel upgrade", icon: "⚡", category: "electrical" },
+  { label: "HVAC install", icon: "❄️", category: "hvac" },
+  { label: "Water heater", icon: "🚿", category: "plumbing" },
+  { label: "Solar panels", icon: "🔆", category: "electrical" },
+  { label: "Fencing", icon: "🧱", category: "structural" },
+  { label: "Landscaping", icon: "🌿", category: "other" },
+  { label: "Driveway / concrete", icon: "🛣️", category: "other" },
+  { label: "Siding", icon: "🪵", category: "structural" },
+  { label: "Gutter installation", icon: "🌧️", category: "roof" },
+  { label: "Insulation", icon: "🧊", category: "other" },
+  { label: "Basement finishing", icon: "🪜", category: "structural" },
+  { label: "Smart home / security", icon: "📹", category: "electrical" },
+  { label: "Drywall repair", icon: "🧱", category: "structural" },
 ] as const;
 
 export const SEVERITIES = [
@@ -108,6 +120,151 @@ export const SYSTEM_CATEGORY: Record<string, string> = {
 
 export function categoryForSystem(systemType: string): string {
   return SYSTEM_CATEGORY[systemType] ?? "other";
+}
+
+// Equipment systems ask for a make / model (brand); structural systems ask for
+// a material. Everything else falls back to a generic "Material / model" label.
+const MAKE_MODEL_SYSTEMS = new Set([
+  "hvac",
+  "water_heater",
+  "electrical_panel",
+  "appliance",
+  "garage_door",
+  "sump_pump",
+]);
+
+export function materialLabel(systemType: string): string {
+  return MAKE_MODEL_SYSTEMS.has(systemType) ? "Make / model" : "Material";
+}
+
+// Dropdown options when adding or editing a system: brands for equipment,
+// materials for structural systems. "Other" (added in the picker) lets an owner
+// type something not listed.
+export const SYSTEM_MATERIALS: Record<string, string[]> = {
+  // --- material-based (structural) ---
+  roof: [
+    "Asphalt shingle",
+    "Architectural shingle",
+    "Metal",
+    "Clay / concrete tile",
+    "Slate",
+    "Wood shake",
+    "Flat - TPO",
+    "Flat - EPDM rubber",
+  ],
+  plumbing: [
+    "Copper",
+    "PEX",
+    "CPVC",
+    "PVC",
+    "Galvanized steel (older)",
+    "Cast iron",
+  ],
+  windows: [
+    "Vinyl",
+    "Wood",
+    "Aluminum",
+    "Fiberglass",
+    "Composite",
+    "Single pane",
+    "Double pane",
+    "Triple pane",
+  ],
+  foundation: [
+    "Poured concrete",
+    "Concrete block",
+    "Slab",
+    "Crawl space",
+    "Basement",
+    "Pier & beam",
+  ],
+  gutters: ["Aluminum", "Vinyl", "Copper", "Steel", "Seamless aluminum"],
+  siding: [
+    "Vinyl",
+    "Fiber cement (Hardie)",
+    "Wood",
+    "Aluminum",
+    "Brick",
+    "Stucco",
+    "Stone veneer",
+  ],
+  deck: [
+    "Pressure-treated wood",
+    "Cedar",
+    "Redwood",
+    "Composite (Trex)",
+    "PVC",
+    "Hardwood",
+  ],
+  driveway: ["Concrete", "Asphalt", "Pavers", "Gravel", "Brick"],
+  sewer_line: [
+    "PVC",
+    "Cast iron",
+    "Clay",
+    "ABS",
+    "Orangeburg (older)",
+    "Septic tank",
+  ],
+  fence: ["Wood", "Vinyl", "Chain link", "Aluminum", "Wrought iron", "Composite"],
+  // --- make / model (equipment brands) ---
+  hvac: [
+    "Carrier",
+    "Trane",
+    "Lennox",
+    "Goodman",
+    "Rheem",
+    "York",
+    "American Standard",
+    "Bryant",
+  ],
+  water_heater: [
+    "Rheem",
+    "A.O. Smith",
+    "Bradford White",
+    "Rinnai (tankless)",
+    "Navien (tankless)",
+    "Bosch",
+    "State",
+  ],
+  electrical_panel: [
+    "Square D",
+    "Eaton / Cutler-Hammer",
+    "Siemens",
+    "General Electric",
+    "Federal Pacific (older)",
+    "Zinsco (older)",
+  ],
+  appliance: [
+    "Whirlpool",
+    "GE",
+    "Samsung",
+    "LG",
+    "Bosch",
+    "Maytag",
+    "Frigidaire",
+    "KitchenAid",
+    "Kenmore",
+  ],
+  garage_door: [
+    "Clopay",
+    "Wayne Dalton",
+    "Amarr",
+    "Overhead Door",
+    "LiftMaster",
+    "Genie",
+    "Chamberlain",
+  ],
+  sump_pump: [
+    "Zoeller",
+    "Wayne",
+    "Liberty",
+    "Basement Watchdog",
+    "Superior Pump",
+  ],
+};
+
+export function materialsForSystem(systemType: string): string[] {
+  return SYSTEM_MATERIALS[systemType] ?? [];
 }
 
 // A short, plain maintenance tip per system, shown when an owner expands a

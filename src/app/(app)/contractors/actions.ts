@@ -50,6 +50,22 @@ export async function postJobAction(formData: FormData) {
     .filter(Boolean)
     .join(", ");
 
+  // Guard against a double-submit posting the same job twice: if an identical
+  // open posting was just created (same property + category), reuse it.
+  const { data: recent } = await supabase
+    .from("contractor_leads")
+    .select("id, created_at")
+    .eq("property_id", property.id)
+    .eq("category", category)
+    .is("contractor_id", null)
+    .eq("status", "new")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (recent && Date.now() - new Date(recent.created_at).getTime() < 15000) {
+    redirect("/contractors?posted=1");
+  }
+
   const { error } = await supabase.from("contractor_leads").insert({
     property_id: property.id,
     issue_id: issueId,
@@ -78,6 +94,67 @@ export async function postJobAction(formData: FormData) {
   revalidatePath("/contractors");
   revalidatePath("/issues");
   redirect("/contractors?posted=1");
+}
+
+// Homeowner edits a posted job (category, timing, details, contact). RLS limits
+// the update to a lead on a property the caller owns.
+export async function updateJobAction(formData: FormData) {
+  const supabase = createClient();
+  const leadId = String(formData.get("lead_id"));
+  const category = formData.get("category") as string;
+  const timing = (formData.get("timing") as string) || null;
+  const message = ((formData.get("message") as string) || "").trim() || null;
+  const homeownerName = (formData.get("homeowner_name") as string) || null;
+  const homeownerEmail = (formData.get("homeowner_email") as string) || null;
+  const homeownerPhone = (formData.get("homeowner_phone") as string) || null;
+
+  const { error } = await supabase
+    .from("contractor_leads")
+    .update({
+      category,
+      payout_amount: leadFeeFor(category),
+      timing,
+      issue_description: message,
+      homeowner_name: homeownerName,
+      homeowner_email: homeownerEmail,
+      homeowner_phone: homeownerPhone,
+    })
+    .eq("id", leadId);
+  if (error) setFlash(error.message, "error");
+  else setFlash("Job updated.", "success");
+  revalidatePath("/contractors");
+}
+
+// Homeowner closes (cancels) a job posting. Only allowed before any pro has
+// applied - once a pro has paid the apply fee, the owner must pick from the
+// applicants rather than cancel (the fee is non-refundable).
+export async function closeJobAction(formData: FormData) {
+  const supabase = createClient();
+  const leadId = String(formData.get("lead_id"));
+  const reason = (formData.get("reason") as string) || "";
+
+  const { count } = await (supabase as any)
+    .from("lead_applications")
+    .select("id", { count: "exact", head: true })
+    .eq("lead_id", leadId);
+  if ((count ?? 0) > 0) {
+    setFlash(
+      "Pros have already applied, so this job can't be closed. Pick one from the applicants.",
+      "error"
+    );
+    revalidatePath("/contractors");
+    return;
+  }
+
+  // RLS limits the delete to a lead on a property the caller owns.
+  const { error } = await supabase
+    .from("contractor_leads")
+    .delete()
+    .eq("id", leadId);
+  if (error) setFlash(error.message, "error");
+  else setFlash(reason ? `Job closed: ${reason}.` : "Job closed.", "info");
+  revalidatePath("/contractors");
+  revalidatePath("/dashboard");
 }
 
 // Homeowner picks a pro from the applicants. The DB function assigns + unlocks

@@ -9,6 +9,10 @@ import { postJobAction, chooseApplicantAction } from "./actions";
 import CategoryFilter from "./CategoryFilter";
 import LeadChat from "@/components/LeadChat";
 import PhoneInput from "@/components/PhoneInput";
+import FadingBanner from "@/components/FadingBanner";
+import CloseJobButton from "./CloseJobButton";
+import EditJobForm from "./EditJobForm";
+import PostJobButton from "./PostJobButton";
 import ReviewPopup from "./ReviewPopup";
 
 // Must match the markers LeadChat posts when either side closes a thread.
@@ -50,6 +54,8 @@ export default async function ContractorsPage({
     issue?: string;
     category?: string;
     posted?: string;
+    desc?: string;
+    timing?: string;
   };
 }) {
   const property = await getActiveProperty();
@@ -58,6 +64,16 @@ export default async function ContractorsPage({
 
   const category = searchParams.category ?? "";
   const issueId = searchParams.issue ?? "";
+
+  // Prefill the contact fields from the owner's saved profile.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: profile } = await supabase
+    .from("users")
+    .select("full_name, email, phone")
+    .eq("id", user?.id ?? "")
+    .maybeSingle();
 
   // The owner's posted jobs (with the chosen pro's info, if one is picked yet).
   // Cast to any[]: the generated types don't model the contractor_leads ->
@@ -134,10 +150,14 @@ export default async function ContractorsPage({
       </div>
 
       {searchParams.posted && (
-        <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+        <FadingBanner
+          delay={2500}
+          fadeMs={4500}
+          className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800"
+        >
           ✅ Job posted. Matching pros can now apply. Their applications show up
           under your jobs below.
-        </div>
+        </FadingBanner>
       )}
 
       <form action={postJobAction} className="card space-y-4">
@@ -145,11 +165,15 @@ export default async function ContractorsPage({
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className="label">What do you need?</label>
-            <CategoryFilter category={category} issueId={issueId} />
+            <CategoryFilter category={category} />
           </div>
           <div>
             <label className="label">Preferred timing</label>
-            <select name="timing" className="select" defaultValue="few_weeks">
+            <select
+              name="timing"
+              className="select"
+              defaultValue={searchParams.timing || "few_weeks"}
+            >
               {TIMING_OPTIONS.map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}
@@ -161,8 +185,14 @@ export default async function ContractorsPage({
 
         <div className="grid gap-3 sm:grid-cols-3">
           <div>
-            <label className="label">Your name</label>
-            <input name="homeowner_name" className="input" placeholder="Jane Doe" required />
+            <label className="label">First and last name</label>
+            <input
+              name="homeowner_name"
+              className="input"
+              placeholder="Jane Doe"
+              defaultValue={profile?.full_name ?? ""}
+              required
+            />
           </div>
           <div>
             <label className="label">Email</label>
@@ -171,25 +201,30 @@ export default async function ContractorsPage({
               type="email"
               className="input"
               placeholder="you@example.com"
+              defaultValue={profile?.email ?? user?.email ?? ""}
             />
           </div>
           <div>
             <label className="label">Phone</label>
-            <PhoneInput name="homeowner_phone" />
+            <PhoneInput
+              name="homeowner_phone"
+              defaultValue={profile?.phone ?? ""}
+            />
           </div>
         </div>
 
         <div>
-          <label className="label">Describe the job</label>
+          <label className="label">Details about your project (optional)</label>
           <textarea
             name="message"
             className="textarea"
             rows={3}
+            defaultValue={searchParams.desc ?? ""}
             placeholder="What needs doing? Pros see this when deciding whether to apply."
           />
         </div>
 
-        <button className="btn-primary w-full">Post job</button>
+        <PostJobButton />
         <p className="text-xs text-stone-400">
           Your contact stays private. Only the pro you choose from the applicants
           gets your name, address, and contact details.
@@ -224,6 +259,8 @@ export default async function ContractorsPage({
                     </span>
                   </div>
 
+                  {!chosen && <EditJobForm job={l} />}
+
                   {chosen ? (
                     // A pro has been picked: show them + open the message thread.
                     <div className="space-y-2">
@@ -246,10 +283,13 @@ export default async function ContractorsPage({
                       <LeadChat leadId={l.id} role="homeowner" />
                     </div>
                   ) : apps.length === 0 ? (
-                    <p className="rounded-lg border border-dashed border-stone-300 p-4 text-sm text-stone-500">
-                      No applications yet. Matching pros in your area can see this
-                      job and apply.
-                    </p>
+                    <div className="space-y-2">
+                      <p className="rounded-lg border border-dashed border-stone-300 p-4 text-sm text-stone-500">
+                        No applications yet. Matching pros in your area can see
+                        this job and apply.
+                      </p>
+                      <CloseJobButton leadId={l.id} />
+                    </div>
                   ) : (
                     // Review the applicants and pick one.
                     <ul className="space-y-2">

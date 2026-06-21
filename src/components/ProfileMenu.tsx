@@ -96,12 +96,12 @@ export default function ProfileMenu({
           <form
             action="/auth/signout"
             method="post"
-            className="border-t border-stone-100 p-1.5"
+            className="border-t border-stone-100"
           >
             <button
               type="submit"
               role="menuitem"
-              className="block w-full rounded-md border border-transparent px-4 py-2 text-left text-sm font-medium text-stone-500 transition-colors duration-200 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+              className="block w-full px-4 py-2 text-left text-sm font-medium text-stone-500 transition-colors hover:bg-red-50 hover:text-red-600"
             >
               Log out
             </button>

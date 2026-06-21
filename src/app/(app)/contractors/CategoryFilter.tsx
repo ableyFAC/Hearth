@@ -1,41 +1,30 @@
-"use client";
+import { ISSUE_CATEGORIES, REMODEL_PROJECTS } from "@/lib/constants";
 
-import { useRouter } from "next/navigation";
-import { ISSUE_CATEGORIES } from "@/lib/constants";
-
-// Changing the category re-filters the matched pros by updating the URL, which
-// re-runs the server query. Stays inside the request form so its value is still
-// submitted when the owner requests quotes.
-export default function CategoryFilter({
-  category,
-  issueId,
-}: {
-  category: string;
-  issueId: string;
-}) {
-  const router = useRouter();
-
+// The "what do you need?" picker for posting a job. Lists repair/issue
+// categories plus common projects, so a homeowner can post a remodel-type job
+// too. Project options map to the matchable contractor category. defaultValue
+// pre-fills it when arriving from a category link (e.g. a project chip on Home).
+export default function CategoryFilter({ category }: { category: string }) {
   return (
-    <select
-      name="category"
-      className="select"
-      defaultValue={category}
-      onChange={(e) => {
-        const params = new URLSearchParams();
-        if (e.target.value) params.set("category", e.target.value);
-        if (issueId) params.set("issue", issueId);
-        router.push(`/contractors?${params.toString()}`);
-      }}
-      required
-    >
+    <select name="category" className="select" defaultValue={category} required>
       <option value="" disabled>
-        Choose a category
+        Choose what you need
       </option>
-      {ISSUE_CATEGORIES.map((c) => (
-        <option key={c.value} value={c.value}>
-          {c.icon} {c.label}
-        </option>
-      ))}
+      <optgroup label="Repairs & issues">
+        {ISSUE_CATEGORIES.map((c) => (
+          <option key={c.value} value={c.value}>
+            {c.icon} {c.label}
+          </option>
+        ))}
+      </optgroup>
+      <optgroup label="Projects">
+        {REMODEL_PROJECTS.map((p) => (
+          <option key={p.label} value={p.category}>
+            {p.icon} {p.label}
+          </option>
+        ))}
+        <option value="other">🔧 Other</option>
+      </optgroup>
     </select>
   );
 }

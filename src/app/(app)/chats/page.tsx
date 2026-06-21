@@ -7,6 +7,7 @@ import { getActiveProperty } from "@/lib/property";
 import { labelFor, iconFor, ISSUE_CATEGORIES } from "@/lib/constants";
 import LeadChat from "@/components/LeadChat";
 import MarkChatSeen from "@/components/MarkChatSeen";
+import AskHearth from "@/components/AskHearth";
 
 // Homeowner-side "seen" cookie (kept separate from the contractor's).
 const SEEN_COOKIE = "hearth_ho_chat_seen";
@@ -42,11 +43,13 @@ export default async function HomeownerChatsPage({
   if (!property) redirect("/onboarding");
   const supabase = createClient();
 
-  // The homeowner's conversations are their requests for the active home.
+  // The homeowner's conversations are jobs where they've PICKED a pro. Open
+  // postings with no chosen pro yet aren't chats - there's no one to message.
   const { data: leads } = await supabase
     .from("contractor_leads")
     .select("*, contractors(name)")
     .eq("property_id", property.id)
+    .not("contractor_id", "is", null)
     .order("created_at", { ascending: false });
 
   const convos = leads ?? [];
@@ -81,8 +84,13 @@ export default async function HomeownerChatsPage({
     return tb < ta ? -1 : tb > ta ? 1 : 0;
   });
 
-  const selected =
-    convos.find((l) => l.id === searchParams.lead) ?? convos[0] ?? null;
+  // "Ask Hearth" is a pinned assistant conversation, always available. It's the
+  // default when there are no real (chosen-pro) conversations yet.
+  const askSelected =
+    !searchParams.lead || searchParams.lead === "ask-hearth";
+  const selected = askSelected
+    ? null
+    : (convos.find((l) => l.id === searchParams.lead) ?? null);
 
   return (
     <div className="space-y-4">
@@ -92,19 +100,29 @@ export default async function HomeownerChatsPage({
         <MarkChatSeen leadId={selected.id} action={markChatSeenAction} />
       )}
 
-      {convos.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-stone-300 p-8 text-center text-sm text-stone-500">
-          No conversations yet. Post a job on{" "}
-          <Link href="/contractors" className="font-medium text-hearth-700 underline">
-            Post a Job
-          </Link>{" "}
-          and once you pick a pro you can message them here.
-        </p>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-[280px_1fr]">
-          {/* ---- Conversation list ---- */}
-          <ul className="max-h-[40vh] divide-y divide-stone-100 overflow-y-auto rounded-xl border border-stone-200 bg-white md:h-[calc(100vh-13rem)] md:max-h-none">
-            {convos.map((l) => {
+      <div className="grid gap-4 md:grid-cols-[280px_1fr]">
+        {/* ---- Conversation list ---- */}
+        <ul className="max-h-[40vh] divide-y divide-stone-100 overflow-y-auto rounded-xl border border-stone-200 bg-white md:h-[calc(100vh-13rem)] md:max-h-none">
+          {/* Pinned assistant */}
+          <li>
+            <Link
+              href="/chats?lead=ask-hearth"
+              className={`block border-l-4 px-4 py-3 transition ${
+                askSelected
+                  ? "border-hearth-500 bg-hearth-50"
+                  : "border-transparent hover:bg-stone-50"
+              }`}
+            >
+              <span className="truncate font-medium text-stone-900">
+                ✨ Ask Hearth
+              </span>
+              <p className="truncate text-xs text-stone-500">
+                Your home assistant
+              </p>
+            </Link>
+          </li>
+
+          {convos.map((l) => {
               const last = lastByLead.get(l.id);
               const isActive = selected?.id === l.id;
               const unread = isUnread(l.id);
@@ -156,7 +174,11 @@ export default async function HomeownerChatsPage({
           </ul>
 
           {/* ---- Open thread ---- */}
-          {selected ? (
+          {askSelected ? (
+            <div className="h-[60vh] rounded-xl border border-stone-200 bg-white p-3 md:h-[calc(100vh-13rem)]">
+              <AskHearth fill />
+            </div>
+          ) : selected ? (
             <div className="h-[60vh] rounded-xl border border-stone-200 bg-white p-3 md:h-[calc(100vh-13rem)]">
               <LeadChat
                 key={selected.id}
@@ -173,7 +195,6 @@ export default async function HomeownerChatsPage({
             </div>
           )}
         </div>
-      )}
     </div>
   );
 }

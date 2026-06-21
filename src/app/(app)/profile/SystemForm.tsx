@@ -2,11 +2,14 @@
 
 import { useRef, useState } from "react";
 import { addSystemAction } from "./actions";
-import { SYSTEM_TYPES } from "@/lib/constants";
+import { SYSTEM_TYPES, materialLabel } from "@/lib/constants";
 import PhotoUpload from "@/components/PhotoUpload";
+import MonthYearInput from "@/components/MonthYearInput";
+import MaterialSelect from "@/components/MaterialSelect";
 
 export default function SystemForm({ propertyId }: { propertyId: string }) {
   const [open, setOpen] = useState(false);
+  const [systemType, setSystemType] = useState<string>(SYSTEM_TYPES[0].value);
   const formRef = useRef<HTMLFormElement>(null);
 
   if (!open) {
@@ -32,7 +35,13 @@ export default function SystemForm({ propertyId }: { propertyId: string }) {
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label">Type</label>
-          <select name="system_type" className="select" required>
+          <select
+            name="system_type"
+            className="select"
+            value={systemType}
+            onChange={(e) => setSystemType(e.target.value)}
+            required
+          >
             {SYSTEM_TYPES.map((s) => (
               <option key={s.value} value={s.value}>
                 {s.label}
@@ -41,12 +50,8 @@ export default function SystemForm({ propertyId }: { propertyId: string }) {
           </select>
         </div>
         <div>
-          <label className="label">Material / model (optional)</label>
-          <input
-            name="material_or_model"
-            className="input"
-            placeholder="e.g. Rheem 50-gal gas"
-          />
+          <label className="label">{materialLabel(systemType)} (optional)</label>
+          <MaterialSelect key={systemType} systemType={systemType} />
         </div>
         <div>
           <label className="label">Install year</label>
@@ -54,13 +59,7 @@ export default function SystemForm({ propertyId }: { propertyId: string }) {
         </div>
         <div>
           <label className="label">Last serviced</label>
-          <input
-            name="last_serviced"
-            type="text"
-            inputMode="numeric"
-            placeholder="MM/YYYY"
-            className="input"
-          />
+          <MonthYearInput name="last_serviced" />
         </div>
         <div>
           <label className="label">Condition</label>
