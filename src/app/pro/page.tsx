@@ -8,11 +8,11 @@ import {
   TIMING_OPTIONS,
 } from "@/lib/constants";
 import Link from "next/link";
-import { updateLeadStatusAction } from "./actions";
 import OpenChatButton from "@/components/OpenChatButton";
 import ChatDrawer from "@/components/ChatDrawer";
 import LeadsRealtime from "./LeadsRealtime";
 import ApplyJobButton from "./ApplyJobButton";
+import JobStatusSelect from "./JobStatusSelect";
 
 const SEVERITY_STYLE: Record<string, string> = {
   low: "border-stone-200 bg-stone-50 text-stone-600",
@@ -21,9 +21,18 @@ const SEVERITY_STYLE: Record<string, string> = {
 };
 
 const STATUS_STYLE: Record<string, string> = {
-  accepted: "border-blue-200 bg-blue-50 text-blue-700",
-  closed: "border-green-200 bg-green-50 text-green-700",
+  new: "border-hearth-200 bg-hearth-50 text-hearth-700",
+  accepted: "border-green-200 bg-green-50 text-green-700",
+  closed: "border-green-600 bg-green-600 text-white",
   lost: "border-stone-200 bg-stone-100 text-stone-500",
+};
+
+// Friendly labels for the pipeline statuses a pro sets on their own jobs.
+const STATUS_LABEL: Record<string, string> = {
+  new: "New lead",
+  accepted: "Active",
+  closed: "Won",
+  lost: "Lost",
 };
 
 function money(n: number | string | null) {
@@ -52,13 +61,20 @@ export default async function ProDashboard() {
 
   const open = (openJobs ?? []) as any[];
   const apps = (myApps ?? []) as any[];
-  const assigned = (assignedData ?? []) as any[];
+  // Won/lost jobs sink to the bottom; active ones stay on top (newest first,
+  // which the query already ordered). Array.sort is stable, so order holds.
+  const isDone = (l: any) => l.status === "closed" || l.status === "lost";
+  const assigned = ((assignedData ?? []) as any[]).sort(
+    (a, b) => (isDone(a) ? 1 : 0) - (isDone(b) ? 1 : 0)
+  );
 
   // Applications still waiting on the homeowner (not yet chosen for the job).
   const pendingApps = apps.filter((a) => a.status === "applied");
   const declinedApps = apps.filter((a) => a.status === "declined");
 
-  const activeCount = assigned.filter((l) => l.status === "accepted").length;
+  const activeCount = assigned.filter(
+    (l) => l.status !== "closed" && l.status !== "lost"
+  ).length;
 
   const { data: wallet } = await (supabase as any)
     .from("wallets")
@@ -269,7 +285,7 @@ function AssignedJobCard({ l }: { l: any }) {
         <span
           className={`rounded-full border px-2 py-0.5 text-xs ${STATUS_STYLE[l.status] ?? ""}`}
         >
-          {l.status}
+          {STATUS_LABEL[l.status] ?? l.status}
         </span>
       </div>
 
@@ -293,50 +309,14 @@ function AssignedJobCard({ l }: { l: any }) {
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <OpenChatButton
           leadId={l.id}
           name={l.homeowner_name || "Homeowner"}
           label="💬 Message"
         />
-        {l.status === "accepted" && (
-          <>
-            <StatusButton id={l.id} status="closed" label="Mark won" primary />
-            <StatusButton id={l.id} status="lost" label="Mark lost" />
-          </>
-        )}
-        {(l.status === "closed" || l.status === "lost") && (
-          <StatusButton id={l.id} status="accepted" label="Reopen" />
-        )}
+        <JobStatusSelect id={l.id} status={l.status} />
       </div>
     </li>
-  );
-}
-
-function StatusButton({
-  id,
-  status,
-  label,
-  primary,
-}: {
-  id: string;
-  status: string;
-  label: string;
-  primary?: boolean;
-}) {
-  return (
-    <form action={updateLeadStatusAction}>
-      <input type="hidden" name="id" value={id} />
-      <input type="hidden" name="status" value={status} />
-      <button
-        className={
-          primary
-            ? "btn-primary text-sm"
-            : "rounded-lg border border-stone-200 px-3 py-1.5 text-sm text-stone-600 hover:border-stone-300"
-        }
-      >
-        {label}
-      </button>
-    </form>
   );
 }
