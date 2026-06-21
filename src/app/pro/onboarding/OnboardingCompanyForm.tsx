@@ -19,17 +19,19 @@ export default function OnboardingCompanyForm({
       action={saveCompanyAction}
       className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm"
     >
-      {/* Filled brown header, attached to the form below */}
-      <div className="bg-hearth-600 px-6 py-8 text-center text-white">
+      {/* White header, matching the contractor signup card */}
+      <div className="px-6 pt-8 text-center">
         <div className="text-3xl">🛠️</div>
-        <h1 className="mt-2 text-2xl font-bold">Set up your company</h1>
-        <p className="mt-1 text-sm text-hearth-100">
+        <h1 className="mt-2 text-2xl font-semibold text-stone-900">
+          Set up your company
+        </h1>
+        <p className="mt-1 text-sm text-stone-500">
           Tell us what you do so we can match you with the right homeowner leads.
         </p>
       </div>
 
       {/* Form body */}
-      <div className="p-6">
+      <div className="px-6 pb-6 pt-6">
         <div className="grid gap-8 md:grid-cols-2">
           {/* Basic information */}
           <div>
