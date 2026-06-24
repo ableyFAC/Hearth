@@ -25,6 +25,8 @@ export const SYSTEM_TYPES = [
 export const STARTER_SYSTEM_NOTE =
   "Auto-added from your address. Update the year if you know it.";
 
+// Home-problem categories for the issue tracker (home-health side). These are
+// things that go *wrong* with a house — not every service a pro offers.
 export const ISSUE_CATEGORIES = [
   { value: "roof", label: "Roof", icon: "🏠" },
   { value: "plumbing", label: "Plumbing", icon: "🚰" },
@@ -34,31 +36,56 @@ export const ISSUE_CATEGORIES = [
   { value: "other", label: "Other", icon: "🔧" },
 ] as const;
 
+// Canonical service categories a contractor advertises and a homeowner can post
+// a job in. Must stay in sync with the contractor CategoryPicker — a job's
+// category is matched (exact equality) against contractors.categories, so both
+// sides have to draw from this same list. (Custom "Other" services are handled
+// separately as free text.)
+export const SERVICE_CATEGORIES = [
+  { value: "roof", label: "Roof", icon: "🏠" },
+  { value: "plumbing", label: "Plumbing", icon: "🚰" },
+  { value: "electrical", label: "Electrical", icon: "⚡" },
+  { value: "hvac", label: "HVAC", icon: "❄️" },
+  { value: "structural", label: "Structural", icon: "🧱" },
+  { value: "remodeling", label: "Remodeling", icon: "🛠️" },
+  { value: "landscaping", label: "Landscaping", icon: "🌿" },
+  { value: "cleaning", label: "Cleaning", icon: "🧽" },
+  { value: "windows", label: "Windows", icon: "🪟" },
+  { value: "painting", label: "Painting", icon: "🎨" },
+] as const;
+
+// Every value a job's category can take, for labels/icons when displaying a
+// posted job (the canonical services plus the catch-all "Other" bucket).
+export const JOB_CATEGORIES = [
+  ...SERVICE_CATEGORIES,
+  { value: "other", label: "Other", icon: "🔧" },
+] as const;
+
 // Popular remodel / improvement projects we surface as recommendations.
 // `category` maps each project to the contractor category used for matching.
 export const REMODEL_PROJECTS = [
-  { label: "Kitchen remodel", icon: "🍳", category: "other" },
-  { label: "Bathroom remodel", icon: "🛁", category: "plumbing" },
-  { label: "Window replacement", icon: "🪟", category: "structural" },
+  { label: "Kitchen remodel", icon: "🍳", category: "remodeling" },
+  { label: "Bathroom remodel", icon: "🛁", category: "remodeling" },
+  { label: "Window replacement", icon: "🪟", category: "windows" },
   { label: "Stairs & railings", icon: "🪜", category: "structural" },
-  { label: "Flooring", icon: "🪵", category: "other" },
+  { label: "Flooring", icon: "🪵", category: "remodeling" },
   { label: "Deck / patio", icon: "🌳", category: "structural" },
-  { label: "Interior painting", icon: "🎨", category: "other" },
-  { label: "Garage door", icon: "🚪", category: "other" },
+  { label: "Interior painting", icon: "🎨", category: "painting" },
+  { label: "Garage door", icon: "🚪", category: "structural" },
   { label: "Roof replacement", icon: "🏠", category: "roof" },
   { label: "Panel upgrade", icon: "⚡", category: "electrical" },
   { label: "HVAC install", icon: "❄️", category: "hvac" },
   { label: "Water heater", icon: "🚿", category: "plumbing" },
   { label: "Solar panels", icon: "🔆", category: "electrical" },
-  { label: "Fencing", icon: "🧱", category: "structural" },
-  { label: "Landscaping", icon: "🌿", category: "other" },
-  { label: "Driveway / concrete", icon: "🛣️", category: "other" },
+  { label: "Fencing", icon: "🧱", category: "landscaping" },
+  { label: "Landscaping", icon: "🌿", category: "landscaping" },
+  { label: "Driveway / concrete", icon: "🛣️", category: "structural" },
   { label: "Siding", icon: "🪵", category: "structural" },
   { label: "Gutter installation", icon: "🌧️", category: "roof" },
-  { label: "Insulation", icon: "🧊", category: "other" },
-  { label: "Basement finishing", icon: "🪜", category: "structural" },
+  { label: "Insulation", icon: "🧊", category: "remodeling" },
+  { label: "Basement finishing", icon: "🪜", category: "remodeling" },
   { label: "Smart home / security", icon: "📹", category: "electrical" },
-  { label: "Drywall repair", icon: "🧱", category: "structural" },
+  { label: "Drywall repair", icon: "🧱", category: "remodeling" },
 ] as const;
 
 export const SEVERITIES = [
@@ -90,6 +117,11 @@ export const LEAD_FEES: Record<string, number> = {
   electrical: 45,
   hvac: 60,
   structural: 90,
+  remodeling: 90,
+  landscaping: 40,
+  cleaning: 30,
+  windows: 50,
+  painting: 45,
   other: 35,
 };
 

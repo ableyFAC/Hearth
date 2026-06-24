@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
-import { labelFor, iconFor, ISSUE_CATEGORIES } from "@/lib/constants";
+import { labelFor, iconFor, JOB_CATEGORIES } from "@/lib/constants";
 import LeadChat from "@/components/LeadChat";
 import MarkChatSeen from "@/components/MarkChatSeen";
 
@@ -142,7 +142,7 @@ export default async function ProChatsPage({
                         </span>
                       ) : (
                         <span className="shrink-0 text-xs text-stone-400">
-                          {iconFor(ISSUE_CATEGORIES, l.category)}
+                          {iconFor(JOB_CATEGORIES, l.category)}
                         </span>
                       )}
                     </div>
@@ -153,7 +153,7 @@ export default async function ProChatsPage({
                     >
                       {last
                         ? `${last.sender_role === "contractor" ? "You: " : ""}${last.body}`
-                        : labelFor(ISSUE_CATEGORIES, l.category)}
+                        : labelFor(JOB_CATEGORIES, l.category)}
                     </p>
                   </Link>
                 </li>
@@ -171,7 +171,7 @@ export default async function ProChatsPage({
                 role="contractor"
                 embedded
                 title={selected.homeowner_name || "Homeowner"}
-                subtitle={`${labelFor(ISSUE_CATEGORIES, selected.category)}${
+                subtitle={`${labelFor(JOB_CATEGORIES, selected.category)}${
                   selected.property_address ? ` · ${selected.property_address}` : ""
                 }`}
               />

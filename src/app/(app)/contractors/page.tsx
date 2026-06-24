@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
-import { ISSUE_CATEGORIES, TIMING_OPTIONS, labelFor, iconFor } from "@/lib/constants";
+import { JOB_CATEGORIES, TIMING_OPTIONS, labelFor, iconFor } from "@/lib/constants";
 import { setFlash } from "@/lib/flash";
 import { postJobAction, chooseApplicantAction } from "./actions";
 import CategoryFilter from "./CategoryFilter";
@@ -247,8 +247,8 @@ export default async function ContractorsPage({
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <span className="font-medium text-stone-900">
-                        {iconFor(ISSUE_CATEGORIES, l.category)}{" "}
-                        {labelFor(ISSUE_CATEGORIES, l.category)}
+                        {iconFor(JOB_CATEGORIES, l.category)}{" "}
+                        {labelFor(JOB_CATEGORIES, l.category)}
                       </span>
                       {l.issue_description && (
                         <p className="text-sm text-stone-500">

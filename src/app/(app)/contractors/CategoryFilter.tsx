@@ -1,30 +1,52 @@
-import { ISSUE_CATEGORIES, REMODEL_PROJECTS } from "@/lib/constants";
+"use client";
 
-// The "what do you need?" picker for posting a job. Lists repair/issue
-// categories plus common projects, so a homeowner can post a remodel-type job
-// too. Project options map to the matchable contractor category. defaultValue
-// pre-fills it when arriving from a category link (e.g. a project chip on Home).
+import { useState } from "react";
+import { SERVICE_CATEGORIES, REMODEL_PROJECTS } from "@/lib/constants";
+
+// The "what do you need?" picker for posting a job. Lists every service category
+// a contractor can offer, plus common projects that map to one of them, so a
+// homeowner's job reaches the right pros. Project options map to the matchable
+// contractor category. defaultValue pre-fills it when arriving from a category
+// link (e.g. a project chip on Home). When "Other" is chosen we nudge the owner
+// to describe the service, since that free text is what matches them to a pro's
+// custom services.
 export default function CategoryFilter({ category }: { category: string }) {
+  const [value, setValue] = useState(category);
+
   return (
-    <select name="category" className="select" defaultValue={category} required>
-      <option value="" disabled>
-        Choose what you need
-      </option>
-      <optgroup label="Repairs & issues">
-        {ISSUE_CATEGORIES.map((c) => (
-          <option key={c.value} value={c.value}>
-            {c.icon} {c.label}
-          </option>
-        ))}
-      </optgroup>
-      <optgroup label="Projects">
-        {REMODEL_PROJECTS.map((p) => (
-          <option key={p.label} value={p.category}>
-            {p.icon} {p.label}
-          </option>
-        ))}
-        <option value="other">🔧 Other</option>
-      </optgroup>
-    </select>
+    <>
+      <select
+        name="category"
+        className="select"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        required
+      >
+        <option value="" disabled>
+          Choose what you need
+        </option>
+        <optgroup label="Services">
+          {SERVICE_CATEGORIES.map((c) => (
+            <option key={c.value} value={c.value}>
+              {c.icon} {c.label}
+            </option>
+          ))}
+        </optgroup>
+        <optgroup label="Popular projects">
+          {REMODEL_PROJECTS.map((p) => (
+            <option key={p.label} value={p.category}>
+              {p.icon} {p.label}
+            </option>
+          ))}
+        </optgroup>
+        <option value="other">🔧 Other (describe it)</option>
+      </select>
+      {value === "other" && (
+        <p className="mt-1 text-xs text-stone-500">
+          Describe the service in “Details” below so we can match you to a pro who
+          offers it.
+        </p>
+      )}
+    </>
   );
 }

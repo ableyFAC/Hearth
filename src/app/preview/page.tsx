@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { labelFor, iconFor, ISSUE_CATEGORIES } from "@/lib/constants";
+import { labelFor, iconFor, JOB_CATEGORIES } from "@/lib/constants";
 
 const SEVERITY_STYLE: Record<string, string> = {
   low: "border-stone-200 bg-stone-50 text-stone-600",
@@ -46,8 +46,8 @@ export default async function PreviewPage() {
             <div key={l.id} className="card space-y-2">
               <div className="flex items-center gap-2">
                 <span className="font-medium text-stone-900">
-                  {iconFor(ISSUE_CATEGORIES, l.category)}{" "}
-                  {labelFor(ISSUE_CATEGORIES, l.category)}
+                  {iconFor(JOB_CATEGORIES, l.category)}{" "}
+                  {labelFor(JOB_CATEGORIES, l.category)}
                 </span>
                 {l.severity && (
                   <span

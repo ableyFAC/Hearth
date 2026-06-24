@@ -1,21 +1,7 @@
 "use client";
 
 import { useState } from "react";
-
-// Contractor service categories. Separate from the homeowner ISSUE_CATEGORIES so
-// pros can advertise services (landscaping, cleaning, …) that aren't "issues".
-const SERVICE_CATEGORIES = [
-  { value: "roof", label: "Roof" },
-  { value: "plumbing", label: "Plumbing" },
-  { value: "electrical", label: "Electrical" },
-  { value: "hvac", label: "HVAC" },
-  { value: "structural", label: "Structural" },
-  { value: "remodeling", label: "Remodeling" },
-  { value: "landscaping", label: "Landscaping" },
-  { value: "cleaning", label: "Cleaning" },
-  { value: "windows", label: "Windows" },
-  { value: "painting", label: "Painting" },
-] as const;
+import { SERVICE_CATEGORIES } from "@/lib/constants";
 
 const CANONICAL = new Set<string>(SERVICE_CATEGORIES.map((c) => c.value));
 

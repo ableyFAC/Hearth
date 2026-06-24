@@ -4,7 +4,7 @@ import { getCurrentContractor } from "@/lib/contractor";
 import {
   labelFor,
   iconFor,
-  ISSUE_CATEGORIES,
+  JOB_CATEGORIES,
   TIMING_OPTIONS,
 } from "@/lib/constants";
 import Link from "next/link";
@@ -138,8 +138,8 @@ export default async function ProDashboard() {
                 <li key={j.id} className="card space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium text-stone-900">
-                      {iconFor(ISSUE_CATEGORIES, j.category)}{" "}
-                      {labelFor(ISSUE_CATEGORIES, j.category)}
+                      {iconFor(JOB_CATEGORIES, j.category)}{" "}
+                      {labelFor(JOB_CATEGORIES, j.category)}
                     </span>
                     {j.issue_severity && (
                       <span
@@ -220,8 +220,8 @@ export default async function ProDashboard() {
               >
                 <div>
                   <span className="font-medium text-stone-900">
-                    {iconFor(ISSUE_CATEGORIES, a.category)}{" "}
-                    {labelFor(ISSUE_CATEGORIES, a.category)}
+                    {iconFor(JOB_CATEGORIES, a.category)}{" "}
+                    {labelFor(JOB_CATEGORIES, a.category)}
                   </span>
                   {a.issue_description && (
                     <p className="text-sm text-stone-500">
@@ -251,8 +251,8 @@ export default async function ProDashboard() {
                 className="card flex items-center justify-between gap-3 opacity-70"
               >
                 <span className="font-medium text-stone-700">
-                  {iconFor(ISSUE_CATEGORIES, a.category)}{" "}
-                  {labelFor(ISSUE_CATEGORIES, a.category)}
+                  {iconFor(JOB_CATEGORIES, a.category)}{" "}
+                  {labelFor(JOB_CATEGORIES, a.category)}
                 </span>
                 <span className="shrink-0 rounded-full border border-stone-200 bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
                   Homeowner chose another pro
@@ -272,8 +272,8 @@ function AssignedJobCard({ l }: { l: any }) {
     <li className="card space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium text-stone-900">
-          {iconFor(ISSUE_CATEGORIES, l.category)}{" "}
-          {labelFor(ISSUE_CATEGORIES, l.category)}
+          {iconFor(JOB_CATEGORIES, l.category)}{" "}
+          {labelFor(JOB_CATEGORIES, l.category)}
         </span>
         {l.issue_severity && (
           <span

@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
     // When the owner wants to hire, emit a machine-readable block the app turns
     // into a prefilled job posting. Keep it out of the visible prose.
     "When the homeowner wants to hire a pro or find a service for a specific job, help them and then append a block on its own line at the VERY END of your reply, in EXACTLY this format with nothing after it:\n" +
-    '[[POSTJOB]]{"category":"<one of: roof, plumbing, electrical, hvac, structural, other>","timing":"<one of: asap, few_weeks, flexible, or empty if unknown>","summary":"<a short bullet-point summary of what they need, with \\n between bullet lines like \'- item\'>"}[[/POSTJOB]]\n' +
+    '[[POSTJOB]]{"category":"<one of: roof, plumbing, electrical, hvac, structural, remodeling, landscaping, cleaning, windows, painting, other>","timing":"<one of: asap, few_weeks, flexible, or empty if unknown>","summary":"<a short bullet-point summary of what they need, with \\n between bullet lines like \'- item\'>"}[[/POSTJOB]]\n' +
     "Only include that block once they actually want to hire someone, and never mention the block or its format in your visible reply.\n\n" +
     // Log a problem to the home record + adjust the system's condition.
     "When the conversation reveals a real problem with the home worth recording, append this block at the END:\n" +
