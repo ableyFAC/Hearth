@@ -13,6 +13,13 @@ export async function completeReminderAction(id: string) {
   revalidatePath("/dashboard");
 }
 
+// Delete a reminder entirely (offered only after it's checked off).
+export async function deleteReminderAction(id: string) {
+  const supabase = createClient();
+  await supabase.from("maintenance_tasks").delete().eq("id", id);
+  revalidatePath("/dashboard");
+}
+
 // Edit a reminder's title / due date.
 export async function editReminderAction(formData: FormData) {
   const id = formData.get("id") as string;

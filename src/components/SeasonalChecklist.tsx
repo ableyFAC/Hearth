@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { useChecklist } from "@/components/ChecklistProvider";
 
 // Checklist with clickable checkmarks. The task CONTENT is seasonal, but the
-// checked state is remembered per `period` (a year-month like "2026-06"), so the
-// checkmarks reset on the 1st of each month for a fresh nudge.
+// checked + hidden state is remembered per `period` (a year-month like
+// "2026-06"), so it resets on the 1st of each month for a fresh nudge.
 export default function SeasonalChecklist({
   period,
   tasks,
@@ -14,22 +14,30 @@ export default function SeasonalChecklist({
   tasks: string[];
 }) {
   const key = `hearth_checklist_${period}`;
+  const hiddenKey = `hearth_checklist_hidden_${period}`;
   const [done, setDone] = useState<Record<number, boolean>>({});
+  const [hidden, setHidden] = useState<Record<number, boolean>>({});
   const checklist = useChecklist();
 
   useEffect(() => {
     let loaded: Record<number, boolean> = {};
+    let loadedHidden: Record<number, boolean> = {};
     try {
       const raw = localStorage.getItem(key);
       if (raw) loaded = JSON.parse(raw);
+      const rawH = localStorage.getItem(hiddenKey);
+      if (rawH) loadedHidden = JSON.parse(rawH);
     } catch {
       /* ignore */
     }
     setDone(loaded);
-    tasks.forEach((_, i) => checklist?.register(`${period}-${i}`, !!loaded[i]));
+    setHidden(loadedHidden);
+    tasks.forEach((_, i) => {
+      if (!loadedHidden[i]) checklist?.register(`${period}-${i}`, !!loaded[i]);
+    });
     return () =>
       tasks.forEach((_, i) => checklist?.unregister(`${period}-${i}`));
-  }, [key, period, tasks, checklist]);
+  }, [key, hiddenKey, period, tasks, checklist]);
 
   function toggle(i: number) {
     setDone((prev) => {
@@ -44,33 +52,59 @@ export default function SeasonalChecklist({
     });
   }
 
-  // Renders plain <li> rows (no <ul>/card) so it can share the "This month" list.
+  function remove(i: number) {
+    setHidden((prev) => {
+      const next = { ...prev, [i]: true };
+      try {
+        localStorage.setItem(hiddenKey, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+    checklist?.unregister(`${period}-${i}`);
+  }
+
+  // Plain <li> rows (no <ul>/card) so it shares the "This month" list.
   return (
     <>
-      {tasks.map((t, i) => (
-        <li key={i}>
-          <button
-            type="button"
-            onClick={() => toggle(i)}
-            className="flex w-full items-start gap-2 text-left text-sm"
-          >
-            <span
-              className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
-                done[i]
-                  ? "border-green-500 bg-green-500 text-white"
-                  : "border-stone-300 text-transparent"
-              }`}
+      {tasks.map((t, i) =>
+        hidden[i] ? null : (
+          <li key={i} className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => toggle(i)}
+              className="flex items-start gap-2 text-left text-sm"
             >
-              ✓
-            </span>
-            <span
-              className={done[i] ? "text-stone-400 line-through" : "text-stone-800"}
-            >
-              {t}
-            </span>
-          </button>
-        </li>
-      ))}
+              <span
+                className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
+                  done[i]
+                    ? "border-green-500 bg-green-500 text-white"
+                    : "border-stone-300 text-transparent"
+                }`}
+              >
+                ✓
+              </span>
+              <span
+                className={
+                  done[i] ? "text-stone-400 line-through" : "text-stone-800"
+                }
+              >
+                {t}
+              </span>
+            </button>
+            {done[i] && (
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                className="text-xs text-stone-400 hover:text-red-600"
+              >
+                Delete
+              </button>
+            )}
+          </li>
+        )
+      )}
     </>
   );
 }

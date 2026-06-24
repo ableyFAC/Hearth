@@ -87,7 +87,8 @@ export async function POST(req: NextRequest) {
       ? `The homeowner's name is ${firstName}; greet and address them by their first name naturally, without overusing it. `
       : "") +
     "Answer the homeowner's question about THEIR specific home, concisely, in short paragraphs or bullet points. " +
-    "Reference their specific systems and ages when relevant. " +
+    "Lead with their specific home details - the relevant system, its age, and any open issues or reminders - rather than generic advice. " +
+    "If the homeowner attaches a PHOTO, examine it closely: describe what you see, identify the system or problem, diagnose the likely cause, and recommend next steps (a DIY fix, or hiring a pro). " +
     "Talk like a normal helpful person having a back-and-forth conversation, and be PROACTIVELY useful - don't just state a fact and stop, and don't end with a hollow 'anything else?'. Always move things forward with a concrete next step or suggestion. " +
     `Today's date is ${today}. ` +
     "When you mention a reminder or issue, say whether it is overdue, explain what to do about it, and offer to help (find a vetted pro, set or adjust a reminder, or mark it done). " +
@@ -96,7 +97,7 @@ export async function POST(req: NextRequest) {
     // When the owner wants to hire, emit a machine-readable block the app turns
     // into a prefilled job posting. Keep it out of the visible prose.
     "When the homeowner wants to hire a pro or find a service for a specific job, help them and then append a block on its own line at the VERY END of your reply, in EXACTLY this format with nothing after it:\n" +
-    '[[POSTJOB]]{"category":"<one of: roof, plumbing, electrical, hvac, structural, remodeling, landscaping, cleaning, windows, painting, other>","timing":"<one of: asap, few_weeks, flexible, or empty if unknown>","summary":"<a short bullet-point summary of what they need, with \\n between bullet lines like \'- item\'>"}[[/POSTJOB]]\n' +
+    '[[POSTJOB]]{"category":"<one of: roof, plumbing, electrical, hvac, structural, remodeling, landscaping, cleaning, windows, painting, other>","timing":"<one of: asap, few_weeks, flexible, or empty if unknown>","summary":"<a thorough, detailed description for the pro: what the problem is, the affected system with its type/brand and age if known, the specific symptoms the homeowner described, anything already tried, and what they want done. Clear bullet points with \\n between lines like \'- item\'. Be detailed, not terse - give the pro enough to quote accurately.>"}[[/POSTJOB]]\n' +
     "Only include that block once they actually want to hire someone, and never mention the block or its format in your visible reply.\n\n" +
     // Log a problem to the home record + adjust the system's condition.
     "When the conversation reveals a real problem with the home worth recording, append this block at the END:\n" +
@@ -113,12 +114,26 @@ export async function POST(req: NextRequest) {
     contents: history
       ? history
           .filter(
-            (m: any) => m && typeof m.content === "string" && m.content.trim()
+            (m: any) =>
+              m && (typeof m.content === "string" || typeof m.image === "string")
           )
-          .map((m: any) => ({
-            role: m.role === "assistant" ? "model" : "user",
-            parts: [{ text: m.content }],
-          }))
+          .map((m: any) => {
+            const parts: any[] = [];
+            if (m.content && m.content.trim()) parts.push({ text: m.content });
+            // A homeowner can attach a downscaled photo - send it to vision.
+            if (m.image)
+              parts.push({
+                inlineData: {
+                  mimeType: m.mime || "image/jpeg",
+                  data: m.image,
+                },
+              });
+            if (parts.length === 0) parts.push({ text: "" });
+            return {
+              role: m.role === "assistant" ? "model" : "user",
+              parts,
+            };
+          })
       : [{ role: "user", parts: [{ text: question }] }],
     generationConfig: { maxOutputTokens: 800 },
   });

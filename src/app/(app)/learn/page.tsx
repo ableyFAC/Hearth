@@ -1,8 +1,22 @@
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
-import { SYSTEM_TYPES } from "@/lib/constants";
-import { DEFAULT_LIFESPANS } from "@/lib/health";
-import { requestTopicAction } from "./actions";
+import { SYSTEM_TYPES, ISSUE_CATEGORIES, labelFor } from "@/lib/constants";
+import { DEFAULT_LIFESPANS, assessSystem } from "@/lib/health";
+import AskHearth from "@/components/AskHearth";
+import LearnGuide from "./LearnGuide";
+
+const STAGE_LABEL: Record<string, string> = {
+  healthy: "Healthy",
+  aging: "Plan ahead",
+  due: "Needs maintenance",
+  unknown: "Add details",
+};
+const STAGE_STYLE: Record<string, string> = {
+  healthy: "border-green-200 bg-green-50 text-green-700",
+  aging: "border-amber-200 bg-amber-50 text-amber-700",
+  due: "border-red-200 bg-red-50 text-red-700",
+  unknown: "border-stone-200 bg-stone-50 text-stone-500",
+};
 
 // Short, concise maintenance bullets per system. Kept here since it's only used
 // on this page.
@@ -108,68 +122,98 @@ const LEARN: Record<string, string[]> = {
 export default async function LearnPage() {
   const supabase = createClient();
   const property = await getActiveProperty();
-  const have = new Set<string>();
+
+  // First instance of each system type they own, for inline status; plus their
+  // most recent open issue, to seed a personal starter question.
+  const byType = new Map<string, any>();
+  let openIssueCategory: string | null = null;
   if (property) {
-    const { data: systems } = await supabase
-      .from("home_systems")
-      .select("system_type")
-      .eq("property_id", property.id);
-    for (const s of systems ?? []) have.add(s.system_type);
+    const [{ data: systems }, { data: issues }] = await Promise.all([
+      supabase.from("home_systems").select("*").eq("property_id", property.id),
+      supabase
+        .from("issues")
+        .select("category")
+        .eq("property_id", property.id)
+        .eq("status", "open")
+        .order("created_at", { ascending: false })
+        .limit(1),
+    ]);
+    for (const s of systems ?? [])
+      if (!byType.has(s.system_type)) byType.set(s.system_type, s);
+    if (issues && issues.length) openIssueCategory = issues[0].category;
   }
+
   // Only the systems the owner actually has; fall back to all if none added yet.
-  const owned = SYSTEM_TYPES.filter((t) => have.has(t.value));
+  const owned = SYSTEM_TYPES.filter((t) => byType.has(t.value));
   const types = owned.length ? owned : SYSTEM_TYPES;
+
+  // Starter questions seeded from THEIR systems - aging ones ask about lifespan,
+  // the rest about maintenance. An open issue takes top billing.
+  const suggestions: string[] = [];
+  for (const t of owned.slice(0, 3)) {
+    const stage = assessSystem(byType.get(t.value)).stage;
+    const label = t.label.toLowerCase();
+    suggestions.push(
+      stage === "due" || stage === "aging"
+        ? `Is my ${label} near the end of its life?`
+        : `How do I maintain my ${label}?`
+    );
+  }
+  if (openIssueCategory) {
+    suggestions.unshift(
+      `What should I do about my open ${labelFor(
+        ISSUE_CATEGORIES,
+        openIssueCategory
+      ).toLowerCase()} issue?`
+    );
+  }
+  if (suggestions.length === 0)
+    suggestions.push("How do I keep my home in good shape?");
+  if (suggestions.length < 4)
+    suggestions.push("What should I focus on this season?");
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-stone-900">Learn</h1>
         <p className="mt-1 text-sm text-stone-500">
-          Maintenance basics for the systems in your home. Tap one to read more.
+          Ask anything about your home and get an answer based on your actual
+          systems. Or browse the basics below.
         </p>
       </div>
 
-      <ul className="space-y-2">
-        {types.map((s) => (
-          <li key={s.value} className="card">
-            <details>
-              <summary className="flex cursor-pointer list-none items-center justify-between font-medium text-stone-900 [&::-webkit-details-marker]:hidden">
-                <span>
-                  {s.icon} {s.label}
-                </span>
-                <span className="text-sm text-stone-400">Read more</span>
-              </summary>
-              <p className="mt-3 text-xs text-stone-400">
-                Typical lifespan: {DEFAULT_LIFESPANS[s.value] ?? "varies"} years
-              </p>
-              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-stone-600">
-                {(LEARN[s.value] ?? []).map((b, i) => (
-                  <li key={i}>{b}</li>
-                ))}
-              </ul>
-            </details>
-          </li>
-        ))}
-      </ul>
+      <AskHearth suggestions={suggestions} />
 
-      <div className="card">
-        <h2 className="font-medium text-stone-900">
-          Don&apos;t see the answer to your question?
+      <div>
+        <h2 className="text-sm font-semibold text-stone-700">
+          Maintenance basics
         </h2>
-        <p className="mt-1 text-sm text-stone-500">
-          Tell us what you want to know about your home and we&apos;ll add a
-          guide for it.
-        </p>
-        <form action={requestTopicAction} className="mt-3 space-y-2">
-          <textarea
-            name="question"
-            required
-            rows={2}
-            className="textarea"
-            placeholder="e.g. How do I winterize my sprinkler system?"
-          />
-          <button className="btn-primary">Request a guide</button>
-        </form>
+        <ul className="mt-2 space-y-2">
+          {types.map((t) => {
+            const instance = byType.get(t.value);
+            const h = instance ? assessSystem(instance) : null;
+            const aging = h?.stage === "due" || h?.stage === "aging";
+            const label = t.label.toLowerCase();
+            return (
+              <LearnGuide
+                key={t.value}
+                systemType={t.value}
+                label={t.label}
+                icon={t.icon}
+                lifespan={DEFAULT_LIFESPANS[t.value] ?? "varies"}
+                statusLabel={h ? STAGE_LABEL[h.stage] : undefined}
+                statusStyle={h ? STAGE_STYLE[h.stage] : undefined}
+                age={h?.age ?? null}
+                tips={LEARN[t.value] ?? []}
+                askQuestion={
+                  aging
+                    ? `My ${label} is getting older. What should I be doing, and is it near replacement?`
+                    : `How should I maintain my ${label}?`
+                }
+              />
+            );
+          })}
+        </ul>
       </div>
     </div>
   );
