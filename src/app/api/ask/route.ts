@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
+import { REPLACEMENT_INFO } from "@/lib/health";
 
 export const runtime = "nodejs";
 
@@ -61,6 +62,22 @@ export async function POST(req: NextRequest) {
       const addr = [property.address_line1, property.city, property.state]
         .filter(Boolean)
         .join(", ");
+      // The town (or full address) used to ground cost answers locally.
+      const locale =
+        [property.city, property.state].filter(Boolean).join(", ") ||
+        "their area";
+
+      // Ballpark replacement cost ranges for the systems they actually own, so
+      // "what does this cost?" gets a grounded number instead of a guess.
+      const costLines = (systems ?? [])
+        .map((s) => {
+          const info = REPLACEMENT_INFO[s.system_type];
+          return info
+            ? `- ${s.system_type}: about $${info.low.toLocaleString()}-$${info.high.toLocaleString()} to replace (national ballpark)`
+            : null;
+        })
+        .filter(Boolean)
+        .join("\n");
 
       const { data: rems } = await supabase
         .from("maintenance_tasks")
@@ -71,10 +88,29 @@ export async function POST(req: NextRequest) {
         .map((r) => `- ${r.title}${r.due_date ? ` (due ${r.due_date})` : ""}`)
         .join("\n");
 
+      // Recently logged issues (any status) so the assistant can REMEMBER and
+      // follow up on the home's history - the thing a search engine can't do.
+      const { data: recentIssues } = await supabase
+        .from("issues")
+        .select("category, severity, description, status, created_at")
+        .eq("property_id", property.id)
+        .order("created_at", { ascending: false })
+        .limit(6);
+      const issueLines = (recentIssues ?? [])
+        .map(
+          (i) =>
+            `- ${(i.created_at ?? "").slice(0, 10)}: ${i.severity ?? ""} ${
+              i.category
+            } - ${i.description ?? "(no detail)"} [${i.status}]`
+        )
+        .join("\n");
+
       context =
-        `Home: ${addr || "unknown address"}, built ${property.year_built ?? "unknown"}.\n` +
+        `Home: ${addr || "unknown address"} (area for pricing: ${locale}), built ${property.year_built ?? "unknown"}.\n` +
         `Systems on file:\n${lines || "(none added yet)"}` +
-        (remLines ? `\nThe homeowner's open reminders:\n${remLines}` : "");
+        (costLines ? `\nReplacement cost ballparks for these systems:\n${costLines}` : "") +
+        (remLines ? `\nThe homeowner's open reminders:\n${remLines}` : "") +
+        (issueLines ? `\nRecently logged issues (most recent first):\n${issueLines}` : "");
     }
   } catch {
     /* keep the minimal context */
@@ -89,6 +125,9 @@ export async function POST(req: NextRequest) {
     "Answer the homeowner's question about THEIR specific home, concisely, in short paragraphs or bullet points. " +
     "Lead with their specific home details - the relevant system, its age, and any open issues or reminders - rather than generic advice. " +
     "If the homeowner attaches a PHOTO, examine it closely: describe what you see, identify the system or problem, diagnose the likely cause, and recommend next steps (a DIY fix, or hiring a pro). " +
+    "If the photo shows a MODEL/SERIAL label, data plate, or a filter, read the text and numbers off it and tell them the EXACT thing they need - e.g. the air-filter size (like 16x25x1), the replacement part or model number, the capacity - and where to get it (a hardware/home store or online). This is something a web search can't do for their specific unit. " +
+    "When the homeowner asks what a repair or replacement COSTS, give a concrete price RANGE for their area (named in the home details below), using the replacement ballparks below as a baseline and noting local prices can vary; then offer to post the job so vetted local pros send real quotes. Never refuse to estimate. " +
+    "You have a record of their recently logged issues below, with dates - refer back to them naturally and follow up (e.g. 'last month you logged a leaking water heater - did that get sorted?') so it feels like you remember their home. " +
     "Talk like a normal helpful person having a back-and-forth conversation, and be PROACTIVELY useful - don't just state a fact and stop, and don't end with a hollow 'anything else?'. Always move things forward with a concrete next step or suggestion. " +
     `Today's date is ${today}. ` +
     "When you mention a reminder or issue, say whether it is overdue, explain what to do about it, and offer to help (find a vetted pro, set or adjust a reminder, or mark it done). " +

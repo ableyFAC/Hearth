@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { logIssueFromChat, setReminderFromChat } from "@/lib/ask-actions";
 
 type Msg = {
@@ -145,6 +146,34 @@ function ActionButton({
   );
 }
 
+// When the AI wants to BOTH log an issue to the home record AND post a job, it's
+// one intent for the homeowner - so it's one button: log the issue, then go
+// straight to the prefilled job posting.
+function LogAndPostButton({ job, issue }: { job: Job; issue: any }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        // Log it to the home record first; even if that hiccups, still let them
+        // post the job rather than blocking on it.
+        try {
+          await logIssueFromChat(issue);
+        } catch {
+          /* ignore - proceed to post */
+        }
+        router.push(jobHref(job));
+      }}
+      className="inline-block rounded-lg bg-hearth-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-hearth-700 disabled:opacity-50"
+    >
+      {busy ? "…" : "📋 Log & post this job"}
+    </button>
+  );
+}
+
 function MessageActions({
   job,
   issue,
@@ -155,22 +184,30 @@ function MessageActions({
   reminder: any;
 }) {
   if (!job && !issue && !reminder) return null;
+  // Both at once -> a single combined button.
+  const combined = job && issue;
   return (
     <div className="mt-1 flex flex-wrap gap-2">
-      {job && (
-        <Link
-          href={jobHref(job)}
-          className="inline-block rounded-lg bg-hearth-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-hearth-700"
-        >
-          📋 Post this job
-        </Link>
-      )}
-      {issue && (
-        <ActionButton
-          label="✅ Log to home record"
-          doneLabel="✓ Logged to home record"
-          onApply={() => logIssueFromChat(issue)}
-        />
+      {combined ? (
+        <LogAndPostButton job={job} issue={issue} />
+      ) : (
+        <>
+          {job && (
+            <Link
+              href={jobHref(job)}
+              className="inline-block rounded-lg bg-hearth-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-hearth-700"
+            >
+              📋 Post this job
+            </Link>
+          )}
+          {issue && (
+            <ActionButton
+              label="✅ Log to home record"
+              doneLabel="✓ Logged to home record"
+              onApply={() => logIssueFromChat(issue)}
+            />
+          )}
+        </>
       )}
       {reminder && (
         <ActionButton

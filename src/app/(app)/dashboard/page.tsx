@@ -118,44 +118,69 @@ export default async function HomePage({
   const season = seasonForMonth(now.getMonth());
   const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-  // The single thing to focus on, with "Get started" prefilled from the issue or
-  // system it points to.
-  const focus = (() => {
-    const i = openIssues[0];
-    if (i) {
-      const desc =
-        `Need help with a ${labelFor(ISSUE_CATEGORIES, i.category)} issue.` +
-        (i.description ? ` ${i.description}` : "");
-      return {
-        text: `Take care of your ${labelFor(ISSUE_CATEGORIES, i.category)} issue.`,
-        href:
-          `/contractors?category=${i.category}` +
-          `&desc=${encodeURIComponent(desc)}` +
-          (i.severity === "urgent" ? "&timing=asap" : ""),
-      };
-    }
-    const u = sortedSys.find(
-      (s) => isMust(s) || assessSystem(s).stage === "due"
-    );
-    if (u) {
-      const desc =
-        `Need help with my ${labelFor(SYSTEM_TYPES, u.system_type)}.` +
-        (u.install_year ? ` Installed ${u.install_year}.` : "") +
-        (u.material_or_model ? ` Material/model: ${u.material_or_model}.` : "") +
-        (u.condition_rating
-          ? ` I rated its condition ${u.condition_rating} of 5.`
-          : "");
-      const urgent = u.condition_rating != null && u.condition_rating <= 2;
-      return {
-        text: `Plan ahead for your ${labelFor(SYSTEM_TYPES, u.system_type)}. It needs attention.`,
-        href:
-          `/contractors?category=${categoryForSystem(u.system_type)}` +
-          `&desc=${encodeURIComponent(desc)}` +
-          (urgent ? "&timing=asap" : ""),
-      };
-    }
-    return { text: SEASONAL_TASKS[season][0], href: null as string | null };
-  })();
+  // Proactive briefing: the top few things Hearth would flag right now, ranked
+  // the same way the systems list is - open issues first (urgent on top), then
+  // systems past/near their life, then aging ones, with a seasonal nudge to
+  // round it out. Each item carries a prefilled action so it's one tap to act.
+  type Brief = { text: string; href: string | null; cta: string };
+  const briefing: Brief[] = [];
+  const seenCat = new Set<string>();
+
+  const issuesByUrgency = [...openIssues].sort(
+    (a, b) =>
+      (b.severity === "urgent" ? 1 : 0) - (a.severity === "urgent" ? 1 : 0)
+  );
+  for (const i of issuesByUrgency) {
+    if (briefing.length >= 3) break;
+    const name = labelFor(ISSUE_CATEGORIES, i.category);
+    const desc =
+      `Need help with a ${name} issue.` +
+      (i.description ? ` ${i.description}` : "");
+    briefing.push({
+      text:
+        (i.severity === "urgent" ? "⚠️ Urgent — " : "") +
+        `your ${name.toLowerCase()} issue needs attention.`,
+      href:
+        `/contractors?category=${i.category}` +
+        `&desc=${encodeURIComponent(desc)}` +
+        (i.severity === "urgent" ? "&timing=asap" : ""),
+      cta: "Find a pro",
+    });
+    seenCat.add(i.category);
+  }
+
+  for (const s of sortedSys) {
+    if (briefing.length >= 3) break;
+    const cat = categoryForSystem(s.system_type);
+    if (seenCat.has(cat)) continue;
+    const h = assessSystem(s);
+    const must = isMust(s) || h.stage === "due";
+    if (!must && h.stage !== "aging") continue;
+    const name = labelFor(SYSTEM_TYPES, s.system_type);
+    const desc =
+      `Need help with my ${name}.` +
+      (s.install_year ? ` Installed ${s.install_year}.` : "") +
+      (s.material_or_model ? ` Material/model: ${s.material_or_model}.` : "") +
+      (s.condition_rating
+        ? ` I rated its condition ${s.condition_rating} of 5.`
+        : "");
+    const urgent = s.condition_rating != null && s.condition_rating <= 2;
+    briefing.push({
+      text: must
+        ? `Your ${name.toLowerCase()} is near the end of its life — worth planning ahead.`
+        : `Your ${name.toLowerCase()} is aging — keep an eye on it.`,
+      href:
+        `/contractors?category=${cat}` +
+        `&desc=${encodeURIComponent(desc)}` +
+        (urgent ? "&timing=asap" : ""),
+      cta: must ? "Plan it" : "Learn more",
+    });
+    seenCat.add(cat);
+  }
+
+  if (briefing.length < 3) {
+    briefing.push({ text: SEASONAL_TASKS[season][0], href: null, cta: "" });
+  }
 
   // Reminders: open ones always; a done (crossed-out) one lingers for 30 days
   // after it was set, then drops off.
@@ -194,19 +219,23 @@ export default async function HomePage({
         <div className="card space-y-3">
           <div className="rounded-lg bg-hearth-50 p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-hearth-700">
-              Focus
+              ✨ Hearth&apos;s briefing
             </p>
-            <p className="mt-0.5 text-sm text-stone-900">
-              {focus.text}
-              {focus.href && (
-                <Link
-                  href={focus.href}
-                  className="ml-1 font-medium text-hearth-700 hover:underline"
-                >
-                  Get started →
-                </Link>
-              )}
-            </p>
+            <ul className="mt-1.5 space-y-1.5">
+              {briefing.map((b, i) => (
+                <li key={i} className="text-sm text-stone-900">
+                  <span className="text-hearth-700">•</span> {b.text}
+                  {b.href && (
+                    <Link
+                      href={b.href}
+                      className="ml-1 font-medium text-hearth-700 hover:underline"
+                    >
+                      {b.cta} →
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ul>
           </div>
 
           <ChecklistProvider>
