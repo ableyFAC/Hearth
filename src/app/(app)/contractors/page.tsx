@@ -13,32 +13,31 @@ import FadingBanner from "@/components/FadingBanner";
 import CloseJobButton from "./CloseJobButton";
 import EditJobForm from "./EditJobForm";
 import PostJobButton from "./PostJobButton";
-import ReviewPopup from "./ReviewPopup";
+import ReviewButton from "./ReviewButton";
+import ContractorReviews from "./ContractorReviews";
 
 // Must match the markers LeadChat posts when either side closes a thread.
 const isCloseMarker = (b: string) =>
   b.startsWith("Conversation closed") || b === "Chat closed by the contractor.";
 
-// Save a homeowner's star rating + comment for a finished job. RLS ensures only
-// the property owner can review; a DB trigger updates the contractor's average.
+// Save a homeowner's star rating + comment for a finished job. Goes through the
+// leave_review() RPC, which derives the contractor from the lead, verifies the
+// caller owns the job, and enforces one review per job — so the contractor being
+// reviewed can't be forged from the form, and ratings can't be manipulated.
 async function saveReviewAction(formData: FormData) {
   "use server";
   const supabase = createClient();
   const lead_id = String(formData.get("lead_id"));
-  const contractor_id = String(formData.get("contractor_id"));
-  const property_id = String(formData.get("property_id") || "") || null;
   const rating = Number(formData.get("rating"));
   const comment = String(formData.get("comment") || "").trim();
   if (!rating || rating < 1 || rating > 5) {
     setFlash("Please pick a star rating.", "error");
     return;
   }
-  const { error } = await supabase.from("reviews").insert({
-    lead_id,
-    contractor_id,
-    property_id,
-    rating,
-    comment: comment || null,
+  const { error } = await supabase.rpc("leave_review", {
+    p_lead: lead_id,
+    p_rating: rating,
+    p_comment: comment,
   });
   setFlash(
     error ? error.message : "Thanks for your review!",
@@ -81,22 +80,27 @@ export default async function ContractorsPage({
   const { data: leadsData } = await supabase
     .from("contractor_leads")
     .select(
-      "*, contractors(name, rating, service_area, license_number, contact_phone, contact_email)"
+      "*, contractors(name, rating, review_count, service_area, license_number, contact_phone, contact_email)"
     )
     .eq("property_id", property.id)
     .order("created_at", { ascending: false });
   const leads = (leadsData ?? []) as any[];
 
-  // Figure out which finished (chat-closed) jobs still need a review.
+  // Figure out which jobs are finished (chat-closed) and which already have a
+  // review, so the row can show a "Leave a review" / "Edit review" button.
   const leadIds = leads.map((l) => l.id);
-  const reviewedIds = new Set<string>();
+  const reviewByLead = new Map<
+    string,
+    { rating: number; comment: string | null }
+  >();
   const closedIds = new Set<string>();
   if (leadIds.length) {
     const { data: revs } = await supabase
       .from("reviews")
-      .select("lead_id")
+      .select("lead_id, rating, comment")
       .in("lead_id", leadIds);
-    for (const r of revs ?? []) reviewedIds.add(r.lead_id);
+    for (const r of revs ?? [])
+      reviewByLead.set(r.lead_id, { rating: r.rating, comment: r.comment });
 
     const { data: sys } = await supabase
       .from("messages")
@@ -109,10 +113,6 @@ export default async function ContractorsPage({
     for (const [lid, m] of lastSys)
       if (isCloseMarker(m.body)) closedIds.add(lid);
   }
-  // The first closed-but-unreviewed job gets the rating popup.
-  const pending = leads.find(
-    (l) => closedIds.has(l.id) && !reviewedIds.has(l.id)
-  );
 
   // Applications on the owner's jobs, with each applying pro's public info.
   // lead_applications isn't in the generated types yet, so query via any.
@@ -120,7 +120,7 @@ export default async function ContractorsPage({
   if (leadIds.length) {
     const { data: apps } = await (supabase as any)
       .from("lead_applications")
-      .select("*, contractors(name, rating, service_area, license_number)")
+      .select("*, contractors(name, rating, review_count, service_area, license_number)")
       .in("lead_id", leadIds)
       .order("created_at", { ascending: true });
     for (const a of (apps ?? []) as any[]) {
@@ -132,15 +132,6 @@ export default async function ContractorsPage({
 
   return (
     <div className="space-y-8">
-      {pending && (
-        <ReviewPopup
-          leadId={pending.id}
-          contractorId={pending.contractor_id ?? ""}
-          propertyId={property.id}
-          contractorName={pending.contractors?.name ?? "your pro"}
-          action={saveReviewAction}
-        />
-      )}
       <div>
         <h1 className="text-2xl font-semibold text-stone-900">Post a job</h1>
         <p className="mt-1 text-sm text-stone-500">
@@ -271,9 +262,14 @@ export default async function ContractorsPage({
                       <div className="rounded-lg bg-stone-50 p-3 text-sm">
                         <p className="font-medium text-stone-900">
                           {l.contractors?.name ?? "Your pro"}
-                          {l.contractors?.rating ? (
+                          {l.contractors?.review_count > 0 ? (
                             <span className="ml-2 text-xs text-amber-600">
                               ★ {l.contractors.rating}
+                              <span className="text-stone-400">
+                                {" "}
+                                · {l.contractors.review_count} review
+                                {l.contractors.review_count === 1 ? "" : "s"}
+                              </span>
                             </span>
                           ) : null}
                         </p>
@@ -283,8 +279,54 @@ export default async function ContractorsPage({
                             ? ` · ${l.contractors.contact_email}`
                             : ""}
                         </p>
+                        {l.contractors?.review_count > 0 && (
+                          <ContractorReviews
+                            contractorId={l.contractor_id}
+                            count={l.contractors.review_count}
+                          />
+                        )}
                       </div>
                       <LeadChat leadId={l.id} role="homeowner" />
+
+                      {/* Review the pro once the conversation has been closed. */}
+                      {closedIds.has(l.id) &&
+                        (reviewByLead.has(l.id) ? (
+                          <div className="flex items-center justify-between gap-2 rounded-lg border border-stone-200 p-3">
+                            <div className="text-sm">
+                              <span className="text-amber-500">
+                                {"★".repeat(reviewByLead.get(l.id)!.rating)}
+                                <span className="text-stone-300">
+                                  {"★".repeat(5 - reviewByLead.get(l.id)!.rating)}
+                                </span>
+                              </span>
+                              {reviewByLead.get(l.id)!.comment && (
+                                <p className="mt-0.5 text-stone-500">
+                                  {reviewByLead.get(l.id)!.comment}
+                                </p>
+                              )}
+                            </div>
+                            <ReviewButton
+                              leadId={l.id}
+                              contractorName={l.contractors?.name ?? "your pro"}
+                              action={saveReviewAction}
+                              existing={reviewByLead.get(l.id)}
+                            />
+                          </div>
+                        ) : (
+                          <div className="rounded-lg border border-dashed border-stone-300 p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-sm text-stone-500">
+                                Job wrapped up? Leave {l.contractors?.name ?? "your pro"} a
+                                review.
+                              </p>
+                              <ReviewButton
+                                leadId={l.id}
+                                contractorName={l.contractors?.name ?? "your pro"}
+                                action={saveReviewAction}
+                              />
+                            </div>
+                          </div>
+                        ))}
                     </div>
                   ) : apps.length === 0 ? (
                     <div className="space-y-2">
@@ -308,12 +350,27 @@ export default async function ContractorsPage({
                                 <span className="font-medium text-stone-900">
                                   {a.contractors?.name ?? "A pro"}
                                 </span>
-                                {a.contractors?.rating && (
+                                {a.contractors?.review_count > 0 ? (
                                   <span className="text-xs text-amber-600">
                                     ★ {a.contractors.rating}
+                                    <span className="text-stone-400">
+                                      {" "}
+                                      · {a.contractors.review_count} review
+                                      {a.contractors.review_count === 1 ? "" : "s"}
+                                    </span>
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-stone-400">
+                                    New
                                   </span>
                                 )}
                               </div>
+                              {a.contractors?.review_count > 0 && (
+                                <ContractorReviews
+                                  contractorId={a.contractor_id}
+                                  count={a.contractors.review_count}
+                                />
+                              )}
                               <p className="text-xs text-stone-500">
                                 {a.contractors?.service_area ?? ""}
                                 {a.contractors?.license_number

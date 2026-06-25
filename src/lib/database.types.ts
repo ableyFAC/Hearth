@@ -217,6 +217,7 @@ export interface Database {
           contact_phone: string | null;
           vetted: boolean;
           rating: number | null;
+          review_count: number;
           balance: number;
           created_at: string;
         };
@@ -231,6 +232,7 @@ export interface Database {
           contact_phone?: string | null;
           vetted?: boolean;
           rating?: number | null;
+          review_count?: number;
           balance?: number;
           created_at?: string;
         };
@@ -547,6 +549,18 @@ export interface Database {
       can_access_lead: {
         Args: { p_lead_id: string };
         Returns: boolean;
+      };
+      leave_review: {
+        Args: { p_lead: string; p_rating: number; p_comment: string };
+        Returns: undefined;
+      };
+      contractor_reviews: {
+        Args: { p_contractor: string };
+        Returns: {
+          rating: number;
+          comment: string | null;
+          created_at: string;
+        }[];
       };
       get_or_create_wallet: {
         Args: { p_contractor: string };

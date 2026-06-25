@@ -1422,3 +1422,183 @@ returns table (
   order by cl.created_at desc;
 $$;
 
+
+-- =====================================================================
+-- file: supabase/migrations/0016_contractor_ratings.sql
+-- =====================================================================
+-- =============================================================================
+-- Hearth — keep a contractor's rating in sync with their reviews.
+--
+-- Homeowners leave reviews (0009 reviews table), but contractors.rating was
+-- static (seeded demo values). This adds a review_count column and a trigger
+-- that recomputes rating (average, 1 decimal) + review_count whenever a review
+-- is inserted / updated / deleted. The UI shows the rating only when
+-- review_count > 0, so seeded values are never displayed as if they were real.
+-- =============================================================================
+
+alter table public.contractors
+  add column if not exists review_count int not null default 0;
+
+-- Recompute one contractor's aggregate from the reviews table. SECURITY DEFINER
+-- because the homeowner writing the review doesn't own the contractor row.
+create or replace function public.recompute_contractor_rating(p_contractor uuid)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update public.contractors c
+     set rating       = sub.avg_rating,
+         review_count = sub.cnt
+    from (
+      select round(avg(rating)::numeric, 1) as avg_rating,
+             count(*)                        as cnt
+      from public.reviews
+      where contractor_id = p_contractor
+    ) sub
+   where c.id = p_contractor;
+$$;
+
+-- Fire on any change to a review; refresh the affected contractor(s).
+create or replace function public.reviews_sync_rating()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if (tg_op = 'DELETE') then
+    perform public.recompute_contractor_rating(old.contractor_id);
+    return old;
+  end if;
+  perform public.recompute_contractor_rating(new.contractor_id);
+  -- An update that re-points the review to a different contractor refreshes both.
+  if (tg_op = 'UPDATE' and new.contractor_id is distinct from old.contractor_id) then
+    perform public.recompute_contractor_rating(old.contractor_id);
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists reviews_sync_rating on public.reviews;
+create trigger reviews_sync_rating
+  after insert or update or delete on public.reviews
+  for each row execute function public.reviews_sync_rating();
+
+-- Backfill from any reviews that already exist. Contractors with no reviews keep
+-- review_count = 0 (their seeded rating simply won't be shown by the UI).
+update public.contractors c
+   set rating       = sub.avg_rating,
+       review_count = sub.cnt
+  from (
+    select contractor_id,
+           round(avg(rating)::numeric, 1) as avg_rating,
+           count(*)                        as cnt
+    from public.reviews
+    group by contractor_id
+  ) sub
+ where c.id = sub.contractor_id;
+
+
+-- =====================================================================
+-- file: supabase/migrations/0017_review_integrity.sql
+-- =====================================================================
+-- =============================================================================
+-- Hearth — review integrity. Only the real homeowner can review the actual pro
+-- who did their job, exactly once.
+--
+-- Before this, the insert trusted lead_id + contractor_id from the client and
+-- only checked can_access_lead(), so:
+--   * a homeowner could attribute a review to ANY contractor_id (sabotage a
+--     competitor) on a lead they own;
+--   * an assigned contractor could self-review;
+--   * anyone could leave unlimited reviews on one job (rating manipulation).
+--
+-- Now reviews go through leave_review(), a SECURITY DEFINER function that derives
+-- the contractor from the lead, verifies the caller owns the job's property, and
+-- enforces one review per job. Direct inserts are no longer allowed by RLS.
+-- =============================================================================
+
+-- One review per job. Drop any pre-existing duplicates first (keep one).
+delete from public.reviews a
+  using public.reviews b
+ where a.lead_id = b.lead_id
+   and a.ctid < b.ctid;
+create unique index if not exists reviews_lead_unique
+  on public.reviews (lead_id);
+
+-- The only sanctioned way to leave a review. Everything is derived/verified
+-- server-side; nothing about who is reviewed is taken from the caller.
+create or replace function public.leave_review(
+  p_lead uuid, p_rating smallint, p_comment text
+) returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  v_contractor uuid;
+  v_property   uuid;
+begin
+  if p_rating is null or p_rating < 1 or p_rating > 5 then
+    raise exception 'Rating must be between 1 and 5';
+  end if;
+
+  select contractor_id, property_id
+    into v_contractor, v_property
+    from contractor_leads
+   where id = p_lead;
+
+  if v_property is null then
+    raise exception 'Job not found';
+  end if;
+  -- Only the homeowner who owns the job's property can review it.
+  if not public.owns_property(v_property) then
+    raise exception 'You can only review your own job';
+  end if;
+  -- And only once a pro was actually assigned to that job.
+  if v_contractor is null then
+    raise exception 'No pro was assigned to this job';
+  end if;
+
+  insert into public.reviews (lead_id, contractor_id, property_id, rating, comment)
+    values (p_lead, v_contractor, v_property, p_rating, nullif(btrim(p_comment), ''))
+  on conflict (lead_id) do update
+    set rating     = excluded.rating,
+        comment    = excluded.comment,
+        created_at = now();
+end;
+$$;
+
+-- Block direct inserts — the function above is the only path in.
+drop policy if exists "reviews insert" on public.reviews;
+
+
+-- =====================================================================
+-- file: supabase/migrations/0018_review_views.sql
+-- =====================================================================
+-- =============================================================================
+-- Hearth — let homeowners read a contractor's reviews when choosing a pro.
+--
+-- The reviews RLS only lets a homeowner read reviews on their OWN leads, so they
+-- couldn't read an applicant's track record. This adds contractor_reviews(), a
+-- SECURITY DEFINER function that returns only the safe, public columns (rating,
+-- comment, date) for a contractor — never the lead/property that links a review
+-- back to a specific homeowner.
+-- =============================================================================
+
+create or replace function public.contractor_reviews(p_contractor uuid)
+returns table (
+  rating     smallint,
+  comment    text,
+  created_at timestamptz
+)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select rating, comment, created_at
+  from public.reviews
+  where contractor_id = p_contractor
+  order by created_at desc
+  limit 100;
+$$;
+
