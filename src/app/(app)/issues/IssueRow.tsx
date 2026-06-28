@@ -20,9 +20,15 @@ const SEVERITY_STYLE: Record<string, string> = {
   urgent: "border-red-200 bg-red-50 text-red-700",
 };
 
-export default function IssueRow({ issue }: { issue: any }) {
+export default function IssueRow({
+  issue,
+  initialResolved = false,
+}: {
+  issue: any;
+  initialResolved?: boolean;
+}) {
   const [editing, setEditing] = useState(false);
-  const [resolved, setResolved] = useState(false);
+  const [resolved, setResolved] = useState(initialResolved);
   const [busy, setBusy] = useState(false);
 
   async function toggleResolved() {
@@ -157,13 +163,24 @@ export default function IssueRow({ issue }: { issue: any }) {
           </div>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="text-xs font-medium text-hearth-700 hover:underline"
-          >
-            Edit
-          </button>
+          {resolved ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={toggleResolved}
+              className="text-xs font-medium text-hearth-700 hover:underline disabled:opacity-50"
+            >
+              {busy ? "…" : "Undo"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="text-xs font-medium text-hearth-700 hover:underline"
+            >
+              Edit
+            </button>
+          )}
         </div>
       </div>
       {!issue.converted_to_lead && !resolved && (

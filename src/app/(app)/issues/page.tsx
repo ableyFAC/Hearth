@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
-import { labelFor, ISSUE_CATEGORIES } from "@/lib/constants";
 import IssueForm from "./IssueForm";
 import IssueRow from "./IssueRow";
 
@@ -53,15 +52,7 @@ export default async function IssuesPage() {
           <h2 className="text-lg font-semibold text-stone-900">Resolved</h2>
           <ul className="space-y-2">
             {resolved.map((i) => (
-              <li
-                key={i.id}
-                className="card flex items-center justify-between text-stone-500"
-              >
-                <span>{labelFor(ISSUE_CATEGORIES, i.category)}</span>
-                {i.description && (
-                  <span className="text-sm">{i.description}</span>
-                )}
-              </li>
+              <IssueRow key={i.id} issue={i} initialResolved />
             ))}
           </ul>
         </section>
