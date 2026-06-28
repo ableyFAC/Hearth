@@ -152,7 +152,11 @@ export default async function ProChatsPage({
                       }`}
                     >
                       {last
-                        ? `${last.sender_role === "contractor" ? "You: " : ""}${last.body}`
+                        ? `${last.sender_role === "contractor" ? "You: " : ""}${
+                            last.body.startsWith("[img]")
+                              ? "📷 Photo"
+                              : last.body
+                          }`
                         : labelFor(JOB_CATEGORIES, l.category)}
                     </p>
                   </Link>

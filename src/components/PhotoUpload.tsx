@@ -13,11 +13,13 @@ export default function PhotoUpload({ propertyId }: { propertyId: string }) {
   const [err, setErr] = useState<string | null>(null);
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
+    const input = e.target;
+    const files = Array.from(input.files ?? []);
     if (!files.length) return;
     setBusy(true);
     setErr(null);
 
+    let failures = 0;
     for (const file of files) {
       const ext = file.name.split(".").pop() || "jpg";
       // Avoid Math.random/Date in this environment-agnostic path; use crypto.
@@ -27,15 +29,22 @@ export default function PhotoUpload({ propertyId }: { propertyId: string }) {
         .from("home-photos")
         .upload(path, file, { upsert: false });
       if (error) {
-        setErr(
-          "Photo upload unavailable (is the home-photos bucket created?). You can still save without photos."
-        );
+        failures++;
         continue;
       }
       const { data } = supabase.storage.from("home-photos").getPublicUrl(path);
       setUrls((prev) => [...prev, data.publicUrl]);
     }
     setBusy(false);
+    // Only show an error if something actually failed, worded to the real count
+    // (so one bad file doesn't make successful ones look failed).
+    setErr(
+      failures
+        ? `${failures} photo${failures > 1 ? "s" : ""} couldn't upload (is the home-photos bucket created?). You can still save without ${failures > 1 ? "them" : "it"}.`
+        : null
+    );
+    // Reset so picking the same file again still fires onChange.
+    input.value = "";
   }
 
   return (

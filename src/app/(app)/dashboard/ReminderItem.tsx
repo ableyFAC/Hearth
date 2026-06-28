@@ -8,6 +8,20 @@ import {
 } from "./actions";
 import { useChecklist } from "@/components/ChecklistProvider";
 
+const MONTHS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+// Format a YYYY-MM-DD date string as e.g. "Jul 15" without going through Date
+// (avoids timezone off-by-one and the argless-Date restriction).
+function formatDue(d: string): string {
+  const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return d;
+  const month = MONTHS[Number(m[2]) - 1];
+  return month ? `${month} ${Number(m[3])}` : d;
+}
+
 // A reminder row: click the checkbox to cross it out (click again to uncross).
 export default function ReminderItem({
   id,
@@ -93,7 +107,9 @@ export default function ReminderItem({
           </button>
         )}
       </div>
-      {due && <span className="shrink-0 text-xs text-stone-400">{due}</span>}
+      {due && (
+        <span className="shrink-0 text-xs text-stone-400">{formatDue(due)}</span>
+      )}
     </li>
   );
 }

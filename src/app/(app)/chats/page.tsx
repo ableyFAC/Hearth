@@ -164,7 +164,11 @@ export default async function HomeownerChatsPage({
                       }`}
                     >
                       {last
-                        ? `${last.sender_role === "homeowner" ? "You: " : ""}${last.body}`
+                        ? `${last.sender_role === "homeowner" ? "You: " : ""}${
+                            last.body.startsWith("[img]")
+                              ? "📷 Photo"
+                              : last.body
+                          }`
                         : labelFor(JOB_CATEGORIES, l.category)}
                     </p>
                   </Link>

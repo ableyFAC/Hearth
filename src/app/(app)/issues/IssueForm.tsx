@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { reportIssueAction } from "./actions";
 import PhotoUpload from "@/components/PhotoUpload";
+import SubmitButton from "@/components/SubmitButton";
 import { ISSUE_CATEGORIES, SEVERITIES, SYSTEM_TYPES, labelFor } from "@/lib/constants";
 import type { HomeSystem } from "@/lib/database.types";
 
@@ -81,7 +82,7 @@ export default function IssueForm({
         <button type="button" className="btn-secondary" onClick={() => setOpen(false)}>
           Cancel
         </button>
-        <button className="btn-primary flex-1">Log issue</button>
+        <SubmitButton pendingLabel="Logging…">Log issue</SubmitButton>
       </div>
       <p className="text-xs text-stone-400">
         After logging, we&apos;ll offer to connect you with a vetted local pro.

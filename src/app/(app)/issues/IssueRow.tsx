@@ -28,21 +28,30 @@ export default function IssueRow({
   initialResolved?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
-  const [resolved, setResolved] = useState(initialResolved);
   const [busy, setBusy] = useState(false);
+  // The checkbox follows the issue's real status (initialResolved), with an
+  // optimistic override only while a toggle is in flight. Using the prop as the
+  // source of truth - instead of a one-time useState init - means a row that
+  // moves into the Resolved section always shows checked, and one moved back to
+  // Open shows unchecked, even if React reuses the same component instance.
+  const [optimistic, setOptimistic] = useState<boolean | null>(null);
+  const resolved = optimistic ?? initialResolved;
 
   async function toggleResolved() {
+    const next = !resolved;
+    setOptimistic(next); // flip the checkbox immediately
     setBusy(true);
     try {
-      if (resolved) {
-        await reopenIssueAction(issue.id);
-        setResolved(false);
-      } else {
+      if (next) {
         await checkResolveIssueAction(issue.id);
-        setResolved(true);
+      } else {
+        await reopenIssueAction(issue.id);
       }
+      // Revalidation re-renders with the new status; drop the override so we
+      // follow the server truth again.
+      setOptimistic(null);
     } catch {
-      /* ignore */
+      setOptimistic(null); // revert the optimistic flip on failure
     } finally {
       setBusy(false);
     }

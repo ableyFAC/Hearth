@@ -37,7 +37,7 @@ export default async function IssuesPage() {
         {open.length ? (
           <ul className="space-y-2">
             {open.map((i) => (
-              <IssueRow key={i.id} issue={i} />
+              <IssueRow key={`${i.id}-${i.status}`} issue={i} />
             ))}
           </ul>
         ) : (
@@ -52,7 +52,7 @@ export default async function IssuesPage() {
           <h2 className="text-lg font-semibold text-stone-900">Resolved</h2>
           <ul className="space-y-2">
             {resolved.map((i) => (
-              <IssueRow key={i.id} issue={i} initialResolved />
+              <IssueRow key={`${i.id}-${i.status}`} issue={i} initialResolved />
             ))}
           </ul>
         </section>

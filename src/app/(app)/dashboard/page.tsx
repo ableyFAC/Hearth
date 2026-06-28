@@ -178,19 +178,28 @@ export default async function HomePage({
     seenCat.add(cat);
   }
 
-  if (briefing.length < 3) {
-    briefing.push({ text: SEASONAL_TASKS[season][0], href: null, cta: "" });
+  // If nothing urgent surfaced, point them at the seasonal checklist below
+  // rather than repeating one of its tasks verbatim in the briefing.
+  if (briefing.length === 0) {
+    briefing.push({
+      text: "Nothing urgent right now — knock out this month's seasonal tasks below. ✅",
+      href: null,
+      cta: "",
+    });
   }
 
   // Reminders: open ones always; a done (crossed-out) one lingers for 30 days
-  // after it was set, then drops off.
+  // after it was COMPLETED, then drops off. Measure from completed_at (falling
+  // back to created_at for older rows) so a task you just finished doesn't
+  // vanish because it was created long ago.
   const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
   const nowMs = Date.now();
   const reminders = (tasks ?? []).filter(
     (t) =>
       t.status === "open" ||
       (t.status === "done" &&
-        nowMs - new Date(t.created_at).getTime() < THIRTY_DAYS)
+        nowMs - new Date(t.completed_at ?? t.created_at).getTime() <
+          THIRTY_DAYS)
   );
   return (
     <div className="space-y-8">

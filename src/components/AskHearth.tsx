@@ -53,20 +53,55 @@ function extractBlock(
   content: string,
   tag: string
 ): { content: string; data: any } {
-  // Tolerate a malformed/typo'd closing tag (e.g. [[/LOGISSGUE]]): match the
-  // exact opening, then content, up to the NEXT bracket marker of any kind.
-  const re = new RegExp(
-    `\\[\\[${tag}\\]\\]([\\s\\S]*?)\\[\\[\\/?[^\\]]*\\]\\]`
-  );
-  const m = content.match(re);
-  if (!m) return { content, data: null };
+  const open = `[[${tag}]]`;
+  const idx = content.indexOf(open);
+  if (idx === -1) return { content, data: null };
+
+  // Find the JSON payload by brace-matching from the first "{" after the tag.
+  // This tolerates a missing or typo'd closing tag (e.g. [[/LOGISSGUE]]) AND a
+  // fully UNCLOSED block, so raw {json} never leaks into the visible message.
+  const after = content.slice(idx + open.length);
+  const start = after.indexOf("{");
   let data: any = null;
-  try {
-    data = JSON.parse(m[1].trim());
-  } catch {
-    /* ignore malformed block */
+  // Default: if we can't find a clean JSON object, strip from the tag to the
+  // end of the message (the AI is told to put blocks at the very end).
+  let consumedEnd = content.length;
+
+  if (start !== -1) {
+    let depth = 0;
+    let end = -1;
+    let inStr = false;
+    let esc = false;
+    for (let i = start; i < after.length; i++) {
+      const ch = after[i];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (ch === "\\") esc = true;
+        else if (ch === '"') inStr = false;
+      } else if (ch === '"') inStr = true;
+      else if (ch === "{") depth++;
+      else if (ch === "}") {
+        depth--;
+        if (depth === 0) {
+          end = i;
+          break;
+        }
+      }
+    }
+    if (end !== -1) {
+      try {
+        data = JSON.parse(after.slice(start, end + 1));
+      } catch {
+        /* ignore malformed block */
+      }
+      // Also swallow a trailing closing tag if one is present.
+      const tail = after.slice(end + 1).match(/^\s*\[\[\/?[^\]]*\]\]/);
+      consumedEnd = idx + open.length + end + 1 + (tail ? tail[0].length : 0);
+    }
   }
-  return { content: content.replace(m[0], "").trim(), data };
+
+  const cleaned = (content.slice(0, idx) + content.slice(consumedEnd)).trim();
+  return { content: cleaned, data };
 }
 
 function parseAssistant(content: string): {
@@ -120,6 +155,7 @@ function ActionButton({
 }) {
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
   if (done)
     return (
       <span className="inline-block text-xs font-medium text-green-600">
@@ -127,22 +163,29 @@ function ActionButton({
       </span>
     );
   return (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={async () => {
-        setBusy(true);
-        try {
-          await onApply();
-          setDone(true);
-        } catch {
-          setBusy(false);
-        }
-      }}
-      className="inline-block rounded-lg bg-hearth-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-hearth-700 disabled:opacity-50"
-    >
-      {busy ? "…" : label}
-    </button>
+    <span className="inline-flex items-center gap-2">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setFailed(false);
+          try {
+            await onApply();
+            setDone(true);
+          } catch {
+            setFailed(true);
+            setBusy(false);
+          }
+        }}
+        className="inline-block rounded-lg bg-hearth-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-hearth-700 disabled:opacity-50"
+      >
+        {busy ? "…" : failed ? "Try again" : label}
+      </button>
+      {failed && (
+        <span className="text-xs text-red-600">Didn&apos;t save</span>
+      )}
+    </span>
   );
 }
 
@@ -255,6 +298,7 @@ export default function AskHearth({
     mime: string;
     data: string;
   } | null>(null);
+  const [imageError, setImageError] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const submitRef = useRef<(t: string) => void>(() => {});
 
@@ -391,10 +435,13 @@ export default function AskHearth({
   }, [fill]);
 
   async function onPickImage(file: File) {
+    setImageError(false);
     try {
       setPendingImage(await downscaleImage(file));
     } catch {
-      /* ignore */
+      // Couldn't read/shrink the image (corrupt, unsupported, too big) - tell
+      // the homeowner instead of silently dropping it.
+      setImageError(true);
     }
   }
 
@@ -458,6 +505,11 @@ export default function AskHearth({
             Remove
           </button>
         </div>
+      )}
+      {imageError && (
+        <p className="mb-2 text-xs text-red-600">
+          Couldn&apos;t attach that image — try a different photo.
+        </p>
       )}
       <form onSubmit={send} className="flex gap-2">
         <label
