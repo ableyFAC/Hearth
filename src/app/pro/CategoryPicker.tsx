@@ -110,7 +110,7 @@ export default function CategoryPicker({
         );
       })}
 
-      {/* Full-width "Other" — describe a service not listed above. */}
+      {/* Full-width "Other". Describe a service not listed above. */}
       <div
         className={`col-span-2 flex items-center gap-3 rounded-xl border px-3 py-3 transition-colors ${
           otherActive

@@ -20,8 +20,23 @@ export async function logIssueFromChat(payload: {
   if (!property) return;
   const supabase = createClient();
 
+  // Find the matching system first so we can LINK the issue to it. That link is
+  // what lets resolving the issue later lift the red flag off the system on the
+  // Home page (otherwise a chat-logged issue has no system_id to trace back to).
+  let systemId: string | null = null;
+  if (payload.system_type) {
+    const { data: sys } = await supabase
+      .from("home_systems")
+      .select("id")
+      .eq("property_id", property.id)
+      .eq("system_type", payload.system_type)
+      .maybeSingle();
+    systemId = sys?.id ?? null;
+  }
+
   await supabase.from("issues").insert({
     property_id: property.id,
+    system_id: systemId,
     category: payload.category || "other",
     severity: payload.severity || "medium",
     description: payload.description || null,
@@ -29,12 +44,11 @@ export async function logIssueFromChat(payload: {
   });
 
   // Reflect the problem on the matching system by lowering its condition.
-  if (payload.system_type && payload.condition) {
+  if (systemId && payload.condition) {
     await supabase
       .from("home_systems")
       .update({ condition_rating: payload.condition })
-      .eq("property_id", property.id)
-      .eq("system_type", payload.system_type);
+      .eq("id", systemId);
   }
 
   setFlash("Logged to your home record.", "success");

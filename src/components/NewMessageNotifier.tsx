@@ -45,15 +45,38 @@ export default function NewMessageNotifier({
       if (!fresh.length) return;
       sinceRef.current = fresh[0].created_at;
 
+      // Name the sender in the toast. Homeowners see the pro's company name.
+      // Contractors see a generic label, because RLS hides the homeowner's
+      // details from the pro side.
+      const nameByLead: Record<string, string> = {};
+      if (role === "homeowner") {
+        const leadIds = Array.from(new Set(fresh.map((m: any) => m.lead_id)));
+        const { data: leads } = await supabase
+          .from("contractor_leads")
+          .select("id, contractors(name)")
+          .in("id", leadIds);
+        for (const l of leads ?? []) {
+          nameByLead[(l as any).id] = (l as any).contractors?.name ?? "";
+        }
+      }
+
+      // First 15 characters of the message, with a photo shown as "Photo".
+      const preview = (body: string) => {
+        if (body.startsWith("[img]")) return "Photo";
+        return body.slice(0, 15) + (body.length > 15 ? "…" : "");
+      };
+
       const next: Toast[] = fresh.map((m: any) => {
         seenIds.current.add(m.id);
         const name =
-          role === "contractor" ? "New message" : "New message from your pro";
+          role === "contractor"
+            ? "Homeowner"
+            : nameByLead[m.lead_id] || "Your pro";
         const href =
           role === "contractor"
             ? `/pro/chats?lead=${m.lead_id}`
             : `/chats?lead=${m.lead_id}`;
-        return { id: m.id, name, body: m.body, href };
+        return { id: m.id, name, body: preview(m.body), href };
       });
 
       setToasts((t) => [...next, ...t].slice(0, 4));

@@ -115,7 +115,7 @@ export async function GET() {
             detail:
               "Change your AC filter, keep blinds closed during the day, and don't set the thermostat too low (it overworks the unit)." +
               (hvacAge && hvacAge >= 15
-                ? ` Your AC is about ${hvacAge} yrs old — watch for weak airflow or short-cycling on the hottest days.`
+                ? ` Your AC is about ${hvacAge} yrs old. Watch for weak airflow or short-cycling on the hottest days.`
                 : ""),
           });
         }

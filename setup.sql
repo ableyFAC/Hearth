@@ -28,6 +28,7 @@ create table public.users (
   email       text unique,
   phone       text,
   full_name   text,
+  notification_prefs jsonb not null default '{}'::jsonb,
   created_at  timestamptz not null default now()
 );
 
@@ -220,9 +221,40 @@ create table public.documents (
   property_id   uuid not null references public.properties (id) on delete cascade,
   doc_type      text,                  -- warranty, manual, receipt, inspection_report
   file_url      text not null,
+  -- Facts the vision model reads off the document, so they can auto-fill the
+  -- digital twin (home_systems) instead of the owner retyping them.
+  title            text,
+  brand            text,
+  model            text,
+  install_year     integer,
+  warranty_expires date,
+  system_type      text,               -- which home system this doc belongs to
+  summary          text,
+  applied_at       timestamptz,        -- when the facts were pushed to home_systems
   uploaded_at   timestamptz not null default now()
 );
 create index documents_property_id_idx on public.documents (property_id);
+
+-- -----------------------------------------------------------------------------
+-- support_messages - in-app contact form. A homeowner can create and read their
+-- own; the team reads all through the service role.
+-- -----------------------------------------------------------------------------
+create table public.support_messages (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid references auth.users (id) on delete set null,
+  name         text,
+  email        text,
+  phone        text,
+  message      text not null,
+  status       text not null default 'open',
+  created_at   timestamptz not null default now()
+);
+create index support_messages_user_id_idx on public.support_messages (user_id);
+alter table public.support_messages enable row level security;
+create policy "support self insert" on public.support_messages
+  for insert to authenticated with check (user_id = auth.uid());
+create policy "support self select" on public.support_messages
+  for select to authenticated using (user_id = auth.uid());
 
 
 -- =====================================================================

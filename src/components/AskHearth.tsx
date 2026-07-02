@@ -111,6 +111,7 @@ function parseAssistant(content: string): {
   job: Job | null;
   issue: any;
   reminder: any;
+  options: string[] | null;
 } {
   let text = content;
   let r = extractBlock(text, "POSTJOB");
@@ -128,13 +129,20 @@ function parseAssistant(content: string): {
   r = extractBlock(text, "REMINDER");
   text = r.content;
   const reminder = r.data;
+  // Tappable quick-reply options the assistant offers, so the homeowner rarely
+  // has to type. Rendered as buttons under the message.
+  r = extractBlock(text, "OPTIONS");
+  text = r.content;
+  const options: string[] | null = Array.isArray(r.data?.options)
+    ? r.data.options.map((o: any) => String(o)).filter(Boolean).slice(0, 5)
+    : null;
   // Safety net: strip any leftover machine block / stray bracket markers so the
   // user never sees raw [[...]] text.
   text = text
     .replace(/\[\[[A-Za-z/]+\]\][\s\S]*?\[\[\/?[^\]]*\]\]/g, "")
     .replace(/\[\[\/?[^\]]*\]\]/g, "")
     .trim();
-  return { text, job, issue, reminder };
+  return { text, job, issue, reminder, options };
 }
 
 function jobHref(job: Job): string {
@@ -302,6 +310,7 @@ export default function AskHearth({
   } | null>(null);
   const [imageError, setImageError] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const submitRef = useRef<(t: string) => void>(() => {});
 
   // Load the conversation on mount, and sync with other instances on this page
@@ -448,11 +457,17 @@ export default function AskHearth({
   }
 
   // One message bubble (text + optional photo + action buttons).
-  function bubble(m: Msg, i: number) {
+  function bubble(m: Msg, i: number, isLast = false) {
     const parsed =
       m.role === "assistant"
         ? parseAssistant(m.content)
-        : { text: m.content, job: null, issue: null, reminder: null };
+        : {
+            text: m.content,
+            job: null,
+            issue: null,
+            reminder: null,
+            options: null as string[] | null,
+          };
     return (
       <div
         key={i}
@@ -488,6 +503,34 @@ export default function AskHearth({
           issue={parsed.issue}
           reminder={parsed.reminder}
         />
+        {/* Tappable quick-reply options, shown on the latest reply so the
+            homeowner can drill down without typing. */}
+        {parsed.options && isLast && !loading && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {parsed.options
+              // Drop any "Other" the model added; we always add our own below.
+              .filter((opt) => !/^(other|something else)\b/i.test(opt.trim()))
+              .map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => submit(opt)}
+                  disabled={loading}
+                  className="rounded-full border border-hearth-300 bg-white px-3 py-1 text-xs font-medium text-hearth-800 hover:bg-hearth-50 disabled:opacity-50"
+                >
+                  {opt}
+                </button>
+              ))}
+            {/* Always let them type their own answer instead of picking. */}
+            <button
+              type="button"
+              onClick={() => inputRef.current?.focus()}
+              className="rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-medium text-stone-500 hover:bg-stone-50"
+            >
+              Other (type)
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -514,7 +557,7 @@ export default function AskHearth({
       )}
       {imageError && (
         <p className="mb-2 text-xs text-red-600">
-          Couldn&apos;t attach that image — try a different photo.
+          Couldn&apos;t attach that image. Try a different photo.
         </p>
       )}
       <form onSubmit={send} className="flex gap-2">
@@ -542,6 +585,7 @@ export default function AskHearth({
           }
         />
         <input
+          ref={inputRef}
           className="input"
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -571,7 +615,7 @@ export default function AskHearth({
 
         {(hasConversation || loading) && (
           <div className="mt-3 max-h-80 space-y-2 overflow-y-auto rounded-lg border border-stone-200 bg-white p-3">
-            {displayed.map((m, i) => bubble(m, i))}
+            {displayed.map((m, i) => bubble(m, i, i === displayed.length - 1))}
             {loading && (
               <div className="flex justify-start">
                 <span className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-400">
@@ -635,7 +679,7 @@ export default function AskHearth({
       </div>
 
       <div className="flex-1 space-y-2 overflow-y-auto py-2">
-        {messages.map((m, i) => bubble(m, i))}
+        {messages.map((m, i) => bubble(m, i, i === messages.length - 1))}
         {loading && (
           <div className="flex justify-start">
             <span className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-400">

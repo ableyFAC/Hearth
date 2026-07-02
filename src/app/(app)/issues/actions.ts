@@ -65,6 +65,31 @@ export async function updateIssueAction(formData: FormData) {
   revalidatePath("/dashboard");
 }
 
+// When an issue is resolved, lift the "bad condition" flag it put on its system
+// so the Home page stops flagging that system as red. We only clear a LOW rating
+// (<=2) - the state a problem would have caused - and never touch a healthy one.
+// This makes the most recent action (resolving) override the earlier one
+// (logging the issue, which lowered the condition), so Home and Issues agree.
+async function liftSystemConditionForIssue(supabase: any, issueId: string) {
+  const { data: issue } = await supabase
+    .from("issues")
+    .select("system_id")
+    .eq("id", issueId)
+    .maybeSingle();
+  if (!issue?.system_id) return;
+  const { data: sys } = await supabase
+    .from("home_systems")
+    .select("id, condition_rating")
+    .eq("id", issue.system_id)
+    .maybeSingle();
+  if (sys && sys.condition_rating != null && sys.condition_rating <= 2) {
+    await supabase
+      .from("home_systems")
+      .update({ condition_rating: null })
+      .eq("id", sys.id);
+  }
+}
+
 export async function resolveIssueAction(formData: FormData) {
   const id = formData.get("id") as string;
   const supabase = createClient();
@@ -73,6 +98,7 @@ export async function resolveIssueAction(formData: FormData) {
     .update({ status: "resolved" })
     .eq("id", id);
   if (error) throw new Error(error.message);
+  await liftSystemConditionForIssue(supabase, id);
   setFlash("Issue resolved");
   revalidatePath("/issues");
   revalidatePath("/dashboard");
@@ -98,6 +124,7 @@ export async function checkResolveIssueAction(id: string) {
     .update({ status: "resolved" })
     .eq("id", id);
   if (error) throw new Error(error.message);
+  await liftSystemConditionForIssue(supabase, id);
   revalidatePath("/issues");
   revalidatePath("/dashboard");
 }

@@ -5,9 +5,12 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { labelFor, iconFor, JOB_CATEGORIES } from "@/lib/constants";
+import { extractQuote, formatUSD } from "@/lib/quotes";
 import LeadChat from "@/components/LeadChat";
 import MarkChatSeen from "@/components/MarkChatSeen";
+import MarkChatsSeen from "@/components/MarkChatsSeen";
 import AskHearth from "@/components/AskHearth";
+import { getProactiveGreeting } from "@/lib/greeting";
 
 // Homeowner-side "seen" cookie (kept separate from the contractor's).
 const SEEN_COOKIE = "hearth_ho_chat_seen";
@@ -34,6 +37,24 @@ async function markChatSeenAction(leadId: string) {
   revalidatePath("/chats");
 }
 
+// Mark every conversation seen at once. Fires when the inbox is opened, so the
+// nav badge clears even on the default Ask Hearth pane where no single thread
+// is selected.
+async function markAllChatsSeenAction(leadIds: string[]) {
+  "use server";
+  const jar = cookies();
+  let map: Record<string, string> = {};
+  try {
+    map = JSON.parse(jar.get(SEEN_COOKIE)?.value || "{}");
+  } catch {
+    map = {};
+  }
+  const now = new Date().toISOString();
+  for (const id of leadIds) map[id] = now;
+  jar.set(SEEN_COOKIE, JSON.stringify(map), { path: "/" });
+  revalidatePath("/chats");
+}
+
 export default async function HomeownerChatsPage({
   searchParams,
 }: {
@@ -42,6 +63,7 @@ export default async function HomeownerChatsPage({
   const property = await getActiveProperty();
   if (!property) redirect("/onboarding");
   const supabase = createClient();
+  const greeting = await getProactiveGreeting();
 
   // The homeowner's conversations are jobs where they've PICKED a pro. Open
   // postings with no chosen pro yet aren't chats - there's no one to message.
@@ -59,6 +81,8 @@ export default async function HomeownerChatsPage({
   // Latest message per conversation, for preview + unread.
   const ids = convos.map((l) => l.id);
   const lastByLead = new Map<string, any>();
+  // The latest price each pro has stated in chat, so the homeowner can compare.
+  const quoteByLead = new Map<string, number>();
   if (ids.length) {
     const { data: msgs } = await supabase
       .from("messages")
@@ -67,15 +91,31 @@ export default async function HomeownerChatsPage({
       .order("created_at", { ascending: false });
     for (const m of msgs ?? []) {
       if (!lastByLead.has(m.lead_id)) lastByLead.set(m.lead_id, m);
+      // Messages are newest first, so the first contractor price we see per lead
+      // is that pro's most recent quote.
+      if (m.sender_role === "contractor" && !quoteByLead.has(m.lead_id)) {
+        const q = extractQuote(m.body);
+        if (q != null) quoteByLead.set(m.lead_id, q);
+      }
     }
   }
+
+  // Pros who have sent a price, cheapest first, for the compare panel.
+  const quoted = convos
+    .filter((l) => quoteByLead.has(l.id))
+    .map((l) => ({ id: l.id, name: nameOf(l), amount: quoteByLead.get(l.id)! }))
+    .sort((a, b) => a.amount - b.amount);
 
   // Unread if the latest message is from the contractor and newer than last seen.
   const isUnread = (leadId: string) => {
     const last = lastByLead.get(leadId);
     if (!last || last.sender_role !== "contractor") return false;
     const seenAt = seen[leadId];
-    return !seenAt || seenAt < last.created_at;
+    // Compare as epoch millis so timestamp formats cannot skew the result.
+    return (
+      !seenAt ||
+      new Date(seenAt).getTime() < new Date(last.created_at).getTime()
+    );
   };
 
   convos.sort((a, b) => {
@@ -96,8 +136,51 @@ export default async function HomeownerChatsPage({
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold text-stone-900">Messages</h1>
 
+      {/* Opening the inbox clears the nav badge, even on the Ask Hearth pane. */}
+      <MarkChatsSeen
+        leadIds={convos.map((l) => l.id)}
+        action={markAllChatsSeenAction}
+      />
+
       {selected && (
         <MarkChatSeen leadId={selected.id} action={markChatSeenAction} />
+      )}
+
+      {/* Compare the prices pros have sent in chat, cheapest first. */}
+      {quoted.length > 0 && (
+        <div className="rounded-xl border border-stone-200 bg-white p-4">
+          <p className="text-sm font-semibold text-stone-900">
+            Quotes from your pros
+          </p>
+          <p className="text-xs text-stone-500">
+            Prices your pros have sent in chat, lowest first.
+          </p>
+          <ul className="mt-2 space-y-1">
+            {quoted.map((q) => (
+              <li
+                key={q.id}
+                className="flex items-center justify-between gap-3"
+              >
+                <Link
+                  href={`/chats?lead=${q.id}`}
+                  className="truncate text-sm text-stone-700 hover:text-hearth-700 hover:underline"
+                >
+                  {q.name}
+                </Link>
+                <span className="flex shrink-0 items-center gap-2">
+                  {quoted.length > 1 && q.amount === quoted[0].amount && (
+                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-700">
+                      Lowest
+                    </span>
+                  )}
+                  <span className="font-semibold text-stone-900">
+                    {formatUSD(q.amount)}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       <div className="grid gap-4 md:grid-cols-[280px_1fr]">
@@ -171,6 +254,11 @@ export default async function HomeownerChatsPage({
                           }`
                         : labelFor(JOB_CATEGORIES, l.category)}
                     </p>
+                    {quoteByLead.has(l.id) && (
+                      <span className="mt-1 inline-block rounded-full bg-hearth-50 px-2 py-0.5 text-[10px] font-semibold text-hearth-700">
+                        Quote {formatUSD(quoteByLead.get(l.id)!)}
+                      </span>
+                    )}
                   </Link>
                 </li>
               );
@@ -180,7 +268,7 @@ export default async function HomeownerChatsPage({
           {/* ---- Open thread ---- */}
           {askSelected ? (
             <div className="h-[60vh] rounded-xl border border-stone-200 bg-white p-3 md:h-[calc(100vh-13rem)]">
-              <AskHearth fill />
+              <AskHearth fill greeting={greeting} />
             </div>
           ) : selected ? (
             <div className="h-[60vh] rounded-xl border border-stone-200 bg-white p-3 md:h-[calc(100vh-13rem)]">

@@ -19,6 +19,7 @@ export interface Database {
           email: string | null;
           phone: string | null;
           full_name: string | null;
+          notification_prefs: { [key: string]: boolean } | null;
           created_at: string;
         };
         Insert: {
@@ -26,6 +27,7 @@ export interface Database {
           email?: string | null;
           phone?: string | null;
           full_name?: string | null;
+          notification_prefs?: { [key: string]: boolean } | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["users"]["Insert"]>;
@@ -453,6 +455,14 @@ export interface Database {
           property_id: string;
           doc_type: string | null;
           file_url: string;
+          title: string | null;
+          brand: string | null;
+          model: string | null;
+          install_year: number | null;
+          warranty_expires: string | null;
+          system_type: string | null;
+          summary: string | null;
+          applied_at: string | null;
           uploaded_at: string;
         };
         Insert: {
@@ -460,9 +470,43 @@ export interface Database {
           property_id: string;
           doc_type?: string | null;
           file_url: string;
+          title?: string | null;
+          brand?: string | null;
+          model?: string | null;
+          install_year?: number | null;
+          warranty_expires?: string | null;
+          system_type?: string | null;
+          summary?: string | null;
+          applied_at?: string | null;
           uploaded_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["documents"]["Insert"]>;
+        Relationships: [];
+      };
+      support_messages: {
+        Row: {
+          id: string;
+          user_id: string | null;
+          name: string | null;
+          email: string | null;
+          phone: string | null;
+          message: string;
+          status: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id?: string | null;
+          name?: string | null;
+          email?: string | null;
+          phone?: string | null;
+          message: string;
+          status?: string;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["support_messages"]["Insert"]
+        >;
         Relationships: [];
       };
       messages: {

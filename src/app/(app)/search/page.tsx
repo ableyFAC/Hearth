@@ -1,0 +1,179 @@
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import { getActiveProperty } from "@/lib/property";
+import {
+  labelFor,
+  iconFor,
+  SYSTEM_TYPES,
+  ISSUE_CATEGORIES,
+} from "@/lib/constants";
+import AskHearth from "@/components/AskHearth";
+
+// Pages the search can jump to, each with a few keywords so a homeowner does
+// not have to know the exact page name.
+const ROUTES = [
+  { label: "Home", href: "/dashboard", keywords: ["home", "dashboard", "health", "score", "systems"] },
+  { label: "Issues", href: "/issues", keywords: ["issue", "problem", "repair", "broken", "leak"] },
+  { label: "Post a Job", href: "/contractors", keywords: ["job", "quote", "contractor", "pro", "hire", "estimate"] },
+  { label: "Messages", href: "/chats", keywords: ["message", "chat", "quote", "pro"] },
+  { label: "Documents", href: "/documents", keywords: ["document", "warranty", "manual", "receipt", "vault", "paperwork", "label"] },
+  { label: "Learn", href: "/learn", keywords: ["learn", "guide", "how", "maintenance", "tips"] },
+  { label: "Account security", href: "/account/security", keywords: ["password", "security", "account", "delete", "email"] },
+  { label: "Notifications", href: "/account/notifications", keywords: ["notification", "notifications", "alerts", "preferences", "email"] },
+  { label: "Help", href: "/account/help", keywords: ["help", "support", "contact", "faq", "question"] },
+];
+
+type Result = { label: string; sub?: string; href: string; icon?: string };
+
+export default async function SearchPage({
+  searchParams,
+}: {
+  searchParams: { q?: string };
+}) {
+  const q = (searchParams.q ?? "").trim();
+  const ql = q.toLowerCase();
+
+  const property = (await getActiveProperty())!;
+  const supabase = createClient();
+
+  const has = (text: string | null | undefined) =>
+    !!text && text.toLowerCase().includes(ql);
+
+  let pages: Result[] = [];
+  let systems: Result[] = [];
+  let documents: Result[] = [];
+  let issues: Result[] = [];
+  let reminders: Result[] = [];
+
+  if (ql) {
+    pages = ROUTES.filter(
+      (r) =>
+        r.label.toLowerCase().includes(ql) ||
+        r.keywords.some((k) => k.includes(ql) || ql.includes(k))
+    ).map((r) => ({ label: r.label, href: r.href }));
+
+    const [sysRes, docRes, issueRes, taskRes] = await Promise.all([
+      supabase
+        .from("home_systems")
+        .select("system_type, material_or_model")
+        .eq("property_id", property.id),
+      supabase
+        .from("documents")
+        .select("id, title, brand, model, summary, system_type")
+        .eq("property_id", property.id),
+      supabase
+        .from("issues")
+        .select("id, category, description, status")
+        .eq("property_id", property.id),
+      supabase
+        .from("maintenance_tasks")
+        .select("id, title, due_date, status")
+        .eq("property_id", property.id),
+    ]);
+
+    systems = (sysRes.data ?? [])
+      .filter(
+        (s) =>
+          has(labelFor(SYSTEM_TYPES, s.system_type)) ||
+          has(s.system_type) ||
+          has(s.material_or_model)
+      )
+      .map((s) => ({
+        label: labelFor(SYSTEM_TYPES, s.system_type),
+        sub: s.material_or_model ?? undefined,
+        href: "/dashboard#systems",
+        icon: iconFor(SYSTEM_TYPES, s.system_type),
+      }));
+
+    documents = (docRes.data ?? [])
+      .filter(
+        (d) =>
+          has(d.title) || has(d.brand) || has(d.model) || has(d.summary)
+      )
+      .map((d) => ({
+        label: d.title ?? "Home document",
+        sub: [d.brand, d.model].filter(Boolean).join(" ") || undefined,
+        href: "/documents",
+        icon: d.system_type ? iconFor(SYSTEM_TYPES, d.system_type) : "📄",
+      }));
+
+    issues = (issueRes.data ?? [])
+      .filter((i) => has(labelFor(ISSUE_CATEGORIES, i.category)) || has(i.description))
+      .map((i) => ({
+        label: labelFor(ISSUE_CATEGORIES, i.category),
+        sub: i.description ?? undefined,
+        href: "/issues",
+        icon: iconFor(ISSUE_CATEGORIES, i.category),
+      }));
+
+    reminders = (taskRes.data ?? [])
+      .filter((t) => has(t.title))
+      .map((t) => ({ label: t.title, href: "/dashboard", icon: "🔔" }));
+  }
+
+  const groups = [
+    { title: "Pages", items: pages },
+    { title: "Your systems", items: systems },
+    { title: "Documents", items: documents },
+    { title: "Issues", items: issues },
+    { title: "Reminders", items: reminders },
+  ].filter((g) => g.items.length > 0);
+
+  const total = groups.reduce((n, g) => n + g.items.length, 0);
+
+  return (
+    <div className="mx-auto max-w-3xl space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-stone-900">
+          {q ? `Results for "${q}"` : "Search"}
+        </h1>
+        {q && (
+          <p className="mt-1 text-sm text-stone-500">
+            {total > 0
+              ? `Found ${total} match${total === 1 ? "" : "es"} in your home and pages.`
+              : "Nothing on the site matched. Ask Hearth below."}
+          </p>
+        )}
+      </div>
+
+      {groups.map((g) => (
+        <section key={g.title} className="space-y-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+            {g.title}
+          </h2>
+          <ul className="divide-y divide-stone-100 overflow-hidden rounded-xl border border-stone-200 bg-white">
+            {g.items.map((r, i) => (
+              <li key={`${r.href}-${i}`}>
+                <Link
+                  href={r.href}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-hearth-50"
+                >
+                  {r.icon && <span className="text-lg">{r.icon}</span>}
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-stone-900">
+                      {r.label}
+                    </span>
+                    {r.sub && (
+                      <span className="block truncate text-xs text-stone-500">
+                        {r.sub}
+                      </span>
+                    )}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+
+      {q && (
+        <section className="space-y-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+            Ask Hearth
+          </h2>
+          <AskHearth suggestions={[q]} />
+        </section>
+      )}
+    </div>
+  );
+}

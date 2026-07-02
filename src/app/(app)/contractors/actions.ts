@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
-import { leadFeeFor } from "@/lib/constants";
+import { leadFeeFor, labelFor, JOB_CATEGORIES } from "@/lib/constants";
 import { setFlash } from "@/lib/flash";
 
 // Homeowner posts a job (Indeed-style). No pro is picked here: the lead is left
@@ -64,6 +64,27 @@ export async function postJobAction(formData: FormData) {
     .maybeSingle();
   if (recent && Date.now() - new Date(recent.created_at).getTime() < 15000) {
     redirect("/contractors?posted=1");
+  }
+
+  // Cap open listings at 2 per maintenance category, so one subject cannot be
+  // flooded with postings (for example at most 2 open plumbing jobs). An open
+  // listing is one no pro has been picked for yet.
+  const { count: openInCategory } = await supabase
+    .from("contractor_leads")
+    .select("id", { count: "exact", head: true })
+    .eq("property_id", property.id)
+    .eq("category", category)
+    .is("contractor_id", null)
+    .eq("status", "new");
+  if ((openInCategory ?? 0) >= 2) {
+    setFlash(
+      `You already have 2 open ${labelFor(
+        JOB_CATEGORIES,
+        category
+      ).toLowerCase()} listings. Close one before posting another.`,
+      "error"
+    );
+    redirect("/contractors");
   }
 
   const { error } = await supabase.from("contractor_leads").insert({

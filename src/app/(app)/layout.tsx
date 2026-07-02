@@ -6,6 +6,7 @@ import { getUser } from "@/lib/auth";
 import Nav from "@/components/Nav";
 import NewMessageNotifier from "@/components/NewMessageNotifier";
 import AskHearthDock from "@/components/AskHearthDock";
+import { getProactiveGreeting } from "@/lib/greeting";
 
 // Shell for all signed-in homeowner screens. Pros are bounced to their own area;
 // then we guarantee a claimed home exists.
@@ -29,11 +30,14 @@ export default async function AppLayout({
   const metaName = (user?.user_metadata?.full_name as string | undefined)?.trim();
   const name = metaName || profile?.full_name || profile?.email || null;
 
+  // A personalized opener so Ask Hearth speaks first about the home's top item.
+  const greeting = await getProactiveGreeting();
+
   return (
     <div className="min-h-screen">
       <Nav homes={homes} activeId={active.id} name={name} />
       <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
-      <AskHearthDock />
+      <AskHearthDock greeting={greeting} />
       <NewMessageNotifier role="homeowner" />
     </div>
   );

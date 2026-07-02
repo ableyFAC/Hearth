@@ -26,7 +26,7 @@ export const STARTER_SYSTEM_NOTE =
   "Auto-added from your address. Update the year if you know it.";
 
 // Home-problem categories for the issue tracker (home-health side). These are
-// things that go *wrong* with a house — not every service a pro offers.
+// things that go *wrong* with a house, not every service a pro offers.
 export const ISSUE_CATEGORIES = [
   { value: "roof", label: "Roof", icon: "🏠" },
   { value: "plumbing", label: "Plumbing", icon: "🚰" },
@@ -37,7 +37,7 @@ export const ISSUE_CATEGORIES = [
 ] as const;
 
 // Canonical service categories a contractor advertises and a homeowner can post
-// a job in. Must stay in sync with the contractor CategoryPicker — a job's
+// a job in. Must stay in sync with the contractor CategoryPicker. A job's
 // category is matched (exact equality) against contractors.categories, so both
 // sides have to draw from this same list. (Custom "Other" services are handled
 // separately as free text.)

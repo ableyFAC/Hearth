@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { censor } from "@/lib/censor";
+import { extractQuote, formatUSD } from "@/lib/quotes";
 
 type Msg = {
   id: string;
@@ -516,6 +517,12 @@ export default function LeadChat({
               );
             }
             const mine = m.sender_role === role;
+            // A price the contractor stated gets labelled as a quote, so it is
+            // easy to spot and compare in the thread.
+            const quote =
+              m.sender_role === "contractor" && !isImageBody(m.body)
+                ? extractQuote(m.body)
+                : null;
             // You can unsend your own messages for up to an hour.
             const recent =
               mine && Date.now() - new Date(m.created_at).getTime() < 3_600_000;
@@ -599,6 +606,12 @@ export default function LeadChat({
                       )}
                     </div>
                   </div>
+
+                  {quote != null && (
+                    <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-hearth-50 px-2 py-0.5 text-[10px] font-semibold text-hearth-700">
+                      💵 Quoted {formatUSD(quote)}
+                    </span>
+                  )}
 
                   {isImageBody(m.body) ? (
                     <a

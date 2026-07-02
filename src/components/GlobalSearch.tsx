@@ -1,0 +1,96 @@
+"use client";
+
+import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+
+// A compact search box for the top nav. It routes to the /search page, which
+// matches the query against the homeowner's own home (systems, documents,
+// issues, reminders) and the app's pages, and hands off to Ask Hearth when
+// nothing on the site matches. Focusing it shows a few example searches to tap.
+const EXAMPLES = [
+  "Water heater",
+  "Warranty",
+  "Find a plumber",
+  "When to replace my roof",
+  "My documents",
+];
+
+export default function GlobalSearch() {
+  const router = useRouter();
+  const [q, setQ] = useState("");
+  const [focused, setFocused] = useState(false);
+  const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function go(query: string) {
+    const s = query.trim();
+    setFocused(false);
+    if (s) router.push(`/search?q=${encodeURIComponent(s)}`);
+  }
+
+  return (
+    <div
+      className="relative"
+      onFocus={() => {
+        if (blurTimer.current) clearTimeout(blurTimer.current);
+        setFocused(true);
+      }}
+      onBlur={() => {
+        blurTimer.current = setTimeout(() => setFocused(false), 120);
+      }}
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          go(q);
+        }}
+        className="relative"
+        role="search"
+      >
+        <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400">
+          <svg
+            viewBox="0 0 24 24"
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="M21 21l-4.3-4.3" />
+          </svg>
+        </span>
+        <input
+          type="search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search"
+          aria-label="Search"
+          className="w-32 rounded-full border border-stone-200 bg-white py-1.5 pl-8 pr-3 text-sm text-stone-700 transition-all placeholder:text-stone-400 focus:w-48 focus:border-hearth-400 focus:outline-none"
+        />
+      </form>
+
+      {focused && (
+        <div className="absolute right-0 z-30 mt-1 w-56 rounded-xl border border-stone-200 bg-white p-2 shadow-lg">
+          <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-stone-400">
+            Try searching
+          </p>
+          {EXAMPLES.map((ex) => (
+            <button
+              key={ex}
+              type="button"
+              // Keep focus on the input so the click registers before blur hides
+              // this panel.
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => go(ex)}
+              className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-stone-700 hover:bg-hearth-50"
+            >
+              {ex}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

@@ -22,7 +22,7 @@ const isCloseMarker = (b: string) =>
 
 // Save a homeowner's star rating + comment for a finished job. Goes through the
 // leave_review() RPC, which derives the contractor from the lead, verifies the
-// caller owns the job, and enforces one review per job — so the contractor being
+// caller owns the job, and enforces one review per job, so the contractor being
 // reviewed can't be forged from the form, and ratings can't be manipulated.
 async function saveReviewAction(formData: FormData) {
   "use server";

@@ -25,6 +25,23 @@ function readSeen(name: string): Record<string, string> {
   }
 }
 
+// The latest time a lead was seen, in epoch millis, taking the max of the seen
+// cookie and any localStorage override written the instant a chat was opened.
+// The localStorage override removes any dependence on cookie write propagation,
+// and epoch millis avoid string-comparison bugs between ISO "Z" timestamps and
+// Postgres "+00:00" timestamps.
+function seenMillis(name: string, leadId: string): number {
+  const cookieVal = readSeen(name)[leadId];
+  let ms = cookieVal ? new Date(cookieVal).getTime() : 0;
+  try {
+    const local = localStorage.getItem(`hearth:seen:${leadId}`);
+    if (local) ms = Math.max(ms, Number(local) || 0);
+  } catch {
+    /* localStorage unavailable */
+  }
+  return ms;
+}
+
 export default function LiveUnreadBadge({
   role,
 }: {
@@ -37,20 +54,23 @@ export default function LiveUnreadBadge({
     let active = true;
     async function poll() {
       if (typeof document !== "undefined" && document.hidden) return;
-      const seen = readSeen(SEEN_COOKIE[role]);
-      // Only the most recent messages - unread ones are always recent, and this
-      // keeps the query bounded (and from hogging a DB connection).
+      const cookieName = SEEN_COOKIE[role];
+      // Only the most recent messages, since unread ones are always recent. This
+      // keeps the query bounded and from hogging a DB connection.
       const { data } = await supabase
         .from("messages")
         .select("lead_id, sender_role, created_at")
         .eq("sender_role", OTHER[role])
         .order("created_at", { ascending: false })
         .limit(50);
-      // Count one per person (conversation), not one per message.
+      // Count one per person (conversation), not one per message. A lead is
+      // unread when its newest incoming message is later than the last time it
+      // was seen, compared as epoch millis so timestamp formats cannot skew it.
       const unread = new Set<string>();
       for (const m of data ?? []) {
-        const s = seen[m.lead_id];
-        if (!s || s < m.created_at) unread.add(m.lead_id);
+        if (new Date(m.created_at).getTime() > seenMillis(cookieName, m.lead_id)) {
+          unread.add(m.lead_id);
+        }
       }
       if (active) setCount(unread.size);
     }
@@ -73,11 +93,16 @@ export default function LiveUnreadBadge({
 
     const onFocus = () => poll();
     window.addEventListener("focus", onFocus);
+    // Opening a conversation marks it read and fires this event; re-poll at once
+    // so the badge clears immediately instead of lingering until the next poll.
+    const onSeen = () => poll();
+    window.addEventListener("hearth:chat-seen", onSeen);
     const t = setInterval(poll, 30000);
     return () => {
       active = false;
       supabase.removeChannel(channel);
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("hearth:chat-seen", onSeen);
       clearInterval(t);
     };
   }, [role]);

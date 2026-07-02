@@ -11,6 +11,7 @@ import {
   REMODEL_PROJECTS,
   categoryForSystem,
   labelFor,
+  iconFor,
   SYSTEM_TYPES,
   ISSUE_CATEGORIES,
   SEASONAL_TASKS,
@@ -37,6 +38,7 @@ export default async function HomePage({
     { data: tasks },
     { data: pics },
     { data: jobs },
+    { data: docs },
   ] = await Promise.all([
     supabase
       .from("home_systems")
@@ -64,6 +66,12 @@ export default async function HomePage({
       .from("contractor_leads")
       .select("id, contractor_id")
       .eq("property_id", property.id),
+    supabase
+      .from("documents")
+      .select("id, title, warranty_expires, system_type")
+      .eq("property_id", property.id)
+      .not("warranty_expires", "is", null)
+      .order("warranty_expires", { ascending: true }),
   ]);
 
   // Open jobs = postings the owner has put up that no pro has been picked for yet.
@@ -133,14 +141,17 @@ export default async function HomePage({
   );
   for (const i of issuesByUrgency) {
     if (briefing.length >= 3) break;
+    // One line per category so two open issues of the same kind cannot produce
+    // two near-identical briefing items.
+    if (seenCat.has(i.category)) continue;
     const name = labelFor(ISSUE_CATEGORIES, i.category);
     const desc =
       `Need help with a ${name} issue.` +
       (i.description ? ` ${i.description}` : "");
     briefing.push({
       text:
-        (i.severity === "urgent" ? "⚠️ Urgent — " : "") +
-        `your ${name.toLowerCase()} issue needs attention.`,
+        (i.severity === "urgent" ? "⚠️ Urgent. " : "") +
+        `Your ${name.toLowerCase()} issue needs attention.`,
       href:
         `/contractors?category=${i.category}` +
         `&desc=${encodeURIComponent(desc)}` +
@@ -168,8 +179,8 @@ export default async function HomePage({
     const urgent = s.condition_rating != null && s.condition_rating <= 2;
     briefing.push({
       text: must
-        ? `Your ${name.toLowerCase()} is near the end of its life — worth planning ahead.`
-        : `Your ${name.toLowerCase()} is aging — keep an eye on it.`,
+        ? `Your ${name.toLowerCase()} is near the end of its life. It is worth planning ahead.`
+        : `Your ${name.toLowerCase()} is aging. Keep an eye on it.`,
       href:
         `/contractors?category=${cat}` +
         `&desc=${encodeURIComponent(desc)}` +
@@ -183,7 +194,7 @@ export default async function HomePage({
   // rather than repeating one of its tasks verbatim in the briefing.
   if (briefing.length === 0) {
     briefing.push({
-      text: "Nothing urgent right now — knock out this month's seasonal tasks below. ✅",
+      text: "Nothing urgent right now. Knock out this month's seasonal tasks below. ✅",
       href: null,
       cta: "",
     });
@@ -202,6 +213,27 @@ export default async function HomePage({
         nowMs - new Date(t.completed_at ?? t.created_at).getTime() <
           THIRTY_DAYS)
   );
+
+  // Upcoming warranties from the documents vault, soonest first, so the owner
+  // hears about coverage before it lapses.
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const warranties = (docs ?? [])
+    .filter((d) => d.warranty_expires && d.warranty_expires >= todayStr)
+    .map((d) => {
+      const w = d.warranty_expires as string;
+      const days = Math.max(
+        0,
+        Math.ceil(
+          (new Date(w + "T00:00:00").getTime() - Date.now()) / 86_400_000
+        )
+      );
+      return { id: d.id, title: d.title, system_type: d.system_type, days };
+    });
+  const warrantyLeft = (days: number) =>
+    days <= 60
+      ? `${days} day${days === 1 ? "" : "s"} left`
+      : `about ${Math.round(days / 30)} months left`;
+
   return (
     <div className="space-y-8">
       {searchParams.welcome && (
@@ -270,6 +302,46 @@ export default async function HomePage({
           </ChecklistProvider>
         </div>
       </section>
+
+      {/* Upcoming warranties from the documents vault */}
+      {warranties.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-stone-900">Warranties</h2>
+          <div className="card space-y-2">
+            {warranties.map((w) => (
+              <div
+                key={w.id}
+                className="flex items-center justify-between gap-3"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <span>
+                    {w.system_type ? iconFor(SYSTEM_TYPES, w.system_type) : "📄"}
+                  </span>
+                  <span className="truncate text-sm text-stone-800">
+                    {w.title ?? "Home document"}
+                  </span>
+                </span>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+                    w.days <= 60
+                      ? "bg-amber-100 text-amber-700"
+                      : "bg-stone-100 text-stone-500"
+                  }`}
+                >
+                  {warrantyLeft(w.days)}
+                </span>
+              </div>
+            ))}
+            <p className="pt-1 text-xs text-stone-400">
+              Pulled from your{" "}
+              <Link href="/documents" className="text-hearth-700 hover:underline">
+                documents
+              </Link>
+              .
+            </p>
+          </div>
+        </section>
+      )}
 
       {/* Key stats */}
       <section className="grid gap-4 sm:grid-cols-2">

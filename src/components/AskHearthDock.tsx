@@ -6,7 +6,7 @@ import AskHearth from "@/components/AskHearth";
 
 // A floating Ask Hearth widget pinned to the bottom-right. Always available; a
 // little tab that opens into the full, scrollable conversation.
-export default function AskHearthDock() {
+export default function AskHearthDock({ greeting }: { greeting?: string }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -40,7 +40,7 @@ export default function AskHearthDock() {
             </button>
           </div>
           <div className="min-h-0 flex-1">
-            <AskHearth fill />
+            <AskHearth fill greeting={greeting} />
           </div>
         </div>
       ) : (

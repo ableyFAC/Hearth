@@ -8,7 +8,7 @@ export default async function ProOnboardingPage() {
   const contractor = await getCurrentContractor();
   if (contractor) redirect("/pro");
 
-  // Prefill the company email with the account email — they can change it.
+  // Prefill the company email with the account email. They can change it.
   const user = await getUser();
 
   return (

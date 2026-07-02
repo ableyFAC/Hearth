@@ -52,14 +52,16 @@ export default function CloseJobButton({ leadId }: { leadId: string }) {
         ))}
       </select>
       {reason === "Other" ? (
-        <input
-          name="reason"
-          value={other}
-          onChange={(e) => setOther(e.target.value)}
-          placeholder="Tell us why"
-          className="input w-56 text-sm"
-          required
-        />
+        <>
+          <input
+            value={other}
+            onChange={(e) => setOther(e.target.value)}
+            placeholder="Add a message (optional)"
+            className="input w-56 text-sm"
+          />
+          {/* Optional: fall back to "Other" when they leave it blank. */}
+          <input type="hidden" name="reason" value={other.trim() || "Other"} />
+        </>
       ) : (
         <input type="hidden" name="reason" value={reason} />
       )}

@@ -2,6 +2,7 @@ import Link from "next/link";
 import HomeSwitcher from "@/components/HomeSwitcher";
 import NavLinks from "@/components/NavLinks";
 import ProfileMenu from "@/components/ProfileMenu";
+import GlobalSearch from "@/components/GlobalSearch";
 import type { Property } from "@/lib/database.types";
 
 export default function Nav({
@@ -34,12 +35,19 @@ export default function Nav({
           <nav className="-mx-1 flex items-center gap-1 overflow-x-auto px-1">
             <NavLinks links={LINKS} />
           </nav>
+          <div className="hidden sm:block">
+            <GlobalSearch />
+          </div>
           {/* Account / Log out - mirrors the contractor profile menu. */}
           <ProfileMenu
           name={name}
           links={[
             { href: "/account", label: "Edit profile" },
+            { href: "/account/security", label: "Account security" },
+            { href: "/account/notifications", label: "Notifications" },
+            { href: "/documents", label: "Documents" },
             { href: "/learn", label: "Learn" },
+            { href: "/account/help", label: "Help" },
           ]}
         />
         </div>
