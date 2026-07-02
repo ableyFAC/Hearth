@@ -36,6 +36,49 @@ export async function POST(req: NextRequest) {
         });
       }
     }
+
+    if (meta.type === "plus_subscription" && meta.user_id && session.subscription) {
+      const subscription = await stripe.subscriptions.retrieve(
+        session.subscription as string
+      );
+      const admin = createAdminClient();
+      await (admin as any).from("subscriptions").upsert(
+        {
+          user_id: meta.user_id,
+          stripe_customer_id: session.customer ?? null,
+          stripe_subscription_id: subscription.id,
+          status: subscription.status,
+          plan: meta.plan ?? null,
+          current_period_end: (subscription as any).current_period_end
+            ? new Date((subscription as any).current_period_end * 1000).toISOString()
+            : null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" }
+      );
+    }
+  }
+
+  if (
+    event.type === "customer.subscription.updated" ||
+    event.type === "customer.subscription.deleted"
+  ) {
+    const subscription = event.data.object as any;
+    const status =
+      event.type === "customer.subscription.deleted"
+        ? "canceled"
+        : subscription.status;
+    const admin = createAdminClient();
+    await (admin as any)
+      .from("subscriptions")
+      .update({
+        status,
+        current_period_end: subscription.current_period_end
+          ? new Date(subscription.current_period_end * 1000).toISOString()
+          : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("stripe_subscription_id", subscription.id);
   }
 
   return NextResponse.json({ received: true });

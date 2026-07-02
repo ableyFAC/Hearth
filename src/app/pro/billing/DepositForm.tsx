@@ -7,9 +7,9 @@ type Tier = { min_cents: number; max_cents: number | null; bonus_pct: number };
 
 // Fallback so the live preview works even if the tiers table didn't load.
 const DEFAULT_TIERS: Tier[] = [
-  { min_cents: 25000, max_cents: 49999, bonus_pct: 10 },
-  { min_cents: 50000, max_cents: 99999, bonus_pct: 15 },
-  { min_cents: 100000, max_cents: null, bonus_pct: 20 },
+  { min_cents: 20000, max_cents: 39999, bonus_pct: 10 },
+  { min_cents: 40000, max_cents: 79999, bonus_pct: 15 },
+  { min_cents: 80000, max_cents: null, bonus_pct: 20 },
 ];
 
 // Mirror of the DB bonus_for_deposit() math (integer cents).
@@ -23,11 +23,12 @@ function bonusFor(cents: number, tiers: Tier[]) {
   return { pct, bonus: Math.floor((cents * pct) / 100) };
 }
 
-const PRESETS = [50, 100, 250, 500];
+const PRESETS = [100, 200, 400, 800];
 
 export default function DepositForm({ tiers }: { tiers: Tier[] }) {
-  // Committed amount (string so the field can be cleared); default $100.
-  const [amount, setAmount] = useState("100");
+  // Committed amount (string so the field can be cleared); default $200 so the
+  // first bonus tier is visible out of the gate.
+  const [amount, setAmount] = useState("200");
   // Preview while hovering a preset - reverts to the committed amount on leave.
   const [hover, setHover] = useState<number | null>(null);
   const [agreed, setAgreed] = useState(false);
@@ -101,7 +102,7 @@ export default function DepositForm({ tiers }: { tiers: Tier[] }) {
           )}
         </div>
         <p className="mt-1 text-[11px] text-stone-400">
-          $250+ earns bonus credit
+          $200+ earns bonus credit
           {bonus > 0 ? ` · $${totalCredit.toFixed(2)} total credit` : ""}.
         </p>
       </div>

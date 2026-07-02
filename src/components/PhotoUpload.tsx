@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { imgSrc } from "@/lib/storage";
 
 // Uploads images to the `home-photos` bucket under <propertyId>/ and renders a
 // hidden input per uploaded URL (name="photo_urls") so the parent <form>'s
@@ -19,8 +20,14 @@ export default function PhotoUpload({ propertyId }: { propertyId: string }) {
     setBusy(true);
     setErr(null);
 
+    const MAX_BYTES = 15 * 1024 * 1024; // 15MB per photo
     let failures = 0;
     for (const file of files) {
+      // Skip anything oversized or not actually an image (accept="" is a hint).
+      if (file.size > MAX_BYTES || !file.type.startsWith("image/")) {
+        failures++;
+        continue;
+      }
       const ext = file.name.split(".").pop() || "jpg";
       // Avoid Math.random/Date in this environment-agnostic path; use crypto.
       const id = crypto.randomUUID();
@@ -64,7 +71,7 @@ export default function PhotoUpload({ propertyId }: { propertyId: string }) {
           // eslint-disable-next-line @next/next/no-img-element
           <img
             key={u}
-            src={u}
+            src={imgSrc(u) ?? u}
             alt="upload preview"
             className="h-16 w-16 rounded-md object-cover"
           />

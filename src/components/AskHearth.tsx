@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { logIssueFromChat, setReminderFromChat } from "@/lib/ask-actions";
 import VoiceButton from "@/components/VoiceButton";
 import Markdown from "@/components/Markdown";
+import { track } from "@/lib/analytics";
 
 type Msg = {
   role: "user" | "assistant";
@@ -218,6 +219,7 @@ function LogAndPostButton({ job, issue }: { job: Job; issue: any }) {
         } catch {
           /* ignore - proceed to post */
         }
+        track("post_job_from_chat", { category: job.category });
         router.push(jobHref(job));
       }}
       className="inline-block rounded-lg bg-hearth-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-hearth-700 disabled:opacity-50"
@@ -248,9 +250,17 @@ function MessageActions({
           {job && (
             <Link
               href={jobHref(job)}
-              className="inline-block rounded-lg bg-hearth-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-hearth-700"
+              onClick={() =>
+                track("post_job_from_chat", { category: job.category })
+              }
+              className="btn-primary flex-col gap-0.5 py-2 leading-tight"
             >
-              📋 Post this job
+              <span className="text-sm font-semibold">
+                Get 3 free quotes
+              </span>
+              <span className="text-[11px] font-normal text-hearth-100">
+                Vetted local pros compete for your job
+              </span>
             </Link>
           )}
           {issue && (
@@ -595,6 +605,10 @@ export default function AskHearth({
           {fill ? "Send" : "Ask"}
         </button>
       </form>
+      <p className="mt-1 text-[11px] text-stone-400">
+        Hearth&apos;s cost figures are ballpark estimates. Confirm with a
+        local pro before you commit.
+      </p>
     </div>
   );
 

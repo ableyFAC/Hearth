@@ -12,6 +12,12 @@ export async function saveSupportMessageAction(formData: FormData) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  // Require a session: this endpoint stores attacker-controllable name/email/
+  // message that staff later read, so don't accept anonymous writes.
+  if (!user) {
+    setFlash("Please sign in to contact support.", "error");
+    return;
+  }
 
   const message = ((formData.get("message") as string) || "").trim();
   if (!message) {
@@ -32,7 +38,7 @@ export async function saveSupportMessageAction(formData: FormData) {
     message,
   });
 
-  if (error) setFlash(error.message, "error");
+  if (error) setFlash("Couldn't send your message. Please try again.", "error");
   else setFlash("Thanks. We got your message and will get back to you.", "success");
   revalidatePath("/account/help");
 }

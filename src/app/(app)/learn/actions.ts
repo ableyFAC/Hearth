@@ -14,12 +14,13 @@ export async function requestTopicAction(formData: FormData) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  if (!user) return; // no anonymous writes
 
   const { error } = await supabase
     .from("learning_requests")
-    .insert({ user_id: user?.id ?? null, question });
+    .insert({ user_id: user.id, question });
 
-  if (error) setFlash(error.message, "error");
+  if (error) setFlash("Couldn't save that request. Please try again.", "error");
   else setFlash("Thanks. We'll add a guide for that.", "success");
   revalidatePath("/learn");
 }

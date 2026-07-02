@@ -108,21 +108,32 @@ export const TIMING_OPTIONS = [
   { value: "flexible", label: "I'm flexible" },
 ] as const;
 
-// Per-lead fee (USD) a contractor owes for each matched lead, by category.
-// Flat per-lead pricing for the MVP - no real payment yet, just billing math.
-// (Swap for a % -of-job model later if you capture job value.)
+// Per-lead fee (USD) a pro owes to unlock/apply for a lead, by category.
+//
+// Priced in three tiers keyed to job value + what a pro can bear (a lead is only
+// worth a slice of the expected job profit). Benchmarked below the big lead
+// marketplaces (Angi $15-85+/lead plus a ~$300/yr fee; Thumbtack ~$20-75) so
+// Hearth undercuts them, with no annual fee:
+//   Tier 1  $25  light / low-ticket work (cleaning, landscaping, painting)
+//   Tier 2  $50  skilled trades + replacements (plumbing, electrical, HVAC, windows)
+//   Tier 3  $90  big-ticket (roofing, structural, remodeling / general contracting)
+export const LEAD_TIER_FEES = { light: 25, skilled: 50, major: 90 } as const;
+
 export const LEAD_FEES: Record<string, number> = {
-  roof: 75,
-  plumbing: 45,
-  electrical: 45,
-  hvac: 60,
-  structural: 90,
-  remodeling: 90,
-  landscaping: 40,
-  cleaning: 30,
-  windows: 50,
-  painting: 45,
-  other: 35,
+  // Tier 3 - major
+  roof: LEAD_TIER_FEES.major,
+  structural: LEAD_TIER_FEES.major,
+  remodeling: LEAD_TIER_FEES.major,
+  // Tier 2 - skilled
+  hvac: LEAD_TIER_FEES.skilled,
+  plumbing: LEAD_TIER_FEES.skilled,
+  electrical: LEAD_TIER_FEES.skilled,
+  windows: LEAD_TIER_FEES.skilled,
+  // Tier 1 - light
+  landscaping: LEAD_TIER_FEES.light,
+  cleaning: LEAD_TIER_FEES.light,
+  painting: LEAD_TIER_FEES.light,
+  other: LEAD_TIER_FEES.light,
 };
 
 export function leadFeeFor(category: string): number {

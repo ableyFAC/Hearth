@@ -44,7 +44,11 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/homeowner-signup") ||
     path.startsWith("/contractor-signup") ||
     path.startsWith("/preview") ||
-    path.startsWith("/auth");
+    path.startsWith("/auth") ||
+    // Stripe webhook authenticates via its signature, not a user session, and
+    // must never be redirected: Stripe doesn't follow redirects and would treat
+    // the 307 as a failed delivery, so deposits would never be credited.
+    path.startsWith("/api/stripe/webhook");
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

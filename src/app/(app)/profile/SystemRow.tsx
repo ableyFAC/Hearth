@@ -7,6 +7,7 @@ import {
   replacementInfoFor,
   effectiveYearsLeft,
 } from "@/lib/health";
+import { imgSrc } from "@/lib/storage";
 import {
   labelFor,
   iconFor,
@@ -386,7 +387,7 @@ export default function SystemRow({
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 key={u}
-                src={u}
+                src={imgSrc(u) ?? u}
                 alt={`${labelFor(SYSTEM_TYPES, s.system_type)} photo`}
                 className="h-16 w-16 rounded-md object-cover"
               />

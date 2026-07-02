@@ -483,6 +483,30 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["documents"]["Insert"]>;
         Relationships: [];
       };
+      notifications: {
+        Row: {
+          id: string;
+          user_id: string;
+          kind: string;
+          title: string;
+          body: string | null;
+          url: string | null;
+          read_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          kind: string;
+          title: string;
+          body?: string | null;
+          url?: string | null;
+          read_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["notifications"]["Insert"]>;
+        Relationships: [];
+      };
       support_messages: {
         Row: {
           id: string;
@@ -571,6 +595,32 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["reports"]["Insert"]>;
         Relationships: [];
       };
+      subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          stripe_customer_id: string | null;
+          stripe_subscription_id: string | null;
+          status: string;
+          plan: string | null;
+          current_period_end: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
+          status?: string;
+          plan?: string | null;
+          current_period_end?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["subscriptions"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: {
       lead_previews: {
@@ -642,3 +692,4 @@ export type Issue = T["issues"]["Row"];
 export type Contractor = T["contractors"]["Row"];
 export type ContractorLead = T["contractor_leads"]["Row"];
 export type SystemLifespan = T["system_lifespans"]["Row"];
+export type Subscription = T["subscriptions"]["Row"];

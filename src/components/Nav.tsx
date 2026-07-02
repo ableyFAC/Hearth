@@ -3,6 +3,7 @@ import HomeSwitcher from "@/components/HomeSwitcher";
 import NavLinks from "@/components/NavLinks";
 import ProfileMenu from "@/components/ProfileMenu";
 import GlobalSearch from "@/components/GlobalSearch";
+import NotificationBell from "@/components/NotificationBell";
 import type { Property } from "@/lib/database.types";
 
 export default function Nav({
@@ -38,6 +39,7 @@ export default function Nav({
           <div className="hidden sm:block">
             <GlobalSearch />
           </div>
+          <NotificationBell />
           {/* Account / Log out - mirrors the contractor profile menu. */}
           <ProfileMenu
           name={name}

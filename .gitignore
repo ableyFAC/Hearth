@@ -35,3 +35,6 @@ yarn-error.log*
 # editor
 .vscode/
 .idea/
+
+# vendored tools — install the Stripe CLI separately, don't commit it
+/stripe-cli-*/

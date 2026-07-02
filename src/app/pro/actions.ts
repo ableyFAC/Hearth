@@ -66,6 +66,11 @@ async function assertContractor() {
 export async function updateLeadStatusAction(formData: FormData) {
   const leadId = formData.get("id") as string;
   const status = formData.get("status") as string;
+  // Only accept a known status value; never write arbitrary client input.
+  if (!LEAD_STATUSES.some((s) => s.value === status)) {
+    setFlash("Unknown status.", "error");
+    return;
+  }
   await assertContractor();
   const supabase = createClient();
   // RLS also guarantees the lead is assigned to this contractor.
@@ -98,17 +103,9 @@ export async function applyToJobAction(formData: FormData) {
   revalidatePath("/pro/billing");
 }
 
-export async function markLeadPaidAction(formData: FormData) {
-  const leadId = formData.get("id") as string;
-  const paid = formData.get("paid") === "true";
-  await assertContractor();
-  const supabase = createClient();
-  const { error } = await supabase
-    .from("contractor_leads")
-    .update({ paid, paid_at: paid ? new Date().toISOString() : null })
-    .eq("id", leadId);
-  if (error) throw new Error(error.message);
-  setFlash(paid ? "Marked as paid" : "Marked as unpaid", "info");
-  revalidatePath("/pro/billing");
-  revalidatePath("/pro");
-}
+// NOTE: a markLeadPaidAction used to live here that wrote the client-supplied
+// `paid` / `paid_at` fields directly to contractor_leads. `paid` gates access to
+// the homeowner's contact info and chat, so letting the client set it was an
+// unlock-without-paying risk. It had no callers (unlocking happens only through
+// the SECURITY DEFINER charge_lead / choose_applicant flows that confirm
+// payment), so it was removed rather than patched.

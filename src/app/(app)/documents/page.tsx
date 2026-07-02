@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { labelFor, iconFor, SYSTEM_TYPES } from "@/lib/constants";
 import DocumentUpload from "@/components/DocumentUpload";
+import { imgSrc } from "@/lib/storage";
 import {
   applyDocumentToTwinAction,
   deleteDocumentAction,
@@ -90,7 +91,7 @@ export default async function DocumentsPage() {
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <a
-                    href={d.file_url}
+                    href={imgSrc(d.file_url) ?? undefined}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="truncate font-medium text-stone-900 hover:text-hearth-700 hover:underline"

@@ -6,11 +6,16 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { leadFeeFor, labelFor, JOB_CATEGORIES } from "@/lib/constants";
 import { setFlash } from "@/lib/flash";
+import { hasPlus } from "@/lib/subscription";
 
 // Homeowner posts a job (Indeed-style). No pro is picked here: the lead is left
 // unassigned (contractor_id null) so matching pros can apply to it. The chosen
 // pro is selected later from the applicants.
 export async function postJobAction(formData: FormData) {
+  // Finding a pro (posting a job) requires an active Hearth Plus subscription.
+  // Home tracking, AI chat, the document vault, and alerts stay free.
+  if (!(await hasPlus())) redirect("/plus");
+
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
   const supabase = createClient();
@@ -143,7 +148,7 @@ export async function updateJobAction(formData: FormData) {
       homeowner_phone: homeownerPhone,
     })
     .eq("id", leadId);
-  if (error) setFlash(error.message, "error");
+  if (error) setFlash("Something went wrong. Please try again.", "error");
   else setFlash("Job updated.", "success");
   revalidatePath("/contractors");
 }
@@ -174,7 +179,7 @@ export async function closeJobAction(formData: FormData) {
     .from("contractor_leads")
     .delete()
     .eq("id", leadId);
-  if (error) setFlash(error.message, "error");
+  if (error) setFlash("Something went wrong. Please try again.", "error");
   else setFlash(reason ? `Job closed: ${reason}.` : "Job closed.", "info");
   revalidatePath("/contractors");
   revalidatePath("/dashboard");
@@ -188,7 +193,7 @@ export async function chooseApplicantAction(formData: FormData) {
   const { error } = await supabase.rpc("choose_applicant", {
     p_application: applicationId,
   });
-  if (error) setFlash(error.message, "error");
+  if (error) setFlash("Something went wrong. Please try again.", "error");
   else
     setFlash(
       "Pro selected. They now have your contact and can message you.",

@@ -397,9 +397,12 @@ on conflict do nothing;
 -- so RLS can check ownership from the object path.
 -- =============================================================================
 
+-- Private bucket: objects are served through the app's /api/img proxy, which
+-- signs a short-lived URL per request (gated by the policies below). See the
+-- storage-hardening block at the end of this file for the safe-cast policies.
 insert into storage.buckets (id, name, public)
-values ('home-photos', 'home-photos', true)
-on conflict (id) do nothing;
+values ('home-photos', 'home-photos', false)
+on conflict (id) do update set public = false;
 
 -- Owners can read/write only objects under a property they own. The first
 -- folder segment of the object name is the property id.
@@ -800,7 +803,7 @@ create policy "lead_reads update" on public.lead_reads
 -- ---- Config (single row; tunable without a redeploy) ------------------------
 create table if not exists public.wallet_config (
   id                      int primary key default 1,
-  min_bonus_deposit_cents bigint  not null default 25000,  -- $250
+  min_bonus_deposit_cents bigint  not null default 20000,  -- $200
   bonus_expiry_days       int     not null default 60,
   spend_cash_first        boolean not null default true,
   constraint wallet_config_single_row check (id = 1)
@@ -817,9 +820,9 @@ create table if not exists public.deposit_tiers (
 insert into public.deposit_tiers (min_cents, max_cents, bonus_pct)
 select v.min_cents, v.max_cents, v.bonus_pct
 from (values
-  (25000,  49999::bigint, 10),
-  (50000,  99999::bigint, 15),
-  (100000, null::bigint,  20)
+  (20000,  39999::bigint, 10),
+  (40000,  79999::bigint, 15),
+  (80000,  null::bigint,  20)
 ) as v(min_cents, max_cents, bonus_pct)
 where not exists (select 1 from public.deposit_tiers);
 
@@ -1633,4 +1636,106 @@ as $$
   order by created_at desc
   limit 100;
 $$;
+
+
+-- =====================================================================
+-- file: supabase/migrations/0021_private_storage.sql (mirrored)
+-- =====================================================================
+-- Safe text->uuid cast (null instead of throwing) so a storage policy evaluated
+-- against a non-uuid path segment (e.g. the "chat" prefix) never errors.
+create or replace function public.try_uuid(p text)
+returns uuid language plpgsql immutable set search_path = public as $$
+begin
+  return p::uuid;
+exception when others then
+  return null;
+end; $$;
+
+drop policy if exists "home-photos owner read"   on storage.objects;
+drop policy if exists "home-photos owner insert" on storage.objects;
+drop policy if exists "home-photos owner delete" on storage.objects;
+drop policy if exists "home-photos chat read"    on storage.objects;
+drop policy if exists "home-photos chat insert"  on storage.objects;
+
+create policy "home-photos owner read" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'home-photos'
+    and public.owns_property(public.try_uuid((storage.foldername(name))[1])));
+create policy "home-photos owner insert" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'home-photos'
+    and public.owns_property(public.try_uuid((storage.foldername(name))[1])));
+create policy "home-photos owner delete" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'home-photos'
+    and public.owns_property(public.try_uuid((storage.foldername(name))[1])));
+
+create policy "home-photos chat read" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'home-photos'
+    and (storage.foldername(name))[1] = 'chat'
+    and public.can_access_lead(public.try_uuid((storage.foldername(name))[2])));
+create policy "home-photos chat insert" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'home-photos'
+    and (storage.foldername(name))[1] = 'chat'
+    and public.can_access_lead(public.try_uuid((storage.foldername(name))[2])));
+
+update storage.buckets set public = false where id = 'home-photos';
+
+
+-- =====================================================================
+-- file: supabase/migrations/0022_subscriptions.sql (mirrored)
+-- =====================================================================
+-- Hearth Plus: tracks a homeowner's Stripe subscription so "finding a pro" can
+-- be gated behind an active plan. Written only by the Stripe webhook (service
+-- role); a user may read only their own row.
+create table if not exists public.subscriptions (
+  id                     uuid primary key default gen_random_uuid(),
+  user_id                uuid not null unique references auth.users (id) on delete cascade,
+  stripe_customer_id     text,
+  stripe_subscription_id text,
+  status                 text not null default 'inactive',
+  plan                   text,
+  current_period_end     timestamptz,
+  created_at             timestamptz not null default now(),
+  updated_at             timestamptz not null default now()
+);
+create index if not exists subscriptions_stripe_customer_id_idx
+  on public.subscriptions (stripe_customer_id);
+create index if not exists subscriptions_stripe_subscription_id_idx
+  on public.subscriptions (stripe_subscription_id);
+alter table public.subscriptions enable row level security;
+drop policy if exists "subscriptions owner read" on public.subscriptions;
+create policy "subscriptions owner read" on public.subscriptions
+  for select to authenticated using (user_id = auth.uid());
+
+
+-- =====================================================================
+-- file: supabase/migrations/0023_notifications.sql (mirrored)
+-- =====================================================================
+-- In-app notification center (weather alerts, recalls, etc.). Rows are written
+-- by the home-alerts cron via the service role; a user reads/marks-read only
+-- their own rows.
+create table if not exists public.notifications (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references auth.users (id) on delete cascade,
+  kind       text not null,
+  title      text not null,
+  body       text,
+  url        text,
+  read_at    timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists notifications_user_read_idx
+  on public.notifications (user_id, read_at);
+create index if not exists notifications_user_created_idx
+  on public.notifications (user_id, created_at desc);
+alter table public.notifications enable row level security;
+drop policy if exists "notifications owner read" on public.notifications;
+create policy "notifications owner read" on public.notifications
+  for select using (user_id = auth.uid());
+drop policy if exists "notifications owner update" on public.notifications;
+create policy "notifications owner update" on public.notifications
+  for update using (user_id = auth.uid()) with check (user_id = auth.uid());
 

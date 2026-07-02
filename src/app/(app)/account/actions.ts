@@ -19,7 +19,6 @@ export async function saveAccountAction(formData: FormData) {
   const full_name = (formData.get("full_name") as string)?.trim() || null;
   const phone = (formData.get("phone") as string)?.trim() || null;
   const email = (formData.get("email") as string)?.trim() || null;
-  const password = (formData.get("password") as string) || "";
 
   // Name + phone - the public profile row (best effort).
   const { error: profileError } = await supabase
@@ -30,15 +29,20 @@ export async function saveAccountAction(formData: FormData) {
 
   // Mirror the name into auth metadata too. This is what the toolbar reads, so
   // it's reliable even if the users-table write didn't land - and it's always
-  // writable (no RLS). Email/password go through Auth as well; an email change
-  // triggers a confirmation link, so it isn't live until the user clicks it.
+  // writable (no RLS). An email change triggers a confirmation link, so it isn't
+  // live until the user clicks it.
+  //
+  // NOTE: password is deliberately NOT handled here. Password changes go only
+  // through updatePasswordAction(), which re-verifies the current password.
+  // Accepting a `password` field here would let a crafted POST (or a hijacked /
+  // shared session) silently reset the password with no re-auth - an account-
+  // takeover path - since server actions accept any FormData regardless of the
+  // rendered form.
   const authChanges: {
     email?: string;
-    password?: string;
     data: { full_name: string | null };
   } = { data: { full_name } };
   if (email && email !== user.email) authChanges.email = email;
-  if (password) authChanges.password = password;
 
   const { error: authError } = await supabase.auth.updateUser(authChanges);
   if (authError) {

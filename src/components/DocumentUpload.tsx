@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { SYSTEM_TYPES } from "@/lib/constants";
 import { saveDocumentAction } from "@/lib/document-actions";
+import { imgSrc } from "@/lib/storage";
 
 const DOC_TYPES = [
   { value: "warranty", label: "Warranty" },
@@ -54,6 +55,15 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
     const file = input.files?.[0];
     input.value = ""; // allow re-picking the same file
     if (!file) return;
+
+    // Guard the size before we read it into memory and POST it to the vision
+    // endpoint (cost/DoS + browser OOM). accept="" is only a hint.
+    const MAX_BYTES = 15 * 1024 * 1024; // 15MB
+    if (file.size > MAX_BYTES) {
+      setPhase("idle");
+      setNote("That file is too large (max 15MB). Try a smaller photo or PDF.");
+      return;
+    }
 
     setPhase("working");
     setNote("Uploading…");
@@ -168,7 +178,7 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
           {preview && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={preview}
+              src={imgSrc(preview) ?? preview}
               alt="Document preview"
               className="mb-1 max-h-40 rounded-lg border border-stone-200 object-contain"
             />

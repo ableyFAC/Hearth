@@ -44,7 +44,10 @@ export async function reportIssueAction(formData: FormData) {
   revalidatePath("/dashboard");
 
   // Hand the owner straight into the "get a pro" flow for this issue.
-  redirect(`/contractors?issue=${issue.id}&category=${category}`);
+  // Encode the category so raw form input can't inject extra query params.
+  redirect(
+    `/contractors?issue=${issue.id}&category=${encodeURIComponent(category ?? "")}`
+  );
 }
 
 export async function updateIssueAction(formData: FormData) {

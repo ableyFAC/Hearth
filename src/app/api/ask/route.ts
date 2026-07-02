@@ -8,7 +8,23 @@ export const runtime = "nodejs";
 // "Ask Hearth": answer a homeowner's question grounded in their own home. We
 // pull their systems + ages so the answer is specific (the thing Google can't
 // do), then ask Gemini. Calls the API directly so there's no SDK dep.
+// Cap each attached image (base64 chars) so a caller can't push huge payloads
+// at the paid vision model. ~4M chars ≈ 3MB; the client already downscales to
+// ~1024px JPEG, so real attachments are far smaller than this.
+const MAX_IMAGE_B64_CHARS = 4_000_000;
+
 export async function POST(req: NextRequest) {
+  // Require a signed-in user before touching the paid model. Ask Hearth is an
+  // authenticated feature; gating here (not just in middleware) stops anonymous
+  // abuse that would run up Gemini cost.
+  const authClient = createClient();
+  const {
+    data: { user: authUser },
+  } = await authClient.auth.getUser();
+  if (!authUser) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return NextResponse.json({
@@ -169,7 +185,11 @@ export async function POST(req: NextRequest) {
             const parts: any[] = [];
             if (m.content && m.content.trim()) parts.push({ text: m.content });
             // A homeowner can attach a downscaled photo - send it to vision.
-            if (m.image)
+            // Drop anything over the cap rather than forwarding a huge payload.
+            if (
+              typeof m.image === "string" &&
+              m.image.length <= MAX_IMAGE_B64_CHARS
+            )
               parts.push({
                 inlineData: {
                   mimeType: m.mime || "image/jpeg",

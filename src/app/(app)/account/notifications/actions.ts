@@ -24,7 +24,7 @@ export async function saveNotificationPrefsAction(formData: FormData) {
     .update({ notification_prefs: prefs })
     .eq("id", user.id);
 
-  if (error) setFlash(error.message, "error");
+  if (error) setFlash("Couldn't update your settings. Please try again.", "error");
   else setFlash("Notification preferences saved.", "success");
   revalidatePath("/account/notifications");
 }

@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SYSTEM_TYPES } from "@/lib/constants";
+import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
+
+// Cap the incoming base64 image so a caller can't push huge payloads at the paid
+// vision model (cost/DoS). ~14M base64 chars ≈ 10MB of binary.
+const MAX_IMAGE_B64_CHARS = 14_000_000;
 
 // Read the facts off a home document (a warranty, manual, receipt, or the
 // model/serial data plate on an appliance) so they can auto-fill the digital
@@ -44,6 +49,16 @@ const MODELS = [
 ];
 
 export async function POST(req: NextRequest) {
+  // Require a signed-in user. This is an authenticated feature; gating it here
+  // (not just in middleware) stops anonymous abuse of the paid vision API.
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     // No key: the vault still works, the owner just fills fields in by hand.
@@ -55,6 +70,9 @@ export async function POST(req: NextRequest) {
   const mime = typeof body.mime === "string" ? body.mime : "image/jpeg";
   if (!image) {
     return NextResponse.json({ error: "No image." }, { status: 400 });
+  }
+  if (image.length > MAX_IMAGE_B64_CHARS) {
+    return NextResponse.json({ error: "Image too large." }, { status: 413 });
   }
 
   const today = new Date().toISOString().slice(0, 10);

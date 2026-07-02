@@ -33,6 +33,26 @@ export default function OnboardingForm() {
               it all in.
             </p>
           </div>
+
+          <ul className="space-y-1.5 rounded-lg bg-hearth-50 p-3 text-sm text-hearth-800">
+            <li className="flex items-start gap-2">
+              <span aria-hidden="true">🛠️</span>
+              <span>Track every system and know what needs attention</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span aria-hidden="true">🔔</span>
+              <span>
+                Proactive freeze, heat, and recall alerts for YOUR home
+              </span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span aria-hidden="true">📄</span>
+              <span>
+                Scan a warranty or receipt and Hearth files it for you
+              </span>
+            </li>
+          </ul>
+
           <div>
             <label className="label" htmlFor="address">
               Address
@@ -45,6 +65,10 @@ export default function OnboardingForm() {
               onChange={(e) => setAddress(e.target.value)}
               required
             />
+            <p className="mt-1 text-xs text-stone-400">
+              We ask so we can personalize maintenance and local pricing for
+              your home, it takes about 30 seconds.
+            </p>
           </div>
           <button className="btn-primary w-full" disabled={busy}>
             {busy ? "Looking up…" : "Find my home"}

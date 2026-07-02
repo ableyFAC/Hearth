@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { JOB_CATEGORIES, TIMING_OPTIONS, labelFor, iconFor } from "@/lib/constants";
 import { setFlash } from "@/lib/flash";
+import { hasPlus } from "@/lib/subscription";
 import { postJobAction, chooseApplicantAction } from "./actions";
 import CategoryFilter from "./CategoryFilter";
 import LeadChat from "@/components/LeadChat";
@@ -60,6 +61,7 @@ export default async function ContractorsPage({
   const property = await getActiveProperty();
   if (!property) redirect("/onboarding");
   const supabase = createClient();
+  const plus = await hasPlus();
 
   const category = searchParams.category ?? "";
   const issueId = searchParams.issue ?? "";
@@ -139,6 +141,23 @@ export default async function ContractorsPage({
           review them and pick the one you want.
         </p>
       </div>
+
+      {!plus && (
+        <div className="card flex items-center justify-between gap-4 border-hearth-200 bg-hearth-50">
+          <div>
+            <p className="font-medium text-hearth-800">
+              Hearth Plus unlocks pro quotes
+            </p>
+            <p className="text-sm text-hearth-700">
+              Posting a job and getting quotes from vetted local pros is a
+              Hearth Plus feature, from $9/month.
+            </p>
+          </div>
+          <Link href="/plus" className="btn-primary shrink-0">
+            Upgrade
+          </Link>
+        </div>
+      )}
 
       {searchParams.posted && (
         <FadingBanner

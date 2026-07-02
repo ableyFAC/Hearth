@@ -46,7 +46,7 @@ export async function updatePasswordAction(formData: FormData) {
 
   const { error } = await supabase.auth.updateUser({ password: next });
   if (error) {
-    setFlash(error.message, "error");
+    setFlash("Couldn't save your changes. Please try again.", "error");
     redirect("/pro/profile");
   }
 
@@ -71,7 +71,7 @@ export async function deleteAccountAction() {
 
   const { error } = await admin.auth.admin.deleteUser(user.id);
   if (error) {
-    setFlash(error.message, "error");
+    setFlash("Couldn't save your changes. Please try again.", "error");
     redirect("/pro/profile");
   }
 

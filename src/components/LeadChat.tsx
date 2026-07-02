@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { censor } from "@/lib/censor";
 import { extractQuote, formatUSD } from "@/lib/quotes";
+import { imgSrc } from "@/lib/storage";
 
 type Msg = {
   id: string;
@@ -27,8 +28,20 @@ const EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "👎"];
 // Photo messages reuse the same text `body` column: an uploaded image is stored
 // as "[img]<public-url>" so both sides can render it without a schema change.
 const IMG_PREFIX = "[img]";
-const isImageBody = (b: string) => b.startsWith(IMG_PREFIX);
 const imageUrl = (b: string) => b.slice(IMG_PREFIX.length);
+
+// A photo message is only TRUSTED as an image if its URL points at our own
+// Supabase storage bucket. Without this, a user could type a message like
+// "[img]javascript:alert(document.cookie)" or "[img]https://tracker/x.gif" and
+// have it rendered to the other party as a clickable link / auto-loading image
+// in their session (stored XSS + IP/phishing). Anything that doesn't match
+// falls through to plain, escaped-text rendering.
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+const isSafeStorageUrl = (u: string) =>
+  SUPABASE_URL !== "" &&
+  u.startsWith(`${SUPABASE_URL}/storage/v1/object/`);
+const isImageBody = (b: string) =>
+  b.startsWith(IMG_PREFIX) && isSafeStorageUrl(imageUrl(b));
 
 // Messaging thread for a lead. Both the homeowner and the assigned contractor
 // see the same thread (RLS enforces only those two can read/post). Polls every
@@ -615,14 +628,14 @@ export default function LeadChat({
 
                   {isImageBody(m.body) ? (
                     <a
-                      href={imageUrl(m.body)}
+                      href={imgSrc(imageUrl(m.body)) ?? undefined}
                       target="_blank"
                       rel="noreferrer"
                       className="block"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={imageUrl(m.body)}
+                        src={imgSrc(imageUrl(m.body)) ?? undefined}
                         alt="shared photo"
                         className="max-h-60 w-auto rounded-lg border border-stone-200 object-cover"
                       />
