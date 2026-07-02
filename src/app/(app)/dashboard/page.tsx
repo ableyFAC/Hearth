@@ -21,6 +21,7 @@ import SystemRow from "../profile/SystemRow";
 import SeasonalChecklist from "@/components/SeasonalChecklist";
 import ChecklistProvider from "@/components/ChecklistProvider";
 import ReminderItem from "./ReminderItem";
+import HomeAlerts from "@/components/HomeAlerts";
 
 export default async function HomePage({
   searchParams,
@@ -221,6 +222,9 @@ export default async function HomePage({
           {property.beds ?? "-"} bd / {property.baths ?? "-"} ba
         </p>
       </section>
+
+      {/* Proactive weather + safety-recall alerts; self-hides when there's none */}
+      <HomeAlerts />
 
       {/* This month: focus + one merged checklist (reminders + seasonal) */}
       <section className="space-y-3">

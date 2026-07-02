@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { logIssueFromChat, setReminderFromChat } from "@/lib/ask-actions";
+import VoiceButton from "@/components/VoiceButton";
+import Markdown from "@/components/Markdown";
 
 type Msg = {
   role: "user" | "assistant";
@@ -468,13 +470,17 @@ export default function AskHearth({
         )}
         {parsed.text && (
           <span
-            className={`block max-w-[85%] whitespace-pre-wrap break-words rounded-lg px-3 py-1.5 text-sm ${
+            className={`block max-w-[85%] break-words rounded-lg px-3 py-1.5 text-sm ${
               m.role === "user"
-                ? "bg-hearth-600 text-white"
+                ? "whitespace-pre-wrap bg-hearth-600 text-white"
                 : "border border-stone-200 bg-white text-stone-700"
             }`}
           >
-            {parsed.text}
+            {m.role === "assistant" ? (
+              <Markdown text={parsed.text} />
+            ) : (
+              parsed.text
+            )}
           </span>
         )}
         <MessageActions
@@ -529,11 +535,17 @@ export default function AskHearth({
             }}
           />
         </label>
+        <VoiceButton
+          disabled={loading}
+          onText={(t) =>
+            setInput((prev) => (prev ? `${prev} ${t}` : t))
+          }
+        />
         <input
           className="input"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask or attach a photo…"
+          placeholder="Ask, speak, or attach a photo…"
         />
         <button className="btn-primary" disabled={loading}>
           {fill ? "Send" : "Ask"}
