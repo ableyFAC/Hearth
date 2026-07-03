@@ -4,9 +4,11 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { ACTIVE_HOME_COOKIE } from "@/lib/property";
+import { ACTIVE_HOME_COOKIE, getProperties } from "@/lib/property";
 import { lookupParcel, type ParcelFacts } from "@/lib/parcel";
 import { DEFAULT_LIFESPANS } from "@/lib/health";
+import { hasPlus } from "@/lib/subscription";
+import { setFlash } from "@/lib/flash";
 
 // Systems virtually every home has - auto-added so the owner doesn't start from
 // a blank inventory. Install years are ESTIMATED from the build year; real
@@ -36,6 +38,17 @@ export async function claimPropertyAction(formData: FormData) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/signin");
+
+  // Free vs Plus home limits: a free homeowner may claim 1 home; Plus unlocks
+  // up to 5 so a landlord/multi-property owner can track them all in one place.
+  const [existingHomes, plus] = await Promise.all([getProperties(), hasPlus()]);
+  if (!plus && existingHomes.length >= 1) {
+    redirect("/plus?reason=home_limit");
+  }
+  if (plus && existingHomes.length >= 5) {
+    setFlash("Hearth Plus covers up to 5 homes.", "error");
+    redirect("/dashboard");
+  }
 
   const num = (key: string) => {
     const v = formData.get(key);

@@ -12,9 +12,13 @@ type MenuLink = { href: string; label: string };
 export default function ProfileMenu({
   name,
   links,
+  hasPlus,
 }: {
   name: string | null;
   links: MenuLink[];
+  // Homeowner-only: whether the signed-in user has Hearth Plus. Undefined on
+  // the contractor side (ProNav), which has no Plus entry to show.
+  hasPlus?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -82,6 +86,20 @@ export default function ProfileMenu({
           role="menu"
           className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg"
         >
+          {hasPlus !== undefined && (
+            <Link
+              href="/plus"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className={
+                hasPlus
+                  ? "block border-b border-stone-100 px-4 py-2 text-sm text-stone-400"
+                  : "block border-b border-stone-100 bg-hearth-50 px-4 py-2 text-sm font-medium text-hearth-700 hover:bg-hearth-100"
+              }
+            >
+              {hasPlus ? "Hearth Plus ✓" : "Upgrade to Hearth Plus"}
+            </Link>
+          )}
           {links.map((l) => (
             <Link
               key={l.href}

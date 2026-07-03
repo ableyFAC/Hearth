@@ -3,6 +3,7 @@ import { getActiveProperty, getProperties } from "@/lib/property";
 import { getRole } from "@/lib/contractor";
 import { getUserProfile } from "@/lib/user";
 import { getUser } from "@/lib/auth";
+import { hasPlus } from "@/lib/subscription";
 import Nav from "@/components/Nav";
 import NewMessageNotifier from "@/components/NewMessageNotifier";
 import AskHearthDock from "@/components/AskHearthDock";
@@ -17,11 +18,12 @@ export default async function AppLayout({
 }) {
   if ((await getRole()) === "contractor") redirect("/pro");
 
-  const [active, homes, profile, user] = await Promise.all([
+  const [active, homes, profile, user, plus] = await Promise.all([
     getActiveProperty(),
     getProperties(),
     getUserProfile(),
     getUser(),
+    hasPlus(),
   ]);
   if (!active) redirect("/onboarding");
 
@@ -35,7 +37,7 @@ export default async function AppLayout({
 
   return (
     <div className="min-h-screen">
-      <Nav homes={homes} activeId={active.id} name={name} />
+      <Nav homes={homes} activeId={active.id} name={name} hasPlus={plus} />
       <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
       <AskHearthDock greeting={greeting} />
       <NewMessageNotifier role="homeowner" />

@@ -83,6 +83,11 @@ export default function HomeSwitcher({
           >
             + Add a home
           </a>
+          {homes.length >= 1 && (
+            <p className="px-2 pb-1 text-xs text-stone-400">
+              Free includes 1 home. Hearth Plus unlocks up to 5.
+            </p>
+          )}
         </div>
       )}
     </div>

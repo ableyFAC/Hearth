@@ -10,10 +10,12 @@ export default function Nav({
   homes,
   activeId,
   name,
+  hasPlus,
 }: {
   homes: Property[];
   activeId: string;
   name: string | null;
+  hasPlus: boolean;
 }) {
   const LINKS = [
     { href: "/dashboard", label: "Home" },
@@ -43,6 +45,7 @@ export default function Nav({
           {/* Account / Log out - mirrors the contractor profile menu. */}
           <ProfileMenu
           name={name}
+          hasPlus={hasPlus}
           links={[
             { href: "/account", label: "Edit profile" },
             { href: "/account/security", label: "Account security" },

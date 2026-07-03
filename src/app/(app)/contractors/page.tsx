@@ -146,15 +146,16 @@ export default async function ContractorsPage({
         <div className="card flex items-center justify-between gap-4 border-hearth-200 bg-hearth-50">
           <div>
             <p className="font-medium text-hearth-800">
-              Hearth Plus unlocks pro quotes
+              Juggling more than one project?
             </p>
             <p className="text-sm text-hearth-700">
-              Posting a job and getting quotes from vetted local pros is a
-              Hearth Plus feature, from $9/month.
+              Free covers 1 open job at a time. Hearth Plus runs up to 10 at
+              once, plus priority matching so pros see yours first. Just $4.99
+              your first month, then $8.99.
             </p>
           </div>
           <Link href="/plus" className="btn-primary shrink-0">
-            Upgrade
+            Line up more pros
           </Link>
         </div>
       )}

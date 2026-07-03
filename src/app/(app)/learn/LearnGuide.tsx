@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 // An interactive maintenance-basics card: shows the owner's actual system status
-// inline, checkable upkeep steps (remembered per system), and buttons that fire
-// a question into Ask Hearth (the box at the top of Learn). Personalized + tied
-// to the AI - the thing a Google search can't be.
+// inline, a short summary that's always visible, checkable upkeep steps
+// (remembered per system) once expanded, and buttons that fire a question into
+// Ask Hearth (the box at the top of Learn). Personalized + tied to the AI - the
+// thing a Google search can't be.
 export default function LearnGuide({
   systemType,
   label,
   icon,
+  summary,
   lifespan,
   statusLabel,
   statusStyle,
@@ -20,6 +22,7 @@ export default function LearnGuide({
   systemType: string;
   label: string;
   icon: string;
+  summary: string;
   lifespan: number | string;
   statusLabel?: string;
   statusStyle?: string;
@@ -28,6 +31,8 @@ export default function LearnGuide({
   askQuestion: string;
 }) {
   const key = `hearth_guide_${systemType}`;
+  const panelId = useId();
+  const [open, setOpen] = useState(false);
   const [checked, setChecked] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
@@ -58,78 +63,105 @@ export default function LearnGuide({
 
   return (
     <li className="card">
-      <details>
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 font-medium text-stone-900 [&::-webkit-details-marker]:hidden">
-          <span className="flex flex-wrap items-center gap-2">
-            <span>
-              {icon} {label}
-            </span>
-            {statusLabel && (
-              <span
-                className={`rounded-full border px-2 py-0.5 text-xs ${statusStyle ?? ""}`}
-              >
-                {statusLabel}
-              </span>
-            )}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-controls={panelId}
+        className="flex w-full items-center justify-between gap-2 text-left font-medium text-stone-900"
+      >
+        <span className="flex flex-wrap items-center gap-2">
+          <span>
+            {icon} {label}
           </span>
-          <span className="shrink-0 text-sm text-stone-400">Read more</span>
-        </summary>
+          {statusLabel && (
+            <span
+              className={`rounded-full border px-2 py-0.5 text-xs ${statusStyle ?? ""}`}
+            >
+              {statusLabel}
+            </span>
+          )}
+        </span>
+        <span
+          className={`shrink-0 text-lg text-stone-400 transition-transform duration-200 ${
+            open ? "rotate-180" : ""
+          }`}
+          aria-hidden="true"
+        >
+          ⌄
+        </span>
+      </button>
 
-        <p className="mt-3 text-xs text-stone-400">
-          Typical lifespan: {lifespan} years
-          {age != null ? ` · yours is about ${age} yrs old` : ""}
-        </p>
+      <p className="mt-1 text-sm text-stone-500">{summary}</p>
 
-        <ul className="mt-2 space-y-1.5">
-          {tips.map((t, i) => (
-            <li key={i}>
-              <button
-                type="button"
-                onClick={() => toggle(i)}
-                className="flex items-start gap-2 text-left text-sm"
-              >
-                <span
-                  className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
-                    checked[i]
-                      ? "border-green-500 bg-green-500 text-white"
-                      : "border-stone-300 text-transparent"
-                  }`}
+      <div
+        id={panelId}
+        role="region"
+        aria-hidden={!open}
+        className={`grid transition-all duration-200 ease-out ${
+          open ? "mt-3 grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+        }`}
+      >
+        <div className="overflow-hidden">
+          <p className="text-xs text-stone-400">
+            Typical lifespan: {lifespan} years
+            {age != null ? ` · yours is about ${age} yrs old` : ""}
+          </p>
+
+          <ul className="mt-2 space-y-1.5">
+            {tips.map((t, i) => (
+              <li key={i}>
+                <button
+                  type="button"
+                  onClick={() => toggle(i)}
+                  tabIndex={open ? 0 : -1}
+                  className="flex items-start gap-2 text-left text-sm"
                 >
-                  ✓
-                </span>
-                <span
-                  className={
-                    checked[i] ? "text-stone-400 line-through" : "text-stone-600"
-                  }
-                >
-                  {t}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
+                  <span
+                    className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
+                      checked[i]
+                        ? "border-green-500 bg-green-500 text-white"
+                        : "border-stone-300 text-transparent"
+                    }`}
+                  >
+                    ✓
+                  </span>
+                  <span
+                    className={
+                      checked[i] ? "text-stone-400 line-through" : "text-stone-600"
+                    }
+                  >
+                    {t}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
 
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => ask(askQuestion)}
-            className="rounded-lg bg-hearth-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-hearth-700"
-          >
-            ✨ Ask Hearth about this
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              ask(
-                `Something seems off with my ${label.toLowerCase()}. Can you help me figure out what's going on and whether I need a pro?`
-              )
-            }
-            className="rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:border-hearth-400 hover:text-hearth-700"
-          >
-            Something wrong?
-          </button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => ask(askQuestion)}
+              tabIndex={open ? 0 : -1}
+              className="rounded-lg bg-hearth-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-hearth-700"
+            >
+              ✨ Ask Hearth about this
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                ask(
+                  `Something seems off with my ${label.toLowerCase()}. Can you help me figure out what's going on and whether I need a pro?`
+                )
+              }
+              tabIndex={open ? 0 : -1}
+              className="rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:border-hearth-400 hover:text-hearth-700"
+            >
+              Something wrong?
+            </button>
+          </div>
         </div>
-      </details>
+      </div>
     </li>
   );
 }

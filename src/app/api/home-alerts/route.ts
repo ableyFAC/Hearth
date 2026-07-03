@@ -127,9 +127,30 @@ export async function GET() {
 
   // --- Recalls (CPSC SaferProducts, no key) ---
   try {
+    // Keywords that must co-occur with a brand name for a recall to count as a
+    // real match for that system. This stops a brand that is also a common word
+    // (e.g. "Carrier" HVAC vs a baby/plate "carrier") from dragging in dozens of
+    // unrelated recalls. A system type with no keywords falls back to brand-only.
+    const SYSTEM_KEYWORDS: Record<string, string[]> = {
+      hvac: [
+        "furnace", "air condition", "heat pump", "hvac", "ac unit",
+        "boiler", "thermostat", "heater", "condenser", "cooling", "heating",
+      ],
+      water_heater: ["water heater", "tankless", "boiler"],
+      roof: ["roof", "shingle", "gutter", "skylight"],
+      windows: ["window"],
+      electrical_panel: ["electrical panel", "breaker", "circuit", "panel", "wiring", "load center"],
+      plumbing: ["plumbing", "faucet", "valve", "pipe", "water supply", "toilet"],
+      sewer_line: ["sewer", "septic", "sump"],
+      appliance: [
+        "dishwasher", "refrigerator", "washer", "dryer", "oven", "range",
+        "microwave", "stove", "freezer", "cooktop", "washing machine",
+      ],
+    };
+
     // Build a small set of brand keywords from stored models, capped to keep
     // this fast. Only systems where the owner actually entered a brand/model.
-    const brands = new Map<string, string>(); // keyword -> system label
+    const brands = new Map<string, { label: string; type: string }>();
     for (const s of systems) {
       const model: string = (s.material_or_model ?? "").trim();
       if (!model) continue;
@@ -137,12 +158,15 @@ export async function GET() {
       if (brand.length < 3) continue;
       const key = brand.toLowerCase();
       if (!brands.has(key))
-        brands.set(key, labelFor(SYSTEM_TYPES, s.system_type));
+        brands.set(key, {
+          label: labelFor(SYSTEM_TYPES, s.system_type),
+          type: s.system_type,
+        });
       if (brands.size >= 4) break;
     }
 
     const seen = new Set<string>();
-    for (const [brand, sysLabel] of brands) {
+    for (const [brand, { label: sysLabel, type: sysType }] of brands) {
       const data = await fetchJson(
         `https://www.saferproducts.gov/RestWebServices/Recall?format=json&ProductName=${encodeURIComponent(
           brand
@@ -150,12 +174,18 @@ export async function GET() {
         4000
       );
       if (!Array.isArray(data)) continue;
+      const keywords = SYSTEM_KEYWORDS[sysType] ?? [];
       for (const rec of data.slice(0, 20)) {
         const title: string =
           rec?.Title ?? rec?.RecallTitle ?? rec?.Description ?? "";
         if (!title) continue;
+        const lower = title.toLowerCase();
         // Conservative: only keep recalls whose text actually names the brand.
-        if (!title.toLowerCase().includes(brand)) continue;
+        if (!lower.includes(brand)) continue;
+        // And, when we know what this system is, that also read like that
+        // system, not an unrelated product that shares the brand word.
+        if (keywords.length && !keywords.some((k) => lower.includes(k)))
+          continue;
         const url: string | undefined = rec?.URL ?? rec?.Url ?? undefined;
         const dedupe = (url ?? title).slice(0, 120);
         if (seen.has(dedupe)) continue;
@@ -170,9 +200,9 @@ export async function GET() {
             }. Check the model/serial against the official notice to confirm.`,
           url,
         });
-        if (recalls.length >= 6) break;
+        if (recalls.length >= 3) break;
       }
-      if (recalls.length >= 6) break;
+      if (recalls.length >= 3) break;
     }
   } catch {
     /* leave recalls empty */

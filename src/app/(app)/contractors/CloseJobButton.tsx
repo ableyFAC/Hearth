@@ -40,10 +40,9 @@ export default function CloseJobButton({ leadId }: { leadId: string }) {
         value={reason}
         onChange={(e) => setReason(e.target.value)}
         className="select w-auto text-sm"
-        required
       >
-        <option value="" disabled>
-          Choose a reason to close
+        <option value="">
+          Reason (optional)
         </option>
         {REASONS.map((r) => (
           <option key={r} value={r}>

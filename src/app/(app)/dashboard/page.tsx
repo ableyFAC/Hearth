@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
+import { hasPlus } from "@/lib/subscription";
+import { generateMaintenancePlanAction } from "./actions";
 import {
   scoreBreakdown,
   scoreBand,
@@ -31,6 +33,7 @@ export default async function HomePage({
 }) {
   const property = (await getActiveProperty())!;
   const supabase = createClient();
+  const plus = await hasPlus();
 
   const [
     { data: systems },
@@ -342,6 +345,78 @@ export default async function HomePage({
           </div>
         </section>
       )}
+
+      {/* Hearth Plus: one cohesive "plan ahead" block (plan + premium tools) */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-stone-900">
+          Plan ahead with Hearth Plus
+        </h2>
+        <div className="card flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-stone-900">
+              Build my maintenance plan
+            </h2>
+            <p className="mt-1 text-sm text-stone-500">
+              Hearth lines up a full year of upkeep reminders tailored to your
+              home.
+            </p>
+          </div>
+          {plus ? (
+            <form action={generateMaintenancePlanAction}>
+              <button className="btn-primary whitespace-nowrap">
+                Build my plan
+              </button>
+            </form>
+          ) : (
+            <Link
+              href="/plus?reason=plan"
+              className="btn-primary whitespace-nowrap text-center"
+            >
+              Get my maintenance plan
+            </Link>
+          )}
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[
+            {
+              href: plus ? "/forecast" : "/plus?reason=forecast",
+              icon: "📈",
+              title: "Cost forecast",
+              desc: "See what will need replacing and the amount to set aside each month.",
+            },
+            {
+              href: plus ? "/quote-check" : "/plus?reason=quote",
+              icon: "🔍",
+              title: "Quote analyzer",
+              desc: "Snap a contractor's quote and check whether the price is fair.",
+            },
+            {
+              href: plus ? "/home-report" : "/plus?reason=report",
+              icon: "📋",
+              title: "Home report",
+              desc: "A shareable record of your home for insurance and resale.",
+            },
+          ].map((t) => (
+            <Link
+              key={t.title}
+              href={t.href}
+              className="card block transition-colors hover:border-hearth-400"
+            >
+              <p className="text-2xl">{t.icon}</p>
+              <p className="mt-1 font-medium text-stone-900">
+                {t.title}
+                {!plus && (
+                  <span className="ml-1.5 rounded-full bg-hearth-100 px-1.5 py-0.5 text-[10px] font-semibold text-hearth-700">
+                    Plus
+                  </span>
+                )}
+              </p>
+              <p className="mt-1 text-sm text-stone-500">{t.desc}</p>
+            </Link>
+          ))}
+        </div>
+      </section>
 
       {/* Key stats */}
       <section className="grid gap-4 sm:grid-cols-2">

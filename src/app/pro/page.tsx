@@ -13,6 +13,7 @@ import ChatDrawer from "@/components/ChatDrawer";
 import LeadsRealtime from "./LeadsRealtime";
 import ApplyJobButton from "./ApplyJobButton";
 import JobStatusSelect from "./JobStatusSelect";
+import { agingLeadFee } from "@/lib/leadPricing";
 
 const SEVERITY_STYLE: Record<string, string> = {
   low: "border-stone-200 bg-stone-50 text-stone-600",
@@ -37,7 +38,8 @@ const STATUS_LABEL: Record<string, string> = {
 
 function money(n: number | string | null) {
   const v = Number(n);
-  return Number.isFinite(v) ? `$${v.toFixed(0)}` : "-";
+  if (!Number.isFinite(v)) return "-";
+  return Number.isInteger(v) ? `$${v}` : `$${v.toFixed(2)}`;
 }
 
 export default async function ProDashboard() {
@@ -78,18 +80,76 @@ export default async function ProDashboard() {
 
   const { data: wallet } = await (supabase as any)
     .from("wallets")
-    .select("cash_balance_cents, bonus_balance_cents")
+    .select("id, cash_balance_cents, bonus_balance_cents")
     .eq("contractor_id", contractor.id)
     .maybeSingle();
-  const balance =
-    (Number(wallet?.cash_balance_cents ?? 0) +
-      Number(wallet?.bonus_balance_cents ?? 0)) /
-    100;
+  const balanceCents =
+    Number(wallet?.cash_balance_cents ?? 0) +
+    Number(wallet?.bonus_balance_cents ?? 0);
+  const balance = balanceCents / 100;
+  const lowBalance = balanceCents < 5000;
+
+  // "Your results" card: how the pro's applications have paid off so far.
+  const { data: appRows } = wallet
+    ? await (supabase as any)
+        .from("lead_applications")
+        .select("status")
+        .eq("contractor_id", contractor.id)
+    : { data: [] };
+  const appliedCount = (appRows ?? []).length;
+  const wonCount = (appRows ?? []).filter(
+    (a: any) => a.status === "chosen"
+  ).length;
+
+  const { data: txnRows } = wallet?.id
+    ? await (supabase as any)
+        .from("wallet_transactions")
+        .select("cash_delta_cents, bonus_delta_cents")
+        .eq("wallet_id", wallet.id)
+    : { data: [] };
+  const spentCents = (txnRows ?? []).reduce((sum: number, t: any) => {
+    const delta =
+      Number(t.cash_delta_cents ?? 0) + Number(t.bonus_delta_cents ?? 0);
+    return delta < 0 ? sum + Math.abs(delta) : sum;
+  }, 0);
+  const spent = spentCents / 100;
 
   return (
     <div className="space-y-8">
       <LeadsRealtime contractorId={contractor.id} />
       <ChatDrawer role="contractor" />
+
+      {lowBalance && (
+        <div className="card flex flex-wrap items-center justify-between gap-3 border-amber-200 bg-amber-50">
+          <p className="text-sm text-amber-800">
+            You're low on funds. Add funds to keep applying, and deposits of
+            $200+ earn bonus credit.
+          </p>
+          <Link href="/pro/billing" className="btn-primary shrink-0">
+            Add funds
+          </Link>
+        </div>
+      )}
+
+      <section className="card space-y-1">
+        <p className="text-sm font-medium text-stone-500">Your results</p>
+        {appliedCount === 0 ? (
+          <p className="text-sm text-stone-600">
+            You haven't applied to a job yet. Apply to an open job below to
+            start winning work.
+          </p>
+        ) : (
+          <>
+            <p className="text-xl font-semibold text-stone-900">
+              You've won {wonCount} job{wonCount === 1 ? "" : "s"} from{" "}
+              {appliedCount} application{appliedCount === 1 ? "" : "s"}.
+            </p>
+            <p className="text-sm text-stone-500">
+              Total spent on applications: ${spent.toFixed(2)}.
+            </p>
+          </>
+        )}
+      </section>
 
       <section className="grid gap-4 sm:grid-cols-3">
         <div className="card">
@@ -133,7 +193,12 @@ export default async function ProDashboard() {
         ) : (
           <ul className="space-y-3">
             {open.map((j) => {
-              const fee = money(j.payout_amount);
+              const { fee, off } = agingLeadFee(
+                Number(j.payout_amount ?? 0),
+                j.created_at
+              );
+              const feeStr = money(fee);
+              const baseStr = money(j.payout_amount);
               return (
                 <li key={j.id} className="card space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
@@ -148,8 +213,21 @@ export default async function ProDashboard() {
                         {j.issue_severity}
                       </span>
                     )}
-                    <span className="ml-auto text-sm font-semibold text-stone-700">
-                      Apply fee {fee}
+                    <span className="ml-auto flex items-center gap-2 text-sm font-semibold text-stone-700">
+                      {off > 0 && (
+                        <span className="rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                          {off}% off, aging deal
+                        </span>
+                      )}
+                      <span>
+                        Apply fee{" "}
+                        {off > 0 && (
+                          <span className="text-stone-400 line-through">
+                            {baseStr}
+                          </span>
+                        )}{" "}
+                        {feeStr}
+                      </span>
                     </span>
                   </div>
 
@@ -170,8 +248,8 @@ export default async function ProDashboard() {
 
                   <ApplyJobButton
                     leadId={j.id}
-                    fee={fee}
-                    canAfford={balance >= Number(j.payout_amount ?? 0)}
+                    fee={feeStr}
+                    canAfford={balance >= fee}
                   />
                 </li>
               );

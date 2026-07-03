@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveProperty } from "@/lib/property";
 import { leadFeeFor, labelFor, JOB_CATEGORIES } from "@/lib/constants";
 import { setFlash } from "@/lib/flash";
@@ -12,10 +13,6 @@ import { hasPlus } from "@/lib/subscription";
 // unassigned (contractor_id null) so matching pros can apply to it. The chosen
 // pro is selected later from the applicants.
 export async function postJobAction(formData: FormData) {
-  // Finding a pro (posting a job) requires an active Hearth Plus subscription.
-  // Home tracking, AI chat, the document vault, and alerts stay free.
-  if (!(await hasPlus())) redirect("/plus");
-
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
   const supabase = createClient();
@@ -71,22 +68,21 @@ export async function postJobAction(formData: FormData) {
     redirect("/contractors?posted=1");
   }
 
-  // Cap open listings at 2 per maintenance category, so one subject cannot be
-  // flooded with postings (for example at most 2 open plumbing jobs). An open
-  // listing is one no pro has been picked for yet.
-  const { count: openInCategory } = await supabase
+  // Free vs Plus open-job limits: a free homeowner may have 1 open job at a
+  // time; Plus unlocks up to 10 so several projects can be in flight together.
+  // An open listing is one no pro has been picked for yet.
+  const plus = await hasPlus();
+  const limit = plus ? 10 : 1;
+  const { count: openCount } = await supabase
     .from("contractor_leads")
     .select("id", { count: "exact", head: true })
     .eq("property_id", property.id)
-    .eq("category", category)
     .is("contractor_id", null)
     .eq("status", "new");
-  if ((openInCategory ?? 0) >= 2) {
+  if ((openCount ?? 0) >= limit) {
+    if (!plus) redirect("/plus?reason=job_limit");
     setFlash(
-      `You already have 2 open ${labelFor(
-        JOB_CATEGORIES,
-        category
-      ).toLowerCase()} listings. Close one before posting another.`,
+      "You can have up to 10 open jobs at once. Close one before posting another.",
       "error"
     );
     redirect("/contractors");
@@ -115,6 +111,32 @@ export async function postJobAction(formData: FormData) {
       .from("issues")
       .update({ converted_to_lead: true })
       .eq("id", issueId);
+  }
+
+  // Nudge matching pros that a fresh job just came in, so they see it while
+  // it's still open and worth racing other applicants for. Best-effort only:
+  // a notification hiccup should never break the homeowner's post.
+  try {
+    const admin = createAdminClient();
+    const { data: matches } = await admin
+      .from("contractors")
+      .select("user_id")
+      .not("user_id", "is", null)
+      .contains("categories", [category])
+      .limit(50);
+    const categoryLabel = labelFor(JOB_CATEGORIES, category);
+    for (const match of matches ?? []) {
+      if (!match.user_id) continue;
+      await admin.from("notifications").insert({
+        user_id: match.user_id,
+        kind: "new_lead",
+        title: `New ${categoryLabel} job posted nearby`,
+        body: "A homeowner just posted a job. Apply before other pros do.",
+        url: "/pro",
+      });
+    }
+  } catch {
+    // Notifications are a nice-to-have here, not part of the posting flow.
   }
 
   revalidatePath("/contractors");

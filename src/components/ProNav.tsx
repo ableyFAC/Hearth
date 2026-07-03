@@ -1,6 +1,7 @@
 import Link from "next/link";
 import NavLinks from "@/components/NavLinks";
 import ProfileMenu from "@/components/ProfileMenu";
+import NotificationBell from "@/components/NotificationBell";
 
 export default function ProNav({ company }: { company: string | null }) {
   // Company / Billing / Sign out now live in the profile menu (ProMenu).
@@ -21,6 +22,7 @@ export default function ProNav({ company }: { company: string | null }) {
           <nav className="-mx-1 flex items-center gap-1 overflow-x-auto px-1">
             <NavLinks links={LINKS} />
           </nav>
+          <NotificationBell />
           <ProfileMenu
             name={company}
             links={[

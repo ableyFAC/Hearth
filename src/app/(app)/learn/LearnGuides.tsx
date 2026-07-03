@@ -1,0 +1,145 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import LearnGuide from "./LearnGuide";
+import { requestTopicAction } from "./actions";
+
+export type GuideData = {
+  systemType: string;
+  label: string;
+  icon: string;
+  category: string;
+  summary: string;
+  lifespan: number | string;
+  statusLabel?: string;
+  statusStyle?: string;
+  age: number | null;
+  tips: string[];
+  askQuestion: string;
+};
+
+const ALL = "All";
+
+// Client shell for the guide list: a live search box, category filter chips,
+// and a fallback "request a topic" form for anything the search can't find.
+// The page.tsx server component stays thin and just hands over the data.
+export default function LearnGuides({ guides }: { guides: GuideData[] }) {
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState(ALL);
+
+  const categories = useMemo(() => {
+    const seen = new Set<string>();
+    const list: string[] = [];
+    for (const g of guides) {
+      if (!seen.has(g.category)) {
+        seen.add(g.category);
+        list.push(g.category);
+      }
+    }
+    return list.length > 1 ? [ALL, ...list] : [];
+  }, [guides]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return guides.filter((g) => {
+      if (category !== ALL && g.category !== category) return false;
+      if (!q) return true;
+      const haystack = `${g.label} ${g.category} ${g.summary} ${g.tips.join(
+        " "
+      )}`.toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [guides, query, category]);
+
+  const trimmedQuery = query.trim();
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-3">
+        <div>
+          <label htmlFor="learn-search" className="label">
+            Search guides
+          </label>
+          <input
+            id="learn-search"
+            type="search"
+            className="input"
+            placeholder="Search by title or keyword, like leak or filter"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+
+        {categories.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {categories.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCategory(c)}
+                aria-pressed={category === c}
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                  category === c
+                    ? "border-hearth-600 bg-hearth-600 text-white"
+                    : "border-stone-200 bg-white text-stone-600 hover:border-hearth-400 hover:text-hearth-700"
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {filtered.length > 0 ? (
+        <ul className="space-y-2">
+          {filtered.map((g) => (
+            <LearnGuide
+              key={g.systemType}
+              systemType={g.systemType}
+              label={g.label}
+              icon={g.icon}
+              summary={g.summary}
+              lifespan={g.lifespan}
+              statusLabel={g.statusLabel}
+              statusStyle={g.statusStyle}
+              age={g.age}
+              tips={g.tips}
+              askQuestion={g.askQuestion}
+            />
+          ))}
+        </ul>
+      ) : (
+        <p className="card text-sm text-stone-500">
+          No guides match &ldquo;{trimmedQuery}&rdquo;. Try a different word,
+          or request a topic below.
+        </p>
+      )}
+
+      <div className="card">
+        <p className="text-sm font-semibold text-stone-700">
+          Don&apos;t see your topic?
+        </p>
+        <p className="mt-1 text-xs text-stone-500">
+          Tell us what you&apos;d like a guide for, and we&apos;ll add it.
+        </p>
+        <form
+          action={requestTopicAction}
+          className="mt-3 flex flex-col gap-2 sm:flex-row"
+        >
+          <input
+            key={filtered.length === 0 ? trimmedQuery : "empty"}
+            name="question"
+            defaultValue={filtered.length === 0 ? trimmedQuery : ""}
+            className="input"
+            placeholder="e.g. How do I winterize outdoor faucets?"
+            required
+          />
+          <button type="submit" className="btn-secondary shrink-0">
+            Request
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}

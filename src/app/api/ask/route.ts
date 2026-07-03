@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveProperty } from "@/lib/property";
+import { hasPlus } from "@/lib/subscription";
 import { REPLACEMENT_INFO } from "@/lib/health";
 
 export const runtime = "nodejs";
@@ -134,25 +136,24 @@ export async function POST(req: NextRequest) {
 
   const today = new Date().toISOString().slice(0, 10);
   const system =
-    "You are Hearth, a friendly, practical home-maintenance assistant. " +
+    "You are Hearth: a warm, real person the homeowner is chatting with about their home, never a robotic or corporate-sounding assistant. " +
     (firstName
       ? `The homeowner's name is ${firstName}; greet and address them by their first name naturally, without overusing it. `
       : "") +
-    "Answer the homeowner's question about THEIR specific home, concisely, in short paragraphs or bullet points. " +
+    "Give a genuinely detailed, useful answer, but break it up so it is easy to skim. Lead with one short sentence that answers the question directly. Then, if there is more to say, add a few short bullets or two to three sentence steps, with a line break between chunks and a small header before a list when it helps, like 'Likely cause:' or 'Next steps:'. Never write a long wall of text. Each chunk should be short enough to read in a few seconds. " +
     "Write in plain, complete sentences. Do NOT use dashes as connectors: no em dashes, and never a hyphen used as a dash. Use a comma, a colon, or a new sentence instead. " +
-    "Keep every answer SHORT and easy to skim: at most two or three short sentences, or a few brief bullets. Get to the point right away and do not pad or over-explain. " +
     "Always capitalize the first letter of every sentence, bullet point, and button label. " +
-    "Lead with their specific home details - the relevant system, its age, and any open issues or reminders - rather than generic advice. " +
+    "Lead with their specific home details, the relevant system, its age, and any open issues or reminders, rather than generic advice. " +
     "If the homeowner attaches a PHOTO, examine it closely: describe what you see, identify the system or problem, diagnose the likely cause, and recommend next steps (a DIY fix, or hiring a pro). " +
-    "If the photo shows a MODEL/SERIAL label, data plate, or a filter, read the text and numbers off it and tell them the EXACT thing they need - e.g. the air-filter size (like 16x25x1), the replacement part or model number, the capacity - and where to get it (a hardware/home store or online). This is something a web search can't do for their specific unit. " +
-    "If the photo is a CONTRACTOR'S QUOTE, ESTIMATE, or INVOICE, act as the homeowner's advocate: read the line items and total, compare each against typical costs for their area, and give a clear verdict - is the total fair, high, or low? Call out any line items that look padded, vague, duplicated, or unusually priced, flag missing details (permits, materials, labor breakdown, warranty), and note anything that reads like a red flag or scam. End by offering to post the job so they can get competing quotes from vetted local pros to compare. " +
+    "If the photo shows a MODEL/SERIAL label, data plate, or a filter, read the text and numbers off it and tell them the EXACT thing they need, for example the air-filter size (like 16x25x1), the replacement part or model number, or the capacity, and where to get it (a hardware/home store or online). This is something a web search can't do for their specific unit. " +
+    "If the photo is a CONTRACTOR'S QUOTE, ESTIMATE, or INVOICE, act as the homeowner's advocate: read the line items and total, compare each against typical costs for their area, and give a clear verdict: is the total fair, high, or low? Call out any line items that look padded, vague, duplicated, or unusually priced, flag missing details (permits, materials, labor breakdown, warranty), and note anything that reads like a red flag or scam. End by offering to post the job so they can get competing quotes from vetted local pros to compare. " +
     "When the homeowner asks what a repair or replacement COSTS, give a concrete price RANGE for their area (named in the home details below), using the replacement ballparks below as a baseline and noting local prices can vary; then offer to post the job so vetted local pros send real quotes. Never refuse to estimate. " +
-    "You have a record of their recently logged issues below, with dates - refer back to them naturally and follow up (e.g. 'last month you logged a leaking water heater - did that get sorted?') so it feels like you remember their home. " +
-    "Talk like a normal helpful person having a back-and-forth conversation, and be PROACTIVELY useful - don't just state a fact and stop, and don't end with a hollow 'anything else?'. Always move things forward with a concrete next step or suggestion. " +
-    "Keep the homeowner engaged: end almost every reply with a natural, SPECIFIC follow-up question that draws out more about their home or their goal - about the system in question, its age or symptoms, what they've noticed, or what they want to happen next - so the conversation feels genuinely two-way. Make it easy and inviting to answer, never generic. " +
+    "You have a record of their recently logged issues below, with dates. Refer back to them naturally and follow up (for example, 'last month you logged a leaking water heater, did that get sorted?') so it feels like you remember their home. " +
+    "Talk like a real person having a genuine back-and-forth conversation: warm, casual, never stiff. Be PROACTIVELY useful, don't just state a fact and stop, and don't end with a hollow 'anything else?'. Always move things forward with a concrete next step or suggestion. " +
+    "Keep the homeowner engaged: end almost every reply with a natural, SPECIFIC follow-up question that draws out more about their home or their goal, about the system in question, its age or symptoms, what they've noticed, or what they want to happen next, so the conversation feels genuinely two-way. Make it easy and inviting to answer, never generic. " +
     `Today's date is ${today}. ` +
     "When you mention a reminder or issue, say whether it is overdue, explain what to do about it, and offer to help (find a vetted pro, set or adjust a reminder, or mark it done). " +
-    "When you need more info, ask only ONE short follow-up question at a time and wait for the answer before asking the next - never list several questions at once. " +
+    "When you need more info, ask only ONE short follow-up question at a time and wait for the answer before asking the next, never list several questions at once. Keep each question quick and casual, the way you would text a friend, for example 'Got it. How old is the water heater, roughly?' or 'Gotcha, is it making any noise?'. " +
     "If a job is risky, large, or code-regulated, recommend hiring a vetted pro (they can post a job in the app).\n\n" +
     // When the owner wants to hire, emit a machine-readable block the app turns
     // into a prefilled job posting. Keep it out of the visible prose.
@@ -205,6 +206,47 @@ export async function POST(req: NextRequest) {
       : [{ role: "user", parts: [{ text: question }] }],
     generationConfig: { maxOutputTokens: 800 },
   });
+
+  // Per-user daily cap so a single account can't run up the paid Gemini bill.
+  // Hearth Plus gets a higher ceiling. Counted via the service-role client so
+  // it works regardless of RLS, and tracked by calendar date (not a rolling
+  // window) so it resets cleanly at midnight.
+  const isPlus = await hasPlus();
+  const dailyLimit = isPlus ? 250 : 25;
+  let usageCount = 1;
+  try {
+    const admin = createAdminClient();
+    const usageDate = new Date(Date.now()).toISOString().slice(0, 10);
+    // Supabase-js has no atomic "increment" helper, so read the current count
+    // for today and write it back one higher. A missed race under this route's
+    // low traffic just undercounts by one, which is fine for an abuse cap.
+    const { data: existing } = await (admin as any)
+      .from("ai_usage")
+      .select("count")
+      .eq("user_id", authUser.id)
+      .eq("usage_date", usageDate)
+      .maybeSingle();
+    usageCount = (existing?.count ?? 0) + 1;
+    await (admin as any)
+      .from("ai_usage")
+      .upsert(
+        { user_id: authUser.id, usage_date: usageDate, count: usageCount },
+        { onConflict: "user_id,usage_date" }
+      );
+  } catch (err) {
+    // A broken counter should never block the homeowner from using the
+    // assistant; log it and let this request through uncounted.
+    console.error("ai_usage upsert failed", err);
+    usageCount = 0;
+  }
+
+  if (usageCount > dailyLimit) {
+    return NextResponse.json({
+      answer: isPlus
+        ? "You have reached today's Ask Hearth limit. It resets tomorrow."
+        : "You have reached today's Ask Hearth limit. It resets tomorrow. Hearth Plus raises your daily limit if you want more room.",
+    });
+  }
 
   // Each free-tier model has its OWN daily quota, so cycle through them: if one
   // is rate-limited (429), fall through to the next.

@@ -21,6 +21,7 @@ const ICON: Record<Alert["kind"], string> = {
 // clutters the dashboard.
 export default function HomeAlerts() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -39,10 +40,14 @@ export default function HomeAlerts() {
 
   if (alerts.length === 0) return null;
 
+  // Keep the dashboard tight: show the three most pressing (weather comes first
+  // from the API), tuck the rest behind a toggle.
+  const shown = expanded ? alerts : alerts.slice(0, 3);
+
   return (
     <section className="space-y-2">
       <ul className="space-y-2">
-        {alerts.map((a, i) => (
+        {shown.map((a, i) => (
           <li
             key={i}
             className={`flex items-start gap-2 rounded-lg border p-3 text-sm ${
@@ -71,6 +76,15 @@ export default function HomeAlerts() {
           </li>
         ))}
       </ul>
+      {alerts.length > 3 && !expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="text-xs font-medium text-stone-500 hover:text-stone-700"
+        >
+          Show {alerts.length - 3} more
+        </button>
+      )}
     </section>
   );
 }

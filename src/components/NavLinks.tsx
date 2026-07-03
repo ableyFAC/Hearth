@@ -30,7 +30,7 @@ export default function NavLinks({
             key={l.href}
             href={l.href}
             aria-current={active ? "page" : undefined}
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${
+            className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ${
               active
                 ? "bg-hearth-100 text-hearth-800"
                 : "text-stone-600 hover:bg-hearth-50 hover:text-hearth-700"

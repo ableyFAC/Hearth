@@ -3,7 +3,7 @@ import { getActiveProperty } from "@/lib/property";
 import { SYSTEM_TYPES, ISSUE_CATEGORIES, labelFor } from "@/lib/constants";
 import { DEFAULT_LIFESPANS, assessSystem } from "@/lib/health";
 import AskHearth from "@/components/AskHearth";
-import LearnGuide from "./LearnGuide";
+import LearnGuides, { type GuideData } from "./LearnGuides";
 
 const STAGE_LABEL: Record<string, string> = {
   healthy: "Healthy",
@@ -119,6 +119,48 @@ const LEARN: Record<string, string[]> = {
   ],
 };
 
+// One-line summary shown before a guide is expanded, so the card is useful even
+// collapsed.
+const SUMMARY: Record<string, string> = {
+  roof: "Watch for storm damage and keep water moving off the roof.",
+  hvac: "Change the filter often and get it tuned up twice a year.",
+  water_heater: "Flush it yearly and watch for rust or strange noises.",
+  electrical_panel: "Know your breakers, and take warning signs seriously.",
+  plumbing: "Know your shutoff, and catch slow leaks early.",
+  windows: "Reseal yearly, and keep tracks and weep holes clear.",
+  foundation: "Keep water sloped away, and watch for new cracks.",
+  appliance: "Clean filters and coils, and don't overload them.",
+  gutters: "Clear them at least twice a year so water drains properly.",
+  siding: "Rinse it yearly and fix small damage before it spreads.",
+  garage_door: "Test the safety reverse, and lubricate moving parts.",
+  deck: "Check for rot, and reseal the wood every couple years.",
+  driveway: "Seal cracks early so water can't freeze and expand them.",
+  sump_pump: "Test it a few times a year, and keep the pit clear.",
+  sewer_line: "Flush only paper, and watch for house-wide slow drains.",
+  fence: "Reset leaning posts early, and reseal wood to slow rot.",
+};
+
+// Broader category per system, used for the filter chips. Grouped by the kind
+// of pro or trade a homeowner would think of, not the raw system list.
+const CATEGORY: Record<string, string> = {
+  roof: "Roof & exterior",
+  gutters: "Roof & exterior",
+  siding: "Roof & exterior",
+  windows: "Roof & exterior",
+  deck: "Roof & exterior",
+  fence: "Roof & exterior",
+  driveway: "Roof & exterior",
+  garage_door: "Roof & exterior",
+  foundation: "Structural",
+  hvac: "HVAC & heating",
+  water_heater: "Plumbing",
+  plumbing: "Plumbing",
+  sump_pump: "Plumbing",
+  sewer_line: "Plumbing",
+  electrical_panel: "Electrical",
+  appliance: "Appliances",
+};
+
 export default async function LearnPage() {
   const supabase = createClient();
   const property = await getActiveProperty();
@@ -152,7 +194,10 @@ export default async function LearnPage() {
   const suggestions: string[] = [];
   for (const t of owned.slice(0, 3)) {
     const stage = assessSystem(byType.get(t.value)).stage;
-    const label = t.label.toLowerCase();
+    // Keep all-caps acronyms like HVAC uppercase; lowercase normal words so the
+    // question reads naturally ("Is my roof...", not "Is my Roof...").
+    const label =
+      t.label === t.label.toUpperCase() ? t.label : t.label.toLowerCase();
     suggestions.push(
       stage === "due" || stage === "aging"
         ? `Is my ${label} near the end of its life?`
@@ -172,13 +217,37 @@ export default async function LearnPage() {
   if (suggestions.length < 4)
     suggestions.push("What should I focus on this season?");
 
+  // Flatten each system into plain guide data for the client-side search,
+  // filter, and accordion component.
+  const guides: GuideData[] = types.map((t) => {
+    const instance = byType.get(t.value);
+    const h = instance ? assessSystem(instance) : null;
+    const aging = h?.stage === "due" || h?.stage === "aging";
+    const label = t.label.toLowerCase();
+    return {
+      systemType: t.value,
+      label: t.label,
+      icon: t.icon,
+      category: CATEGORY[t.value] ?? "Other",
+      summary: SUMMARY[t.value] ?? "",
+      lifespan: DEFAULT_LIFESPANS[t.value] ?? "varies",
+      statusLabel: h ? STAGE_LABEL[h.stage] : undefined,
+      statusStyle: h ? STAGE_STYLE[h.stage] : undefined,
+      age: h?.age ?? null,
+      tips: LEARN[t.value] ?? [],
+      askQuestion: aging
+        ? `My ${label} is getting older. What should I be doing, and is it near replacement?`
+        : `How should I maintain my ${label}?`,
+    };
+  });
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-stone-900">Learn</h1>
         <p className="mt-1 text-sm text-stone-500">
           Ask anything about your home and get an answer based on your actual
-          systems. Or browse the basics below.
+          systems. Or search, filter, and browse the basics below.
         </p>
       </div>
 
@@ -188,32 +257,9 @@ export default async function LearnPage() {
         <h2 className="text-sm font-semibold text-stone-700">
           Maintenance basics
         </h2>
-        <ul className="mt-2 space-y-2">
-          {types.map((t) => {
-            const instance = byType.get(t.value);
-            const h = instance ? assessSystem(instance) : null;
-            const aging = h?.stage === "due" || h?.stage === "aging";
-            const label = t.label.toLowerCase();
-            return (
-              <LearnGuide
-                key={t.value}
-                systemType={t.value}
-                label={t.label}
-                icon={t.icon}
-                lifespan={DEFAULT_LIFESPANS[t.value] ?? "varies"}
-                statusLabel={h ? STAGE_LABEL[h.stage] : undefined}
-                statusStyle={h ? STAGE_STYLE[h.stage] : undefined}
-                age={h?.age ?? null}
-                tips={LEARN[t.value] ?? []}
-                askQuestion={
-                  aging
-                    ? `My ${label} is getting older. What should I be doing, and is it near replacement?`
-                    : `How should I maintain my ${label}?`
-                }
-              />
-            );
-          })}
-        </ul>
+        <div className="mt-2">
+          <LearnGuides guides={guides} />
+        </div>
       </div>
     </div>
   );
