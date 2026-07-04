@@ -48,6 +48,16 @@ export async function postJobAction(formData: FormData) {
     issueSeverity = issue?.severity ?? null;
   }
 
+  // Pros pay to apply, so a posting has to give them something to go on:
+  // require a real description (at least 20 characters) before it goes live.
+  if ((issueDescription ?? "").trim().length < 20) {
+    setFlash(
+      "Please describe the job in at least 20 characters so pros know what they're applying to.",
+      "error"
+    );
+    redirect("/contractors");
+  }
+
   const address = [property.address_line1, property.city, property.state]
     .filter(Boolean)
     .join(", ");

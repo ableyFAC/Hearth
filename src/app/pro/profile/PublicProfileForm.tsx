@@ -129,9 +129,12 @@ export default function PublicProfileForm({
               <div>
                 <label className="label flex items-center gap-2">
                   State License Number
+                  {/* No real license verification exists yet (contractors.vetted
+                      is auto-set true at signup), so never claim "Verified" -
+                      an honest "pending" until a genuine review flag exists. */}
                   {licenseLocked && (
-                    <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-700">
-                      {contractor.vetted ? "Verified" : "Pending"}
+                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                      Verification pending
                     </span>
                   )}
                 </label>
@@ -146,7 +149,8 @@ export default function PublicProfileForm({
                       </div>
                     </div>
                     <p className="mt-1 text-xs text-stone-400">
-                      Contact support to update your verified license.
+                      We&apos;re reviewing your license. You can keep applying
+                      to jobs meanwhile. Contact support to update it.
                     </p>
                   </>
                 ) : (

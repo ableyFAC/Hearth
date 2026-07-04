@@ -42,7 +42,8 @@ const STEPS: Step[] = [
   {
     emoji: "🗓️",
     title: "Maintenance plan",
-    benefit: "A full year of upkeep reminders, auto-built for your home.",
+    benefit:
+      "A maintenance plan built for your home, a few tasks at a time so it never piles up.",
     href: "/dashboard",
     cta: "Try it",
   },

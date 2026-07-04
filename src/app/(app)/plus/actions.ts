@@ -83,9 +83,18 @@ export async function upgradeToYearlyAction() {
     redirect("/plus");
   }
 
-  const stripeSub = await stripe.subscriptions.retrieve(
-    sub.stripe_subscription_id
-  );
+  let stripeSub: Stripe.Subscription;
+  try {
+    stripeSub = await stripe.subscriptions.retrieve(
+      sub.stripe_subscription_id
+    );
+  } catch {
+    setFlash(
+      "Something went sideways talking to Stripe. Try Manage billing instead.",
+      "error"
+    );
+    redirect("/plus");
+  }
   const item = stripeSub.items.data[0];
   const yearlyPriceId = process.env.STRIPE_PRICE_PLUS_YEARLY;
   const productId =
@@ -93,26 +102,34 @@ export async function upgradeToYearlyAction() {
       ? item.price.product
       : item.price.product.id;
 
-  await stripe.subscriptions.update(sub.stripe_subscription_id, {
-    items: [
-      yearlyPriceId
-        ? { id: item.id, price: yearlyPriceId, quantity: 1 }
-        : {
-            id: item.id,
-            quantity: 1,
-            price_data: {
-              currency: "usd",
-              unit_amount: 3999,
-              recurring: { interval: "year" as const },
-              product: productId,
+  try {
+    await stripe.subscriptions.update(sub.stripe_subscription_id, {
+      items: [
+        yearlyPriceId
+          ? { id: item.id, price: yearlyPriceId, quantity: 1 }
+          : {
+              id: item.id,
+              quantity: 1,
+              price_data: {
+                currency: "usd",
+                unit_amount: 3999,
+                recurring: { interval: "year" as const },
+                product: productId,
+              },
             },
-          },
-    ],
-    // Bill the yearly price today; unused monthly time becomes a credit.
-    proration_behavior: "always_invoice",
-    // A free-month trial doesn't carry over - yearly starts (and bills) now.
-    ...(stripeSub.status === "trialing" ? { trial_end: "now" as const } : {}),
-  });
+      ],
+      // Bill the yearly price today; unused monthly time becomes a credit.
+      proration_behavior: "always_invoice",
+      // A free-month trial doesn't carry over - yearly starts (and bills) now.
+      ...(stripeSub.status === "trialing" ? { trial_end: "now" as const } : {}),
+    });
+  } catch {
+    setFlash(
+      "Something went sideways talking to Stripe. Try Manage billing instead.",
+      "error"
+    );
+    redirect("/plus");
+  }
 
   // The webhook flips the stored plan once Stripe confirms the update.
   setFlash("You're on yearly now. Unused monthly time was credited.");
@@ -139,9 +156,18 @@ export async function downgradeToMonthlyAction() {
     redirect("/plus");
   }
 
-  const stripeSub = await stripe.subscriptions.retrieve(
-    sub.stripe_subscription_id
-  );
+  let stripeSub: Stripe.Subscription;
+  try {
+    stripeSub = await stripe.subscriptions.retrieve(
+      sub.stripe_subscription_id
+    );
+  } catch {
+    setFlash(
+      "Something went sideways talking to Stripe. Try Manage billing instead.",
+      "error"
+    );
+    redirect("/plus");
+  }
   if (stripeSub.schedule) {
     setFlash("Your switch to monthly is already scheduled.", "info");
     redirect("/plus");
@@ -226,9 +252,18 @@ export async function keepYearlyAction() {
     redirect("/plus");
   }
 
-  const stripeSub = await stripe.subscriptions.retrieve(
-    sub.stripe_subscription_id
-  );
+  let stripeSub: Stripe.Subscription;
+  try {
+    stripeSub = await stripe.subscriptions.retrieve(
+      sub.stripe_subscription_id
+    );
+  } catch {
+    setFlash(
+      "Something went sideways talking to Stripe. Try Manage billing instead.",
+      "error"
+    );
+    redirect("/plus");
+  }
   const scheduleId =
     typeof stripeSub.schedule === "string"
       ? stripeSub.schedule
@@ -255,9 +290,18 @@ export async function cancelMembershipAction() {
     redirect("/plus");
   }
 
-  const stripeSub = await stripe.subscriptions.retrieve(
-    sub.stripe_subscription_id
-  );
+  let stripeSub: Stripe.Subscription;
+  try {
+    stripeSub = await stripe.subscriptions.retrieve(
+      sub.stripe_subscription_id
+    );
+  } catch {
+    setFlash(
+      "Something went sideways talking to Stripe. Try Manage billing instead.",
+      "error"
+    );
+    redirect("/plus");
+  }
   const scheduleId =
     typeof stripeSub.schedule === "string"
       ? stripeSub.schedule
@@ -266,9 +310,17 @@ export async function cancelMembershipAction() {
     await stripe.subscriptionSchedules.release(scheduleId);
   }
 
-  await stripe.subscriptions.update(sub.stripe_subscription_id, {
-    cancel_at_period_end: true,
-  });
+  try {
+    await stripe.subscriptions.update(sub.stripe_subscription_id, {
+      cancel_at_period_end: true,
+    });
+  } catch {
+    setFlash(
+      "Something went sideways talking to Stripe. Try Manage billing instead.",
+      "error"
+    );
+    redirect("/plus");
+  }
 
   setFlash("Your membership won't renew. You keep Plus until it ends.");
   revalidatePath("/plus");
@@ -285,9 +337,17 @@ export async function resumeMembershipAction() {
     redirect("/plus");
   }
 
-  await stripe.subscriptions.update(sub.stripe_subscription_id, {
-    cancel_at_period_end: false,
-  });
+  try {
+    await stripe.subscriptions.update(sub.stripe_subscription_id, {
+      cancel_at_period_end: false,
+    });
+  } catch {
+    setFlash(
+      "Something went sideways talking to Stripe. Try Manage billing instead.",
+      "error"
+    );
+    redirect("/plus");
+  }
 
   setFlash("Welcome back. Your membership will keep renewing.");
   revalidatePath("/plus");

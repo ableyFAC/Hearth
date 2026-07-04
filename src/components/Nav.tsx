@@ -65,6 +65,7 @@ export default function Nav({
           ]}
           links={[{ href: "/documents", label: "Documents" }]}
           moreLinks={[
+            { href: "/inspection", label: "Home inspection" },
             { href: "/account", label: "Edit profile" },
             { href: "/account/notifications", label: "Notifications" },
             { href: "/account/security", label: "Account security" },

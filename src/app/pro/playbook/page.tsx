@@ -1,0 +1,29 @@
+import { redirect } from "next/navigation";
+import { getCurrentContractor, getRole } from "@/lib/contractor";
+import PlaybookGuides from "./PlaybookGuides";
+import { PLAYBOOK_GUIDES } from "./guides";
+
+// The Playbook: the pro-side Learn tab. Short, honest guides on winning work
+// on Hearth - speed, apply messages, and how the marketplace mechanics
+// (ghost protection, aging deals, the 3-spot cap) actually work.
+export default async function ProPlaybookPage() {
+  const contractor = await getCurrentContractor();
+  if (!contractor) {
+    if ((await getRole()) === null) redirect("/get-started");
+    redirect("/pro/onboarding");
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-stone-900">Playbook</h1>
+        <p className="mt-1 text-sm text-stone-500">
+          Short guides on winning work here: no fluff, just what moves your win
+          rate.
+        </p>
+      </div>
+
+      <PlaybookGuides guides={PLAYBOOK_GUIDES} />
+    </div>
+  );
+}

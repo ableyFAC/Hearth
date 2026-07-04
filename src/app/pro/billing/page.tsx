@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentContractor } from "@/lib/contractor";
 import { createClient } from "@/lib/supabase/server";
+import { labelFor, JOB_CATEGORIES } from "@/lib/constants";
 import DepositForm from "./DepositForm";
 import Confetti from "@/components/Confetti";
 import FadingBanner from "@/components/FadingBanner";
@@ -14,14 +15,30 @@ const TX_LABEL: Record<string, string> = {
   deposit: "Deposit",
   bonus_grant: "Bonus credit",
   lead_charge: "Lead unlocked",
+  apply_fee: "Applied to job",
   bonus_expiry: "Bonus expired",
   adjustment: "Adjustment",
+  ghost_refund: "Ghost protection refund",
+  ghost_recharge: "Fee re-charged (job won)",
+  ghost_recharge_waived: "Re-charge waived",
 };
+
+// Never show a raw transaction type like "apply_fee": mapped label first,
+// humanized underscores as the fallback for anything new.
+function txLabel(type: string | null | undefined): string {
+  if (!type) return "Activity";
+  return TX_LABEL[type] ?? type.replace(/_/g, " ");
+}
 
 export default async function ProBillingPage({
   searchParams,
 }: {
-  searchParams: { paid?: string; canceled?: string };
+  searchParams: {
+    paid?: string;
+    canceled?: string;
+    need?: string;
+    category?: string;
+  };
 }) {
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");
@@ -53,6 +70,20 @@ export default async function ProBillingPage({
     txns = data ?? [];
   }
 
+  // Arrived from an "Add funds to apply" link: how much more the wallet needs
+  // for that specific job. Drives the banner and the preselected deposit.
+  const needRaw = Number(searchParams.need);
+  const need = Number.isFinite(needRaw) && needRaw > 0 ? needRaw : null;
+  const needStr =
+    need !== null
+      ? Number.isInteger(need)
+        ? `$${need}`
+        : `$${need.toFixed(2)}`
+      : null;
+  const needCategory = searchParams.category
+    ? labelFor(JOB_CATEGORIES, searchParams.category)
+    : null;
+
   return (
     <div className="space-y-8">
       <div>
@@ -62,6 +93,13 @@ export default async function ProBillingPage({
           service.
         </p>
       </div>
+
+      {need !== null && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          You need {needStr} more to apply to that{" "}
+          {needCategory ? `${needCategory} ` : ""}job.
+        </div>
+      )}
 
       {searchParams.paid && (
         <>
@@ -100,7 +138,7 @@ export default async function ProBillingPage({
       {/* Deposit */}
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-stone-900">Add credit</h2>
-        <DepositForm tiers={(tiers as any) ?? []} />
+        <DepositForm tiers={(tiers as any) ?? []} need={need ?? undefined} />
       </section>
 
       {/* Activity */}
@@ -122,7 +160,7 @@ export default async function ProBillingPage({
                 >
                   <div>
                     <span className="font-medium text-stone-900">
-                      {TX_LABEL[t.type] ?? t.type}
+                      {txLabel(t.type)}
                     </span>
                     <p className="text-xs text-stone-400">
                       {new Date(t.created_at).toLocaleString()}

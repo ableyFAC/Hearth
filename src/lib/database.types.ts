@@ -20,6 +20,7 @@ export interface Database {
           phone: string | null;
           full_name: string | null;
           notification_prefs: { [key: string]: boolean } | null;
+          free_quote_used_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -28,6 +29,7 @@ export interface Database {
           phone?: string | null;
           full_name?: string | null;
           notification_prefs?: { [key: string]: boolean } | null;
+          free_quote_used_at?: string | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["users"]["Insert"]>;
@@ -433,6 +435,32 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["contractor_leads"]["Insert"]>;
         Relationships: [];
       };
+      lead_applications: {
+        Row: {
+          id: string;
+          lead_id: string;
+          contractor_id: string;
+          message: string | null;
+          status: string;
+          fee_cents: number;
+          refunded_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          lead_id: string;
+          contractor_id: string;
+          message?: string | null;
+          status?: string;
+          fee_cents?: number;
+          refunded_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["lead_applications"]["Insert"]
+        >;
+        Relationships: [];
+      };
       intent_signals: {
         Row: {
           id: string;
@@ -679,6 +707,10 @@ export interface Database {
       expire_bonus: {
         Args: Record<string, never>;
         Returns: undefined;
+      };
+      ghost_refund_application: {
+        Args: { p_application: string };
+        Returns: boolean;
       };
     };
     Enums: Record<string, never>;

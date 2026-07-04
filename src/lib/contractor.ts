@@ -32,6 +32,10 @@ export type Role = "homeowner" | "contractor";
 // The current user's role, used to route a single sign-in to the right side of
 // the app. Set explicitly at sign-up (user_metadata.role); for legacy accounts
 // created before that, we fall back to inferring it from a contractor company.
+// A user with neither signal has NO known role and gets null: callers that
+// only branch on "contractor"/"homeowner" behave as before (null falls into
+// the homeowner-side default), but /pro can now send them to the role chooser
+// instead of silently trapping them in the homeowner flow.
 export const getRole = cache(async (): Promise<Role | null> => {
   const user = await getUser();
   if (!user) return null;
@@ -42,5 +46,5 @@ export const getRole = cache(async (): Promise<Role | null> => {
   if (meta === "contractor" || meta === "homeowner") return meta;
 
   // Legacy fallback: a company row means they're a contractor.
-  return (await isContractor()) ? "contractor" : "homeowner";
+  return (await isContractor()) ? "contractor" : null;
 });

@@ -213,7 +213,9 @@ export default function VoiceButton({
     switchMode("speech");
 
     const rec = new SR();
-    rec.lang = "en-US";
+    // Dictate in the browser's language (a Spanish speaker's browser is set to
+    // es-*), falling back to English if it's unavailable.
+    rec.lang = navigator.language || "en-US";
     rec.continuous = true;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
@@ -350,7 +352,7 @@ export default function VoiceButton({
   return (
     <span className="relative flex">
       {bubble ? (
-        <span className="pointer-events-none absolute bottom-full right-0 z-10 mb-1.5 w-max max-w-[220px] rounded-lg border border-stone-200 bg-white px-2 py-1 text-left text-xs leading-snug text-stone-600 shadow-sm">
+        <span className="pointer-events-none absolute bottom-full left-0 z-10 mb-1.5 w-max max-w-[min(220px,70vw)] rounded-lg border border-stone-200 bg-white px-2 py-1 text-left text-xs leading-snug text-stone-600 shadow-sm">
           {bubble}
         </span>
       ) : null}

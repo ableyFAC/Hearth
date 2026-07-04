@@ -16,6 +16,7 @@ import EditJobForm from "./EditJobForm";
 import PostJobButton from "./PostJobButton";
 import ReviewButton from "./ReviewButton";
 import ContractorReviews from "./ContractorReviews";
+import { redactContact } from "@/lib/redact";
 
 // Must match the markers LeadChat posts when either side closes a thread.
 const isCloseMarker = (b: string) =>
@@ -399,7 +400,7 @@ export default async function ContractorsPage({
                               </p>
                               {a.message && (
                                 <p className="mt-1 text-sm text-stone-600">
-                                  {a.message}
+                                  {redactContact(a.message)}
                                 </p>
                               )}
                             </div>

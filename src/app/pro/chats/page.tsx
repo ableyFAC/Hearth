@@ -51,9 +51,10 @@ export default async function ProChatsPage({
 
   const seen = readSeenMap();
 
-  // You can only message a homeowner once the lead is unlocked (paid), so the
-  // inbox is the set of paid leads.
-  const convos = (leads ?? []).filter((l) => Boolean(l.paid));
+  // The inbox is every lead assigned to this contractor (the homeowner picked
+  // them). The old `paid` unlock flag predates the apply flow: the fee is now
+  // charged at application time, so filtering on it hid every conversation.
+  const convos = leads ?? [];
 
   // Pull the latest message per conversation for the list preview + unread.
   const ids = convos.map((l) => l.id);
@@ -100,11 +101,11 @@ export default async function ProChatsPage({
 
       {convos.length === 0 ? (
         <p className="rounded-xl border border-dashed border-stone-300 p-8 text-center text-sm text-stone-500">
-          No conversations yet. Unlock a lead on the{" "}
+          No conversations yet. Apply to jobs on the{" "}
           <Link href="/pro" className="font-medium text-hearth-700 underline">
             Leads
           </Link>{" "}
-          page to start messaging the homeowner.
+          page, and when a homeowner picks you, your chat opens here.
         </p>
       ) : (
         <div className="grid gap-4 md:grid-cols-[280px_1fr]">

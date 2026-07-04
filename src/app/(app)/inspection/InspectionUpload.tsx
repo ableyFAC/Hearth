@@ -45,16 +45,30 @@ const SEVERITY_STYLE: Record<string, string> = {
   urgent: "border-red-200 bg-red-50 text-red-700",
 };
 
-// Read a File into base64 (no data: prefix) for the vision endpoint.
-function toBase64(file: File): Promise<string> {
+// Downscale a report page to a JPEG that keeps text legible but stays small
+// enough that several pages fit under hosting request-size limits (a raw
+// phone photo alone can blow past them). Returns base64 without the prefix.
+function toBase64(file: File, maxDim = 1600, quality = 0.8): Promise<string> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const res = String(reader.result || "");
-      resolve(res.includes(",") ? res.split(",")[1] : res);
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return reject(new Error("no canvas"));
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/jpeg", quality);
+      resolve(dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl);
     };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("unreadable image"));
+    };
+    img.src = url;
   });
 }
 
@@ -88,7 +102,7 @@ export default function InspectionUpload() {
     }
 
     setError(null);
-    const newB64 = await Promise.all(files.map(toBase64));
+    const newB64 = await Promise.all(files.map((f) => toBase64(f)));
     const newPreviews = files.map((f) => URL.createObjectURL(f));
     setImages((prev) => [...prev, ...newB64]);
     setPreviews((prev) => [...prev, ...newPreviews]);

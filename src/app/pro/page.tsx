@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentContractor } from "@/lib/contractor";
+import { getCurrentContractor, getRole } from "@/lib/contractor";
 import {
   labelFor,
   iconFor,
   JOB_CATEGORIES,
   TIMING_OPTIONS,
+  MAX_APPLICANTS_PER_JOB,
 } from "@/lib/constants";
 import Link from "next/link";
 import OpenChatButton from "@/components/OpenChatButton";
@@ -42,9 +43,49 @@ function money(n: number | string | null) {
   return Number.isInteger(v) ? `$${v}` : `$${v.toFixed(2)}`;
 }
 
-export default async function ProDashboard() {
+// How long a job has been sitting open - shown on the card so a pro can see
+// why an aging markdown exists (or that a listing is brand new).
+function postedAgo(createdAt: string | null | undefined): string | null {
+  const t = new Date(createdAt ?? "").getTime();
+  if (!Number.isFinite(t)) return null;
+  const days = Math.floor((Date.now() - t) / 86_400_000);
+  if (days <= 0) return "Posted today";
+  return `Posted ${days} day${days === 1 ? "" : "s"} ago`;
+}
+
+// Tiny factual signals a pro can price-judge a posting with. No scores, just
+// whether the homeowner gave pros something real to go on. Freshness already
+// shows via the posted-ago line, so it isn't repeated here.
+function qualityChips(j: any): string[] {
+  const chips: string[] = [];
+  if ((j.issue_description ?? "").trim().length >= 80)
+    chips.push("Detailed description");
+  if (j.has_photos) chips.push("Photos attached");
+  if (j.timing) chips.push("Timing set");
+  return chips;
+}
+
+// Leads-board sort options. Newest is the default (and the order the RPC
+// already returns); the others are cheap client-side re-sorts.
+const SORT_OPTIONS = [
+  { value: "new", label: "Newest" },
+  { value: "fee", label: "Cheapest fee" },
+  { value: "deal", label: "Biggest deal" },
+] as const;
+
+export default async function ProDashboard({
+  searchParams,
+}: {
+  searchParams?: { sort?: string };
+}) {
   const contractor = await getCurrentContractor();
-  if (!contractor) redirect("/pro/onboarding");
+  if (!contractor) {
+    // No company yet: a user who chose the contractor role finishes company
+    // setup; one with no chosen role at all picks a side first instead of
+    // being funneled into either onboarding flow.
+    if ((await getRole()) === null) redirect("/get-started");
+    redirect("/pro/onboarding");
+  }
 
   const supabase = createClient();
 
@@ -63,6 +104,21 @@ export default async function ProDashboard() {
 
   const open = (openJobs ?? []) as any[];
   const apps = (myApps ?? []) as any[];
+
+  // Sort the open-jobs board. The effective fee (after the aging markdown) is
+  // what "cheapest" means to a pro, and "deal" surfaces the biggest markdowns.
+  const sort =
+    searchParams?.sort === "fee" || searchParams?.sort === "deal"
+      ? searchParams.sort
+      : "new";
+  const effFee = (j: any) =>
+    agingLeadFee(Number(j.payout_amount ?? 0), j.created_at);
+  if (sort === "fee") open.sort((a, b) => effFee(a).fee - effFee(b).fee);
+  else if (sort === "deal")
+    open.sort(
+      (a, b) => effFee(b).off - effFee(a).off || effFee(a).fee - effFee(b).fee
+    );
+
   // Won/lost jobs sink to the bottom; active ones stay on top (newest first,
   // which the query already ordered). Array.sort is stable, so order holds.
   const isDone = (l: any) => l.status === "closed" || l.status === "lost";
@@ -146,6 +202,8 @@ export default async function ProDashboard() {
             </p>
             <p className="text-sm text-stone-500">
               Total spent on applications: ${spent.toFixed(2)}.
+              {appliedCount >= 3 &&
+                ` Win rate: ${Math.round((wonCount / appliedCount) * 100)}%.`}
             </p>
           </>
         )}
@@ -174,21 +232,47 @@ export default async function ProDashboard() {
 
       {/* ---- Open jobs: posted by homeowners, pay the fee to apply ---- */}
       <section className="space-y-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-stone-900">
-            Open jobs <span className="text-stone-400">({open.length})</span>
-          </h1>
-          <p className="text-sm text-stone-500">
-            Jobs homeowners posted in your categories. Apply to one and the
-            homeowner reviews you. If they pick you, you get their contact.
-          </p>
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h1 className="text-2xl font-semibold text-stone-900">
+              Open jobs <span className="text-stone-400">({open.length})</span>
+            </h1>
+            <p className="text-sm text-stone-500">
+              Jobs homeowners posted in your categories. Apply to one and the
+              homeowner reviews you. If they pick you, you get their contact.
+            </p>
+          </div>
+          {open.length > 1 && (
+            <div className="flex gap-1">
+              {SORT_OPTIONS.map((o) => (
+                <Link
+                  key={o.value}
+                  href={o.value === "new" ? "/pro" : `/pro?sort=${o.value}`}
+                  className={`rounded-full border px-2 py-0.5 text-xs ${
+                    sort === o.value
+                      ? "border-hearth-300 bg-hearth-50 font-medium text-hearth-700"
+                      : "border-stone-200 text-stone-500 hover:border-stone-300"
+                  }`}
+                >
+                  {o.label}
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
 
         {open.length === 0 ? (
           <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
             No open jobs right now. When a homeowner posts one in your categories
             ({(contractor.categories ?? []).join(", ") || "none set"}), it shows
-            up here.
+            up here.{" "}
+            <Link
+              href="/pro/profile"
+              className="font-medium text-hearth-700 hover:underline"
+            >
+              Add more categories
+            </Link>{" "}
+            to see more jobs.
           </p>
         ) : (
           <ul className="space-y-3">
@@ -199,6 +283,9 @@ export default async function ProDashboard() {
               );
               const feeStr = money(fee);
               const baseStr = money(j.payout_amount);
+              const spots = Number(j.application_count ?? 0);
+              const full = spots >= MAX_APPLICANTS_PER_JOB;
+              const chips = qualityChips(j);
               return (
                 <li key={j.id} className="card space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
@@ -231,26 +318,58 @@ export default async function ProDashboard() {
                     </span>
                   </div>
 
-                  {j.issue_description && (
+                  {j.issue_description ? (
                     <p className="text-sm text-stone-600">
                       {j.issue_description}
                     </p>
+                  ) : (
+                    <p className="text-sm italic text-stone-400">
+                      No details provided yet
+                    </p>
+                  )}
+                  {chips.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {chips.map((c) => (
+                        <span
+                          key={c}
+                          className="rounded-full border border-stone-200 px-1.5 py-0.5 text-[10px] text-stone-500"
+                        >
+                          {c}
+                        </span>
+                      ))}
+                    </div>
                   )}
                   <div className="flex flex-wrap gap-4 text-xs text-stone-500">
+                    {postedAgo(j.created_at) && (
+                      <span className="text-xs text-stone-400">
+                        {postedAgo(j.created_at)}
+                      </span>
+                    )}
                     {j.timing && (
                       <span>Timing: {labelFor(TIMING_OPTIONS, j.timing)}</span>
                     )}
                     <span>
-                      {j.application_count} applicant
-                      {Number(j.application_count) === 1 ? "" : "s"} so far
+                      {spots} of {MAX_APPLICANTS_PER_JOB} spots taken
                     </span>
                   </div>
 
-                  <ApplyJobButton
-                    leadId={j.id}
-                    fee={feeStr}
-                    canAfford={balance >= fee}
-                  />
+                  {full ? (
+                    <p className="rounded-lg border border-stone-200 bg-stone-100 px-3 py-2 text-center text-sm font-medium text-stone-400">
+                      Job full
+                    </p>
+                  ) : (
+                    <ApplyJobButton
+                      leadId={j.id}
+                      fee={feeStr}
+                      canAfford={balance >= fee}
+                      billingHref={`/pro/billing?need=${Math.max(
+                        0,
+                        fee - balance
+                      ).toFixed(2)}&category=${encodeURIComponent(
+                        j.category ?? ""
+                      )}`}
+                    />
+                  )}
                 </li>
               );
             })}
@@ -286,10 +405,16 @@ export default async function ProDashboard() {
       {/* ---- Applications still waiting on a homeowner's decision ---- */}
       {pendingApps.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-stone-900">
-            Pending applications{" "}
-            <span className="text-stone-400">({pendingApps.length})</span>
-          </h2>
+          <div>
+            <h2 className="text-lg font-semibold text-stone-900">
+              Pending applications{" "}
+              <span className="text-stone-400">({pendingApps.length})</span>
+            </h2>
+            <p className="text-xs text-stone-400">
+              Ghost protection: if the homeowner doesn't respond within 7 days,
+              your fee comes back automatically.
+            </p>
+          </div>
           <ul className="space-y-2">
             {pendingApps.map((a) => (
               <li
@@ -307,9 +432,15 @@ export default async function ProDashboard() {
                     </p>
                   )}
                 </div>
-                <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
-                  Waiting for homeowner
-                </span>
+                {a.refunded_at ? (
+                  <span className="shrink-0 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                    Fee returned
+                  </span>
+                ) : (
+                  <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                    Waiting for homeowner
+                  </span>
+                )}
               </li>
             ))}
           </ul>
@@ -367,8 +498,10 @@ function AssignedJobCard({ l }: { l: any }) {
         </span>
       </div>
 
-      {l.issue_description && (
+      {l.issue_description ? (
         <p className="text-sm text-stone-600">{l.issue_description}</p>
+      ) : (
+        <p className="text-sm italic text-stone-400">No details provided yet</p>
       )}
 
       <div className="rounded-lg bg-stone-50 p-3 text-sm text-stone-600">

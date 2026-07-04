@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { hasPlus } from "@/lib/subscription";
 import { REPLACEMENT_INFO } from "@/lib/health";
 
@@ -90,9 +91,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // The quote analyzer is a Hearth Plus feature.
+  // The quote analyzer is a Hearth Plus feature, but every homeowner gets
+  // exactly one free check as a taste. A non-Plus user with an unused credit
+  // (users.free_quote_used_at is null) may run one analysis; the credit is
+  // stamped only after a successful analysis so a blurry photo doesn't burn
+  // it. Once used, they get the same 403 as before.
+  let burnFreeCredit = false;
   if (!(await hasPlus())) {
-    return NextResponse.json({ error: "plus_required" }, { status: 403 });
+    let freeAvailable = false;
+    try {
+      const admin = createAdminClient();
+      const { data: row, error } = await admin
+        .from("users")
+        .select("free_quote_used_at")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (error) throw error;
+      freeAvailable = !!row && row.free_quote_used_at === null;
+    } catch {
+      // Column missing (migration 0027 not run yet) or read failed: fall
+      // back to the old Plus-only behavior so nothing breaks.
+      freeAvailable = false;
+    }
+    if (!freeAvailable) {
+      return NextResponse.json({ error: "plus_required" }, { status: 403 });
+    }
+    burnFreeCredit = true;
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -187,6 +211,20 @@ export async function POST(req: NextRequest) {
         parsed = JSON.parse(responseText);
       } catch {
         continue; // malformed - try the next model
+      }
+      // The analysis succeeded, so a free-taste user's one credit is spent
+      // now (never on a failed or unreadable analysis). Best-effort: a stamp
+      // failure shouldn't take down a result the user already earned.
+      if (burnFreeCredit) {
+        try {
+          const admin = createAdminClient();
+          await admin
+            .from("users")
+            .update({ free_quote_used_at: new Date().toISOString() })
+            .eq("id", user.id);
+        } catch {
+          // ignore - worst case they get a second free check
+        }
       }
       return NextResponse.json({ analysis: normalize(parsed) });
     } catch {

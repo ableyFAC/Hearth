@@ -4,7 +4,8 @@ import { getRole } from "@/lib/contractor";
 
 // Role chooser for NEW users. After "Get started" they pick homeowner or
 // contractor and we send them to the matching sign-up (which tags the account's
-// role). Already-signed-in users skip straight into their side of the app.
+// role). Already-signed-in users with a known role skip straight into their
+// side of the app; a signed-in user with no role yet still gets the chooser.
 export default async function GetStarted() {
   const supabase = createClient();
   const {
@@ -12,7 +13,8 @@ export default async function GetStarted() {
   } = await supabase.auth.getUser();
 
   if (user) {
-    redirect((await getRole()) === "contractor" ? "/pro" : "/dashboard");
+    const role = await getRole();
+    if (role) redirect(role === "contractor" ? "/pro" : "/dashboard");
   }
 
   return (

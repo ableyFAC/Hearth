@@ -259,6 +259,10 @@ export async function POST(req: NextRequest) {
   ];
 
   let rateLimited = false;
+  // If a model's reply was cut off or blocked (finishReason MAX_TOKENS,
+  // SAFETY, RECITATION, ...), keep the longest partial text so the user still
+  // sees something if every model fails to finish cleanly.
+  let bestAnswer = "";
   for (const model of MODELS) {
     try {
       const resp = await fetch(
@@ -278,13 +282,27 @@ export async function POST(req: NextRequest) {
       }
       if (!resp.ok) continue;
       const data = await resp.json();
-      const answer = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (answer) return NextResponse.json({ answer });
-      // No text (blocked/empty) - try the next model.
+      const candidate = data?.candidates?.[0];
+      const answer = candidate?.content?.parts?.[0]?.text;
+      const finishReason = candidate?.finishReason;
+      // Only a clean STOP (or no reported reason) with text is a complete
+      // answer; anything else was truncated or blocked, so keep the partial
+      // and try the next model.
+      if (answer && (!finishReason || finishReason === "STOP")) {
+        return NextResponse.json({ answer });
+      }
+      if (typeof answer === "string" && answer.length > bestAnswer.length) {
+        bestAnswer = answer;
+      }
+      // No text or a non-STOP finish - try the next model.
     } catch {
       // Network error - try the next model.
     }
   }
+
+  // Every model came back truncated, blocked, or empty. A partial answer
+  // still beats an apology.
+  if (bestAnswer) return NextResponse.json({ answer: bestAnswer });
 
   return NextResponse.json({
     answer: rateLimited

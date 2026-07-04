@@ -86,6 +86,8 @@ async function runCron(req: NextRequest) {
     .toISOString()
     .slice(0, 10);
 
+  // Only rows still missing a marker, soonest due first, so already-reminded
+  // tasks can never crowd new ones out of the MAX_TASKS window.
   const { data: tasks, error } = await supabase
     .from("maintenance_tasks")
     .select(
@@ -94,6 +96,8 @@ async function runCron(req: NextRequest) {
     .eq("status", "open")
     .not("due_date", "is", null)
     .lte("due_date", horizon)
+    .or("reminded_upcoming_at.is.null,reminded_overdue_at.is.null")
+    .order("due_date", { ascending: true })
     .limit(MAX_TASKS);
 
   if (error || !tasks) {
@@ -182,13 +186,15 @@ async function runCron(req: NextRequest) {
         });
         if (sent) {
           created += 1;
-          await supabase
+          const { error: markErr } = await supabase
             .from("maintenance_tasks")
             .update({ reminded_upcoming_at: nowIso })
             .in(
               "id",
               b.upcoming.map((t) => t.id)
             );
+          // A failed stamp means tomorrow's run would notify again - surface it.
+          if (markErr) console.error("reminder marker (upcoming):", markErr.message);
         }
       }
 
@@ -209,13 +215,14 @@ async function runCron(req: NextRequest) {
         });
         if (sent) {
           created += 1;
-          await supabase
+          const { error: markErr } = await supabase
             .from("maintenance_tasks")
             .update({ reminded_overdue_at: nowIso })
             .in(
               "id",
               b.overdue.map((t) => t.id)
             );
+          if (markErr) console.error("reminder marker (overdue):", markErr.message);
         }
       }
     } catch {

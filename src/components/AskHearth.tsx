@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { logIssueFromChat, setReminderFromChat } from "@/lib/ask-actions";
 import VoiceButton from "@/components/VoiceButton";
 import Markdown from "@/components/Markdown";
@@ -287,7 +288,9 @@ function MessageActions({
 
 // One shared conversation kept in localStorage: it survives reloads, and
 // messages age out per the retention setting below (default: 24 hours), pruned
-// by each message's own timestamp on load.
+// by each message's own timestamp on load. Keys are namespaced per user id
+// (e.g. "hearth_ask_chat:<uuid>") so chats can't leak between accounts on a
+// shared device; the bare legacy keys are only used while the id loads.
 const STORAGE_KEY = "hearth_ask_chat";
 const SYNC_EVENT = "hearth:ask-updated";
 
@@ -302,9 +305,9 @@ const RETENTION_MS: Record<Retention, number> = {
 // Even on "never", cap the history so localStorage can't bloat.
 const MAX_MESSAGES = 200;
 
-function loadRetention(): Retention {
+function loadRetention(key: string): Retention {
   try {
-    const r = localStorage.getItem(RETENTION_KEY);
+    const r = localStorage.getItem(key);
     if (r === "24h" || r === "2w" || r === "1m" || r === "never") return r;
   } catch {
     /* ignore */
@@ -330,14 +333,18 @@ const DEFAULT_GREETING =
 // it renders as a compact card (Home / Learn). `suggestions` are starter
 // questions shown as chips until the owner asks something. `greeting` is an
 // optional personalized opener (e.g. referencing their systems/issues).
+// `initialQuestion` is a question handed to a freshly mounted instance (the
+// dock opening in response to "hearth:ask-question"); it is submitted once.
 export default function AskHearth({
   fill = false,
   suggestions,
   greeting,
+  initialQuestion,
 }: {
   fill?: boolean;
   suggestions?: string[];
   greeting?: string;
+  initialQuestion?: string;
 }) {
   const GREETING: Msg = {
     role: "assistant",
@@ -356,49 +363,110 @@ export default function AskHearth({
   const inputRef = useRef<HTMLInputElement>(null);
   const submitRef = useRef<(t: string) => void>(() => {});
 
-  // Load the conversation on mount, prune anything older than the retention
-  // window, and sync with other instances on this page (dock + Messages).
+  // Which account's chat this is. Until the id loads (or if it can't), fall
+  // back to the legacy shared keys so nothing breaks.
+  const [userId, setUserId] = useState<string | null>(null);
+  const [userReady, setUserReady] = useState(false);
+  const storageKey = userId ? `${STORAGE_KEY}:${userId}` : STORAGE_KEY;
+  const retentionKey = userId ? `${RETENTION_KEY}:${userId}` : RETENTION_KEY;
+
+  // Resolve the signed-in user once, and migrate any legacy shared-key chat to
+  // the per-user key (then remove the legacy key so the next account on this
+  // device can't see it).
+  useEffect(() => {
+    let cancelled = false;
+    createClient()
+      .auth.getUser()
+      .then(({ data: { user } }) => {
+        if (cancelled) return;
+        if (user) {
+          try {
+            const chatKey = `${STORAGE_KEY}:${user.id}`;
+            const legacyChat = localStorage.getItem(STORAGE_KEY);
+            if (legacyChat !== null) {
+              if (localStorage.getItem(chatKey) === null) {
+                localStorage.setItem(chatKey, legacyChat);
+              }
+              localStorage.removeItem(STORAGE_KEY);
+            }
+            const retKey = `${RETENTION_KEY}:${user.id}`;
+            const legacyRet = localStorage.getItem(RETENTION_KEY);
+            if (legacyRet !== null) {
+              if (localStorage.getItem(retKey) === null) {
+                localStorage.setItem(retKey, legacyRet);
+              }
+              localStorage.removeItem(RETENTION_KEY);
+            }
+          } catch {
+            /* ignore */
+          }
+          setUserId(user.id);
+        }
+        setUserReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setUserReady(true); // stay on the legacy keys
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Load the conversation on mount (and again once the per-user key resolves),
+  // prune anything older than the retention window, and sync with other
+  // instances on this page (dock + Messages).
   useEffect(() => {
     function read() {
-      const r = loadRetention();
+      const r = loadRetention(retentionKey);
       setRetention(r);
       try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = localStorage.getItem(storageKey);
         const parsed = raw ? JSON.parse(raw) : null;
         const pruned = Array.isArray(parsed) ? prune(parsed, r) : [];
         if (Array.isArray(parsed) && pruned.length !== parsed.length) {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(pruned));
+          localStorage.setItem(storageKey, JSON.stringify(pruned));
         }
         setMessages(pruned.length ? pruned : [GREETING]);
       } catch {
         /* ignore */
       }
     }
+    function onSync(e: Event) {
+      // Ignore updates for a different key (e.g. another instance already on
+      // the per-user key while this one is still on the legacy key).
+      const k = (e as CustomEvent).detail?.key;
+      if (typeof k === "string" && k !== storageKey) return;
+      read();
+    }
     read();
-    window.addEventListener(SYNC_EVENT, read);
-    return () => window.removeEventListener(SYNC_EVENT, read);
+    window.addEventListener(SYNC_EVENT, onSync);
+    return () => window.removeEventListener(SYNC_EVENT, onSync);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [storageKey, retentionKey]);
 
   // Save the conversation and notify other open instances on this page. Only on
   // real user turns, so loading a saved chat can't overwrite it.
   function persist(msgs: Msg[]) {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(prune(msgs, retention)));
+      localStorage.setItem(storageKey, JSON.stringify(prune(msgs, retention)));
     } catch {
       /* ignore */
     }
-    window.dispatchEvent(new Event(SYNC_EVENT));
+    window.dispatchEvent(
+      new CustomEvent(SYNC_EVENT, { detail: { key: storageKey } })
+    );
   }
 
   function clearChat() {
     setMessages([GREETING]);
     try {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(storageKey);
     } catch {
       /* ignore */
     }
-    window.dispatchEvent(new Event(SYNC_EVENT));
+    window.dispatchEvent(
+      new CustomEvent(SYNC_EVENT, { detail: { key: storageKey } })
+    );
   }
 
   // Save the new window and apply it right away; other instances pick it up
@@ -406,14 +474,16 @@ export default function AskHearth({
   function changeRetention(r: Retention) {
     setRetention(r);
     try {
-      localStorage.setItem(RETENTION_KEY, r);
+      localStorage.setItem(retentionKey, r);
       const pruned = prune(messages, r);
       setMessages(pruned.length ? pruned : [GREETING]);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(pruned));
+      localStorage.setItem(storageKey, JSON.stringify(pruned));
     } catch {
       /* ignore */
     }
-    window.dispatchEvent(new Event(SYNC_EVENT));
+    window.dispatchEvent(
+      new CustomEvent(SYNC_EVENT, { detail: { key: storageKey } })
+    );
   }
 
   useEffect(() => {
@@ -480,16 +550,34 @@ export default function AskHearth({
   }
   submitRef.current = submit;
 
-  // The Learn box answers questions fired from the "Maintenance basics" cards.
+  // Answer questions fired from elsewhere in the app (Learn's "Maintenance
+  // basics" cards, the forecast plan button). Every mounted instance listens;
+  // the first one to see the event claims it via a flag on the event object
+  // (listeners run synchronously in registration order), so when two instances
+  // exist (Learn's inline box + the dock) exactly one submits.
   useEffect(() => {
-    if (fill) return;
     function onAsk(e: Event) {
+      if ((e as any).__hearthHandled) return;
+      (e as any).__hearthHandled = true;
       const q = (e as CustomEvent).detail;
       if (typeof q === "string") submitRef.current(q);
     }
     window.addEventListener("hearth:ask-question", onAsk);
     return () => window.removeEventListener("hearth:ask-question", onAsk);
-  }, [fill]);
+  }, []);
+
+  // Submit a question handed in by the dock when it opened for an event that
+  // fired while it was closed. Wait until the per-user storage key and saved
+  // conversation have loaded (userReady + a timeout past this commit) so the
+  // submit can't clobber the stored history, and guard with a ref so it fires
+  // exactly once.
+  const initialSentRef = useRef(false);
+  useEffect(() => {
+    if (!initialQuestion || !userReady || initialSentRef.current) return;
+    initialSentRef.current = true;
+    const t = setTimeout(() => submitRef.current(initialQuestion), 0);
+    return () => clearTimeout(t);
+  }, [initialQuestion, userReady]);
 
   async function onPickImage(file: File) {
     setImageError(false);

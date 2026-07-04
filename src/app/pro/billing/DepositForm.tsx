@@ -25,10 +25,23 @@ function bonusFor(cents: number, tiers: Tier[]) {
 
 const PRESETS = [100, 200, 400, 800];
 
-export default function DepositForm({ tiers }: { tiers: Tier[] }) {
+export default function DepositForm({
+  tiers,
+  need,
+}: {
+  tiers: Tier[];
+  // Dollars still missing for a specific job (?need= from the leads board).
+  need?: number;
+}) {
   // Committed amount (string so the field can be cleared); default $200 so the
-  // first bonus tier is visible out of the gate.
-  const [amount, setAmount] = useState("200");
+  // first bonus tier is visible out of the gate. When the pro came here short
+  // on a specific job, preselect the smallest option that covers the shortfall
+  // instead (falling back to a custom amount above the largest preset).
+  const initialAmount =
+    need && need > 0
+      ? String(PRESETS.find((p) => p >= need) ?? Math.ceil(need))
+      : "200";
+  const [amount, setAmount] = useState(initialAmount);
   // Preview while hovering a preset - reverts to the committed amount on leave.
   const [hover, setHover] = useState<number | null>(null);
   const [agreed, setAgreed] = useState(false);

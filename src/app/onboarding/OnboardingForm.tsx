@@ -185,8 +185,8 @@ export default function OnboardingForm() {
           </div>
 
           <p className="rounded-lg bg-hearth-50 p-3 text-xs text-hearth-800">
-            By claiming this home you confirm you own or manage it. We start with
-            your word and may verify later.
+            Confirm this is your home. You just need to own or manage it,
+            that&apos;s all we check.
           </p>
 
           <div className="flex gap-3">

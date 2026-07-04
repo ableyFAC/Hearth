@@ -142,6 +142,16 @@ export function leadFeeFor(category: string): number {
   return LEAD_FEES[category] ?? LEAD_FEES.other;
 }
 
+// Applicant cap: this many live (non-refunded) applications fill a posted job,
+// so pros stop burning fees on crowded postings. Must match the check in
+// apply_to_lead (supabase/migrations/0028_ghost_protection.sql).
+export const MAX_APPLICANTS_PER_JOB = 3;
+
+// Ghost protection: an application the homeowner never responds to is
+// auto-refunded after this many days. Display-only mirror of the cron window
+// in supabase/migrations/0028_ghost_protection.sql.
+export const GHOST_PROTECTION_DAYS = 7;
+
 // Maps a home system to the contractor category, so a "Find a pro" button on a
 // system jumps straight to the right trade.
 export const SYSTEM_CATEGORY: Record<string, string> = {
@@ -365,7 +375,9 @@ export function labelFor(
   value: string | null | undefined
 ): string {
   if (!value) return "-";
-  return list.find((o) => o.value === value)?.label ?? value;
+  // Unknown values (legacy rows, options removed from a list) must never leak
+  // as raw enums like "this_month" - humanize the underscores as a fallback.
+  return list.find((o) => o.value === value)?.label ?? value.replace(/_/g, " ");
 }
 
 export function iconFor(

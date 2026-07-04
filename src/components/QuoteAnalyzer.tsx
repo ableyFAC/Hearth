@@ -47,7 +47,13 @@ function toBase64(file: File): Promise<string> {
 // The homeowner's advocate: hand over a photo of a contractor's quote (or its
 // text), and Hearth reads every line, checks it against typical costs, calls
 // out padding or vague charges, and writes a negotiation message for them.
-export default function QuoteAnalyzer() {
+// `freeTaste` means a non-Plus user is spending their one free check, so a
+// successful result gets a compact Plus upsell under it.
+export default function QuoteAnalyzer({
+  freeTaste = false,
+}: {
+  freeTaste?: boolean;
+}) {
   const [mode, setMode] = useState<Mode>("photo");
   const [preview, setPreview] = useState<string | null>(null);
   const [image, setImage] = useState<string | null>(null);
@@ -337,6 +343,18 @@ export default function QuoteAnalyzer() {
 
           <Link href="/contractors" className="btn-primary block text-center">
             Get more quotes to compare
+          </Link>
+        </div>
+      )}
+
+      {result && freeTaste && (
+        <div className="card space-y-3 border-hearth-200 bg-hearth-50 text-center">
+          <p className="text-sm text-hearth-800">
+            That was your free check. Get every quote checked with Hearth
+            Plus, $4.99/mo after a free first month.
+          </p>
+          <Link href="/plus?reason=quote" className="btn-primary inline-block">
+            Get Hearth Plus
           </Link>
         </div>
       )}

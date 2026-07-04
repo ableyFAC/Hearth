@@ -19,6 +19,7 @@ import {
   SEASONAL_TASKS,
   seasonForMonth,
 } from "@/lib/constants";
+import { planTitles } from "@/lib/maintenancePlan";
 import SystemForm from "../profile/SystemForm";
 import SystemRow from "../profile/SystemRow";
 import SeasonalChecklist from "@/components/SeasonalChecklist";
@@ -83,9 +84,13 @@ export default async function HomePage({
   // Open jobs = postings the owner has put up that no pro has been picked for yet.
   const openJobsCount = (jobs ?? []).filter((j) => !j.contractor_id).length;
 
-  // Whether a maintenance plan already exists (any open task), so the CTA can
-  // switch from "Build my plan" to "View my plan".
-  const hasOpenPlan = (tasks ?? []).some((t) => t.status === "open");
+  // Whether a maintenance plan already exists, so the CTA can switch from
+  // "Build my plan" to "View my plan". Only plan-generated tasks count - a
+  // manual reminder (say, from chat) must not hide "Build my plan" forever.
+  const planTitleSet = planTitles();
+  const hasOpenPlan = (tasks ?? []).some(
+    (t) => t.status === "open" && planTitleSet.has(t.title)
+  );
 
   // Group system photos by system id so each row can show its own thumbnails.
   const photosBySystem = new Map<string, string[]>();
@@ -187,10 +192,18 @@ export default async function HomePage({
         ? ` I rated its condition ${s.condition_rating} of 5.`
         : "");
     const urgent = s.condition_rating != null && s.condition_rating <= 2;
+    // Verb agreement for plural labels ("windows are", not "windows is"), and
+    // show our work: when the call comes from age alone, say so.
+    const plural = name.toLowerCase().endsWith("s");
+    const verb = plural ? "are" : "is";
+    const its = plural ? "their" : "its";
+    const them = plural ? "them" : "it";
+    const ageOnly = !isMust(s);
+    const basedOnAge = ageOnly ? `, based on ${its} age` : "";
     briefing.push({
       text: must
-        ? `Your ${name.toLowerCase()} is near the end of its life. It is worth planning ahead.`
-        : `Your ${name.toLowerCase()} is aging. Keep an eye on it.`,
+        ? `Your ${name.toLowerCase()} ${verb} near the end of ${its} life${basedOnAge}. It is worth planning ahead.`
+        : `Your ${name.toLowerCase()} ${verb} aging${basedOnAge}. Keep an eye on ${them}.`,
       href:
         `/contractors?category=${cat}` +
         `&desc=${encodeURIComponent(desc)}` +
@@ -294,8 +307,18 @@ export default async function HomePage({
     <div className="space-y-8">
       {searchParams.welcome && (
         <div className="rounded-xl border border-hearth-200 bg-hearth-50 p-4 text-sm text-hearth-800">
-          🎉 Your home is claimed. Add your systems below. It&apos;s what powers
-          your maintenance reminders and your Home Health Score.
+          {sys.length > 0 ? (
+            <>
+              🎉 Your home is claimed. We pre-filled {sys.length} systems from
+              your home&apos;s details. Confirm or adjust them below to sharpen
+              your Health Score.
+            </>
+          ) : (
+            <>
+              🎉 Your home is claimed. Add your systems below. It&apos;s what
+              powers your maintenance reminders and your Home Health Score.
+            </>
+          )}
         </div>
       )}
 
@@ -420,7 +443,7 @@ export default async function HomePage({
                   .map((u) => (
                     <details key={u} open={planOpen} className="group">
                       <summary
-                        className={`cursor-pointer list-none px-2 text-xs font-semibold uppercase tracking-wide ${URGENCY_TONE[u]}`}
+                        className={`cursor-pointer list-none [&::-webkit-details-marker]:hidden px-2 text-xs font-semibold uppercase tracking-wide ${URGENCY_TONE[u]}`}
                       >
                         <span className="mr-1 inline-block transition-transform group-open:rotate-90">
                           ▸
@@ -441,8 +464,8 @@ export default async function HomePage({
                     </details>
                   ))}
 
-                <details open={planOpen} className="group">
-                  <summary className="cursor-pointer list-none px-2 text-xs font-semibold uppercase tracking-wide text-stone-400">
+                <details open={planOpen || remindersTotal === 0} className="group">
+                  <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden px-2 text-xs font-semibold uppercase tracking-wide text-stone-400">
                     <span className="mr-1 inline-block transition-transform group-open:rotate-90">
                       ▸
                     </span>
@@ -578,6 +601,11 @@ export default async function HomePage({
                 {!plus && (
                   <span className="ml-1.5 rounded-full bg-hearth-100 px-1.5 py-0.5 text-[10px] font-semibold text-hearth-700">
                     Plus
+                  </span>
+                )}
+                {!plus && t.title === "Quote analyzer" && (
+                  <span className="ml-1.5 rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-700">
+                    1 free
                   </span>
                 )}
               </p>

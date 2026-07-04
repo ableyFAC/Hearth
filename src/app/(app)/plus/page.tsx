@@ -205,8 +205,8 @@ export default async function PlusPage({
       {searchParams.reason === "quote" && (
         <div className="card border-hearth-200 bg-hearth-50 text-center">
           <p className="text-sm text-hearth-800">
-            Hearth Plus reads a contractor&apos;s quote, checks it against fair
-            prices, and flags anything padded, so you never overpay.
+            You&apos;ve used your free quote check. Plus reads every quote you
+            get, flags padding, and writes the negotiation message, unlimited.
           </p>
         </div>
       )}

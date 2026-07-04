@@ -8,6 +8,8 @@ export default function ProNav({ company }: { company: string | null }) {
   const LINKS = [
     { href: "/pro", label: "Leads" },
     { href: "/pro/chats", label: "Messages", liveBadge: "contractor" as const },
+    { href: "/pro/business", label: "My Business" },
+    { href: "/pro/playbook", label: "Playbook" },
   ];
 
   return (
@@ -26,9 +28,10 @@ export default function ProNav({ company }: { company: string | null }) {
           <ProfileMenu
             name={company}
             links={[
-              { href: "/pro/profile", label: "Edit profile" },
+              { href: "/pro/profile", label: "Company profile" },
               { href: "/pro/billing", label: "Billing" },
             ]}
+            moreLinks={[{ href: "/pro/playbook", label: "Playbook" }]}
           />
         </div>
       </div>
