@@ -50,63 +50,65 @@ export async function uncompleteReminderAction(id: string) {
 
 // --- Hearth Plus: personalized maintenance plan ---
 //
-// Every home gets these two, regardless of its system inventory.
-const ALWAYS_SCHEDULE: Array<{ title: string; everyMonths: number }> = [
-  { title: "Test smoke and CO detectors", everyMonths: 6 },
-  { title: "Clean gutters and downspouts", everyMonths: 6 },
+// The plan stays small and encouraging. Each scheduled task becomes ONE upcoming
+// reminder, staggered so quick checks land within a couple of weeks and bigger
+// jobs a month or two out. Re-running only adds task types you do not already
+// have open, so the list never balloons and never duplicates.
+
+// Always scheduled, regardless of the home's systems. dueInDays = when the next
+// occurrence lands (small/quick tasks sooner, bigger ones later).
+const ALWAYS_SCHEDULE: Array<{ title: string; dueInDays: number }> = [
+  { title: "Test smoke and CO detectors", dueInDays: 10 },
+  { title: "Clean gutters and downspouts", dueInDays: 45 },
 ];
 
-// Additional tasks, keyed by system_type, added only when that system is on
-// the property's home_systems inventory.
-const SYSTEM_SCHEDULE: Record<string, Array<{ title: string; everyMonths: number }>> = {
+// Extra tasks added only when that system is on the property's inventory.
+const SYSTEM_SCHEDULE: Record<
+  string,
+  Array<{ title: string; dueInDays: number }>
+> = {
   hvac: [
-    { title: "Replace HVAC air filter", everyMonths: 3 },
-    { title: "Schedule an HVAC tune-up", everyMonths: 12 },
+    { title: "Replace HVAC air filter", dueInDays: 14 },
+    { title: "Schedule an HVAC tune-up", dueInDays: 60 },
   ],
-  water_heater: [{ title: "Flush the water heater", everyMonths: 12 }],
-  roof: [{ title: "Inspect roof and flashing", everyMonths: 12 }],
+  water_heater: [{ title: "Flush the water heater", dueInDays: 75 }],
+  roof: [{ title: "Inspect roof and flashing", dueInDays: 50 }],
   plumbing: [
-    { title: "Check under sinks and around toilets for leaks", everyMonths: 6 },
+    { title: "Check under sinks and around toilets for leaks", dueInDays: 20 },
   ],
-  electrical_panel: [{ title: "Test GFCI outlets and breakers", everyMonths: 6 }],
+  electrical_panel: [
+    { title: "Test GFCI outlets and breakers", dueInDays: 30 },
+  ],
   appliance: [
-    { title: "Clean the dryer vent and refrigerator coils", everyMonths: 12 },
+    { title: "Clean the dryer vent and refrigerator coils", dueInDays: 40 },
   ],
-  windows: [{ title: "Check window caulk and weatherstripping", everyMonths: 12 }],
+  windows: [{ title: "Check window caulk and weatherstripping", dueInDays: 55 }],
   foundation: [
-    { title: "Walk the foundation and grading for cracks or pooling", everyMonths: 12 },
+    {
+      title: "Walk the foundation and grading for cracks or pooling",
+      dueInDays: 65,
+    },
   ],
   sewer_line: [
-    { title: "Watch for slow drains, consider a sewer scope", everyMonths: 12 },
+    { title: "Watch for slow drains, consider a sewer scope", dueInDays: 70 },
   ],
 };
 
-// Safety cap so a plan can never balloon the reminders list.
-const MAX_PLAN_INSERTS = 40;
+// Keep the plan digestible.
+const MAX_PLAN_TASKS = 12;
 
-function addMonths(base: Date, months: number): string {
+function addDays(base: Date, days: number): string {
   const d = new Date(base.getTime());
-  d.setMonth(d.getMonth() + months);
-  return d.toISOString().slice(0, 10);
+  d.setDate(d.getDate() + days);
+  // Local date parts, not toISOString (UTC), so due dates match the real calendar.
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
-// Builds one year of due dates for a recurring task: today + N, +2N, ... up to
-// 12 months out (every 3 months -> 4 tasks, every 6 -> 2, every 12 -> 1).
-function occurrencesOverAYear(
-  base: Date,
-  title: string,
-  everyMonths: number
-): Array<{ title: string; due_date: string }> {
-  const count = Math.floor(12 / everyMonths);
-  const rows: Array<{ title: string; due_date: string }> = [];
-  for (let i = 1; i <= count; i++) {
-    rows.push({ title, due_date: addMonths(base, everyMonths * i) });
-  }
-  return rows;
-}
-
-// Plus-only: builds a year of maintenance reminders tailored to the active
-// property's system inventory, skipping anything already on the books.
+// Plus-only: builds a short, staggered set of maintenance reminders tailored to
+// the active property's systems, adding only task types not already open.
 export async function generateMaintenancePlanAction() {
   const plus = await hasPlus();
   if (!plus) redirect("/plus?reason=plan");
@@ -121,45 +123,40 @@ export async function generateMaintenancePlanAction() {
     .eq("property_id", property.id);
   const systemTypes = new Set((systems ?? []).map((s) => s.system_type));
 
-  const today = new Date(Date.now());
-  let candidates: Array<{ title: string; due_date: string }> = [];
-  for (const item of ALWAYS_SCHEDULE) {
-    candidates = candidates.concat(
-      occurrencesOverAYear(today, item.title, item.everyMonths)
-    );
-  }
-  for (const systemType of systemTypes) {
-    for (const item of SYSTEM_SCHEDULE[systemType] ?? []) {
-      candidates = candidates.concat(
-        occurrencesOverAYear(today, item.title, item.everyMonths)
-      );
-    }
-  }
-  candidates = candidates.slice(0, MAX_PLAN_INSERTS);
+  const schedule = [
+    ...ALWAYS_SCHEDULE,
+    ...[...systemTypes].flatMap((t) => SYSTEM_SCHEDULE[t] ?? []),
+  ];
 
-  // Dedupe against this property's existing open tasks (same title + due date).
+  // Task types already open, so re-running never piles on a duplicate.
   const { data: existing } = await supabase
     .from("maintenance_tasks")
-    .select("title, due_date")
+    .select("title")
     .eq("property_id", property.id)
     .eq("status", "open");
-  const existingKeys = new Set(
-    (existing ?? []).map((t) => `${t.title}|${t.due_date ?? ""}`)
-  );
+  const openTitles = new Set((existing ?? []).map((t) => t.title));
 
-  const rows = candidates
-    .filter((c) => !existingKeys.has(`${c.title}|${c.due_date}`))
-    .map((c) => ({
+  const today = new Date(Date.now());
+  const seen = new Set<string>();
+  const rows = schedule
+    .filter((s) => {
+      if (openTitles.has(s.title) || seen.has(s.title)) return false;
+      seen.add(s.title);
+      return true;
+    })
+    .slice(0, MAX_PLAN_TASKS)
+    .map((s) => ({
       property_id: property.id,
-      title: c.title,
-      due_date: c.due_date,
+      title: s.title,
+      due_date: addDays(today, s.dueInDays),
       status: "open",
     }));
 
   if (rows.length > 0) {
     await supabase.from("maintenance_tasks").insert(rows);
+    setFlash("Your maintenance plan is ready. Check your reminders.", "success");
+  } else {
+    setFlash("Your maintenance plan is already up to date.", "info");
   }
-
-  setFlash("Your maintenance plan is ready. Check your reminders.", "success");
   revalidatePath("/dashboard");
 }

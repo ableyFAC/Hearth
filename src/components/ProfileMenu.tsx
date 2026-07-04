@@ -13,14 +13,24 @@ export default function ProfileMenu({
   name,
   links,
   hasPlus,
+  plusTools,
+  moreLinks,
 }: {
   name: string | null;
   links: MenuLink[];
   // Homeowner-only: whether the signed-in user has Hearth Plus. Undefined on
   // the contractor side (ProNav), which has no Plus entry to show.
   hasPlus?: boolean;
+  // Homeowner premium tools, shown as a group in the menu. For non-Plus users
+  // they render locked (dimmed + a lock) and link to the upgrade page, so the
+  // menu doubles as a teaser of what Plus unlocks.
+  plusTools?: Array<{ href: string; label: string; locked?: boolean }>;
+  // Secondary links tucked behind a "More" row so the menu opens showing only
+  // the handful people reach for daily. Log out always stays visible.
+  moreLinks?: MenuLink[];
 }) {
   const [open, setOpen] = useState(false);
+  const [showMore, setShowMore] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   // Close on outside click or Escape.
@@ -44,7 +54,10 @@ export default function ProfileMenu({
     <div ref={ref} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          setOpen((v) => !v);
+          setShowMore(false);
+        }}
         aria-haspopup="menu"
         aria-expanded={open}
         className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 text-sm font-medium text-stone-700 hover:bg-hearth-50"
@@ -100,6 +113,31 @@ export default function ProfileMenu({
               {hasPlus ? "Hearth Plus ✓" : "Upgrade to Hearth Plus"}
             </Link>
           )}
+          {plusTools && plusTools.length > 0 && (
+            <div className="border-b border-stone-100 py-1">
+              <p className="px-4 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-400">
+                Plus tools
+              </p>
+              {plusTools.map((l) => (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  role="menuitem"
+                  onClick={() => setOpen(false)}
+                  className={`flex items-center justify-between gap-2 px-4 py-2 text-sm hover:bg-hearth-50 ${
+                    l.locked ? "text-stone-400" : "text-stone-700"
+                  }`}
+                >
+                  <span>{l.label}</span>
+                  {l.locked && (
+                    <span aria-hidden="true" className="text-xs">
+                      🔒
+                    </span>
+                  )}
+                </Link>
+              ))}
+            </div>
+          )}
           {links.map((l) => (
             <Link
               key={l.href}
@@ -111,6 +149,41 @@ export default function ProfileMenu({
               {l.label}
             </Link>
           ))}
+          {moreLinks && moreLinks.length > 0 && !showMore && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => setShowMore(true)}
+              className="flex w-full items-center gap-1 px-4 py-2 text-left text-sm text-stone-400 hover:bg-hearth-50 hover:text-stone-600"
+            >
+              More
+              <svg
+                viewBox="0 0 20 20"
+                className="h-3.5 w-3.5"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
+          )}
+          {moreLinks &&
+            showMore &&
+            moreLinks.map((l) => (
+              <Link
+                key={l.href}
+                href={l.href}
+                role="menuitem"
+                onClick={() => setOpen(false)}
+                className="block px-4 py-2 text-sm text-stone-700 hover:bg-hearth-50"
+              >
+                {l.label}
+              </Link>
+            ))}
           <form
             action="/auth/signout"
             method="post"

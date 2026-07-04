@@ -149,9 +149,9 @@ export default async function ContractorsPage({
               Juggling more than one project?
             </p>
             <p className="text-sm text-hearth-700">
-              Free covers 1 open job at a time. Hearth Plus runs up to 10 at
-              once, plus priority matching so pros see yours first. Just $4.99
-              your first month, then $8.99.
+              Free covers 3 open jobs at a time. Hearth Plus is unlimited, plus
+              priority matching so pros see yours first. Free first month, then
+              $4.99.
             </p>
           </div>
           <Link href="/plus" className="btn-primary shrink-0">

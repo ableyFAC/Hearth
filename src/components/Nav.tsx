@@ -46,11 +46,28 @@ export default function Nav({
           <ProfileMenu
           name={name}
           hasPlus={hasPlus}
-          links={[
+          plusTools={[
+            {
+              href: hasPlus ? "/forecast" : "/plus?reason=forecast",
+              label: "Cost forecast",
+              locked: !hasPlus,
+            },
+            {
+              href: hasPlus ? "/quote-check" : "/plus?reason=quote",
+              label: "Quote analyzer",
+              locked: !hasPlus,
+            },
+            {
+              href: hasPlus ? "/home-report" : "/plus?reason=report",
+              label: "Home report",
+              locked: !hasPlus,
+            },
+          ]}
+          links={[{ href: "/documents", label: "Documents" }]}
+          moreLinks={[
             { href: "/account", label: "Edit profile" },
-            { href: "/account/security", label: "Account security" },
             { href: "/account/notifications", label: "Notifications" },
-            { href: "/documents", label: "Documents" },
+            { href: "/account/security", label: "Account security" },
             { href: "/learn", label: "Learn" },
             { href: "/account/help", label: "Help" },
           ]}

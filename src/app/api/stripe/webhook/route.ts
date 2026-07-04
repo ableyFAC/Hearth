@@ -6,6 +6,25 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// current_period_end lives on the subscription in older API versions and on
+// the subscription item in newer ones - read whichever is present.
+function periodEnd(subscription: any): string | null {
+  const ts =
+    subscription?.current_period_end ??
+    subscription?.items?.data?.[0]?.current_period_end;
+  return ts ? new Date(ts * 1000).toISOString() : null;
+}
+
+// Derive the stored plan ("monthly"/"yearly") from the price actually on the
+// subscription. It changes on an immediate upgrade and again when a scheduled
+// downgrade's monthly phase kicks in at period end.
+function planFromItems(subscription: any): string | null {
+  const interval = subscription?.items?.data?.[0]?.price?.recurring?.interval;
+  if (interval === "year") return "yearly";
+  if (interval === "month") return "monthly";
+  return null;
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.text();
   const sig = req.headers.get("stripe-signature") ?? "";
@@ -48,10 +67,8 @@ export async function POST(req: NextRequest) {
           stripe_customer_id: session.customer ?? null,
           stripe_subscription_id: subscription.id,
           status: subscription.status,
-          plan: meta.plan ?? null,
-          current_period_end: (subscription as any).current_period_end
-            ? new Date((subscription as any).current_period_end * 1000).toISOString()
-            : null,
+          plan: meta.plan ?? planFromItems(subscription),
+          current_period_end: periodEnd(subscription),
           updated_at: new Date().toISOString(),
         },
         { onConflict: "user_id" }
@@ -68,14 +85,15 @@ export async function POST(req: NextRequest) {
       event.type === "customer.subscription.deleted"
         ? "canceled"
         : subscription.status;
+    const plan = planFromItems(subscription);
     const admin = createAdminClient();
     await (admin as any)
       .from("subscriptions")
       .update({
         status,
-        current_period_end: subscription.current_period_end
-          ? new Date(subscription.current_period_end * 1000).toISOString()
-          : null,
+        // Only overwrite the plan when the payload carries items we can read.
+        ...(plan ? { plan } : {}),
+        current_period_end: periodEnd(subscription),
         updated_at: new Date().toISOString(),
       })
       .eq("stripe_subscription_id", subscription.id);

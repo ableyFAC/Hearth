@@ -93,6 +93,24 @@ export default async function HomeReportPage() {
   const allTasks = tasks ?? [];
   const allIssues = issues ?? [];
 
+  // Collapse the issue log to one entry per category, showing only that
+  // category's most recent row. This mirrors the dashboard, which dedupes
+  // issues per category via a Map, so the two sides agree and the same roof
+  // problem can't appear several times in contradictory states. The issues
+  // query is already ordered created_at DESC (the only activity timestamp the
+  // schema has), so the first row seen per category is the latest one, and
+  // resolving updates a row in place, meaning each row is one logical issue.
+  const latestIssueByCategory = new Map<string, (typeof allIssues)[number]>();
+  for (const i of allIssues) {
+    const seen = latestIssueByCategory.get(i.category);
+    // An open issue always outranks a resolved one, matching the dashboard,
+    // which surfaces open issues per category. Otherwise latest wins.
+    if (!seen || (seen.status === "resolved" && i.status === "open")) {
+      latestIssueByCategory.set(i.category, i);
+    }
+  }
+  const issueLog = [...latestIssueByCategory.values()];
+
   // Completed tasks: most recently finished first. Upcoming tasks: soonest
   // due first, since that's the order that actually matters to a reader.
   const completedTasks = allTasks
@@ -264,21 +282,30 @@ export default async function HomeReportPage() {
         <h2 className="mb-3 text-xl font-semibold text-stone-900">
           Repairs &amp; issue log
         </h2>
-        {allIssues.length === 0 ? (
+        {issueLog.length === 0 ? (
           <p className="text-sm text-stone-500">None recorded yet.</p>
         ) : (
           <ul className="divide-y divide-stone-100">
-            {allIssues.map((i) => (
+            {issueLog.map((i) => (
               <li key={i.id} className="py-2 text-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-stone-800">
                     {labelFor(ISSUE_CATEGORIES, i.category)}
-                    <span className="ml-2 rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500 print:border print:border-stone-300 print:bg-white">
-                      {SEVERITY_LABEL[i.severity] ?? i.severity}
-                    </span>
-                    <span className="ml-2 text-xs text-stone-400">
-                      {i.status === "resolved" ? "Resolved" : "Open"}
-                    </span>
+                    {i.status === "resolved" ? (
+                      // Resolved reads as a single, unambiguous state. Severity
+                      // only describes an active problem, so we drop it here to
+                      // avoid a "Low ... Resolved" contradiction.
+                      <span className="ml-2 rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500 print:border print:border-stone-300 print:bg-white">
+                        Resolved
+                      </span>
+                    ) : (
+                      <>
+                        <span className="ml-2 rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500 print:border print:border-stone-300 print:bg-white">
+                          {SEVERITY_LABEL[i.severity] ?? i.severity}
+                        </span>
+                        <span className="ml-2 text-xs text-stone-400">Open</span>
+                      </>
+                    )}
                   </span>
                   <span className="text-xs text-stone-500">
                     {fmtTimestamp(i.created_at)}

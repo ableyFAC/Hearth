@@ -336,7 +336,7 @@ export default function QuoteAnalyzer() {
           )}
 
           <Link href="/contractors" className="btn-primary block text-center">
-            Get competing quotes
+            Get more quotes to compare
           </Link>
         </div>
       )}

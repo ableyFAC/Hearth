@@ -1,14 +1,27 @@
 import Link from "next/link";
-import { hasPlus, getSubscription } from "@/lib/subscription";
-import { manageBillingAction } from "./actions";
+import {
+  hasPlus,
+  getSubscription,
+  getBillingOutlook,
+} from "@/lib/subscription";
+import {
+  manageBillingAction,
+  upgradeToYearlyAction,
+  downgradeToMonthlyAction,
+  keepYearlyAction,
+  cancelMembershipAction,
+  resumeMembershipAction,
+} from "./actions";
 import PlanToggle from "./PlanToggle";
+import PlusWelcome from "./PlusWelcome";
+import ConfirmSubmit from "./ConfirmSubmit";
 
 const COMPARISON: Array<{ label: string; free: string; plus: string }> = [
-  { label: "Open job postings", free: "1 at a time", plus: "Up to 10 at once" },
+  { label: "Open job postings", free: "3 at a time", plus: "Unlimited" },
   { label: "Matching to pros", free: "Standard", plus: "Priority" },
   { label: "Home tracking & document vault", free: "Included", plus: "Included" },
-  { label: "Homes", free: "1", plus: "Up to 5" },
-  { label: "Maintenance plan", free: "-", plus: "Full year, auto-built" },
+  { label: "Homes you can track", free: "1 home", plus: "Up to 5 homes" },
+  { label: "Maintenance plan", free: "-", plus: "Auto-built for your home" },
   { label: "Cost forecast & repair fund", free: "-", plus: "10-year outlook" },
   { label: "AI quote analyzer", free: "-", plus: "Included" },
   { label: "Home report for resale & insurance", free: "-", plus: "Included" },
@@ -18,13 +31,34 @@ const COMPARISON: Array<{ label: string; free: string; plus: string }> = [
 export default async function PlusPage({
   searchParams,
 }: {
-  searchParams: { reason?: string };
+  searchParams: { reason?: string; welcome?: string };
 }) {
   const [plus, sub] = await Promise.all([hasPlus(), getSubscription()]);
 
+  // One-time celebration right after checkout. Shown off the ?welcome=1 flag so
+  // it appears even if the Stripe webhook hasn't synced the subscription yet.
+  if (searchParams.welcome === "1") {
+    return <PlusWelcome />;
+  }
+
   if (plus) {
+    // Pending billing changes (downgrade schedule, cancellation), read live
+    // from Stripe in one call.
+    const { scheduledDowngrade, cancelsAt } = await getBillingOutlook(sub);
+    const renewsOn = sub?.current_period_end
+      ? new Date(sub.current_period_end).toLocaleDateString()
+      : "your renewal date";
+    const included = [
+      "Unlimited job postings, matched first",
+      "Cost forecast and repair fund",
+      "AI quote analyzer",
+      "Home report for resale and insurance",
+      "Up to 5 homes",
+      "A maintenance plan auto-built for your home",
+      "Every proactive alert",
+    ];
     return (
-      <div className="mx-auto max-w-2xl space-y-8">
+      <div className="mx-auto max-w-2xl space-y-6">
         <div className="text-center">
           <h1 className="text-2xl font-semibold text-stone-900">Hearth Plus</h1>
         </div>
@@ -41,6 +75,89 @@ export default async function PlusPage({
           <form action={manageBillingAction}>
             <button className="btn-secondary">Manage billing</button>
           </form>
+          {sub?.stripe_subscription_id && cancelsAt && (
+            <div className="space-y-2 border-t border-stone-100 pt-4">
+              <p className="text-sm text-stone-600">
+                Your membership ends on {cancelsAt.toLocaleDateString()}. You
+                keep every Plus benefit until then.
+              </p>
+              <form action={resumeMembershipAction}>
+                <button className="btn-secondary">Keep my membership</button>
+              </form>
+            </div>
+          )}
+          {sub?.stripe_subscription_id && !cancelsAt && (
+            <div className="space-y-2 border-t border-stone-100 pt-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-stone-400">
+                Change plan
+              </p>
+              {sub.plan !== "yearly" && (
+                <>
+                  <form action={upgradeToYearlyAction}>
+                    <ConfirmSubmit
+                      label="Switch to yearly, $39.99/yr (save 33%)"
+                      note="You'll be charged today, with your unused monthly time credited toward it. Switch to yearly?"
+                      yesLabel="Yes, switch to yearly"
+                    />
+                  </form>
+                  <p className="text-xs text-stone-400">
+                    Starts today. Unused monthly time is credited toward the
+                    yearly charge.
+                  </p>
+                </>
+              )}
+              {sub.plan === "yearly" && !scheduledDowngrade && (
+                <>
+                  <form action={downgradeToMonthlyAction}>
+                    <ConfirmSubmit
+                      label="Switch to monthly at renewal"
+                      note={`Nothing changes today. You keep yearly until ${renewsOn}, then it becomes $4.99/mo. Switch?`}
+                      yesLabel="Yes, switch at renewal"
+                    />
+                  </form>
+                  <p className="text-xs text-stone-400">
+                    You keep every Plus benefit through {renewsOn}. Monthly
+                    billing starts after that, so you lose nothing you paid for.
+                  </p>
+                </>
+              )}
+              {sub.plan === "yearly" && scheduledDowngrade && (
+                <>
+                  <p className="text-sm text-stone-600">
+                    Switching to monthly on{" "}
+                    {scheduledDowngrade.switchesAt.toLocaleDateString()}
+                  </p>
+                  <form action={keepYearlyAction}>
+                    <button className="btn-secondary">Keep yearly</button>
+                  </form>
+                </>
+              )}
+              <form action={cancelMembershipAction} className="pt-1">
+                <ConfirmSubmit
+                  subtle
+                  label="Cancel membership"
+                  note={`You'd keep every Plus benefit through ${renewsOn}, and it just won't renew after that. Cancel?`}
+                  yesLabel="Yes, cancel my membership"
+                />
+              </form>
+            </div>
+          )}
+        </div>
+        <div className="card">
+          <p className="mb-3 text-sm font-semibold text-stone-900">
+            Everything you have
+          </p>
+          <ul className="space-y-2">
+            {included.map((f) => (
+              <li
+                key={f}
+                className="flex items-start gap-2 text-sm text-stone-700"
+              >
+                <span className="mt-0.5 font-bold text-green-600">✓</span>
+                <span>{f}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     );
@@ -51,8 +168,8 @@ export default async function PlusPage({
       {searchParams.reason === "job_limit" && (
         <div className="card border-hearth-200 bg-hearth-50 text-center">
           <p className="text-sm text-hearth-800">
-            You&apos;ve used your 1 free job posting. Hearth Plus lets you post
-            up to 10 jobs at once and get quotes rolling.
+            You&apos;ve used all 3 of your free job posts. Hearth Plus lets you
+            post unlimited jobs and keeps the quotes rolling.
           </p>
         </div>
       )}
@@ -69,8 +186,8 @@ export default async function PlusPage({
       {searchParams.reason === "plan" && (
         <div className="card border-hearth-200 bg-hearth-50 text-center">
           <p className="text-sm text-hearth-800">
-            Hearth Plus builds a full year of maintenance reminders for your
-            home, automatically.
+            Hearth Plus builds a maintenance plan tuned to your home&apos;s
+            systems, a few tasks at a time so it never piles up.
           </p>
         </div>
       )}

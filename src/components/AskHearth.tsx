@@ -14,11 +14,13 @@ type Msg = {
   // Optional attached photo (downscaled JPEG, base64 without the data: prefix).
   image?: string;
   mime?: string;
+  // When the message was sent (Date.now()); used to age messages out.
+  ts?: number;
 };
 type Job = { category: string; timing: string; summary: string };
 
 // Downscale a chosen photo to a small JPEG so it's cheap to send to the model
-// and small enough to keep in sessionStorage.
+// and small enough to keep in localStorage.
 async function downscaleImage(
   file: File,
   maxDim = 1024,
@@ -283,14 +285,44 @@ function MessageActions({
   );
 }
 
-// One shared conversation kept in sessionStorage: it carries across in-app
-// navigation within a session, but auto-clears when the tab/app is closed OR
-// refreshed, so a returning user doesn't see stale text.
+// One shared conversation kept in localStorage: it survives reloads, and
+// messages age out per the retention setting below (default: 24 hours), pruned
+// by each message's own timestamp on load.
 const STORAGE_KEY = "hearth_ask_chat";
 const SYNC_EVENT = "hearth:ask-updated";
-// Module-scoped: true once we've handled the very first mount of this page load
-// (so a reload clears the chat once, not on every in-app navigation).
-let pageLoadHandled = false;
+
+type Retention = "24h" | "2w" | "1m" | "never";
+const RETENTION_KEY = "hearth_ask_retention";
+const RETENTION_MS: Record<Retention, number> = {
+  "24h": 24 * 60 * 60 * 1000,
+  "2w": 14 * 24 * 60 * 60 * 1000,
+  "1m": 30 * 24 * 60 * 60 * 1000,
+  never: Infinity,
+};
+// Even on "never", cap the history so localStorage can't bloat.
+const MAX_MESSAGES = 200;
+
+function loadRetention(): Retention {
+  try {
+    const r = localStorage.getItem(RETENTION_KEY);
+    if (r === "24h" || r === "2w" || r === "1m" || r === "never") return r;
+  } catch {
+    /* ignore */
+  }
+  return "24h";
+}
+
+// Drop messages older than the retention window (by their own timestamp, so
+// history rolls off gradually), then cap the count. Messages without a
+// timestamp (the greeting) are kept.
+function prune(msgs: Msg[], retention: Retention): Msg[] {
+  const cutoff = Date.now() - RETENTION_MS[retention];
+  const kept =
+    retention === "never"
+      ? msgs
+      : msgs.filter((m) => !m.ts || m.ts >= cutoff);
+  return kept.slice(-MAX_MESSAGES);
+}
 const DEFAULT_GREETING =
   "Hi, I'm Hearth. If you have any questions about your home, feel free to ask.";
 
@@ -312,6 +344,7 @@ export default function AskHearth({
     content: greeting || DEFAULT_GREETING,
   };
   const [messages, setMessages] = useState<Msg[]>([GREETING]);
+  const [retention, setRetention] = useState<Retention>("24h");
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [pendingImage, setPendingImage] = useState<{
@@ -323,43 +356,25 @@ export default function AskHearth({
   const inputRef = useRef<HTMLInputElement>(null);
   const submitRef = useRef<(t: string) => void>(() => {});
 
-  // Load the conversation on mount, and sync with other instances on this page
-  // (dock + Messages). A real page RELOAD clears it once so stale text isn't
-  // shown; in-app navigation within the session keeps it.
+  // Load the conversation on mount, prune anything older than the retention
+  // window, and sync with other instances on this page (dock + Messages).
   useEffect(() => {
     function read() {
+      const r = loadRetention();
+      setRetention(r);
       try {
-        const raw = sessionStorage.getItem(STORAGE_KEY);
+        const raw = localStorage.getItem(STORAGE_KEY);
         const parsed = raw ? JSON.parse(raw) : null;
-        setMessages(
-          Array.isArray(parsed) && parsed.length ? parsed : [GREETING]
-        );
-      } catch {
-        /* ignore */
-      }
-    }
-    if (!pageLoadHandled) {
-      pageLoadHandled = true;
-      let reloaded = false;
-      try {
-        const nav = performance.getEntriesByType("navigation")[0] as any;
-        reloaded = nav?.type === "reload";
-      } catch {
-        /* ignore */
-      }
-      if (reloaded) {
-        try {
-          sessionStorage.removeItem(STORAGE_KEY);
-        } catch {
-          /* ignore */
+        const pruned = Array.isArray(parsed) ? prune(parsed, r) : [];
+        if (Array.isArray(parsed) && pruned.length !== parsed.length) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(pruned));
         }
-        setMessages([GREETING]);
-      } else {
-        read();
+        setMessages(pruned.length ? pruned : [GREETING]);
+      } catch {
+        /* ignore */
       }
-    } else {
-      read();
     }
+    read();
     window.addEventListener(SYNC_EVENT, read);
     return () => window.removeEventListener(SYNC_EVENT, read);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -369,7 +384,7 @@ export default function AskHearth({
   // real user turns, so loading a saved chat can't overwrite it.
   function persist(msgs: Msg[]) {
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(msgs));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(prune(msgs, retention)));
     } catch {
       /* ignore */
     }
@@ -379,7 +394,22 @@ export default function AskHearth({
   function clearChat() {
     setMessages([GREETING]);
     try {
-      sessionStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+    window.dispatchEvent(new Event(SYNC_EVENT));
+  }
+
+  // Save the new window and apply it right away; other instances pick it up
+  // via the sync event.
+  function changeRetention(r: Retention) {
+    setRetention(r);
+    try {
+      localStorage.setItem(RETENTION_KEY, r);
+      const pruned = prune(messages, r);
+      setMessages(pruned.length ? pruned : [GREETING]);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(pruned));
     } catch {
       /* ignore */
     }
@@ -402,6 +432,7 @@ export default function AskHearth({
     const userMsg: Msg = {
       role: "user",
       content: text || (pendingImage ? "Here's a photo - what is this?" : ""),
+      ts: Date.now(),
       ...(pendingImage
         ? { image: pendingImage.data, mime: pendingImage.mime }
         : {}),
@@ -427,6 +458,7 @@ export default function AskHearth({
         {
           role: "assistant",
           content: data.answer ?? data.error ?? "Something went wrong.",
+          ts: Date.now(),
         },
       ];
       setMessages(updated);
@@ -434,7 +466,11 @@ export default function AskHearth({
     } catch {
       const updated: Msg[] = [
         ...next,
-        { role: "assistant", content: "Something went wrong. Please try again." },
+        {
+          role: "assistant",
+          content: "Something went wrong. Please try again.",
+          ts: Date.now(),
+        },
       ];
       setMessages(updated);
       persist(updated);
@@ -608,6 +644,20 @@ export default function AskHearth({
       <p className="mt-1 text-[11px] text-stone-400">
         Hearth&apos;s cost figures are ballpark estimates. Confirm with a
         local pro before you commit.
+      </p>
+      <p className="mt-0.5 text-[11px] text-stone-400">
+        {retention === "never" ? "Chats are kept " : "Chats clear after "}
+        <select
+          value={retention}
+          onChange={(e) => changeRetention(e.target.value as Retention)}
+          aria-label="How long chats are kept"
+          className="cursor-pointer appearance-none border-0 bg-transparent p-0 text-[11px] text-stone-400 underline decoration-dotted hover:text-stone-600 focus:outline-none"
+        >
+          <option value="24h">24 hours</option>
+          <option value="2w">2 weeks</option>
+          <option value="1m">1 month</option>
+          <option value="never">forever</option>
+        </select>
       </p>
     </div>
   );

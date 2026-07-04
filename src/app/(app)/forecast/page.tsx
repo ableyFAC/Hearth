@@ -3,11 +3,22 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { hasPlus } from "@/lib/subscription";
-import { buildForecast } from "@/lib/forecast";
-import { labelFor, iconFor, SYSTEM_TYPES } from "@/lib/constants";
+import { buildForecast, stateName } from "@/lib/forecast";
+import { labelFor, iconFor, SYSTEM_TYPES, categoryForSystem } from "@/lib/constants";
+import AskHearthPlanButton from "./AskHearthPlanButton";
 
 function money(n: number): string {
   return `$${Math.round(n).toLocaleString()}`;
+}
+
+// Compact form for the bar chart labels ($1.2k instead of $1,200) so a decade
+// of bars stays readable on a phone screen.
+function moneyShort(n: number): string {
+  if (n >= 1000) {
+    const k = n / 1000;
+    return `$${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}k`;
+  }
+  return `$${Math.round(n)}`;
 }
 
 export default async function ForecastPage() {
@@ -24,7 +35,17 @@ export default async function ForecastPage() {
 
   const sys = systems ?? [];
   const currentYear = new Date(Date.now()).getFullYear();
-  const forecast = sys.length > 0 ? buildForecast(sys, currentYear) : null;
+  const forecast = sys.length > 0 ? buildForecast(sys, currentYear, property.state) : null;
+  const region = stateName(property.state);
+
+  // Personalize the handoff into Ask Hearth with the owner's actual top
+  // priorities, not a generic prompt, so the answer is about their home.
+  const planQuestion =
+    forecast && forecast.startHere.length > 0
+      ? `Help me plan for these upcoming home costs: ${forecast.startHere
+          .map((p) => labelFor(SYSTEM_TYPES, p.item.system_type))
+          .join(", ")}. Which should I tackle first?`
+      : "Help me plan for my upcoming home costs. Which should I tackle first?";
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
@@ -67,28 +88,48 @@ export default async function ForecastPage() {
             <p className="text-xs text-hearth-700">
               So a big repair is a plan, not a panic.
             </p>
+            <p className="text-xs text-hearth-600">
+              Adjusted for {region ? `your area (${region})` : "your area"},
+              and for future prices, not just today's.
+            </p>
           </div>
 
-          {forecast.dueSoon.length > 0 && (
-            <div className="card mt-6 border-red-200 bg-red-50 space-y-3">
-              <h2 className="text-sm font-semibold text-red-800">
-                Due now or soon
+          <div className="mt-4 flex justify-center">
+            <AskHearthPlanButton question={planQuestion} />
+          </div>
+
+          {forecast.startHere.length > 0 && (
+            <div className="card mt-6 space-y-3">
+              <h2 className="text-sm font-semibold text-stone-900">
+                Start here
               </h2>
               <div className="space-y-2">
-                {forecast.dueSoon.map((item) => (
+                {forecast.startHere.map(({ item, reason }) => (
                   <div
                     key={item.system.id}
-                    className="flex items-center justify-between gap-3 text-sm"
+                    className={`flex items-start justify-between gap-3 rounded-lg border p-3 ${
+                      item.yearsLeft <= 1
+                        ? "border-red-200 bg-red-50"
+                        : "border-stone-200 bg-stone-50"
+                    }`}
                   >
-                    <span className="flex items-center gap-2 text-red-800">
+                    <div className="flex items-start gap-2">
                       <span className="text-lg">
-                        {iconFor(SYSTEM_TYPES, item.system.system_type)}
+                        {iconFor(SYSTEM_TYPES, item.system_type)}
                       </span>
-                      {labelFor(SYSTEM_TYPES, item.system.system_type)}
-                    </span>
-                    <span className="text-red-700">
-                      {money(item.costLow)} - {money(item.costHigh)}
-                    </span>
+                      <div>
+                        <p className="text-sm font-medium text-stone-900">
+                          {labelFor(SYSTEM_TYPES, item.system_type)}
+                        </p>
+                        <p className="text-xs text-stone-500">{reason}</p>
+                      </div>
+                    </div>
+                    <Link
+                      href={`/contractors?category=${categoryForSystem(item.system_type)}`}
+                      className="btn-secondary shrink-0 whitespace-nowrap px-3 py-1.5 text-xs"
+                    >
+                      Get quotes
+                    </Link>
                   </div>
                 ))}
               </div>
@@ -97,7 +138,37 @@ export default async function ForecastPage() {
 
           <div className="card mt-6 space-y-3">
             <h2 className="text-sm font-semibold text-stone-900">
-              10-year timeline
+              Expected spend by year
+            </h2>
+            <div className="flex items-end gap-2 overflow-x-auto pb-1">
+              {forecast.yearlySpend.map((y) => {
+                const max = Math.max(...forecast.yearlySpend.map((x) => x.amount), 1);
+                const height =
+                  y.amount > 0 ? Math.max(6, Math.round((y.amount / max) * 88)) : 3;
+                return (
+                  <div
+                    key={y.year}
+                    className="flex min-w-[2.5rem] flex-col items-center gap-1"
+                  >
+                    <span className="text-[10px] text-stone-500">
+                      {y.amount > 0 ? moneyShort(y.amount) : ""}
+                    </span>
+                    <div
+                      className={`w-6 rounded-t ${
+                        y.amount > 0 ? "bg-hearth-400" : "bg-stone-100"
+                      }`}
+                      style={{ height: `${height}px` }}
+                    />
+                    <span className="text-[10px] text-stone-400">{y.year}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="card mt-6 space-y-3">
+            <h2 className="text-sm font-semibold text-stone-900">
+              {forecast.horizonYears}-year timeline
             </h2>
             <div className="divide-y divide-stone-100">
               {forecast.timeline.map((item) => (
@@ -107,11 +178,11 @@ export default async function ForecastPage() {
                 >
                   <div className="flex items-center gap-3">
                     <span className="text-xl">
-                      {iconFor(SYSTEM_TYPES, item.system.system_type)}
+                      {iconFor(SYSTEM_TYPES, item.system_type)}
                     </span>
                     <div>
                       <p className="text-sm font-medium text-stone-900">
-                        {labelFor(SYSTEM_TYPES, item.system.system_type)}
+                        {labelFor(SYSTEM_TYPES, item.system_type)}
                       </p>
                       <p className="text-xs text-stone-400">
                         {item.yearsLeft <= 0
@@ -120,11 +191,25 @@ export default async function ForecastPage() {
                         {" · "}
                         est. {item.replacementYear}
                       </p>
+                      <Link
+                        href={`/contractors?category=${categoryForSystem(item.system_type)}`}
+                        className="text-xs font-medium text-hearth-700 hover:underline"
+                      >
+                        Get quotes →
+                      </Link>
                     </div>
                   </div>
-                  <p className="whitespace-nowrap text-sm text-stone-600">
-                    {money(item.costLow)} - {money(item.costHigh)}
-                  </p>
+                  <div className="whitespace-nowrap text-right text-sm text-stone-600">
+                    <p>
+                      {money(item.costLow)} - {money(item.costHigh)}
+                    </p>
+                    {item.replacementYear - currentYear > 1 && (
+                      <p className="text-xs text-stone-400">
+                        closer to ~{money(item.futureCost)} by{" "}
+                        {item.replacementYear}
+                      </p>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

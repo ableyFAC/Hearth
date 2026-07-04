@@ -68,11 +68,11 @@ export async function postJobAction(formData: FormData) {
     redirect("/contractors?posted=1");
   }
 
-  // Free vs Plus open-job limits: a free homeowner may have 1 open job at a
-  // time; Plus unlocks up to 10 so several projects can be in flight together.
-  // An open listing is one no pro has been picked for yet.
+  // Free vs Plus open-job limits: a free homeowner may have 3 open jobs at a
+  // time (plenty for any normal household, and it keeps junk postings down);
+  // Plus removes the cap. An open listing is one no pro has been picked for yet.
   const plus = await hasPlus();
-  const limit = plus ? 10 : 1;
+  const limit = plus ? Infinity : 3;
   const { count: openCount } = await supabase
     .from("contractor_leads")
     .select("id", { count: "exact", head: true })
@@ -80,12 +80,8 @@ export async function postJobAction(formData: FormData) {
     .is("contractor_id", null)
     .eq("status", "new");
   if ((openCount ?? 0) >= limit) {
-    if (!plus) redirect("/plus?reason=job_limit");
-    setFlash(
-      "You can have up to 10 open jobs at once. Close one before posting another.",
-      "error"
-    );
-    redirect("/contractors");
+    // Only free homeowners can reach this: Plus is unlimited.
+    redirect("/plus?reason=job_limit");
   }
 
   const { error } = await supabase.from("contractor_leads").insert({

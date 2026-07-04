@@ -133,6 +133,7 @@ export async function POST(req: NextRequest) {
     "If what you are given is not actually a contractor's quote, or you cannot read enough of it to judge, set verdict to unclear, leave total empty, and explain why in summary. " +
     "Never invent numbers that are not shown or implied by the quote. " +
     `Today's date is ${today}. ` +
+    "Write summary, notes, red_flags, missing, and negotiation in the language the quote is written in (for example, a Spanish quote gets a Spanish analysis and negotiation message), keeping the verdict field values in English. " +
     "Write in plain, complete sentences. Never use an em dash or a hyphen as a connector: use a comma, a colon, or a new sentence instead.";
 
   const userParts: any[] = [];

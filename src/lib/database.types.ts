@@ -117,6 +117,8 @@ export interface Database {
           recurrence: string;
           status: string;
           completed_at: string | null;
+          reminded_upcoming_at: string | null;
+          reminded_overdue_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -128,6 +130,8 @@ export interface Database {
           recurrence?: string;
           status?: string;
           completed_at?: string | null;
+          reminded_upcoming_at?: string | null;
+          reminded_overdue_at?: string | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["maintenance_tasks"]["Insert"]>;

@@ -29,8 +29,11 @@ import HomeAlerts from "@/components/HomeAlerts";
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: { welcome?: string };
+  searchParams: { welcome?: string; plan?: string };
 }) {
+  // "View my plan" lands here with ?plan=open so the collapsed task groups
+  // start expanded, making the click visibly do something.
+  const planOpen = searchParams.plan === "open";
   const property = (await getActiveProperty())!;
   const supabase = createClient();
   const plus = await hasPlus();
@@ -79,6 +82,10 @@ export default async function HomePage({
 
   // Open jobs = postings the owner has put up that no pro has been picked for yet.
   const openJobsCount = (jobs ?? []).filter((j) => !j.contractor_id).length;
+
+  // Whether a maintenance plan already exists (any open task), so the CTA can
+  // switch from "Build my plan" to "View my plan".
+  const hasOpenPlan = (tasks ?? []).some((t) => t.status === "open");
 
   // Group system photos by system id so each row can show its own thumbnails.
   const photosBySystem = new Map<string, string[]>();
@@ -217,6 +224,52 @@ export default async function HomePage({
           THIRTY_DAYS)
   );
 
+  // Purely presentational grouping so "This month" reads like an organized
+  // plan (Overdue / Due soon / Later / Done) instead of a flat list. Doesn't
+  // touch how tasks are generated, ordered in the query, or toggled.
+  type ReminderRow = (typeof reminders)[number];
+  type Urgency = "overdue" | "soon" | "later" | "done";
+  const URGENCY_LABEL: Record<Urgency, string> = {
+    overdue: "Overdue",
+    soon: "Due soon",
+    later: "Later",
+    done: "Done",
+  };
+  const URGENCY_TONE: Record<Urgency, string> = {
+    overdue: "text-red-600",
+    soon: "text-amber-600",
+    later: "text-stone-400",
+    done: "text-stone-400",
+  };
+  function daysUntil(dateStr: string): number {
+    const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return NaN;
+    const due = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return Math.round((due.getTime() - today.getTime()) / 86_400_000);
+  }
+  function urgencyFor(t: ReminderRow): Urgency {
+    if (t.status === "done") return "done";
+    if (!t.due_date) return "later";
+    const days = daysUntil(t.due_date);
+    if (Number.isNaN(days)) return "later";
+    if (days < 0) return "overdue";
+    if (days <= 14) return "soon";
+    return "later";
+  }
+  const groupedReminders: Record<Urgency, ReminderRow[]> = {
+    overdue: [],
+    soon: [],
+    later: [],
+    done: [],
+  };
+  for (const t of reminders) groupedReminders[urgencyFor(t)].push(t);
+  const URGENCY_ORDER: Urgency[] = ["overdue", "soon", "later", "done"];
+
+  const remindersTotal = reminders.length;
+  const remindersDone = groupedReminders.done.length;
+  const seasonLabel = season.charAt(0).toUpperCase() + season.slice(1);
+
   // Upcoming warranties from the documents vault, soonest first, so the owner
   // hears about coverage before it lapses.
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -262,7 +315,7 @@ export default async function HomePage({
       <HomeAlerts />
 
       {/* This month: focus + one merged checklist (reminders + seasonal) */}
-      <section className="space-y-3">
+      <section id="this-month" className="scroll-mt-20 space-y-3">
         <h2 className="text-lg font-semibold text-stone-900">This month</h2>
         <div className="card space-y-3">
           <div className="rounded-lg bg-hearth-50 p-3">
@@ -286,23 +339,125 @@ export default async function HomePage({
             </ul>
           </div>
 
-          <ChecklistProvider>
-            <ul className="space-y-2 border-t border-stone-100 pt-3">
-              {reminders.map((t) => (
-                <ReminderItem
-                  key={t.id}
-                  id={t.id}
-                  title={t.title}
-                  due={t.due_date}
-                  initialDone={t.status === "done"}
+          <div className="border-t border-stone-100 pt-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-stone-700">
+                {remindersTotal > 0
+                  ? `${remindersTotal} task${remindersTotal === 1 ? "" : "s"} on your plan`
+                  : "No maintenance tasks yet"}
+              </p>
+              {remindersTotal > 0 && (
+                <p className="text-xs text-stone-400">
+                  {remindersDone} of {remindersTotal} done
+                </p>
+              )}
+            </div>
+            {remindersTotal > 0 && (
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-stone-100">
+                <div
+                  className="h-full rounded-full bg-green-500 transition-all"
+                  style={{
+                    width: `${Math.round((remindersDone / remindersTotal) * 100)}%`,
+                  }}
                 />
-              ))}
-              <SeasonalChecklist
-                period={monthKey}
-                tasks={SEASONAL_TASKS[season]}
-              />
-            </ul>
-          </ChecklistProvider>
+              </div>
+            )}
+
+            {/* Everything checked off: celebrate, then tee up the next round
+                (rebuilding schedules fresh future dates for the same tasks). */}
+            {remindersTotal > 0 && remindersDone === remindersTotal && (
+              <div className="mt-3 flex flex-col items-start gap-2 rounded-lg bg-green-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-green-800">
+                  🎉 All caught up. Your home thanks you.
+                </p>
+                {plus ? (
+                  <form action={generateMaintenancePlanAction}>
+                    <button className="text-sm font-medium text-green-700 hover:underline">
+                      Plan my next round →
+                    </button>
+                  </form>
+                ) : (
+                  <Link
+                    href="/plus?reason=plan"
+                    className="text-sm font-medium text-green-700 hover:underline"
+                  >
+                    Plan my next round →
+                  </Link>
+                )}
+              </div>
+            )}
+
+            <ChecklistProvider>
+              <div className="mt-3 space-y-4">
+                {/* Near-term work stays in view; everything further out folds
+                    into collapsed groups so the card shows a handful of tasks,
+                    not a wall. */}
+                {(["overdue", "soon"] as Urgency[])
+                  .filter((u) => groupedReminders[u].length > 0)
+                  .map((u) => (
+                    <div key={u}>
+                      <p
+                        className={`px-2 text-xs font-semibold uppercase tracking-wide ${URGENCY_TONE[u]}`}
+                      >
+                        {URGENCY_LABEL[u]} ({groupedReminders[u].length})
+                      </p>
+                      <ul className="mt-1 space-y-0.5">
+                        {groupedReminders[u].map((t) => (
+                          <ReminderItem
+                            key={t.id}
+                            id={t.id}
+                            title={t.title}
+                            due={t.due_date}
+                            initialDone={t.status === "done"}
+                          />
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+
+                {(["later", "done"] as Urgency[])
+                  .filter((u) => groupedReminders[u].length > 0)
+                  .map((u) => (
+                    <details key={u} open={planOpen} className="group">
+                      <summary
+                        className={`cursor-pointer list-none px-2 text-xs font-semibold uppercase tracking-wide ${URGENCY_TONE[u]}`}
+                      >
+                        <span className="mr-1 inline-block transition-transform group-open:rotate-90">
+                          ▸
+                        </span>
+                        {URGENCY_LABEL[u]} ({groupedReminders[u].length})
+                      </summary>
+                      <ul className="mt-1 space-y-0.5">
+                        {groupedReminders[u].map((t) => (
+                          <ReminderItem
+                            key={t.id}
+                            id={t.id}
+                            title={t.title}
+                            due={t.due_date}
+                            initialDone={t.status === "done"}
+                          />
+                        ))}
+                      </ul>
+                    </details>
+                  ))}
+
+                <details open={planOpen} className="group">
+                  <summary className="cursor-pointer list-none px-2 text-xs font-semibold uppercase tracking-wide text-stone-400">
+                    <span className="mr-1 inline-block transition-transform group-open:rotate-90">
+                      ▸
+                    </span>
+                    Seasonal, {seasonLabel} ({SEASONAL_TASKS[season].length})
+                  </summary>
+                  <ul className="mt-1 space-y-0.5">
+                    <SeasonalChecklist
+                      period={monthKey}
+                      tasks={SEASONAL_TASKS[season]}
+                    />
+                  </ul>
+                </details>
+              </div>
+            </ChecklistProvider>
+          </div>
         </div>
       </section>
 
@@ -349,24 +504,38 @@ export default async function HomePage({
       {/* Hearth Plus: one cohesive "plan ahead" block (plan + premium tools) */}
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-stone-900">
-          Plan ahead with Hearth Plus
+          {plus ? "Your Hearth Plus tools" : "Plan ahead with Hearth Plus"}
         </h2>
-        <div className="card flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-stone-900">
-              Build my maintenance plan
-            </h2>
-            <p className="mt-1 text-sm text-stone-500">
-              Hearth lines up a full year of upkeep reminders tailored to your
-              home.
-            </p>
+        <div className="card flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-hearth-100 text-xl">
+              🗓️
+            </span>
+            <div>
+              <h2 className="text-lg font-semibold text-stone-900">
+                Build my maintenance plan
+              </h2>
+              <p className="mt-1 text-sm text-stone-500">
+                Upkeep reminders timed to your home&apos;s systems, a few at a
+                time so it never feels like a chore.
+              </p>
+            </div>
           </div>
           {plus ? (
-            <form action={generateMaintenancePlanAction}>
-              <button className="btn-primary whitespace-nowrap">
-                Build my plan
-              </button>
-            </form>
+            hasOpenPlan ? (
+              <Link
+                href="/dashboard?plan=open#this-month"
+                className="btn-primary whitespace-nowrap text-center"
+              >
+                View my plan
+              </Link>
+            ) : (
+              <form action={generateMaintenancePlanAction}>
+                <button className="btn-primary whitespace-nowrap">
+                  Build my plan
+                </button>
+              </form>
+            )
           ) : (
             <Link
               href="/plus?reason=plan"

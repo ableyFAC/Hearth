@@ -52,6 +52,7 @@ export const SERVICE_CATEGORIES = [
   { value: "cleaning", label: "Cleaning", icon: "🧽" },
   { value: "windows", label: "Windows", icon: "🪟" },
   { value: "painting", label: "Painting", icon: "🎨" },
+  { value: "home_inspection", label: "Home inspection", icon: "🔍" },
 ] as const;
 
 // Every value a job's category can take, for labels/icons when displaying a
@@ -129,6 +130,7 @@ export const LEAD_FEES: Record<string, number> = {
   plumbing: LEAD_TIER_FEES.skilled,
   electrical: LEAD_TIER_FEES.skilled,
   windows: LEAD_TIER_FEES.skilled,
+  home_inspection: LEAD_TIER_FEES.skilled,
   // Tier 1 - light
   landscaping: LEAD_TIER_FEES.light,
   cleaning: LEAD_TIER_FEES.light,
