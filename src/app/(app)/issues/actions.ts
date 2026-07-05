@@ -6,6 +6,21 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { setFlash } from "@/lib/flash";
 
+// Server-side length cap for free-text fields: trim, then quietly slice
+// rather than erroring, so a paste-happy owner never loses their report.
+function clipText(v: FormDataEntryValue | null, max: number): string | null {
+  const s = typeof v === "string" ? v.trim() : "";
+  return s ? s.slice(0, max) : null;
+}
+
+// Photo URLs come from our own upload component, so anything oversized is
+// not a real URL; drop it quietly instead of storing a broken link.
+function validPhotoUrls(formData: FormData): string[] {
+  return (formData.getAll("photo_urls") as string[]).filter(
+    (u) => typeof u === "string" && u.length > 0 && u.length <= 1000
+  );
+}
+
 export async function reportIssueAction(formData: FormData) {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
@@ -19,7 +34,7 @@ export async function reportIssueAction(formData: FormData) {
       system_id: (formData.get("system_id") as string) || null,
       category,
       severity: formData.get("severity") as string,
-      description: (formData.get("description") as string) || null,
+      description: clipText(formData.get("description"), 4000),
     })
     .select("id")
     .single();
@@ -27,7 +42,7 @@ export async function reportIssueAction(formData: FormData) {
   if (error || !issue) throw new Error(error?.message ?? "insert failed");
 
   // Attach any uploaded photos.
-  const urls = formData.getAll("photo_urls") as string[];
+  const urls = validPhotoUrls(formData);
   if (urls.length) {
     await supabase.from("photos").insert(
       urls.map((url) => ({
@@ -59,7 +74,7 @@ export async function updateIssueAction(formData: FormData) {
     .update({
       category: formData.get("category") as string,
       severity: formData.get("severity") as string,
-      description: (formData.get("description") as string) || null,
+      description: clipText(formData.get("description"), 4000),
     })
     .eq("id", id);
   if (error) throw new Error(error.message);

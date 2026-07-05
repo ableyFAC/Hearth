@@ -45,6 +45,16 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/contractor-signup") ||
     path.startsWith("/preview") ||
     path.startsWith("/auth") ||
+    // A pro's shareable public page: readable with no account by design.
+    path.startsWith("/p/") ||
+    // Public pros landing page: /p/ pages link here ("Powered by Hearth"),
+    // so logged-out visitors must not bounce to /signin. Exact match: the
+    // signed-in pro app lives under /pro/ and must stay guarded.
+    path === "/pros" ||
+    // SEO endpoints (src/app/sitemap.ts, robots.ts): crawlers have no
+    // session, and a 307 to /signin here would hide the whole site from them.
+    path === "/sitemap.xml" ||
+    path === "/robots.txt" ||
     // Stripe webhook authenticates via its signature, not a user session, and
     // must never be redirected: Stripe doesn't follow redirects and would treat
     // the 307 as a failed delivery, so deposits would never be credited.

@@ -72,6 +72,36 @@ export default function SystemForm({ propertyId }: { propertyId: string }) {
             <option value="1">1 (failing)</option>
           </select>
         </div>
+        {/* HVAC only: filter size + reminder cadence, so Hearth can nudge the
+            owner when it is time for a fresh filter (consumables autopilot). */}
+        {systemType === "hvac" && (
+          <>
+            <div>
+              <label className="label">Filter size (optional)</label>
+              <input
+                name="filter_size"
+                className="input"
+                placeholder="16x25x1"
+                maxLength={20}
+              />
+            </div>
+            <div>
+              <label className="label">Reminder every</label>
+              <select
+                name="filter_interval_months"
+                className="select"
+                defaultValue=""
+              >
+                <option value="">No reminder</option>
+                <option value="1">1 month</option>
+                <option value="2">2 months</option>
+                <option value="3">3 months</option>
+                <option value="6">6 months</option>
+                <option value="12">12 months</option>
+              </select>
+            </div>
+          </>
+        )}
       </div>
 
       <div>

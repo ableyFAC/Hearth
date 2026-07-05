@@ -1,0 +1,349 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { sendNotification } from "@/lib/notify";
+import { estimateHomeValue, calculateEquity } from "@/lib/homeValue";
+import { assessSystem, scoreBreakdown, scoreBand } from "@/lib/health";
+import { labelFor, SYSTEM_TYPES } from "@/lib/constants";
+import type { HomeSystem, Issue } from "@/lib/database.types";
+
+export const runtime = "nodejs";
+
+// Monthly job (Vercel Cron, see vercel.json) that sends every homeowner one
+// short factual check-in composed entirely from data they already entered:
+// the estimated home value (if they set a purchase price and year), the home
+// health score and its band (if they have systems on file), how many open
+// maintenance tasks come due in the next month, and up to two systems whose
+// age says they are due for attention. Only sections with data appear, and an
+// owner with nothing at all gets nothing at all: no filler, no urgency.
+//
+// Noise control: at most one digest per owner per run, and a dup guard (same
+// kind written in the last 25 days) makes an accidental second run a no-op
+// while never suppressing next month's legitimate digest.
+
+const MAX_OWNERS = 2000; // cap the work a single run does
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Open tasks due inside this window count toward the "coming due" line.
+const TASK_WINDOW_DAYS = 31;
+
+// Dup-guard lookback. Shorter than a month so a scheduler that fires a bit
+// early never suppresses next month's legitimate digest.
+const DUP_GUARD_MS = 25 * DAY_MS;
+
+const DIGEST_KIND = "home_digest";
+const DIGEST_URL = "/dashboard";
+
+// PostgREST silently truncates every response at its max-rows cap (default
+// 1000 rows), so an unbounded .in() fetch can quietly drop rows. Property
+// chunks of 25 keep the per-property child queries (systems, open issues,
+// soon-due tasks) comfortably under the cap even for well-stocked homes, and
+// explicit .order() makes any residual truncation deterministic (a digest
+// sentence goes missing) instead of arbitrary.
+const QUERY_CHUNK = 25;
+// Keep Promise.all fan-out bounded.
+const SEND_CHUNK = 20;
+
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+function isAuthorized(req: NextRequest): boolean {
+  const expected = process.env.CRON_SECRET;
+  if (!expected) return false;
+  // Vercel Cron automatically sends "Authorization: Bearer <CRON_SECRET>" when
+  // the CRON_SECRET env var is set. Also accept an explicit x-cron-secret header
+  // or ?secret= for manual runs / other schedulers.
+  const auth = req.headers.get("authorization");
+  const bearer = auth?.startsWith("Bearer ") ? auth.slice(7) : null;
+  const provided =
+    bearer ??
+    req.headers.get("x-cron-secret") ??
+    req.nextUrl.searchParams.get("secret");
+  return provided === expected;
+}
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+function plural(n: number, word: string): string {
+  return n === 1 ? `${n} ${word}` : `${n} ${word}s`;
+}
+
+function usd(n: number): string {
+  return `$${Math.round(n).toLocaleString("en-US")}`;
+}
+
+async function runCron(req: NextRequest) {
+  if (!isAuthorized(req)) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const supabase = createAdminClient();
+  const now = new Date();
+  const nowMs = now.getTime();
+  const currentYear = now.getFullYear();
+  const monthName = MONTH_NAMES[now.getMonth()];
+  const digestTitle = `Your ${monthName} home check-in`;
+
+  // Oldest properties first so the recipient set stays stable when a run hits
+  // the cap. purchase_price and mortgage_balance are columns from migration
+  // 0029 that are not in src/lib/database.types.ts, so they are read off the
+  // row with a cast below (same pattern as the /value page) rather than
+  // widening the generated types by hand.
+  const { data: rawProperties, error: propertiesError } = await supabase
+    .from("properties")
+    .select("*")
+    .order("created_at", { ascending: true })
+    .limit(MAX_OWNERS);
+  if (propertiesError) {
+    return NextResponse.json(
+      { checked: 0, notified: 0, error: propertiesError.message },
+      { status: 200 }
+    );
+  }
+
+  // Simplification: an owner with several properties gets a digest for their
+  // FIRST property only (oldest by created_at). One warm monthly note beats
+  // a stack of near-identical ones; multi-property digests can come later.
+  type PropertyRow = NonNullable<typeof rawProperties>[number];
+  const propertyByOwner = new Map<string, PropertyRow>();
+  for (const p of rawProperties ?? []) {
+    if (!p.user_id || propertyByOwner.has(p.user_id)) continue;
+    propertyByOwner.set(p.user_id, p);
+  }
+  const owners = Array.from(propertyByOwner.keys());
+  if (owners.length === 0) {
+    return NextResponse.json({ checked: 0, notified: 0 });
+  }
+
+  // Dup guard: anyone who already got a digest in the last 25 days (e.g. the
+  // cron ran twice) is skipped.
+  const guardCutoff = new Date(nowMs - DUP_GUARD_MS).toISOString();
+  const alreadyNotified = new Set<string>();
+  for (const ids of chunk(owners, QUERY_CHUNK)) {
+    const { data: recent } = await supabase
+      .from("notifications")
+      .select("user_id")
+      .in("user_id", ids)
+      .eq("kind", DIGEST_KIND)
+      .gte("created_at", guardCutoff)
+      .order("created_at", { ascending: false });
+    for (const r of recent ?? []) alreadyNotified.add(r.user_id);
+  }
+
+  // Pull systems, open issues, and soon-due open tasks for the properties
+  // that can still receive a digest, grouped by property.
+  const activePropertyIds = owners
+    .filter((o) => !alreadyNotified.has(o))
+    .map((o) => propertyByOwner.get(o)!.id);
+
+  const systemsByProperty = new Map<string, HomeSystem[]>();
+  const issuesByProperty = new Map<string, Issue[]>();
+  const dueTasksByProperty = new Map<string, number>();
+
+  const todayIso = now.toISOString().slice(0, 10);
+  const taskHorizonIso = new Date(nowMs + TASK_WINDOW_DAYS * DAY_MS)
+    .toISOString()
+    .slice(0, 10);
+
+  for (const ids of chunk(activePropertyIds, QUERY_CHUNK)) {
+    const { data: systems } = await supabase
+      .from("home_systems")
+      .select("*")
+      .in("property_id", ids)
+      .order("property_id", { ascending: true })
+      .order("created_at", { ascending: true });
+    for (const s of systems ?? []) {
+      const list = systemsByProperty.get(s.property_id) ?? [];
+      list.push(s);
+      systemsByProperty.set(s.property_id, list);
+    }
+
+    const { data: issues } = await supabase
+      .from("issues")
+      .select("*")
+      .in("property_id", ids)
+      .eq("status", "open")
+      .order("property_id", { ascending: true })
+      .order("created_at", { ascending: true });
+    for (const i of issues ?? []) {
+      const list = issuesByProperty.get(i.property_id) ?? [];
+      list.push(i);
+      issuesByProperty.set(i.property_id, list);
+    }
+
+    // "Coming due" means dated open tasks due between today and the horizon;
+    // overdue tasks already get their own reminders (maintenance-reminders).
+    const { data: tasks } = await supabase
+      .from("maintenance_tasks")
+      .select("property_id")
+      .in("property_id", ids)
+      .eq("status", "open")
+      .not("due_date", "is", null)
+      .gte("due_date", todayIso)
+      .lte("due_date", taskHorizonIso)
+      .order("property_id", { ascending: true })
+      .order("due_date", { ascending: true });
+    for (const t of tasks ?? []) {
+      dueTasksByProperty.set(
+        t.property_id,
+        (dueTasksByProperty.get(t.property_id) ?? 0) + 1
+      );
+    }
+  }
+
+  // Build each owner's digest: 2-4 short factual sentences, only the
+  // sections they actually have data for.
+  let checked = 0;
+  const digests: { userId: string; body: string }[] = [];
+
+  for (const [userId, property] of propertyByOwner) {
+    try {
+      checked += 1;
+      if (alreadyNotified.has(userId)) continue;
+
+      const raw = property as any;
+      const purchasePrice: number | null =
+        typeof raw.purchase_price === "number" ? raw.purchase_price : null;
+      const mortgageBalance: number | null =
+        typeof raw.mortgage_balance === "number" ? raw.mortgage_balance : null;
+      const purchaseYear: number | null = property.purchase_date
+        ? Number(property.purchase_date.slice(0, 4)) || null
+        : null;
+
+      const systems = systemsByProperty.get(property.id) ?? [];
+      const openIssues = issuesByProperty.get(property.id) ?? [];
+      const dueTasks = dueTasksByProperty.get(property.id) ?? 0;
+
+      const parts: string[] = [];
+
+      // Estimated value (and equity when a balance is on file). A negative
+      // equity number is real but a one-line digest is the wrong place to
+      // break it, so the equity clause only appears when it is positive.
+      if (purchasePrice && purchaseYear) {
+        const value = estimateHomeValue(
+          purchasePrice,
+          purchaseYear,
+          property.state,
+          currentYear
+        );
+        const equity = calculateEquity(value, mortgageBalance);
+        parts.push(
+          mortgageBalance !== null && equity > 0
+            ? `Your home's estimated value is ${usd(value)}, about ${usd(
+                equity
+              )} of it equity.`
+            : `Your home's estimated value is ${usd(value)}.`
+        );
+      }
+
+      // Health score, only meaningful once they have systems on file.
+      if (systems.length > 0) {
+        const { score } = scoreBreakdown(systems, openIssues);
+        parts.push(
+          `Your home health score is ${score} (${scoreBand(
+            score
+          ).label.toLowerCase()}).`
+        );
+      }
+
+      if (dueTasks > 0) {
+        parts.push(
+          `You have ${plural(
+            dueTasks,
+            "maintenance task"
+          )} coming due in the next month.`
+        );
+      }
+
+      // Up to two systems whose age says they are due for attention.
+      const dueSystems = systems
+        .filter((s) => assessSystem(s).stage === "due")
+        .slice(0, 2)
+        .map((s) => labelFor(SYSTEM_TYPES, s.system_type).toLowerCase());
+      if (dueSystems.length === 1) {
+        parts.push(`Your ${dueSystems[0]} is due for attention.`);
+      } else if (dueSystems.length === 2) {
+        parts.push(
+          `Your ${dueSystems[0]} and ${dueSystems[1]} are due for attention.`
+        );
+      }
+
+      // Nothing to say, nothing sent.
+      if (parts.length === 0) continue;
+
+      digests.push({ userId, body: parts.join(" ") });
+    } catch {
+      // One bad property shouldn't stop the rest of the run.
+      continue;
+    }
+  }
+
+  if (digests.length === 0) {
+    return NextResponse.json({ checked, notified: 0 });
+  }
+
+  // Contact details so the email/SMS channels can fire once their providers
+  // are configured (same pattern as the pro weekly digest).
+  const userById = new Map<
+    string,
+    { id: string; email: string | null; phone: string | null }
+  >();
+  for (const ids of chunk(digests.map((d) => d.userId), QUERY_CHUNK)) {
+    const { data: users } = await supabase
+      .from("users")
+      .select("id, email, phone")
+      .in("id", ids)
+      .order("id", { ascending: true });
+    for (const u of users ?? []) userById.set(u.id, u);
+  }
+
+  // Send in bounded parallel batches.
+  let notified = 0;
+  for (const batch of chunk(digests, SEND_CHUNK)) {
+    await Promise.all(
+      batch.map(async (d) => {
+        try {
+          const contact = userById.get(d.userId);
+          const sent = await sendNotification(supabase, {
+            userId: d.userId,
+            kind: DIGEST_KIND,
+            title: digestTitle,
+            body: d.body,
+            url: DIGEST_URL,
+            email: contact?.email ?? null,
+            phone: contact?.phone ?? null,
+          });
+          if (sent) notified += 1;
+        } catch {
+          // One failed send shouldn't stop the rest of the batch.
+        }
+      })
+    );
+  }
+
+  return NextResponse.json({ checked, notified });
+}
+
+export async function POST(req: NextRequest) {
+  return runCron(req);
+}
+
+export async function GET(req: NextRequest) {
+  return runCron(req);
+}

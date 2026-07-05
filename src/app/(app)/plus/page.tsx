@@ -14,10 +14,20 @@ import {
 } from "./actions";
 import PlanToggle from "./PlanToggle";
 import PlusWelcome from "./PlusWelcome";
-import ConfirmSubmit from "./ConfirmSubmit";
+import ConfirmSubmit from "@/components/ConfirmSubmit";
+import { COLD_START_FREE_POSTING } from "@/lib/constants";
 
 const COMPARISON: Array<{ label: string; free: string; plus: string }> = [
-  { label: "Open job postings", free: "3 at a time", plus: "Unlimited" },
+  // COLD START: while COLD_START_FREE_POSTING is on, posting is uncapped for
+  // everyone, so the row says so honestly. The gated version comes back when
+  // the flag flips.
+  COLD_START_FREE_POSTING
+    ? {
+        label: "Open job postings",
+        free: "Unlimited while Hearth is new",
+        plus: "Unlimited",
+      }
+    : { label: "Open job postings", free: "3 at a time", plus: "Unlimited" },
   { label: "Matching to pros", free: "Standard", plus: "Priority" },
   { label: "Home tracking & document vault", free: "Included", plus: "Included" },
   { label: "Homes you can track", free: "1 home", plus: "Up to 5 homes" },
@@ -62,7 +72,7 @@ export default async function PlusPage({
         <div className="text-center">
           <h1 className="text-2xl font-semibold text-stone-900">Hearth Plus</h1>
         </div>
-        <div className="card space-y-4 text-center">
+        <div className="card-hero space-y-4 text-center">
           <p className="text-lg font-medium text-hearth-700">
             You&apos;re on Hearth Plus
           </p>
@@ -165,7 +175,10 @@ export default async function PlusPage({
 
   return (
     <div className="mx-auto max-w-2xl space-y-8">
-      {searchParams.reason === "job_limit" && (
+      {/* COLD START: the posting cap is off while COLD_START_FREE_POSTING is
+          on, so this banner must not show even if the URL is hit directly.
+          Keep it for when the flag flips back. */}
+      {!COLD_START_FREE_POSTING && searchParams.reason === "job_limit" && (
         <div className="card border-hearth-200 bg-hearth-50 text-center">
           <p className="text-sm text-hearth-800">
             You&apos;ve used all 3 of your free job posts. Hearth Plus lets you
@@ -220,13 +233,36 @@ export default async function PlusPage({
         </div>
       )}
 
+      {searchParams.reason === "tax" && (
+        <div className="card border-hearth-200 bg-hearth-50 text-center">
+          <p className="text-sm text-hearth-800">
+            Your assessment looks high, and Plus drafts the appeal letter for
+            you. Homeowners who appeal often save hundreds a year, and one win
+            covers years of Plus.
+          </p>
+        </div>
+      )}
+
+      {searchParams.reason === "insurance" && (
+        <div className="card border-hearth-200 bg-hearth-50 text-center">
+          <p className="text-sm text-hearth-800">
+            Plus builds your requote packet: your home&apos;s facts, upkeep
+            record, and the questions to ask, ready to hand to insurance
+            agents so they compete for you.
+          </p>
+        </div>
+      )}
+
       <div className="text-center">
         <h1 className="text-3xl font-semibold text-stone-900">
           Get your home fixed faster
         </h1>
         <p className="mt-2 text-sm text-stone-500">
-          Line up vetted pros, on your terms. Post more jobs at once, get
-          matched first, and keep every proactive alert working for you.
+          {COLD_START_FREE_POSTING
+            ? // COLD START: posting is uncapped for everyone right now, so the
+              // pitch leans on the perks that stay exclusive.
+              "Line up vetted pros, on your terms. Get matched first and keep every proactive alert working for you."
+            : "Line up vetted pros, on your terms. Post more jobs at once, get matched first, and keep every proactive alert working for you."}
         </p>
         <div className="mt-5">
           <a href="#pricing" className="btn-primary">

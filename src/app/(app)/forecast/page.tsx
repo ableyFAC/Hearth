@@ -4,7 +4,17 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { hasPlus } from "@/lib/subscription";
 import { buildForecast, stateName } from "@/lib/forecast";
-import { labelFor, iconFor, SYSTEM_TYPES, categoryForSystem } from "@/lib/constants";
+import {
+  estimateSeasonalEnergyCost,
+  estimateUpgradeSavings,
+} from "@/lib/energy";
+import {
+  labelFor,
+  iconFor,
+  SYSTEM_TYPES,
+  categoryForSystem,
+  seasonForMonth,
+} from "@/lib/constants";
 import AskHearthPlanButton from "./AskHearthPlanButton";
 
 function money(n: number): string {
@@ -34,9 +44,44 @@ export default async function ForecastPage() {
     .order("created_at", { ascending: true });
 
   const sys = systems ?? [];
-  const currentYear = new Date(Date.now()).getFullYear();
+  const nowDate = new Date(Date.now());
+  const currentYear = nowDate.getFullYear();
   const forecast = sys.length > 0 ? buildForecast(sys, currentYear, property.state) : null;
   const region = stateName(property.state);
+
+  // Running-costs section: the season the owner is heading into (fall points
+  // at winter, spring at summer), estimated from data already on this page.
+  // Requires the state (same gate as the dashboard card): the fine print
+  // claims state-specific weather and prices, so national-average numbers
+  // must never pose as personal. May also come back null for seasons with a
+  // negligible load (see estimateSeasonalEnergyCost), which hides the section.
+  const calendarSeason = seasonForMonth(nowDate.getMonth());
+  const energySeason: "winter" | "summer" =
+    calendarSeason === "winter" || calendarSeason === "fall" ? "winter" : "summer";
+  const hvacSystem = sys.find((s) => s.system_type === "hvac") ?? null;
+  const energyEstimate =
+    property.state != null
+      ? estimateSeasonalEnergyCost({
+          sqft: property.sqft,
+          yearBuilt: property.year_built,
+          state: property.state,
+          hvacInstallYear: hvacSystem?.install_year ?? null,
+          hvacType: hvacSystem?.material_or_model ?? null,
+          season: energySeason,
+          currentYear,
+        })
+      : null;
+  // Non-null only when the HVAC has an install year and is 15+ years old.
+  const upgradeSavings = hvacSystem
+    ? estimateUpgradeSavings({
+        sqft: property.sqft,
+        yearBuilt: property.year_built,
+        state: property.state,
+        hvacInstallYear: hvacSystem.install_year,
+        hvacType: hvacSystem.material_or_model,
+        currentYear,
+      })
+    : null;
 
   // Personalize the handoff into Ask Hearth with the owner's actual top
   // priorities, not a generic prompt, so the answer is about their home.
@@ -55,10 +100,10 @@ export default async function ForecastPage() {
         </h1>
       </header>
       <p className="mb-5 text-sm text-stone-500">
-        83% of homeowners hit an unexpected repair last year, and most
-        couldn't cover a $5,000 emergency. Here is what your home's systems
-        are likely to need over the next {forecast?.horizonYears ?? 10} years,
-        and how much to set aside so it never catches you off guard.
+        Most homeowners get surprised by a big repair sooner or later, and a
+        five-figure one hurts. Here is what your home's systems are likely to
+        need over the next {forecast?.horizonYears ?? 10} years, and how much
+        to set aside so it never catches you off guard.
       </p>
 
       {!forecast && (
@@ -75,14 +120,14 @@ export default async function ForecastPage() {
 
       {forecast && (
         <>
-          <div className="card bg-hearth-50 border-hearth-200 space-y-2 text-center">
+          <div className="card-hero space-y-2 text-center">
             <p className="text-sm text-hearth-800">
               Over the next {forecast.horizonYears} years, plan for about{" "}
               <span className="font-semibold">
                 {money(forecast.totalMidCost)}
               </span>
             </p>
-            <p className="text-3xl font-semibold text-hearth-800">
+            <p className="stat-number text-4xl text-hearth-800">
               Set aside about {money(forecast.monthlySetAside)}/month
             </p>
             <p className="text-xs text-hearth-700">
@@ -92,6 +137,18 @@ export default async function ForecastPage() {
               Adjusted for {region ? `your area (${region})` : "your area"},
               and for future prices, not just today's.
             </p>
+            {forecast.estimatedTimingCount > 0 && (
+              <p className="text-xs text-hearth-600">
+                {forecast.estimatedTimingCount === 1
+                  ? "1 of your systems has no install year, so its timing here is a rough placement."
+                  : `${forecast.estimatedTimingCount} of your systems have no install year, so their timing here is a rough placement.`}{" "}
+                Add install years on your{" "}
+                <Link href="/profile" className="underline">
+                  home profile
+                </Link>{" "}
+                for a sharper forecast.
+              </p>
+            )}
           </div>
 
           <div className="mt-4 flex justify-center">
@@ -100,7 +157,7 @@ export default async function ForecastPage() {
 
           {forecast.startHere.length > 0 && (
             <div className="card mt-6 space-y-3">
-              <h2 className="text-sm font-semibold text-stone-900">
+              <h2 className="flex items-center text-sm font-semibold text-stone-900">
                 Start here
               </h2>
               <div className="space-y-2">
@@ -114,7 +171,7 @@ export default async function ForecastPage() {
                     }`}
                   >
                     <div className="flex items-start gap-2">
-                      <span className="text-lg">
+                      <span className="icon-chip">
                         {iconFor(SYSTEM_TYPES, item.system_type)}
                       </span>
                       <div>
@@ -137,37 +194,101 @@ export default async function ForecastPage() {
           )}
 
           <div className="card mt-6 space-y-3">
-            <h2 className="text-sm font-semibold text-stone-900">
+            <h2 className="flex items-center text-sm font-semibold text-stone-900">
               Expected spend by year
             </h2>
-            <div className="flex items-end gap-2 overflow-x-auto pb-1">
-              {forecast.yearlySpend.map((y) => {
-                const max = Math.max(...forecast.yearlySpend.map((x) => x.amount), 1);
-                const height =
-                  y.amount > 0 ? Math.max(6, Math.round((y.amount / max) * 88)) : 3;
-                return (
-                  <div
-                    key={y.year}
-                    className="flex min-w-[2.5rem] flex-col items-center gap-1"
-                  >
-                    <span className="text-[10px] text-stone-500">
-                      {y.amount > 0 ? moneyShort(y.amount) : ""}
-                    </span>
+            <div className="overflow-x-auto pb-1">
+              <div className="flex items-end gap-2 border-b border-stone-200">
+                {forecast.yearlySpend.map((y) => {
+                  const max = Math.max(...forecast.yearlySpend.map((x) => x.amount), 1);
+                  const height =
+                    y.amount > 0 ? Math.max(6, Math.round((y.amount / max) * 96)) : 3;
+                  return (
                     <div
-                      className={`w-6 rounded-t ${
-                        y.amount > 0 ? "bg-hearth-400" : "bg-stone-100"
-                      }`}
-                      style={{ height: `${height}px` }}
-                    />
-                    <span className="text-[10px] text-stone-400">{y.year}</span>
-                  </div>
-                );
-              })}
+                      key={y.year}
+                      title={`${y.year}: ${money(y.amount)}`}
+                      className="flex min-w-[2.5rem] flex-col items-center justify-end gap-1 transition hover:opacity-90"
+                    >
+                      <span className="text-[10px] font-medium tabular-nums text-stone-500">
+                        {y.amount > 0 ? moneyShort(y.amount) : ""}
+                      </span>
+                      <div
+                        className={`w-7 rounded-t-md ${
+                          y.amount > 0
+                            ? `bg-gradient-to-t ${
+                                y.amount === max
+                                  ? "from-hearth-600 to-hearth-500"
+                                  : "from-hearth-500 to-hearth-400"
+                              }`
+                            : "bg-stone-100"
+                        }`}
+                        style={{ height: `${height}px` }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex gap-2">
+                {forecast.yearlySpend.map((y) => (
+                  <span
+                    key={y.year}
+                    className="min-w-[2.5rem] text-center text-[10px] text-stone-400"
+                  >
+                    {y.year}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
 
+          {energyEstimate && (
+            <div className="card mt-6 space-y-3">
+              <h2 className="flex items-center text-sm font-semibold text-stone-900">
+                Running costs, not just repairs
+              </h2>
+              <p className="text-sm text-stone-500">
+                Replacements are the big shocks, but your home also costs
+                money to run every month.{" "}
+                {energySeason === "winter"
+                  ? "Keeping it warm this winter"
+                  : "Keeping it cool this summer"}{" "}
+                will likely run about{" "}
+                <span className="font-semibold text-stone-900">
+                  {money(energyEstimate.low)} - {money(energyEstimate.high)}
+                </span>
+                .
+              </p>
+              {upgradeSavings && (
+                <div className="rounded-lg bg-hearth-50 p-3">
+                  <p className="text-sm text-hearth-800">
+                    Your HVAC is about {upgradeSavings.hvacAge} years old, and
+                    older units waste energy. A modern high-efficiency unit
+                    could trim roughly{" "}
+                    <span className="font-semibold">
+                      {money(upgradeSavings.low)} -{" "}
+                      {money(upgradeSavings.high)} a year
+                    </span>{" "}
+                    off your energy bills, on top of dodging a breakdown at
+                    the worst possible time.
+                  </p>
+                  <Link
+                    href={`/contractors?category=${categoryForSystem("hvac")}`}
+                    className="mt-1 inline-block text-xs font-medium text-hearth-700 hover:underline"
+                  >
+                    Get replacement quotes →
+                  </Link>
+                </div>
+              )}
+              <p className="text-xs text-stone-400">
+                Ballpark from typical energy prices and 30-year weather
+                averages for your state, give or take 30%. Your thermostat
+                habits matter more than any formula.
+              </p>
+            </div>
+          )}
+
           <div className="card mt-6 space-y-3">
-            <h2 className="text-sm font-semibold text-stone-900">
+            <h2 className="flex items-center text-sm font-semibold text-stone-900">
               {forecast.horizonYears}-year timeline
             </h2>
             <div className="divide-y divide-stone-100">
@@ -177,7 +298,7 @@ export default async function ForecastPage() {
                   className="flex items-center justify-between gap-3 py-3"
                 >
                   <div className="flex items-center gap-3">
-                    <span className="text-xl">
+                    <span className="icon-chip">
                       {iconFor(SYSTEM_TYPES, item.system_type)}
                     </span>
                     <div>
@@ -185,11 +306,17 @@ export default async function ForecastPage() {
                         {labelFor(SYSTEM_TYPES, item.system_type)}
                       </p>
                       <p className="text-xs text-stone-400">
-                        {item.yearsLeft <= 0
-                          ? "Due now"
-                          : `~${item.yearsLeft} year${item.yearsLeft === 1 ? "" : "s"} left`}
-                        {" · "}
-                        est. {item.replacementYear}
+                        {item.timingEstimated ? (
+                          "Timing unknown, add an install year for a real estimate"
+                        ) : (
+                          <>
+                            {item.yearsLeft <= 0
+                              ? "Due now"
+                              : `~${item.yearsLeft} year${item.yearsLeft === 1 ? "" : "s"} left`}
+                            {" · "}
+                            est. {item.replacementYear}
+                          </>
+                        )}
                       </p>
                       <Link
                         href={`/contractors?category=${categoryForSystem(item.system_type)}`}
@@ -203,12 +330,13 @@ export default async function ForecastPage() {
                     <p>
                       {money(item.costLow)} - {money(item.costHigh)}
                     </p>
-                    {item.replacementYear - currentYear > 1 && (
-                      <p className="text-xs text-stone-400">
-                        closer to ~{money(item.futureCost)} by{" "}
-                        {item.replacementYear}
-                      </p>
-                    )}
+                    {!item.timingEstimated &&
+                      item.replacementYear - currentYear > 1 && (
+                        <p className="text-xs text-stone-400">
+                          closer to ~{money(item.futureCost)} by{" "}
+                          {item.replacementYear}
+                        </p>
+                      )}
                   </div>
                 </div>
               ))}
@@ -216,7 +344,7 @@ export default async function ForecastPage() {
           </div>
 
           <div className="card mt-6 space-y-2">
-            <h2 className="text-sm font-semibold text-stone-900">
+            <h2 className="flex items-center text-sm font-semibold text-stone-900">
               Why this matters
             </h2>
             <p className="text-sm text-stone-500">

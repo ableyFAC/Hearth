@@ -3,7 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
-type MenuLink = { href: string; label: string };
+type MenuLink = {
+  href: string;
+  label: string;
+  // Optional visual accent for an item that needs to stand out (currently only
+  // used by the homeowner "Emergency" link). Undefined renders the normal row.
+  accent?: "red";
+};
 
 // Avatar + dropdown shown in the top-right of both navs. The menu links differ
 // per side (contractor: company listing + billing; homeowner: account), but the
@@ -12,12 +18,16 @@ type MenuLink = { href: string; label: string };
 export default function ProfileMenu({
   name,
   links,
+  linksLabel,
   hasPlus,
   plusTools,
   moreLinks,
 }: {
   name: string | null;
   links: MenuLink[];
+  // Optional section label rendered above `links` (homeowner passes
+  // "Your home"). Omitted on the contractor side, which renders links plain.
+  linksLabel?: string;
   // Homeowner-only: whether the signed-in user has Hearth Plus. Undefined on
   // the contractor side (ProNav), which has no Plus entry to show.
   hasPlus?: boolean;
@@ -97,7 +107,7 @@ export default function ProfileMenu({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg"
+          className="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-xl border border-stone-200 bg-white py-1.5 shadow-lg"
         >
           {hasPlus !== undefined && (
             <Link
@@ -113,6 +123,34 @@ export default function ProfileMenu({
               {hasPlus ? "Hearth Plus ✓" : "Upgrade to Hearth Plus"}
             </Link>
           )}
+          <div
+            className={
+              plusTools && plusTools.length > 0
+                ? "border-b border-stone-100 py-1"
+                : undefined
+            }
+          >
+            {linksLabel && (
+              <p className="px-4 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-400">
+                {linksLabel}
+              </p>
+            )}
+            {links.map((l) => (
+              <Link
+                key={l.href}
+                href={l.href}
+                role="menuitem"
+                onClick={() => setOpen(false)}
+                className={
+                  l.accent === "red"
+                    ? "mx-1 flex items-center rounded-md px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                    : "mx-1 flex items-center rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-hearth-50"
+                }
+              >
+                {l.label}
+              </Link>
+            ))}
+          </div>
           {plusTools && plusTools.length > 0 && (
             <div className="border-b border-stone-100 py-1">
               <p className="px-4 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-400">
@@ -124,7 +162,7 @@ export default function ProfileMenu({
                   href={l.href}
                   role="menuitem"
                   onClick={() => setOpen(false)}
-                  className={`flex items-center justify-between gap-2 px-4 py-2 text-sm hover:bg-hearth-50 ${
+                  className={`mx-1 flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm hover:bg-hearth-50 ${
                     l.locked ? "text-stone-400" : "text-stone-700"
                   }`}
                 >
@@ -138,23 +176,12 @@ export default function ProfileMenu({
               ))}
             </div>
           )}
-          {links.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              role="menuitem"
-              onClick={() => setOpen(false)}
-              className="block px-4 py-2 text-sm text-stone-700 hover:bg-hearth-50"
-            >
-              {l.label}
-            </Link>
-          ))}
           {moreLinks && moreLinks.length > 0 && !showMore && (
             <button
               type="button"
               role="menuitem"
               onClick={() => setShowMore(true)}
-              className="flex w-full items-center gap-1 px-4 py-2 text-left text-sm text-stone-400 hover:bg-hearth-50 hover:text-stone-600"
+              className="mx-1 flex w-[calc(100%-0.5rem)] items-center gap-1 rounded-md px-3 py-2 text-left text-sm text-stone-400 hover:bg-hearth-50 hover:text-stone-600"
             >
               More
               <svg
@@ -179,7 +206,7 @@ export default function ProfileMenu({
                 href={l.href}
                 role="menuitem"
                 onClick={() => setOpen(false)}
-                className="block px-4 py-2 text-sm text-stone-700 hover:bg-hearth-50"
+                className="mx-1 flex items-center rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-hearth-50"
               >
                 {l.label}
               </Link>

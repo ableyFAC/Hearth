@@ -26,6 +26,11 @@ import SeasonalChecklist from "@/components/SeasonalChecklist";
 import ChecklistProvider from "@/components/ChecklistProvider";
 import ReminderItem from "./ReminderItem";
 import HomeAlerts from "@/components/HomeAlerts";
+import { estimateHomeValue, calculateEquity } from "@/lib/homeValue";
+import {
+  estimateSeasonalEnergyCost,
+  estimateUpgradeSavings,
+} from "@/lib/energy";
 
 export default async function HomePage({
   searchParams,
@@ -303,6 +308,69 @@ export default async function HomePage({
       ? `${days} day${days === 1 ? "" : "s"} left`
       : `about ${Math.round(days / 30)} months left`;
 
+  // Home value & equity tile. purchase_price/mortgage_balance are new columns
+  // (migration 0029) not yet in database.types.ts, so read off the row with a
+  // cast rather than widening the generated types by hand; if the migration
+  // hasn't run yet these just come back undefined and the tile shows the CTA.
+  const rawProperty = property as any;
+  const homeValuePurchasePrice: number | null =
+    typeof rawProperty.purchase_price === "number" ? rawProperty.purchase_price : null;
+  const homeValueMortgageBalance: number | null =
+    typeof rawProperty.mortgage_balance === "number" ? rawProperty.mortgage_balance : null;
+  const homeValuePurchaseYear: number | null = property.purchase_date
+    ? Number(property.purchase_date.slice(0, 4)) || null
+    : null;
+  const hasHomeValueData =
+    homeValuePurchasePrice != null && homeValuePurchaseYear != null;
+  const homeEstimatedValue = hasHomeValueData
+    ? estimateHomeValue(
+        homeValuePurchasePrice!,
+        homeValuePurchaseYear!,
+        property.state,
+        now.getFullYear()
+      )
+    : null;
+  const homeEquity =
+    homeEstimatedValue != null
+      ? calculateEquity(homeEstimatedValue, homeValueMortgageBalance)
+      : null;
+
+  // Energy-this-season tile. Reuses data already on the page (property +
+  // home_systems), no extra queries. Fall points at the coming winter and
+  // spring at the coming summer, so the number is always about the bill the
+  // owner is heading into, not one that already passed.
+  const energySeason: "winter" | "summer" =
+    season === "winter" || season === "fall" ? "winter" : "summer";
+  const hvacSystem = sys.find((s) => s.system_type === "hvac") ?? null;
+  // Numbers only make sense with a state (weather + prices) and at least one
+  // real fact about the home; otherwise the tile nudges setup instead.
+  const hasEnergyInputs =
+    property.state != null &&
+    (property.sqft != null || property.year_built != null || hvacSystem != null);
+  const energyEstimate = hasEnergyInputs
+    ? estimateSeasonalEnergyCost({
+        sqft: property.sqft,
+        yearBuilt: property.year_built,
+        state: property.state,
+        hvacInstallYear: hvacSystem?.install_year ?? null,
+        hvacType: hvacSystem?.material_or_model ?? null,
+        season: energySeason,
+        currentYear: now.getFullYear(),
+      })
+    : null;
+  // Non-null only for a 15+ year old HVAC (the lib enforces the threshold).
+  const upgradeSavings =
+    hasEnergyInputs && hvacSystem
+      ? estimateUpgradeSavings({
+          sqft: property.sqft,
+          yearBuilt: property.year_built,
+          state: property.state,
+          hvacInstallYear: hvacSystem.install_year,
+          hvacType: hvacSystem.material_or_model,
+          currentYear: now.getFullYear(),
+        })
+      : null;
+
   return (
     <div className="space-y-8">
       {searchParams.welcome && (
@@ -339,7 +407,7 @@ export default async function HomePage({
 
       {/* This month: focus + one merged checklist (reminders + seasonal) */}
       <section id="this-month" className="scroll-mt-20 space-y-3">
-        <h2 className="text-lg font-semibold text-stone-900">This month</h2>
+        <h2 className="flex items-center text-lg font-semibold text-stone-900">This month</h2>
         <div className="card space-y-3">
           <div className="rounded-lg bg-hearth-50 p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-hearth-700">
@@ -487,15 +555,15 @@ export default async function HomePage({
       {/* Upcoming warranties from the documents vault */}
       {warranties.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-stone-900">Warranties</h2>
-          <div className="card space-y-2">
+          <h2 className="flex items-center text-lg font-semibold text-stone-900">Warranties</h2>
+          <div className="card divide-y divide-stone-100">
             {warranties.map((w) => (
               <div
                 key={w.id}
-                className="flex items-center justify-between gap-3"
+                className="flex items-center justify-between gap-3 py-2 first:pt-0"
               >
                 <span className="flex min-w-0 items-center gap-2">
-                  <span>
+                  <span className="icon-chip">
                     {w.system_type ? iconFor(SYSTEM_TYPES, w.system_type) : "📄"}
                   </span>
                   <span className="truncate text-sm text-stone-800">
@@ -503,7 +571,7 @@ export default async function HomePage({
                   </span>
                 </span>
                 <span
-                  className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+                  className={`chip shrink-0 ${
                     w.days <= 60
                       ? "bg-amber-100 text-amber-700"
                       : "bg-stone-100 text-stone-500"
@@ -513,7 +581,7 @@ export default async function HomePage({
                 </span>
               </div>
             ))}
-            <p className="pt-1 text-xs text-stone-400">
+            <p className="pt-2 text-xs text-stone-400">
               Pulled from your{" "}
               <Link href="/documents" className="text-hearth-700 hover:underline">
                 documents
@@ -526,12 +594,12 @@ export default async function HomePage({
 
       {/* Hearth Plus: one cohesive "plan ahead" block (plan + premium tools) */}
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-stone-900">
+        <h2 className="flex items-center text-lg font-semibold text-stone-900">
           {plus ? "Your Hearth Plus tools" : "Plan ahead with Hearth Plus"}
         </h2>
         <div className="card flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-hearth-100 text-xl">
+            <span className="icon-chip text-xl">
               🗓️
             </span>
             <div>
@@ -595,16 +663,16 @@ export default async function HomePage({
               href={t.href}
               className="card block transition-colors hover:border-hearth-400"
             >
-              <p className="text-2xl">{t.icon}</p>
+              <p className="icon-chip">{t.icon}</p>
               <p className="mt-1 font-medium text-stone-900">
                 {t.title}
                 {!plus && (
-                  <span className="ml-1.5 rounded-full bg-hearth-100 px-1.5 py-0.5 text-[10px] font-semibold text-hearth-700">
+                  <span className="chip ml-1.5 bg-hearth-100 text-hearth-700">
                     Plus
                   </span>
                 )}
                 {!plus && t.title === "Quote analyzer" && (
-                  <span className="ml-1.5 rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-700">
+                  <span className="chip ml-1.5 bg-green-100 text-green-700">
                     1 free
                   </span>
                 )}
@@ -616,10 +684,10 @@ export default async function HomePage({
       </section>
 
       {/* Key stats */}
-      <section className="grid gap-4 sm:grid-cols-2">
-        <div className={`card border ${band.tone}`}>
-          <p className="text-sm font-medium">Home Health Score</p>
-          <p className="mt-1 text-4xl font-bold">{score}</p>
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className={`card-hero border ${band.tone}`}>
+          <p className="stat-label">Home Health Score</p>
+          <p className="stat-number mt-1 text-4xl">{score}</p>
           <p className="text-sm">{band.label}</p>
           <details className="mt-2 text-xs">
             <summary className="cursor-pointer opacity-80 hover:opacity-100">
@@ -643,8 +711,8 @@ export default async function HomePage({
           </details>
         </div>
         <div className="card">
-          <p className="text-sm font-medium text-stone-500">Open jobs</p>
-          <p className="mt-1 text-4xl font-bold text-stone-900">
+          <p className="stat-label">Open jobs</p>
+          <p className="stat-number mt-1 text-2xl">
             {openJobsCount}
           </p>
           <Link
@@ -654,6 +722,86 @@ export default async function HomePage({
             View job postings →
           </Link>
         </div>
+        <Link
+          href="/value"
+          className="card block transition-colors hover:border-hearth-400"
+        >
+          <p className="stat-label">Home value</p>
+          {hasHomeValueData && homeEstimatedValue != null ? (
+            <>
+              <p className="stat-number mt-1 text-2xl">
+                ${Math.round(homeEstimatedValue).toLocaleString()}
+              </p>
+              <p className="text-sm text-stone-500">
+                {homeEquity != null && homeEquity < 0
+                  ? `-$${Math.round(Math.abs(homeEquity)).toLocaleString()} equity (underwater)`
+                  : `$${Math.round(homeEquity ?? 0).toLocaleString()} equity`}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="mt-1 text-lg font-semibold text-stone-900">
+                Track your home&apos;s value
+              </p>
+              <p className="text-sm text-stone-500">
+                See what your home is likely worth today and how much equity
+                you have.
+              </p>
+            </>
+          )}
+        </Link>
+        <div className="card">
+          <p className="stat-label">
+            Energy this season
+          </p>
+          {energyEstimate ? (
+            <>
+              <p className="stat-number mt-1 text-2xl">
+                ~${energyEstimate.low.toLocaleString()}-
+                {energyEstimate.high.toLocaleString()}
+              </p>
+              <p className="text-sm text-stone-500">
+                {energySeason === "winter"
+                  ? "to keep warm this winter"
+                  : "to stay cool this summer"}
+              </p>
+              {upgradeSavings &&
+                (plus ? (
+                  <Link
+                    href="/forecast"
+                    className="mt-1 block text-xs text-hearth-700 hover:underline"
+                  >
+                    Your HVAC is {upgradeSavings.hvacAge} years old. A new unit
+                    could save ~${upgradeSavings.low.toLocaleString()}-
+                    {upgradeSavings.high.toLocaleString()}/yr →
+                  </Link>
+                ) : (
+                  <Link
+                    href="/plus?reason=forecast"
+                    className="mt-1 block text-xs text-hearth-700 hover:underline"
+                  >
+                    See what a new unit would save →
+                  </Link>
+                ))}
+            </>
+          ) : (
+            <>
+              <p className="mt-1 text-lg font-semibold text-stone-900">
+                Estimate your energy bills
+              </p>
+              <p className="text-sm text-stone-500">
+                Add your home&apos;s state and square footage to see what
+                heating and cooling likely cost.
+              </p>
+              <Link
+                href="/profile"
+                className="text-sm text-hearth-700 hover:underline"
+              >
+                Finish your home profile →
+              </Link>
+            </>
+          )}
+        </div>
       </section>
 
       {/* Systems inventory (the old Home Profile) */}
@@ -661,7 +809,7 @@ export default async function HomePage({
         <summary className="w-fit cursor-pointer text-lg font-semibold text-stone-900 marker:text-stone-400">
           Your systems{sortedSys.length > 0 ? ` (${sortedSys.length})` : ""}
           {mustCount > 0 ? (
-            <span className="ml-2 rounded-full border border-red-300 bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+            <span className="chip ml-2 border border-red-300 bg-red-100 text-red-700">
               {mustCount} must do
             </span>
           ) : null}
@@ -679,10 +827,15 @@ export default async function HomePage({
             ))}
           </ul>
         ) : (
-          <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
-            No systems yet. Add your roof, HVAC, and water heater first. Those
-            drive the most useful reminders.
-          </p>
+          <div className="rounded-xl border border-dashed border-stone-300 p-6 text-center">
+            <div className="flex justify-center">
+              <span className="icon-chip">🏠</span>
+            </div>
+            <p className="mt-2 text-sm text-stone-500">
+              No systems yet. Add your roof, HVAC, and water heater first. Those
+              drive the most useful reminders.
+            </p>
+          </div>
         )}
 
         <SystemForm propertyId={property.id} />
@@ -690,7 +843,7 @@ export default async function HomePage({
 
       {/* Project ideas - always open, not collapsible. */}
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-stone-900">
+        <h2 className="flex items-center text-lg font-semibold text-stone-900">
           Thinking about a project?
         </h2>
         <p className="text-sm text-stone-500">

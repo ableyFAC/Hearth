@@ -4,8 +4,8 @@ import { useState } from "react";
 import { startPlusCheckoutAction } from "./actions";
 
 const PLANS = {
-  monthly: { label: "Monthly" },
-  yearly: { label: "Yearly" },
+  monthly: { label: "Monthly", price: "$4.99/mo" },
+  yearly: { label: "Yearly", price: "$39.99/yr" },
 } as const;
 
 // Monthly / yearly toggle for the Plus pricing card. Monthly gives the first
@@ -16,20 +16,28 @@ export default function PlanToggle() {
   const [plan, setPlan] = useState<"monthly" | "yearly">("monthly");
 
   return (
-    <div id="pricing" className="card space-y-4 text-center">
+    <div id="pricing" className="card-hero space-y-4 text-center">
       <div className="mx-auto inline-flex rounded-full border border-stone-200 bg-stone-50 p-1">
         {(Object.keys(PLANS) as Array<keyof typeof PLANS>).map((key) => (
           <button
             key={key}
             type="button"
             onClick={() => setPlan(key)}
+            aria-pressed={plan === key}
             className={`relative rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
               plan === key
-                ? "bg-white text-stone-900 shadow-sm"
+                ? "bg-hearth-600 text-white shadow-sm"
                 : "text-stone-500 hover:text-stone-700"
             }`}
           >
-            {PLANS[key].label}
+            <span className="block leading-tight">{PLANS[key].label}</span>
+            <span
+              className={`block text-[10px] font-normal leading-tight ${
+                plan === key ? "text-hearth-100" : "text-stone-400"
+              }`}
+            >
+              {PLANS[key].price}
+            </span>
             {key === "yearly" && (
               <span className="absolute -top-3 right-0 rounded-full bg-hearth-600 px-1.5 py-0.5 text-[10px] font-medium text-white">
                 Save 33%

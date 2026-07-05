@@ -4,6 +4,7 @@ import { saveCompanyAction } from "../actions";
 import CategoryPicker from "../CategoryPicker";
 import FieldIcon from "../FieldIcon";
 import PhoneInput from "@/components/PhoneInput";
+import { STATE_NAMES } from "@/lib/forecast";
 import type { Contractor } from "@/lib/database.types";
 
 // Redesigned contractor profile editor. Posts to the same saveCompanyAction the
@@ -123,6 +124,31 @@ export default function PublicProfileForm({
                 </div>
                 <p className="mt-1 text-xs text-stone-400">
                   Where you are willing to travel for jobs.
+                </p>
+              </div>
+
+              <div>
+                <label className="label">State You Serve</label>
+                <div className="relative">
+                  <FieldIcon>
+                    <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15" />
+                  </FieldIcon>
+                  <select
+                    name="service_state"
+                    className="input pl-9"
+                    defaultValue={(contractor as any).service_state ?? ""}
+                  >
+                    <option value="">All states</option>
+                    {Object.entries(STATE_NAMES).map(([code, name]) => (
+                      <option key={code} value={code}>
+                        {name.replace(/^the /, "")} ({code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="mt-1 text-xs text-stone-400">
+                  Jobs from homeowners in this state show first; leave blank to
+                  see everything.
                 </p>
               </div>
 

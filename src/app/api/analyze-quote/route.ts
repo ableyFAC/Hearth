@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasPlus } from "@/lib/subscription";
+import { countAiUsage } from "@/lib/aiUsage";
 import { REPLACEMENT_INFO } from "@/lib/health";
 
 export const runtime = "nodejs";
@@ -93,34 +94,55 @@ export async function POST(req: NextRequest) {
 
   // The quote analyzer is a Hearth Plus feature, but every homeowner gets
   // exactly one free check as a taste. A non-Plus user with an unused credit
-  // (users.free_quote_used_at is null) may run one analysis; the credit is
-  // stamped only after a successful analysis so a blurry photo doesn't burn
-  // it. Once used, they get the same 403 as before.
-  let burnFreeCredit = false;
-  if (!(await hasPlus())) {
-    let freeAvailable = false;
+  // (users.free_quote_used_at is null) claims it ATOMICALLY up front: a
+  // conditional update that only matches while the column is still null, so
+  // N parallel requests can't each pass a read-then-check and farm extra free
+  // analyses. Only the one request that wins the claim proceeds; the rest get
+  // the same 403 as before. If this request never produces an analysis, the
+  // claim is refunded below so a blurry photo still doesn't burn the credit.
+  const isPlus = await hasPlus();
+  let claimedFreeCredit = false;
+  if (!isPlus) {
     try {
       const admin = createAdminClient();
-      const { data: row, error } = await admin
+      const { data: claimed, error } = await admin
         .from("users")
-        .select("free_quote_used_at")
+        .update({ free_quote_used_at: new Date().toISOString() })
         .eq("id", user.id)
-        .maybeSingle();
+        .is("free_quote_used_at", null)
+        .select("id");
       if (error) throw error;
-      freeAvailable = !!row && row.free_quote_used_at === null;
+      claimedFreeCredit = !!claimed && claimed.length > 0;
     } catch {
-      // Column missing (migration 0027 not run yet) or read failed: fall
+      // Column missing (migration 0027 not run yet) or write failed: fall
       // back to the old Plus-only behavior so nothing breaks.
-      freeAvailable = false;
+      claimedFreeCredit = false;
     }
-    if (!freeAvailable) {
+    if (!claimedFreeCredit) {
       return NextResponse.json({ error: "plus_required" }, { status: 403 });
     }
-    burnFreeCredit = true;
   }
+
+  // Hand the claim back on any path that never delivers an analysis (missing
+  // key, bad input, over the daily cap, every model failed), preserving the
+  // promise that only a successful analysis spends the free check.
+  // Best-effort: if the refund itself fails, the credit stays spent.
+  const refundFreeCredit = async () => {
+    if (!claimedFreeCredit) return;
+    try {
+      const admin = createAdminClient();
+      await admin
+        .from("users")
+        .update({ free_quote_used_at: null })
+        .eq("id", user.id);
+    } catch {
+      // ignore, the analysis outcome still goes back to the user
+    }
+  };
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
+    await refundFreeCredit();
     return NextResponse.json({ analysis: null, reason: "no_key" });
   }
 
@@ -131,13 +153,24 @@ export async function POST(req: NextRequest) {
   const category = typeof body.category === "string" && body.category ? body.category : null;
 
   if (!image && !text) {
+    await refundFreeCredit();
     return NextResponse.json(
       { error: "Add a photo of the quote or paste its text." },
       { status: 400 }
     );
   }
   if (image.length > MAX_IMAGE_B64_CHARS) {
+    await refundFreeCredit();
     return NextResponse.json({ error: "Image too large." }, { status: 413 });
+  }
+
+  // Same per-user daily cap as /api/ask (same ai_usage table and limits), so
+  // the quote analyzer can't be a side door around the abuse limits on the
+  // paid model. Over the cap degrades like any other model failure.
+  const { overLimit } = await countAiUsage(user.id, isPlus);
+  if (overLimit) {
+    await refundFreeCredit();
+    return NextResponse.json({ analysis: null, reason: "rate_limited" });
   }
 
   const baseline = baselineFor(category);
@@ -212,26 +245,14 @@ export async function POST(req: NextRequest) {
       } catch {
         continue; // malformed - try the next model
       }
-      // The analysis succeeded, so a free-taste user's one credit is spent
-      // now (never on a failed or unreadable analysis). Best-effort: a stamp
-      // failure shouldn't take down a result the user already earned.
-      if (burnFreeCredit) {
-        try {
-          const admin = createAdminClient();
-          await admin
-            .from("users")
-            .update({ free_quote_used_at: new Date().toISOString() })
-            .eq("id", user.id);
-        } catch {
-          // ignore - worst case they get a second free check
-        }
-      }
+      // The analysis succeeded, so the credit claimed up front stays spent.
       return NextResponse.json({ analysis: normalize(parsed) });
     } catch {
       // network error - try the next model
     }
   }
 
+  await refundFreeCredit();
   return NextResponse.json({
     analysis: null,
     reason: rateLimited ? "rate_limited" : "failed",

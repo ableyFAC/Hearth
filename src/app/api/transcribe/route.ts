@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { hasPlus } from "@/lib/subscription";
+import { countAiUsage } from "@/lib/aiUsage";
 
 export const runtime = "nodejs";
 
@@ -59,38 +59,10 @@ export async function POST(req: NextRequest) {
 
   // Same per-user daily cap as /api/ask, counted in the same ai_usage table
   // (migration 0024), so dictation shares the cap instead of bypassing it.
-  // Counted via the service-role client so it works regardless of RLS, and
-  // tracked by calendar date so it resets cleanly at midnight.
+  // Fails open and resets at midnight; see src/lib/aiUsage.ts.
   const isPlus = await hasPlus();
-  const dailyLimit = isPlus ? 250 : 25;
-  let usageCount = 1;
-  try {
-    const admin = createAdminClient();
-    const usageDate = new Date(Date.now()).toISOString().slice(0, 10);
-    // Supabase-js has no atomic "increment" helper, so read the current count
-    // for today and write it back one higher. A missed race under this route's
-    // low traffic just undercounts by one, which is fine for an abuse cap.
-    const { data: existing } = await (admin as any)
-      .from("ai_usage")
-      .select("count")
-      .eq("user_id", user.id)
-      .eq("usage_date", usageDate)
-      .maybeSingle();
-    usageCount = (existing?.count ?? 0) + 1;
-    await (admin as any)
-      .from("ai_usage")
-      .upsert(
-        { user_id: user.id, usage_date: usageDate, count: usageCount },
-        { onConflict: "user_id,usage_date" }
-      );
-  } catch (err) {
-    // A broken counter should never block the homeowner from dictating; log
-    // it and let this request through uncounted.
-    console.error("ai_usage upsert failed", err);
-    usageCount = 0;
-  }
-
-  if (usageCount > dailyLimit) {
+  const { overLimit } = await countAiUsage(user.id, isPlus);
+  if (overLimit) {
     return NextResponse.json({ text: null, reason: "rate_limited" });
   }
 

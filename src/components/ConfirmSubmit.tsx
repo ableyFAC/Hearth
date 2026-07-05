@@ -5,7 +5,8 @@ import { useState } from "react";
 // A two-step submit for the Change plan forms: the first tap arms it, then a
 // small inline "Are you sure?" with Yes/Cancel actually submits. Keeps a plan
 // switch (which bills or reschedules billing) from firing on a stray click,
-// without a jarring browser popup.
+// without a jarring browser popup. Shared by the homeowner /plus and pro
+// /pro/plus billing cards so the two confirm flows can't drift apart.
 export default function ConfirmSubmit({
   label,
   note,

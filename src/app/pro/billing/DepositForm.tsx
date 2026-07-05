@@ -12,14 +12,17 @@ const DEFAULT_TIERS: Tier[] = [
   { min_cents: 80000, max_cents: null, bonus_pct: 20 },
 ];
 
-// Mirror of the DB bonus_for_deposit() math (integer cents).
-function bonusFor(cents: number, tiers: Tier[]) {
+// Mirror of the DB apply_deposit() bonus math (integer cents). boostPts is
+// the Pro membership boost: extra points on top of the matched tier (and on
+// every deposit, even below the entry tier), matching p_bonus_boost_pts in
+// migration 0032.
+function bonusFor(cents: number, tiers: Tier[], boostPts: number) {
   const t = [...tiers]
     .sort((a, b) => b.min_cents - a.min_cents)
     .find(
       (t) => cents >= t.min_cents && (t.max_cents == null || cents <= t.max_cents)
     );
-  const pct = t?.bonus_pct ?? 0;
+  const pct = (t?.bonus_pct ?? 0) + Math.max(boostPts, 0);
   return { pct, bonus: Math.floor((cents * pct) / 100) };
 }
 
@@ -28,10 +31,13 @@ const PRESETS = [100, 200, 400, 800];
 export default function DepositForm({
   tiers,
   need,
+  boostPts = 0,
 }: {
   tiers: Tier[];
   // Dollars still missing for a specific job (?need= from the leads board).
   need?: number;
+  // Pro membership deposit boost (percentage points); 0 for non-members.
+  boostPts?: number;
 }) {
   // Committed amount (string so the field can be cleared); default $200 so the
   // first bonus tier is visible out of the gate. When the pro came here short
@@ -52,7 +58,7 @@ export default function DepositForm({
 
   const effTiers = tiers.length ? tiers : DEFAULT_TIERS;
   const cents = Math.round(num * 100);
-  const { bonus } = bonusFor(cents, effTiers);
+  const { bonus } = bonusFor(cents, effTiers, boostPts);
   const bonusDollars = bonus / 100;
   const totalCredit = (cents + bonus) / 100;
 
@@ -115,7 +121,9 @@ export default function DepositForm({
           )}
         </div>
         <p className="mt-1 text-[11px] text-stone-400">
-          $200+ earns bonus credit
+          {boostPts > 0
+            ? `Every deposit earns +${boostPts}% as a Pro member, tiers stack on top`
+            : "$200+ earns bonus credit"}
           {bonus > 0 ? ` · $${totalCredit.toFixed(2)} total credit` : ""}.
         </p>
       </div>

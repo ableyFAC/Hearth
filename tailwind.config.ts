@@ -8,7 +8,7 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Hearth palette — warm, calm, trustworthy.
+        // Hearth palette: warm, calm, trustworthy.
         hearth: {
           50: "#fbf7f2",
           100: "#f3e9dd",

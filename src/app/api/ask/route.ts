@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveProperty } from "@/lib/property";
 import { hasPlus } from "@/lib/subscription";
+import { countAiUsage } from "@/lib/aiUsage";
 import { REPLACEMENT_INFO } from "@/lib/health";
 
 export const runtime = "nodejs";
@@ -209,39 +209,11 @@ export async function POST(req: NextRequest) {
   });
 
   // Per-user daily cap so a single account can't run up the paid Gemini bill.
-  // Hearth Plus gets a higher ceiling. Counted via the service-role client so
-  // it works regardless of RLS, and tracked by calendar date (not a rolling
-  // window) so it resets cleanly at midnight.
+  // Hearth Plus gets a higher ceiling. Counted in the shared ai_usage table
+  // (fails open, resets at midnight); see src/lib/aiUsage.ts.
   const isPlus = await hasPlus();
-  const dailyLimit = isPlus ? 250 : 25;
-  let usageCount = 1;
-  try {
-    const admin = createAdminClient();
-    const usageDate = new Date(Date.now()).toISOString().slice(0, 10);
-    // Supabase-js has no atomic "increment" helper, so read the current count
-    // for today and write it back one higher. A missed race under this route's
-    // low traffic just undercounts by one, which is fine for an abuse cap.
-    const { data: existing } = await (admin as any)
-      .from("ai_usage")
-      .select("count")
-      .eq("user_id", authUser.id)
-      .eq("usage_date", usageDate)
-      .maybeSingle();
-    usageCount = (existing?.count ?? 0) + 1;
-    await (admin as any)
-      .from("ai_usage")
-      .upsert(
-        { user_id: authUser.id, usage_date: usageDate, count: usageCount },
-        { onConflict: "user_id,usage_date" }
-      );
-  } catch (err) {
-    // A broken counter should never block the homeowner from using the
-    // assistant; log it and let this request through uncounted.
-    console.error("ai_usage upsert failed", err);
-    usageCount = 0;
-  }
-
-  if (usageCount > dailyLimit) {
+  const { overLimit } = await countAiUsage(authUser.id, isPlus);
+  if (overLimit) {
     return NextResponse.json({
       answer: isPlus
         ? "You have reached today's Ask Hearth limit. It resets tomorrow."

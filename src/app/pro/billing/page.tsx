@@ -1,7 +1,13 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentContractor } from "@/lib/contractor";
 import { createClient } from "@/lib/supabase/server";
-import { labelFor, JOB_CATEGORIES } from "@/lib/constants";
+import { hasProPlan } from "@/lib/subscription";
+import {
+  labelFor,
+  JOB_CATEGORIES,
+  PRO_DEPOSIT_BOOST_PTS,
+} from "@/lib/constants";
 import DepositForm from "./DepositForm";
 import Confetti from "@/components/Confetti";
 import FadingBanner from "@/components/FadingBanner";
@@ -42,6 +48,10 @@ export default async function ProBillingPage({
 }) {
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");
+
+  // Pro members earn extra points on every deposit bonus (display only here;
+  // the webhook applies the real boost when the payment lands).
+  const proMember = await hasProPlan();
 
   const supabase = createClient();
 
@@ -117,16 +127,16 @@ export default async function ProBillingPage({
 
       {/* Balances */}
       <section className="grid gap-4 sm:grid-cols-2">
-        <div className="card border-hearth-200 bg-hearth-50">
-          <p className="text-sm font-medium text-hearth-800">Cash balance</p>
-          <p className="mt-1 text-4xl font-bold text-hearth-900">
+        <div className="card-hero">
+          <p className="stat-label text-hearth-800">Cash balance</p>
+          <p className="stat-number mt-1 text-4xl text-hearth-900">
             {dollars(cash)}
           </p>
           <p className="mt-1 text-xs text-hearth-700">Never expires.</p>
         </div>
         <div className="card border-amber-200 bg-amber-50">
-          <p className="text-sm font-medium text-amber-800">Bonus credit</p>
-          <p className="mt-1 text-4xl font-bold text-amber-900">
+          <p className="stat-label text-amber-800">Bonus credit</p>
+          <p className="stat-number mt-1 text-2xl text-amber-900">
             {dollars(bonus)}
           </p>
           <p className="mt-1 text-xs text-amber-700">
@@ -138,7 +148,43 @@ export default async function ProBillingPage({
       {/* Deposit */}
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-stone-900">Add credit</h2>
-        <DepositForm tiers={(tiers as any) ?? []} need={need ?? undefined} />
+        <DepositForm
+          tiers={(tiers as any) ?? []}
+          need={need ?? undefined}
+          boostPts={proMember ? PRO_DEPOSIT_BOOST_PTS : 0}
+        />
+        {proMember ? (
+          <div className="rounded-xl border border-hearth-200 bg-hearth-50 p-3 text-xs text-hearth-800">
+            <span className="font-semibold">Pro member bonus applied:</span>{" "}
+            every tier below earns +{PRO_DEPOSIT_BOOST_PTS} pts
+            {((tiers as any) ?? []).length > 0 && (
+              <>
+                {" "}
+                (
+                {((tiers as any) as Array<{
+                  min_cents: number;
+                  bonus_pct: number;
+                }>)
+                  .map(
+                    (t) =>
+                      `$${Math.round(t.min_cents / 100)}+ earns ${
+                        t.bonus_pct + PRO_DEPOSIT_BOOST_PTS
+                      }%`
+                  )
+                  .join(", ")}
+                )
+              </>
+            )}
+            .
+          </div>
+        ) : (
+          <p className="text-xs text-stone-500">
+            Pro members get +{PRO_DEPOSIT_BOOST_PTS}% on every deposit.{" "}
+            <Link href="/pro/plus" className="text-hearth-700 hover:underline">
+              See Hearth Pro
+            </Link>
+          </p>
+        )}
       </section>
 
       {/* Activity */}
@@ -167,7 +213,7 @@ export default async function ProBillingPage({
                     </p>
                   </div>
                   <span
-                    className={`font-semibold ${
+                    className={`font-semibold [font-variant-numeric:tabular-nums] ${
                       positive ? "text-green-600" : "text-stone-700"
                     }`}
                   >

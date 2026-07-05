@@ -5,6 +5,7 @@
 
 # next.js
 /.next/
+/.next-build/
 /out/
 next-env.d.ts
 
@@ -20,7 +21,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# local env files — NEVER commit secrets
+# local env files: NEVER commit secrets
 .env
 .env.local
 .env*.local
@@ -36,5 +37,5 @@ yarn-error.log*
 .vscode/
 .idea/
 
-# vendored tools — install the Stripe CLI separately, don't commit it
+# vendored tools: install the Stripe CLI separately, don't commit it
 /stripe-cli-*/

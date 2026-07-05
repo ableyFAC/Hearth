@@ -97,7 +97,17 @@ export async function claimPropertyAction(formData: FormData) {
     let install_year: number | null = null;
     if (yearBuilt) {
       const age = CURRENT_YEAR - yearBuilt;
-      install_year = age <= 0 ? yearBuilt : CURRENT_YEAR - (age % lifespan);
+      if (age <= 0) {
+        // Brand-new (or future-dated) build: everything installed at build.
+        install_year = yearBuilt;
+      } else {
+        // Years since the most recent assumed replacement. When home age is
+        // an exact multiple of the lifespan, the system is at the END of its
+        // life, not brand new: a 75-year-old home does not get a brand-new
+        // 75-year foundation.
+        const yearsIntoCycle = age % lifespan || lifespan;
+        install_year = CURRENT_YEAR - yearsIntoCycle;
+      }
     }
     return {
       property_id: created.id,

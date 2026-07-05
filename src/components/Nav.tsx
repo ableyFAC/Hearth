@@ -25,7 +25,7 @@ export default function Nav({
   ];
 
   return (
-    <header className="border-b border-stone-200 bg-white">
+    <header className="sticky top-0 z-30 border-b border-stone-200/70 bg-white/80 backdrop-blur">
       <div className="mx-auto flex max-w-5xl flex-col gap-3 px-6 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <Link href="/dashboard" className="text-lg font-semibold text-stone-900">
@@ -63,13 +63,19 @@ export default function Nav({
               locked: !hasPlus,
             },
           ]}
-          links={[{ href: "/documents", label: "Documents" }]}
-          moreLinks={[
+          linksLabel="Your home"
+          links={[
+            { href: "/emergency", label: "Emergency", accent: "red" as const },
+            { href: "/documents", label: "Documents" },
+            { href: "/value", label: "Home value" },
+            { href: "/taxes", label: "Property taxes" },
             { href: "/inspection", label: "Home inspection" },
+          ]}
+          moreLinks={[
+            { href: "/learn", label: "Learn" },
             { href: "/account", label: "Edit profile" },
             { href: "/account/notifications", label: "Notifications" },
             { href: "/account/security", label: "Account security" },
-            { href: "/learn", label: "Learn" },
             { href: "/account/help", label: "Help" },
           ]}
         />

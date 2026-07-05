@@ -36,8 +36,8 @@ export default async function ProsLanding() {
     },
     {
       icon: "🚫",
-      title: "No subscription, no auto-charge",
-      body: "Load your wallet with deposits from $5 and spend it on leads. That's the whole model.",
+      title: "No subscription required",
+      body: "Load your wallet with deposits from $5 and pay per application. An optional Pro membership adds perks like bonus credit and instant alerts, but it never changes which jobs you can see or apply to.",
     },
   ];
 
@@ -48,48 +48,61 @@ export default async function ProsLanding() {
   ];
 
   return (
-    <main className="mx-auto max-w-3xl px-6 pb-16 pt-6">
-      <header className="flex items-center justify-between">
-        <a
-          href="/"
-          className="flex items-center gap-2 font-semibold text-stone-900"
-        >
-          <span aria-hidden>🏡</span> Hearth
-        </a>
-        <a href="/" className="text-sm text-stone-500 hover:text-hearth-700">
-          For homeowners →
-        </a>
-      </header>
+    <main className="pb-16">
+      {/* Warm gradient band wraps header and hero */}
+      <div className="bg-gradient-to-b from-hearth-50 via-white to-white">
+        <div className="mx-auto max-w-3xl px-6 pt-6">
+          <header className="flex items-center justify-between">
+            <a
+              href="/"
+              className="flex items-center gap-2 font-semibold text-stone-900"
+            >
+              <span aria-hidden>🏡</span> Hearth
+            </a>
+            <a
+              href="/"
+              className="text-sm text-stone-500 hover:text-hearth-700"
+            >
+              For homeowners →
+            </a>
+          </header>
 
-      {/* Hero */}
-      <div className="mt-14 flex flex-col items-center text-center">
-        <div className="mb-3 text-4xl">🛠️</div>
-        <h1 className="max-w-xl text-4xl font-semibold tracking-tight text-stone-900">
-          Leads without the games.
-        </h1>
-        <p className="mt-4 max-w-xl text-lg text-stone-600">
-          Tired of lead sites that charge you for shared leads you never asked
-          for? On Hearth you see the price first, and you only pay when you
-          choose to apply.
-        </p>
-        <a
-          href="/contractor-signup"
-          className="btn-primary mt-8 px-6 py-3 text-base"
-        >
-          Create your pro account
-        </a>
-        <a
-          href="/signin"
-          className="mt-3 text-sm text-hearth-700 hover:underline"
-        >
-          Already have an account? Sign in
-        </a>
+          {/* Hero */}
+          <div className="mt-14 flex flex-col items-center pb-4 text-center">
+            <div className="mb-4 text-4xl" aria-hidden>
+              🛠️
+            </div>
+            <h1 className="max-w-2xl text-5xl font-semibold tracking-tight text-stone-900 sm:text-6xl">
+              Leads without the games.
+            </h1>
+            <p className="mt-5 max-w-xl text-lg text-stone-600">
+              Tired of lead sites that charge you for shared leads you never
+              asked for? On Hearth you see the price first, and you only pay
+              when you choose to apply.
+            </p>
+            <a
+              href="/contractor-signup"
+              className="btn-primary mt-8 px-6 py-3 text-base shadow-md"
+            >
+              Create your pro account
+            </a>
+            <a
+              href="/signin"
+              className="mt-3 text-sm text-hearth-700 hover:underline"
+            >
+              Already have an account? Sign in
+            </a>
+          </div>
+        </div>
       </div>
 
+      <div className="mx-auto max-w-3xl px-6">
       {/* Ghost protection gets top billing: it is the promise no competitor
           keeps, so it stands alone above the grid. */}
-      <section className="mt-16 rounded-2xl border border-hearth-200 bg-hearth-50 p-6 text-center">
-        <div className="text-3xl">👻</div>
+      <section className="mt-14 rounded-2xl border border-hearth-200 bg-hearth-50 p-6 text-center shadow-sm">
+        <div className="text-3xl" aria-hidden>
+          👻
+        </div>
         <h2 className="mt-2 text-xl font-semibold text-stone-900">
           Ghost protection: if the lead is dead, you don&apos;t pay.
         </h2>
@@ -104,8 +117,10 @@ export default async function ProsLanding() {
       <section className="mt-6 grid gap-4 sm:grid-cols-2">
         {PROMISES.map((p) => (
           <div key={p.title} className="card">
-            <div className="text-2xl">{p.icon}</div>
-            <h2 className="mt-2 font-semibold text-stone-900">{p.title}</h2>
+            <div className="icon-chip" aria-hidden>
+              {p.icon}
+            </div>
+            <h2 className="mt-3 font-semibold text-stone-900">{p.title}</h2>
             <p className="mt-1 text-sm text-stone-600">{p.body}</p>
           </div>
         ))}
@@ -126,6 +141,43 @@ export default async function ProsLanding() {
             </li>
           ))}
         </ol>
+        {/* The honest deal: every line here is a real, shipped product rule
+            (3-spot cap, ghost refunds, first-apply guarantee, aging tiers,
+            pay-per-apply). Restyled from claims elsewhere on this page; add
+            nothing here that isn't true in code. */}
+        <div className="mx-auto mt-8 max-w-md rounded-2xl border border-stone-200 bg-stone-50 p-5">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-stone-500">
+            The honest deal
+          </h3>
+          <ul className="mt-3 space-y-2 text-sm text-stone-600">
+            <li className="flex items-start gap-2">
+              <span aria-hidden>✔️</span>
+              <span>Max 3 pros per job, so you never race a crowd.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span aria-hidden>✔️</span>
+              <span>
+                Ghost protection: if the homeowner never responds, your fee
+                comes back automatically.
+              </span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span aria-hidden>✔️</span>
+              <span>
+                Your first application is guaranteed: not chosen, and the fee
+                comes back as wallet credit. One time, for licensed pros.
+              </span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span aria-hidden>✔️</span>
+              <span>Jobs that sit unclaimed get marked down 15-30%.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span aria-hidden>✔️</span>
+              <span>No subscription required. You pay per application.</span>
+            </li>
+          </ul>
+        </div>
       </section>
 
       {/* Honesty line: this matches the wallet's actual bonus terms */}
@@ -139,6 +191,7 @@ export default async function ProsLanding() {
           Looking after your own home instead? Hearth for homeowners →
         </a>
       </footer>
+      </div>
     </main>
   );
 }

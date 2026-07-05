@@ -3,10 +3,17 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
-import { JOB_CATEGORIES, TIMING_OPTIONS, labelFor, iconFor } from "@/lib/constants";
+import {
+  JOB_CATEGORIES,
+  TIMING_OPTIONS,
+  BUDGET_RANGES,
+  labelFor,
+  iconFor,
+  COLD_START_FREE_POSTING,
+} from "@/lib/constants";
 import { setFlash } from "@/lib/flash";
 import { hasPlus } from "@/lib/subscription";
-import { postJobAction, chooseApplicantAction } from "./actions";
+import { postJobAction, chooseApplicantAction, rehireProAction } from "./actions";
 import CategoryFilter from "./CategoryFilter";
 import LeadChat from "@/components/LeadChat";
 import PhoneInput from "@/components/PhoneInput";
@@ -14,8 +21,11 @@ import FadingBanner from "@/components/FadingBanner";
 import CloseJobButton from "./CloseJobButton";
 import EditJobForm from "./EditJobForm";
 import PostJobButton from "./PostJobButton";
+import StrongPostMeter from "./StrongPostMeter";
+import PhotoUpload from "@/components/PhotoUpload";
 import ReviewButton from "./ReviewButton";
 import ContractorReviews from "./ContractorReviews";
+import HireAgainButton from "./HireAgainButton";
 import { redactContact } from "@/lib/redact";
 
 // Must match the markers LeadChat posts when either side closes a thread.
@@ -89,6 +99,30 @@ export default async function ContractorsPage({
     .order("created_at", { ascending: false });
   const leads = (leadsData ?? []) as any[];
 
+  // My Pros: distinct pros the homeowner previously hired on this property
+  // (accepted = active, closed = completed), most recent job first, so each
+  // shows what they were last hired for. `leads` is already newest-first, so
+  // the first row seen per contractor is that pro's most recent job.
+  const myPros: {
+    contractorId: string;
+    name: string;
+    lastCategory: string;
+    lastDescription: string | null;
+  }[] = [];
+  const seenContractors = new Set<string>();
+  for (const l of leads) {
+    if (!l.contractor_id) continue;
+    if (l.status !== "accepted" && l.status !== "closed") continue;
+    if (seenContractors.has(l.contractor_id)) continue;
+    seenContractors.add(l.contractor_id);
+    myPros.push({
+      contractorId: l.contractor_id,
+      name: l.contractors?.name ?? "Your pro",
+      lastCategory: l.category,
+      lastDescription: l.issue_description ?? null,
+    });
+  }
+
   // Figure out which jobs are finished (chat-closed) and which already have a
   // review, so the row can show a "Leave a review" / "Edit review" button.
   const leadIds = leads.map((l) => l.id);
@@ -143,7 +177,44 @@ export default async function ContractorsPage({
         </p>
       </div>
 
-      {!plus && (
+      {myPros.length > 0 && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-lg font-semibold text-stone-900">My Pros</h2>
+            <p className="text-sm text-stone-500">
+              Already worked with someone great? Hire them again, free, no
+              apply fee.
+            </p>
+          </div>
+          <ul className="space-y-2">
+            {myPros.map((p) => (
+              <li
+                key={p.contractorId}
+                className="card flex items-center justify-between gap-3"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium text-stone-900">{p.name}</p>
+                  <p className="truncate text-sm text-stone-500">
+                    Last hired for {labelFor(JOB_CATEGORIES, p.lastCategory)}
+                    {p.lastDescription ? `: ${p.lastDescription}` : ""}
+                  </p>
+                </div>
+                <HireAgainButton
+                  contractorId={p.contractorId}
+                  contractorName={p.name}
+                  lastCategory={p.lastCategory}
+                  action={rehireProAction}
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* COLD START: while posting is free and uncapped for everyone, the
+          "3 open jobs" upsell would be false advertising, so it stays hidden.
+          Flip COLD_START_FREE_POSTING to bring it back with the cap. */}
+      {!COLD_START_FREE_POSTING && !plus && (
         <div className="card flex items-center justify-between gap-4 border-hearth-200 bg-hearth-50">
           <div>
             <p className="font-medium text-hearth-800">
@@ -239,6 +310,31 @@ export default async function ContractorsPage({
             placeholder="What needs doing? Pros see this when deciding whether to apply."
           />
         </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <PhotoUpload propertyId={property.id} />
+            <p className="mt-1 text-xs text-stone-400">
+              Pros quote more accurately when they can see the job.
+            </p>
+          </div>
+          <div>
+            <label className="label">Rough budget (optional)</label>
+            <select name="budget_range" className="select" defaultValue="">
+              <option value="">Prefer not to say</option>
+              {BUDGET_RANGES.map((b) => (
+                <option key={b.value} value={b.value}>
+                  {b.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-stone-400">
+              Helps pros give realistic quotes. Not a commitment.
+            </p>
+          </div>
+        </div>
+
+        <StrongPostMeter />
 
         <PostJobButton />
         <p className="text-xs text-stone-400">
@@ -351,10 +447,22 @@ export default async function ContractorsPage({
                     </div>
                   ) : apps.length === 0 ? (
                     <div className="space-y-2">
-                      <p className="rounded-lg border border-dashed border-stone-300 p-4 text-sm text-stone-500">
-                        No applications yet. Matching pros in your area can see
-                        this job and apply.
-                      </p>
+                      <div className="rounded-lg border border-dashed border-stone-300 p-4 text-sm text-stone-500">
+                        <p>
+                          Your job is live. Pros usually apply within a day or
+                          two; we&apos;ll notify you the moment one does.
+                        </p>
+                        {/* Photos ride on the lead's issue (photos rows keyed
+                            to issue_id), so a lead with no issue_id definitely
+                            has none. When issue_id exists we can't tell
+                            without another query, so the tip stays quiet. */}
+                        {!l.issue_id && (
+                          <p className="mt-1 text-xs text-stone-400">
+                            Tip: adding photos or more detail helps pros decide
+                            to apply and quote accurately.
+                          </p>
+                        )}
+                      </div>
                       <CloseJobButton leadId={l.id} />
                     </div>
                   ) : (

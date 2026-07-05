@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { stripe } from "@/lib/stripe";
 import { getUser } from "@/lib/auth";
-import { getSubscription } from "@/lib/subscription";
+import { getSubscription, getProSubscription } from "@/lib/subscription";
 import { setFlash } from "@/lib/flash";
 
 const siteUrl = () =>
@@ -38,7 +38,47 @@ export async function startPlusCheckoutAction(formData: FormData) {
         },
       };
 
+  // getSubscription is homeowner-side only; the same user may also carry a
+  // Pro-side row (a contractor who is also a homeowner) on the same Stripe
+  // customer.
   const existing = await getSubscription();
+  const proSub = await getProSubscription();
+  const customerId =
+    existing?.stripe_customer_id ?? proSub?.stripe_customer_id ?? null;
+
+  // Double-checkout guard: our subscriptions row only appears after the
+  // Stripe webhook fires, so two checkouts opened back-to-back could each
+  // mint a live Stripe subscription (and a trial). When we already know the
+  // Stripe customer, ask Stripe directly whether they have a live Plus
+  // subscription before creating another one. A live Hearth Pro membership
+  // doesn't count (that sub is a different membership), so the pro-side
+  // row's subscription id is excluded from the check. If no customer id
+  // exists yet, the webhook's upsert-by-(user_id, side), fed by the metadata
+  // below, keeps our side to one row.
+  if (customerId) {
+    let alreadySubscribed = false;
+    try {
+      const stripeSubs = await stripe.subscriptions.list({
+        customer: customerId,
+        status: "all",
+        limit: 10,
+      });
+      alreadySubscribed = stripeSubs.data.some(
+        (s) =>
+          (s.status === "active" || s.status === "trialing") &&
+          s.id !== proSub?.stripe_subscription_id
+      );
+    } catch {
+      // If Stripe is unreachable, fall through to checkout as before.
+    }
+    if (alreadySubscribed) {
+      setFlash(
+        "You already have a Hearth Plus membership. No need to buy it twice.",
+        "info"
+      );
+      redirect("/plus");
+    }
+  }
 
   // Brand-new subscribers on the monthly plan get their first month free (a
   // 30-day trial). Yearly is already discounted, so no trial there.
@@ -48,8 +88,8 @@ export async function startPlusCheckoutAction(formData: FormData) {
     mode: "subscription",
     line_items: [lineItem],
     subscription_data: freeTrial ? { trial_period_days: 30 } : undefined,
-    customer: existing?.stripe_customer_id ?? undefined,
-    customer_email: existing?.stripe_customer_id ? undefined : user.email ?? undefined,
+    customer: customerId ?? undefined,
+    customer_email: customerId ? undefined : user.email ?? undefined,
     metadata: {
       type: "plus_subscription",
       user_id: user.id,

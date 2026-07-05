@@ -1,9 +1,12 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createJsClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getCurrentContractor } from "@/lib/contractor";
+import { hasProPlan } from "@/lib/subscription";
 import { setFlash } from "@/lib/flash";
 
 // Change the signed-in user's password. Verifies the current password first by
@@ -51,6 +54,94 @@ export async function updatePasswordAction(formData: FormData) {
   }
 
   setFlash("Password updated.");
+  redirect("/pro/profile");
+}
+
+// Save the Pro-member extras for the public page (/p/<id>): logo, about, and
+// the private license/insurance vault that powers the "on file" badge. The
+// vault details never appear publicly; public_pro_profile (0033) reduces them
+// to booleans. Everything is validated here, membership is re-checked
+// server-side, and a failed write (e.g. migration 0033 not applied yet)
+// degrades to a soft flash instead of crashing.
+export async function savePublicPageAction(formData: FormData) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/signin");
+
+  const contractor = await getCurrentContractor();
+  if (!contractor) redirect("/pro/onboarding");
+
+  if (!(await hasProPlan())) {
+    setFlash("Page extras are a Hearth Pro member perk.", "error");
+    redirect("/pro/profile");
+  }
+
+  const str = (name: string) => String(formData.get(name) ?? "").trim();
+
+  // About: cap server-side; the textarea's maxLength is only a hint.
+  const about = str("about");
+  if (about.length > 1000) {
+    setFlash("The about section must be 1,000 characters or fewer.", "error");
+    redirect("/pro/profile");
+  }
+
+  // Logo: only accept a URL that points inside THIS contractor's folder of the
+  // pro-logos bucket, so the column can't be pointed at an arbitrary image.
+  const logoRaw = str("logo_url");
+  const logo_url =
+    logoRaw && logoRaw.includes(`/pro-logos/${contractor.id}/`)
+      ? logoRaw
+      : null;
+
+  // Vault fields. The license number is locked once set (same rule as the
+  // profile form), so a missing read-only field can't wipe or swap it.
+  const license_number = contractor.license_number
+    ? contractor.license_number
+    : str("license_number").slice(0, 60) || null;
+
+  const stateRaw = str("license_state").toUpperCase();
+  if (stateRaw && !/^[A-Z]{2}$/.test(stateRaw)) {
+    setFlash("License state should be a 2-letter code, like CA.", "error");
+    redirect("/pro/profile");
+  }
+
+  const insurance_carrier = str("insurance_carrier").slice(0, 120) || null;
+
+  const expiresRaw = str("insurance_expires");
+  if (expiresRaw && Number.isNaN(new Date(expiresRaw).getTime())) {
+    setFlash("That insurance expiry date doesn't look right.", "error");
+    redirect("/pro/profile");
+  }
+
+  const fields: Record<string, unknown> = {
+    about: about || null,
+    license_number,
+    license_state: stateRaw || null,
+    insurance_carrier,
+    insurance_expires: expiresRaw || null,
+  };
+  // Only overwrite the logo when a new upload came through, so saving the
+  // form without touching the logo never clears it.
+  if (logo_url) fields.logo_url = logo_url;
+  // Stamp the vault whenever it holds anything, so the badge has a "when".
+  if (license_number || stateRaw || insurance_carrier || expiresRaw) {
+    fields.license_insurance_updated_at = new Date().toISOString();
+  }
+
+  // Cast: the 0033 columns aren't in the generated types (database.types.ts
+  // is not regenerated here).
+  const { error } = await (supabase.from("contractors") as any)
+    .update(fields)
+    .eq("id", contractor.id);
+  if (error) {
+    setFlash("Couldn't save your page extras. Please try again.", "error");
+    redirect("/pro/profile");
+  }
+
+  setFlash("Public page updated.");
+  revalidatePath("/pro/profile");
   redirect("/pro/profile");
 }
 

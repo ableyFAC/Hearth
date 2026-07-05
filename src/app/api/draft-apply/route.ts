@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentContractor } from "@/lib/contractor";
-import { hasPlus } from "@/lib/subscription";
+import { hasPlus, hasProPlan } from "@/lib/subscription";
+import { countAiUsage } from "@/lib/aiUsage";
 import { labelFor, JOB_CATEGORIES, TIMING_OPTIONS } from "@/lib/constants";
 
 export const runtime = "nodejs";
@@ -72,36 +73,12 @@ export async function POST(req: NextRequest) {
 
   // Per-user daily cap so a single account can't run up the paid Gemini bill.
   // Shares the ai_usage counter (and the Plus ceiling) with Ask Hearth, so it
-  // resets cleanly at midnight and one pro can't farm drafts all day.
-  const isPlus = await hasPlus();
-  const dailyLimit = isPlus ? 250 : 25;
-  let usageCount = 1;
-  try {
-    const usageDate = new Date(Date.now()).toISOString().slice(0, 10);
-    // Supabase-js has no atomic "increment" helper, so read the current count
-    // for today and write it back one higher. A missed race under this route's
-    // low traffic just undercounts by one, which is fine for an abuse cap.
-    const { data: existing } = await (admin as any)
-      .from("ai_usage")
-      .select("count")
-      .eq("user_id", authUser.id)
-      .eq("usage_date", usageDate)
-      .maybeSingle();
-    usageCount = (existing?.count ?? 0) + 1;
-    await (admin as any)
-      .from("ai_usage")
-      .upsert(
-        { user_id: authUser.id, usage_date: usageDate, count: usageCount },
-        { onConflict: "user_id,usage_date" }
-      );
-  } catch (err) {
-    // A broken counter should never block the pro from drafting; log it and
-    // let this request through uncounted.
-    console.error("ai_usage upsert failed", err);
-    usageCount = 0;
-  }
-
-  if (usageCount > dailyLimit) {
+  // resets cleanly at midnight and one pro can't farm drafts all day. An
+  // active Pro membership counts as the higher tier here: a paying pro who
+  // already used the AI back office shouldn't hit the free ceiling on drafts.
+  const higherTier = (await hasPlus()) || (await hasProPlan());
+  const { overLimit } = await countAiUsage(authUser.id, higherTier);
+  if (overLimit) {
     return NextResponse.json({ message: null, reason: "rate_limited" });
   }
 

@@ -1,0 +1,58 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+import { getActiveProperty } from "@/lib/property";
+import { setFlash } from "@/lib/flash";
+import type { PrepKey } from "./PanicCard";
+
+const PREP_KEYS: PrepKey[] = ["water_shutoff", "gas_shutoff", "breaker_panel"];
+
+type PrepValue = { photo_path: string | null; note: string | null };
+type PrepMap = Partial<Record<PrepKey, PrepValue>>;
+
+// Saves one prep slot (a photo location + note) into properties.emergency_prep.
+// emergency_prep is a migration-0031 column not yet in database.types.ts, so we
+// cast at the query call site (same pattern as the ai_usage route) until types
+// regenerate. If the migration hasn't run against the live DB yet, this update
+// fails and we show a soft message instead of throwing, since the panic flows
+// themselves must keep working either way.
+export async function savePrepItemAction(formData: FormData) {
+  const property = await getActiveProperty();
+  if (!property) throw new Error("No active property");
+
+  const key = formData.get("key") as PrepKey;
+  if (!PREP_KEYS.includes(key)) throw new Error("Bad prep key");
+
+  // Cap lengths server-side so an oversized payload can't bloat the row. A
+  // note gets trimmed to a sane size; a too-long "URL" is not a URL at all,
+  // so it's quietly dropped (falling back to the existing photo).
+  const rawUrl = ((formData.get("photo_url") as string) || "").trim();
+  const photoUrl = rawUrl.length <= 1000 ? rawUrl : "";
+  const note = ((formData.get("note") as string) || "").trim().slice(0, 2000);
+
+  const supabase = createClient();
+  try {
+    const existing = ((property as any).emergency_prep ?? {}) as PrepMap;
+    const next: PrepMap = {
+      ...existing,
+      [key]: {
+        photo_path: photoUrl || existing[key]?.photo_path || null,
+        note: note || null,
+      },
+    };
+    const { error } = await (supabase as any)
+      .from("properties")
+      .update({ emergency_prep: next })
+      .eq("id", property.id);
+    if (error) throw error;
+    setFlash("Saved. You're ready for this one.");
+  } catch (err) {
+    console.error("emergency_prep save failed", err);
+    setFlash(
+      "Couldn't save that yet, this feature needs a database update first. Try again soon.",
+      "error"
+    );
+  }
+  revalidatePath("/emergency");
+}

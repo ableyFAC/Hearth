@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SYSTEM_TYPES, ISSUE_CATEGORIES, SEVERITIES } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
+import { hasPlus } from "@/lib/subscription";
+import { countAiUsage } from "@/lib/aiUsage";
 
 export const runtime = "nodejs";
 
@@ -100,6 +102,15 @@ export async function POST(req: NextRequest) {
   }
   if (images.some((img) => img.length > MAX_IMAGE_B64_CHARS)) {
     return NextResponse.json({ error: "One of those images is too large." }, { status: 413 });
+  }
+
+  // Same per-user daily cap as /api/ask (same ai_usage table and limits), so
+  // report ingestion can't be a side door around the abuse limits on the paid
+  // model. One request counts once, however many pages it carries; the page
+  // cap above already bounds the cost of a single call.
+  const { overLimit } = await countAiUsage(user.id, await hasPlus());
+  if (overLimit) {
+    return NextResponse.json({ result: null, reason: "rate_limited" });
   }
 
   const today = new Date().toISOString().slice(0, 10);

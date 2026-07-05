@@ -1,0 +1,311 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { savePublicPageAction } from "./actions";
+import LogoUpload from "./LogoUpload";
+import QrCodeCard from "./QrCodeCard";
+import type { Contractor } from "@/lib/database.types";
+
+// "Your public page" manager. EVERY pro gets the shareable /p/<id> link; Pro
+// members additionally edit the page extras here: logo, about, and the
+// license/insurance vault that powers the "on file" badge. Membership never
+// changes the page's rating or reviews: those are the same for everyone.
+export default function PublicPageCard({
+  contractor,
+  member,
+}: {
+  contractor: Contractor;
+  member: boolean;
+}) {
+  // The new 0033 columns aren't in the generated types (database.types.ts is
+  // not regenerated here), so read them off an any-cast view of the row.
+  const extra = contractor as any;
+  // One "Copied!" flag keyed by which button was clicked (link, caption,
+  // widget), so the share kit rows don't need three separate states.
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  // Origin is only known in the browser; start with the bare path so the
+  // server render and first client render match (no hydration mismatch).
+  const [origin, setOrigin] = useState("");
+  useEffect(() => setOrigin(window.location.origin), []);
+
+  const path = `/p/${contractor.id}`;
+  const fullUrl = `${origin}${path}`;
+  // Dynamic 1200x630 share card, generated at /p/<id>/opengraph-image (the
+  // same image social networks pull when the link is posted).
+  const shareCardUrl = `${path}/opengraph-image`;
+  const caption = `${contractor.name} is on Hearth. Real reviews from real jobs: ${fullUrl}`;
+  const widgetSnippet = `<iframe src="${origin}/api/pro-widget/${contractor.id}" width="320" height="120" style="border:0" title="Hearth rating"></iframe>`;
+  const licenseLocked = Boolean(contractor.license_number);
+  const hasVault = Boolean(
+    (contractor.license_number && String(contractor.license_number).trim()) ||
+      (extra.insurance_carrier && String(extra.insurance_carrier).trim())
+  );
+
+  async function copyText(key: string, text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 2000);
+    } catch {
+      // Clipboard can be unavailable (permissions, http). The visible text is
+      // still selectable by hand.
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Share link: every pro gets this, member or not. */}
+      <section className="card space-y-3">
+        <div>
+          <h2 className="font-semibold text-stone-900">Share your page</h2>
+          <p className="mt-1 text-sm text-stone-500">
+            Anyone can open it, no account needed. It shows your business name,
+            services, and your real Hearth reviews.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <code className="min-w-0 flex-1 truncate rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-600">
+            {fullUrl}
+          </code>
+          <button
+            type="button"
+            onClick={() => copyText("link", fullUrl)}
+            className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-medium text-stone-600 shadow-sm hover:bg-stone-50"
+          >
+            {copiedKey === "link" ? "Copied!" : "Copy link"}
+          </button>
+          <a
+            href={path}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-lg bg-hearth-600 px-3 py-2 text-sm font-semibold text-white hover:bg-hearth-700"
+          >
+            View page
+          </a>
+        </div>
+
+        {/* QR code: free for every pro (only renders once origin is known). */}
+        <QrCodeCard
+          url={origin ? fullUrl : ""}
+          businessName={contractor.name}
+        />
+      </section>
+
+      {/* Share kit: member-only extras for spreading the page around. Free
+          pros see these teased in the upsell card below, same as the other
+          member perks. Nothing in the kit changes rating math or ordering:
+          it only repackages the page and its true aggregate numbers. */}
+      {member && (
+        <section className="card space-y-4">
+          <div>
+            <h2 className="font-semibold text-stone-900">
+              Share kit{" "}
+              <span className="ml-1 rounded-full border border-hearth-200 bg-hearth-50 px-2 py-0.5 text-xs font-medium text-hearth-700">
+                Pro member
+              </span>
+            </h2>
+            <p className="mt-1 text-sm text-stone-500">
+              Ready-made pieces for social posts and your own website. They
+              always show your real Hearth numbers.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-4">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-stone-900">
+                Share card image
+              </p>
+              <p className="mt-0.5 text-xs text-stone-500">
+                A 1200x630 image of your page, sized for social posts. Pair it
+                with the caption.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <a
+                href={shareCardUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-600 shadow-sm hover:bg-stone-50"
+              >
+                Download share card
+              </a>
+              <button
+                type="button"
+                onClick={() => copyText("caption", caption)}
+                className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-600 shadow-sm hover:bg-stone-50"
+              >
+                {copiedKey === "caption" ? "Copied!" : "Copy caption"}
+              </button>
+            </div>
+          </div>
+
+          <div className="border-t border-stone-100 pt-4">
+            <p className="text-sm font-medium text-stone-900">
+              Rating widget for your website
+            </p>
+            <p className="mt-0.5 text-xs text-stone-500">
+              Paste this into your site. It shows your full Hearth rating and
+              review count, exactly as they appear here.
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-600">
+                {widgetSnippet}
+              </code>
+              <button
+                type="button"
+                onClick={() => copyText("widget", widgetSnippet)}
+                className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-600 shadow-sm hover:bg-stone-50"
+              >
+                {copiedKey === "widget" ? "Copied!" : "Copy embed code"}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {member ? (
+        <form action={savePublicPageAction} className="card space-y-5">
+          <div>
+            <h2 className="font-semibold text-stone-900">
+              Page extras{" "}
+              <span className="ml-1 rounded-full border border-hearth-200 bg-hearth-50 px-2 py-0.5 text-xs font-medium text-hearth-700">
+                Pro member
+              </span>
+            </h2>
+            <p className="mt-1 text-sm text-stone-500">
+              Your logo and about section appear on your public page. Saving
+              license and insurance details adds an &quot;on file&quot; badge;
+              the details themselves stay private.
+            </p>
+          </div>
+
+          <LogoUpload
+            contractorId={contractor.id}
+            initialUrl={extra.logo_url ?? null}
+          />
+
+          <div>
+            <label className="label">About your business</label>
+            <textarea
+              name="about"
+              rows={5}
+              maxLength={1000}
+              defaultValue={extra.about ?? ""}
+              placeholder="What you do, how long you've been at it, and what customers can expect."
+              className="input h-auto"
+            />
+            <p className="mt-1 text-xs text-stone-400">
+              Up to 1,000 characters.
+            </p>
+          </div>
+
+          <div className="border-t border-stone-100 pt-4">
+            <h3 className="text-sm font-semibold text-stone-900">
+              License &amp; insurance vault
+            </h3>
+            <p className="mt-1 text-xs text-stone-400">
+              Kept private. Your page only shows an &quot;on file&quot; badge,
+              worded as provided by you, not verified by Hearth.
+            </p>
+
+            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="label">License number</label>
+                {licenseLocked ? (
+                  <>
+                    <div className="input cursor-not-allowed select-none bg-stone-100 text-stone-400">
+                      {contractor.license_number}
+                    </div>
+                    <p className="mt-1 text-xs text-stone-400">
+                      Locked once set. Contact support to update it.
+                    </p>
+                  </>
+                ) : (
+                  <input
+                    name="license_number"
+                    className="input"
+                    placeholder="LIC-000000-XX"
+                  />
+                )}
+              </div>
+              <div>
+                <label className="label">License state</label>
+                <input
+                  name="license_state"
+                  className="input uppercase"
+                  maxLength={2}
+                  defaultValue={extra.license_state ?? ""}
+                  placeholder="CA"
+                />
+              </div>
+              <div>
+                <label className="label">Insurance carrier</label>
+                <input
+                  name="insurance_carrier"
+                  className="input"
+                  maxLength={120}
+                  defaultValue={extra.insurance_carrier ?? ""}
+                  placeholder="e.g. State Farm"
+                />
+              </div>
+              <div>
+                <label className="label">Insurance expires</label>
+                <input
+                  name="insurance_expires"
+                  type="date"
+                  className="input"
+                  defaultValue={extra.insurance_expires ?? ""}
+                />
+              </div>
+            </div>
+
+            {hasVault && (
+              <p className="mt-3 text-xs text-emerald-700">
+                Your page shows the &quot;on file&quot; badge for what
+                you&apos;ve saved.
+              </p>
+            )}
+          </div>
+
+          <div className="flex justify-end border-t border-stone-100 pt-4">
+            <button type="submit" className="btn-primary">
+              Save Page Extras
+            </button>
+          </div>
+        </form>
+      ) : (
+        <section className="card space-y-3">
+          <h2 className="font-semibold text-stone-900">
+            Make it yours with Hearth Pro
+          </h2>
+          <p className="text-sm text-stone-500">
+            Your basic page is live for every pro. Members can dress it up:
+          </p>
+          <ul className="space-y-1.5 text-sm text-stone-600">
+            <li>🖼️ Your logo at the top of the page</li>
+            <li>✍️ An about section in your own words</li>
+            <li>
+              📄 A &quot;license and insurance on file&quot; badge once you
+              save those details in a private vault
+            </li>
+            <li>
+              📇 A share card image and ready-to-post caption for social media
+            </li>
+            <li>
+              ⭐ An embeddable rating widget for your own website, showing your
+              full Hearth rating and review count
+            </li>
+          </ul>
+          <p className="text-xs text-stone-400">
+            Membership never changes your rating or reviews: those are real
+            for everyone.
+          </p>
+          <Link href="/pro/plus" className="btn-primary inline-block">
+            See Hearth Pro
+          </Link>
+        </section>
+      )}
+    </div>
+  );
+}

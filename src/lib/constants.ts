@@ -1,5 +1,21 @@
 // Shared option lists. Keep these in sync with the CHECK comments in the schema.
 
+// =============================================================================
+// COLD START: launch-phase liquidity levers.
+//
+// While the marketplace is young, both sides of it are opened up to build
+// liquidity: homeowners post jobs free (no Plus requirement, no free-post cap)
+// and EVERY pro gets instant new-job alerts (not just Pro members). Flip each
+// constant to false to restore the Plus posting gate and the members-only
+// instant alerts; every consumer references these constants and keeps the
+// original gate code intact behind them, so reverting is a one-line change.
+//
+// These flags never touch the quality guards (auth, the 20-character job
+// description floor, duplicate-post protection): those stay on regardless.
+// =============================================================================
+export const COLD_START_FREE_POSTING = true;
+export const COLD_START_FREE_ALERTS = true;
+
 export const SYSTEM_TYPES = [
   { value: "roof", label: "Roof", icon: "🏠" },
   { value: "hvac", label: "HVAC", icon: "❄️" },
@@ -109,6 +125,19 @@ export const TIMING_OPTIONS = [
   { value: "flexible", label: "I'm flexible" },
 ] as const;
 
+// Rough budget bands a homeowner can attach to a job posting. Purely a signal
+// so pros can quote realistically, never a commitment or a binding number.
+// Keep the values in sync with the column comment on
+// contractor_leads.budget_range (supabase/migrations/0047_job_budget.sql).
+export const BUDGET_RANGES = [
+  { value: "under-500", label: "Under $500" },
+  { value: "500-1500", label: "$500-1,500" },
+  { value: "1500-5000", label: "$1,500-5,000" },
+  { value: "5000-15000", label: "$5,000-15,000" },
+  { value: "15000-plus", label: "$15,000+" },
+  { value: "not-sure", label: "Not sure yet" },
+] as const;
+
 // Per-lead fee (USD) a pro owes to unlock/apply for a lead, by category.
 //
 // Priced in three tiers keyed to job value + what a pro can bear (a lead is only
@@ -141,6 +170,28 @@ export const LEAD_FEES: Record<string, number> = {
 export function leadFeeFor(category: string): number {
   return LEAD_FEES[category] ?? LEAD_FEES.other;
 }
+
+// Hearth Pro membership (contractor side) pricing, USD. This is the ONE place
+// the prices live: the /pro/plus page and checkout both read from here, so a
+// price change is a one-line edit. First-time monthly subscribers get an
+// intro month at introFirstMonth (a one-time $20-off Stripe coupon at
+// checkout); yearly carries no intro discount. Membership is perks only: it
+// never gates lead access. Every pro sees every job and pays per application,
+// member or not.
+export const PRO_PLAN = {
+  monthly: 29.99,
+  // 12 x 19.99: the yearly plan works out to exactly $19.99/mo, a real $120
+  // saving vs paying monthly. Always compare against monthly x 12 in copy,
+  // never an invented list price.
+  yearly: 239.88,
+  introFirstMonth: 9.99,
+} as const;
+
+// Extra percentage points a Pro member earns on top of the deposit-bonus tier
+// percentage, applied to every deposit. Display-side mirror of the
+// p_bonus_boost_pts argument the Stripe webhook passes to apply_deposit
+// (supabase/migrations/0032_pro_membership.sql).
+export const PRO_DEPOSIT_BOOST_PTS = 5;
 
 // Applicant cap: this many live (non-refunded) applications fill a posted job,
 // so pros stop burning fees on crowded postings. Must match the check in

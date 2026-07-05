@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import PublicProfileForm from "./PublicProfileForm";
+import PublicPageCard from "./PublicPageCard";
+import ProjectsCard, { type ProProject } from "./ProjectsCard";
 import AccountSecurity from "./AccountSecurity";
 import type { Contractor } from "@/lib/database.types";
 
@@ -13,6 +15,18 @@ const TABS = [
     subtitle: "Manage your public business profile and service offerings.",
   },
   {
+    key: "page" as const,
+    label: "Your Public Page",
+    title: "Your Public Page",
+    subtitle: "Share your Hearth page and manage what appears on it.",
+  },
+  {
+    key: "projects" as const,
+    label: "Projects",
+    title: "Projects",
+    subtitle: "Showcase completed work with photo albums on your public page.",
+  },
+  {
     key: "security" as const,
     label: "Account Security",
     title: "Account Security",
@@ -22,10 +36,16 @@ const TABS = [
 
 export default function ProfileTabs({
   contractor,
+  member,
+  projects,
 }: {
   contractor: Contractor;
+  member: boolean;
+  projects: ProProject[];
 }) {
-  const [tab, setTab] = useState<"public" | "security">("public");
+  const [tab, setTab] = useState<"public" | "page" | "projects" | "security">(
+    "public"
+  );
   const meta = TABS.find((t) => t.key === tab)!;
 
   return (
@@ -59,6 +79,14 @@ export default function ProfileTabs({
 
       {tab === "public" ? (
         <PublicProfileForm contractor={contractor} />
+      ) : tab === "page" ? (
+        <PublicPageCard contractor={contractor} member={member} />
+      ) : tab === "projects" ? (
+        <ProjectsCard
+          contractorId={contractor.id}
+          member={member}
+          projects={projects}
+        />
       ) : (
         <AccountSecurity />
       )}

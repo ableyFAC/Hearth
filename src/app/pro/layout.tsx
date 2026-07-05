@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentContractor, getRole } from "@/lib/contractor";
 import ProNav from "@/components/ProNav";
@@ -38,6 +39,12 @@ export default async function ProLayout({
     <div className="min-h-screen">
       <ProNav company={contractor.name} />
       <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
+      <footer className="mx-auto max-w-5xl px-6 pb-8 text-center text-xs text-stone-400">
+        Need a hand?{" "}
+        <Link href="/pro/help" className="underline hover:text-stone-600">
+          Help
+        </Link>
+      </footer>
       <NewMessageNotifier role="contractor" />
     </div>
   );

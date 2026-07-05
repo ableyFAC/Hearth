@@ -6,7 +6,9 @@ import {
   iconFor,
   JOB_CATEGORIES,
   TIMING_OPTIONS,
+  BUDGET_RANGES,
   MAX_APPLICANTS_PER_JOB,
+  COLD_START_FREE_ALERTS,
 } from "@/lib/constants";
 import Link from "next/link";
 import OpenChatButton from "@/components/OpenChatButton";
@@ -14,7 +16,9 @@ import ChatDrawer from "@/components/ChatDrawer";
 import LeadsRealtime from "./LeadsRealtime";
 import ApplyJobButton from "./ApplyJobButton";
 import JobStatusSelect from "./JobStatusSelect";
+import SetupChecklist, { type SetupItem } from "@/components/pro/SetupChecklist";
 import { agingLeadFee } from "@/lib/leadPricing";
+import { hasProPlan } from "@/lib/subscription";
 
 const SEVERITY_STYLE: Record<string, string> = {
   low: "border-stone-200 bg-stone-50 text-stone-600",
@@ -145,6 +149,42 @@ export default async function ProDashboard({
   const balance = balanceCents / 100;
   const lowBalance = balanceCents < 5000;
 
+  // First-session setup checklist. Every item comes from data this page
+  // already loads (the contractor row, the wallet, my_applications), so it
+  // costs nothing extra and hides itself once every step is done.
+  const setupItems: SetupItem[] = [
+    {
+      label: "Complete your company profile",
+      done: Boolean(contractor.name) && (contractor.categories ?? []).length > 0,
+      href: "/pro/profile",
+      linkLabel: "Complete profile",
+    },
+    {
+      label: "Put your license on file",
+      done: Boolean(contractor.license_number),
+      href: "/pro/profile",
+      linkLabel: "Add license",
+    },
+    {
+      label: "Upload your logo",
+      done: Boolean((contractor as any).logo_url),
+      href: "/pro/profile",
+      linkLabel: "Add logo",
+    },
+    {
+      label: "Fund your wallet",
+      done: balanceCents > 0,
+      href: "/pro/billing",
+      linkLabel: "Add funds",
+    },
+    {
+      label: "Apply to your first job",
+      done: apps.length > 0,
+      href: "#open-jobs",
+      linkLabel: "Browse jobs",
+    },
+  ];
+
   // "Your results" card: how the pro's applications have paid off so far.
   const { data: appRows } = wallet
     ? await (supabase as any)
@@ -156,6 +196,10 @@ export default async function ProDashboard({
   const wonCount = (appRows ?? []).filter(
     (a: any) => a.status === "chosen"
   ).length;
+
+  // Only the empty-state card needs membership status (to hide the Pro-alerts
+  // suggestion from members), so skip the lookup when the board has jobs.
+  const isProMember = open.length === 0 ? await hasProPlan() : false;
 
   const { data: txnRows } = wallet?.id
     ? await (supabase as any)
@@ -175,6 +219,8 @@ export default async function ProDashboard({
       <LeadsRealtime contractorId={contractor.id} />
       <ChatDrawer role="contractor" />
 
+      <SetupChecklist items={setupItems} />
+
       {lowBalance && (
         <div className="card flex flex-wrap items-center justify-between gap-3 border-amber-200 bg-amber-50">
           <p className="text-sm text-amber-800">
@@ -187,13 +233,22 @@ export default async function ProDashboard({
         </div>
       )}
 
-      <section className="card space-y-1">
-        <p className="text-sm font-medium text-stone-500">Your results</p>
+      <section className="card-hero space-y-1">
+        <p className="stat-label">Your results</p>
         {appliedCount === 0 ? (
-          <p className="text-sm text-stone-600">
-            You haven't applied to a job yet. Apply to an open job below to
-            start winning work.
-          </p>
+          <>
+            <p className="text-sm text-stone-600">
+              You haven't applied to a job yet. Apply to an open job below to
+              start winning work.
+            </p>
+            {apps.length === 0 && (
+              <p className="text-xs text-stone-400">
+                {contractor.license_number
+                  ? "Your first application is guaranteed: if you're not chosen, the fee comes back as credit."
+                  : "Adding your license unlocks the first-application guarantee: if you're not chosen for your first job, the fee comes back as credit."}
+              </p>
+            )}
+          </>
         ) : (
           <>
             <p className="text-xl font-semibold text-stone-900">
@@ -201,7 +256,11 @@ export default async function ProDashboard({
               {appliedCount} application{appliedCount === 1 ? "" : "s"}.
             </p>
             <p className="text-sm text-stone-500">
-              Total spent on applications: ${spent.toFixed(2)}.
+              Total spent on applications:{" "}
+              <span className="[font-variant-numeric:tabular-nums]">
+                ${spent.toFixed(2)}
+              </span>
+              .
               {appliedCount >= 3 &&
                 ` Win rate: ${Math.round((wonCount / appliedCount) * 100)}%.`}
             </p>
@@ -211,19 +270,23 @@ export default async function ProDashboard({
 
       <section className="grid gap-4 sm:grid-cols-3">
         <div className="card">
-          <p className="text-sm font-medium text-stone-500">Open jobs</p>
-          <p className="mt-1 text-4xl font-bold text-stone-900">{open.length}</p>
+          <p className="stat-label">Open jobs</p>
+          <p className="stat-number mt-1 text-4xl text-stone-900">
+            {open.length}
+          </p>
         </div>
         <div className="card">
-          <p className="text-sm font-medium text-stone-500">Active jobs</p>
-          <p className="mt-1 text-4xl font-bold text-stone-900">{activeCount}</p>
+          <p className="stat-label">Active jobs</p>
+          <p className="stat-number mt-1 text-4xl text-stone-900">
+            {activeCount}
+          </p>
         </div>
         <Link
           href="/pro/billing"
           className="card transition hover:border-hearth-400 hover:shadow-md"
         >
-          <p className="text-sm font-medium text-stone-500">Wallet balance</p>
-          <p className="mt-1 text-4xl font-bold text-stone-900">
+          <p className="stat-label">Wallet balance</p>
+          <p className="stat-number mt-1 text-4xl text-stone-900">
             ${balance.toFixed(2)}
           </p>
           <p className="mt-1 text-xs font-medium text-hearth-700">Add funds →</p>
@@ -231,7 +294,7 @@ export default async function ProDashboard({
       </section>
 
       {/* ---- Open jobs: posted by homeowners, pay the fee to apply ---- */}
-      <section className="space-y-3">
+      <section id="open-jobs" className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
             <h1 className="text-2xl font-semibold text-stone-900">
@@ -262,18 +325,77 @@ export default async function ProDashboard({
         </div>
 
         {open.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
-            No open jobs right now. When a homeowner posts one in your categories
-            ({(contractor.categories ?? []).join(", ") || "none set"}), it shows
-            up here.{" "}
-            <Link
-              href="/pro/profile"
-              className="font-medium text-hearth-700 hover:underline"
-            >
-              Add more categories
-            </Link>{" "}
-            to see more jobs.
-          </p>
+          // Honest empty state: no fake urgency, no invented stats. Just the
+          // truth about a young marketplace and three useful things to do
+          // while waiting (each conditional line only shows when it applies).
+          <div className="rounded-xl border border-dashed border-stone-300 p-6 text-center">
+            <p className="font-medium text-stone-900">
+              No open jobs in your trades right now.
+            </p>
+            <p className="mt-1 text-sm text-stone-500">
+              Hearth is growing; new jobs land here the moment homeowners post
+              them.
+            </p>
+            <ul className="mx-auto mt-4 max-w-md space-y-2 text-left text-sm">
+              <li className="flex items-start gap-2 text-stone-600">
+                <span aria-hidden>✔️</span>
+                <span>
+                  Make your page worth picking:{" "}
+                  <Link
+                    href="/pro/profile"
+                    className="font-medium text-hearth-700 hover:underline"
+                  >
+                    complete your public page
+                  </Link>{" "}
+                  (categories, license, logo) so you stand out when jobs
+                  arrive.
+                </span>
+              </li>
+              {apps.length === 0 && (
+                <li className="flex items-start gap-2 text-stone-600">
+                  <span aria-hidden>✔️</span>
+                  <span>
+                    Your first application is guaranteed: if you&apos;re not
+                    chosen, the fee comes back as credit.{" "}
+                    <Link
+                      href="/pro/billing"
+                      className="font-medium text-hearth-700 hover:underline"
+                    >
+                      Fund your wallet
+                    </Link>{" "}
+                    so you can apply the moment something posts.
+                  </span>
+                </li>
+              )}
+              {/* COLD START: while COLD_START_FREE_ALERTS is on, every pro
+                  gets instant alerts, so the honest line is a plain statement.
+                  The membership upsell version returns when the flag flips. */}
+              {COLD_START_FREE_ALERTS ? (
+                <li className="flex items-start gap-2 text-stone-600">
+                  <span aria-hidden>✔️</span>
+                  <span>
+                    You&apos;ll be alerted the moment a job posts in your
+                    trades, so you never check an empty board.
+                  </span>
+                </li>
+              ) : (
+                !isProMember && (
+                  <li className="flex items-start gap-2 text-stone-600">
+                    <span aria-hidden>✔️</span>
+                    <span>
+                      <Link
+                        href="/pro/plus"
+                        className="font-medium text-hearth-700 hover:underline"
+                      >
+                        Get alerts the moment a job posts
+                      </Link>{" "}
+                      with a Pro membership, so you never check an empty board.
+                    </span>
+                  </li>
+                )
+              )}
+            </ul>
+          </div>
         ) : (
           <ul className="space-y-3">
             {open.map((j) => {
@@ -286,27 +408,35 @@ export default async function ProDashboard({
               const spots = Number(j.application_count ?? 0);
               const full = spots >= MAX_APPLICANTS_PER_JOB;
               const chips = qualityChips(j);
+              // Homeowner's rough budget band (0047): a pricing signal, not a
+              // quote. "not-sure" carries no signal, so no chip for it.
+              const budgetLabel =
+                j.budget_range && j.budget_range !== "not-sure"
+                  ? labelFor(BUDGET_RANGES, j.budget_range)
+                  : null;
               return (
                 <li key={j.id} className="card space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-stone-900">
-                      {iconFor(JOB_CATEGORIES, j.category)}{" "}
+                    <span className="flex items-center gap-2 font-medium text-stone-900">
+                      <span className="icon-chip">
+                        {iconFor(JOB_CATEGORIES, j.category)}
+                      </span>{" "}
                       {labelFor(JOB_CATEGORIES, j.category)}
                     </span>
                     {j.issue_severity && (
                       <span
-                        className={`rounded-full border px-2 py-0.5 text-xs ${SEVERITY_STYLE[j.issue_severity] ?? ""}`}
+                        className={`chip border ${SEVERITY_STYLE[j.issue_severity] ?? ""}`}
                       >
                         {j.issue_severity}
                       </span>
                     )}
                     <span className="ml-auto flex items-center gap-2 text-sm font-semibold text-stone-700">
                       {off > 0 && (
-                        <span className="rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                        <span className="chip border border-amber-200 bg-amber-100 font-semibold text-amber-700">
                           {off}% off, aging deal
                         </span>
                       )}
-                      <span>
+                      <span className="[font-variant-numeric:tabular-nums]">
                         Apply fee{" "}
                         {off > 0 && (
                           <span className="text-stone-400 line-through">
@@ -327,12 +457,17 @@ export default async function ProDashboard({
                       No details provided yet
                     </p>
                   )}
-                  {chips.length > 0 && (
+                  {(chips.length > 0 || budgetLabel) && (
                     <div className="flex flex-wrap gap-1">
+                      {budgetLabel && (
+                        <span className="chip bg-stone-100 text-stone-600">
+                          Budget: {budgetLabel}
+                        </span>
+                      )}
                       {chips.map((c) => (
                         <span
                           key={c}
-                          className="rounded-full border border-stone-200 px-1.5 py-0.5 text-[10px] text-stone-500"
+                          className="chip bg-stone-100 text-stone-600"
                         >
                           {c}
                         </span>
@@ -422,8 +557,10 @@ export default async function ProDashboard({
                 className="card flex items-center justify-between gap-3"
               >
                 <div>
-                  <span className="font-medium text-stone-900">
-                    {iconFor(JOB_CATEGORIES, a.category)}{" "}
+                  <span className="flex items-center gap-2 font-medium text-stone-900">
+                    <span className="icon-chip">
+                      {iconFor(JOB_CATEGORIES, a.category)}
+                    </span>{" "}
                     {labelFor(JOB_CATEGORIES, a.category)}
                   </span>
                   {a.issue_description && (
@@ -433,11 +570,11 @@ export default async function ProDashboard({
                   )}
                 </div>
                 {a.refunded_at ? (
-                  <span className="shrink-0 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                  <span className="chip shrink-0 border border-green-200 bg-green-50 text-green-700">
                     Fee returned
                   </span>
                 ) : (
-                  <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                  <span className="chip shrink-0 border border-amber-200 bg-amber-50 text-amber-700">
                     Waiting for homeowner
                   </span>
                 )}
@@ -459,11 +596,13 @@ export default async function ProDashboard({
                 key={a.application_id}
                 className="card flex items-center justify-between gap-3 opacity-70"
               >
-                <span className="font-medium text-stone-700">
-                  {iconFor(JOB_CATEGORIES, a.category)}{" "}
+                <span className="flex items-center gap-2 font-medium text-stone-700">
+                  <span className="icon-chip">
+                    {iconFor(JOB_CATEGORIES, a.category)}
+                  </span>{" "}
                   {labelFor(JOB_CATEGORIES, a.category)}
                 </span>
-                <span className="shrink-0 rounded-full border border-stone-200 bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
+                <span className="chip shrink-0 border border-stone-200 bg-stone-100 text-stone-500">
                   Homeowner chose another pro
                 </span>
               </li>
@@ -480,20 +619,20 @@ function AssignedJobCard({ l }: { l: any }) {
   return (
     <li className="card space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium text-stone-900">
-          {iconFor(JOB_CATEGORIES, l.category)}{" "}
+        <span className="flex items-center gap-2 font-medium text-stone-900">
+          <span className="icon-chip">
+            {iconFor(JOB_CATEGORIES, l.category)}
+          </span>{" "}
           {labelFor(JOB_CATEGORIES, l.category)}
         </span>
         {l.issue_severity && (
           <span
-            className={`rounded-full border px-2 py-0.5 text-xs ${SEVERITY_STYLE[l.issue_severity] ?? ""}`}
+            className={`chip border ${SEVERITY_STYLE[l.issue_severity] ?? ""}`}
           >
             {l.issue_severity}
           </span>
         )}
-        <span
-          className={`rounded-full border px-2 py-0.5 text-xs ${STATUS_STYLE[l.status] ?? ""}`}
-        >
+        <span className={`chip border ${STATUS_STYLE[l.status] ?? ""}`}>
           {STATUS_LABEL[l.status] ?? l.status}
         </span>
       </div>

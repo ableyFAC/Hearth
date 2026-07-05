@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SYSTEM_TYPES } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
+import { hasPlus } from "@/lib/subscription";
+import { countAiUsage } from "@/lib/aiUsage";
 
 export const runtime = "nodejs";
 
@@ -73,6 +75,14 @@ export async function POST(req: NextRequest) {
   }
   if (image.length > MAX_IMAGE_B64_CHARS) {
     return NextResponse.json({ error: "Image too large." }, { status: 413 });
+  }
+
+  // Same per-user daily cap as /api/ask (same ai_usage table and limits), so
+  // document extraction can't be a side door around the abuse limits on the
+  // paid model. Over the cap degrades like any other model failure.
+  const { overLimit } = await countAiUsage(user.id, await hasPlus());
+  if (overLimit) {
+    return NextResponse.json({ doc: null, reason: "rate_limited" });
   }
 
   const today = new Date().toISOString().slice(0, 10);

@@ -124,6 +124,11 @@ export interface ForecastItem {
   // costMid compounded at ~3%/yr out to replacementYear, so the plan reflects
   // what the repair will actually cost when it happens, not what it costs now.
   futureCost: number;
+  // True when the timing is a guess: no install year and no condition rating
+  // to anchor it, so yearsLeft is just "midpoint of a typical lifespan". The
+  // cost range is still real; the WHEN is not, and the page should say so
+  // instead of quoting a confident replacement year.
+  timingEstimated: boolean;
 }
 
 export interface PriorityItem {
@@ -139,25 +144,32 @@ export interface YearlySpend {
 export interface Forecast {
   horizonYears: number;
   timeline: ForecastItem[]; // every system with a cost range, soonest first
-  dueSoon: ForecastItem[]; // yearsLeft <= 1
+  dueSoon: ForecastItem[]; // yearsLeft <= 1, real data only (no guessed timing)
   startHere: PriorityItem[]; // top 2-3 items to act on first, with why
   yearlySpend: YearlySpend[]; // one entry per year of the horizon, for a bar chart
   totalMidCost: number; // sum of future (inflation-adjusted) costs due within the horizon
   monthlySetAside: number; // recommended monthly repair-fund contribution
   stateMultiplier: number; // regional cost multiplier applied (1.0 = national average)
+  // How many systems have timingEstimated timing (no install year, no
+  // condition signal). Their costs are still in the totals, so the page must
+  // disclose that their placement on the timeline is rough.
+  estimatedTimingCount: number;
 }
 
 // Years left before a system likely needs replacing, adjusted for the
 // owner-reported condition. Mirrors health.ts's effectiveYearsLeft, but
 // takes install_year/condition directly and always returns a number: a
-// system with no install year is treated as being at the midpoint of its
-// typical lifespan, so it still lands somewhere on the timeline instead of
-// disappearing from the forecast.
+// system with no install year is placed at the midpoint of its typical
+// lifespan so it still lands somewhere on the timeline instead of
+// disappearing from the forecast. When neither an install year nor a
+// worrying condition rating backs that placement up, timingEstimated is
+// true: the WHEN is a guess and downstream code must treat it that way
+// (no due-soon urgency, no confident replacement year on the page).
 function yearsLeftFor(
   system: Pick<HomeSystem, "system_type" | "install_year" | "condition_rating">,
   currentYear: number,
   lifespan: number
-): { age: number | null; yearsLeft: number } {
+): { age: number | null; yearsLeft: number; timingEstimated: boolean } {
   const age = system.install_year != null ? currentYear - system.install_year : null;
   const ageBased = age != null ? lifespan - age : Math.round(lifespan / 2);
 
@@ -168,7 +180,10 @@ function yearsLeftFor(
   else if (c === 3) cap = 5; // fair - within ~5 years
 
   const yearsLeft = cap == null ? ageBased : Math.min(ageBased, cap);
-  return { age, yearsLeft };
+  // No install year AND no condition cap: the midpoint placement is pure
+  // guesswork. (A bad condition rating is real data, so it still counts.)
+  const timingEstimated = age == null && cap == null;
+  return { age, yearsLeft, timingEstimated };
 }
 
 // One-line reason a "start here" item is ranked where it is.
@@ -201,7 +216,11 @@ export function buildForecast(
   const items: ForecastItem[] = systems.map((system) => {
     const lifespan =
       system.expected_lifespan_years ?? DEFAULT_LIFESPANS[system.system_type] ?? 20;
-    const { age, yearsLeft } = yearsLeftFor(system, currentYear, lifespan);
+    const { age, yearsLeft, timingEstimated } = yearsLeftFor(
+      system,
+      currentYear,
+      lifespan
+    );
     const cost = REPLACEMENT_INFO[system.system_type] ?? { low: 1000, high: 5000 };
     const costLow = Math.round(cost.low * multiplier);
     const costHigh = Math.round(cost.high * multiplier);
@@ -221,24 +240,39 @@ export function buildForecast(
       costMid,
       todayCost: costMid,
       futureCost,
+      timingEstimated,
     };
   });
 
   const timeline = [...items].sort((a, b) => a.yearsLeft - b.yearsLeft);
 
-  const dueSoon = timeline.filter((i) => i.yearsLeft <= 1);
+  // "Due soon" is an urgency call, so it only includes systems whose timing
+  // is backed by real data. A guessed midpoint never creates urgency.
+  const dueSoon = timeline.filter((i) => !i.timingEstimated && i.yearsLeft <= 1);
 
-  const withinHorizon = timeline.filter((i) => i.yearsLeft <= horizonYears);
+  // Guessed-timing items stay in the total even when their placeholder
+  // midpoint lands past the horizon: we do not know WHEN that roof is due,
+  // only that it will be, and the fund should still cover it. The page
+  // discloses this via estimatedTimingCount.
+  const withinHorizon = timeline.filter(
+    (i) => i.yearsLeft <= horizonYears || i.timingEstimated
+  );
   const totalMidCost = withinHorizon.reduce((sum, i) => sum + i.futureCost, 0);
 
   const monthlySetAside = Math.round(totalMidCost / (horizonYears * 12));
 
+  const estimatedTimingCount = items.filter((i) => i.timingEstimated).length;
+
   // Top 2-3 items to act on first: soonest due, then costliest as a
   // tiebreaker, mirroring how an owner should actually triage a list.
-  const ranked = [...timeline].sort((a, b) => {
-    if (a.yearsLeft !== b.yearsLeft) return a.yearsLeft - b.yearsLeft;
-    return b.futureCost - a.futureCost;
-  });
+  // Guessed-timing items never make this list: "act now" advice has to
+  // rest on real dates or a real condition rating, not a midpoint guess.
+  const ranked = timeline
+    .filter((i) => !i.timingEstimated)
+    .sort((a, b) => {
+      if (a.yearsLeft !== b.yearsLeft) return a.yearsLeft - b.yearsLeft;
+      return b.futureCost - a.futureCost;
+    });
   const startHereItems = ranked.slice(0, Math.min(3, ranked.length));
   const costliestId =
     startHereItems.length > 0
@@ -268,5 +302,6 @@ export function buildForecast(
     totalMidCost,
     monthlySetAside,
     stateMultiplier: multiplier,
+    estimatedTimingCount,
   };
 }

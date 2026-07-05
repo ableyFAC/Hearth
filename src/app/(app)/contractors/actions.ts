@@ -5,9 +5,26 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveProperty } from "@/lib/property";
-import { leadFeeFor, labelFor, JOB_CATEGORIES } from "@/lib/constants";
+import {
+  leadFeeFor,
+  labelFor,
+  JOB_CATEGORIES,
+  ISSUE_CATEGORIES,
+  BUDGET_RANGES,
+  COLD_START_FREE_POSTING,
+} from "@/lib/constants";
 import { setFlash } from "@/lib/flash";
 import { hasPlus } from "@/lib/subscription";
+import { alertProsForNewLead } from "@/lib/proAlerts";
+
+// Photo URLs come from our own upload component (PhotoUpload), so anything
+// oversized is not a real URL; drop it quietly instead of storing a broken
+// link. Same rule as the issue tracker's photo handling.
+function validPhotoUrls(formData: FormData): string[] {
+  return (formData.getAll("photo_urls") as string[]).filter(
+    (u) => typeof u === "string" && u.length > 0 && u.length <= 1000
+  );
+}
 
 // Homeowner posts a job (Indeed-style). No pro is picked here: the lead is left
 // unassigned (contractor_id null) so matching pros can apply to it. The chosen
@@ -27,8 +44,19 @@ export async function postJobAction(formData: FormData) {
   const timing = (formData.get("timing") as string) || null;
   const message = ((formData.get("message") as string) || "").trim() || null;
 
-  // Homeowners share one gate account, so we can't derive a real identity from
-  // auth - capture contact on the form and snapshot it onto the job.
+  // Optional budget band: a signal for pros, never a commitment. Only accept a
+  // known band value; never write arbitrary client input.
+  const budgetRaw = (formData.get("budget_range") as string) || "";
+  const budgetRange = BUDGET_RANGES.some((b) => b.value === budgetRaw)
+    ? budgetRaw
+    : null;
+
+  const photoUrls = validPhotoUrls(formData);
+
+  // Contact details are captured on the form and snapshotted onto the job,
+  // since a lead is a frozen packet: pros read only contractor_leads, never the
+  // homeowner's account. The signed-in user's auth email is the fallback when
+  // the form field is left blank.
   const homeownerName = (formData.get("homeowner_name") as string) || null;
   const homeownerEmail =
     (formData.get("homeowner_email") as string) || user.email || null;
@@ -81,22 +109,54 @@ export async function postJobAction(formData: FormData) {
   // Free vs Plus open-job limits: a free homeowner may have 3 open jobs at a
   // time (plenty for any normal household, and it keeps junk postings down);
   // Plus removes the cap. An open listing is one no pro has been picked for yet.
-  const plus = await hasPlus();
-  const limit = plus ? Infinity : 3;
-  const { count: openCount } = await supabase
-    .from("contractor_leads")
-    .select("id", { count: "exact", head: true })
-    .eq("property_id", property.id)
-    .is("contractor_id", null)
-    .eq("status", "new");
-  if ((openCount ?? 0) >= limit) {
-    // Only free homeowners can reach this: Plus is unlimited.
-    redirect("/plus?reason=job_limit");
+  // COLD START: while COLD_START_FREE_POSTING is on, posting is free for
+  // everyone and the cap is skipped entirely. Flip the constant to restore it.
+  if (!COLD_START_FREE_POSTING) {
+    const plus = await hasPlus();
+    const limit = plus ? Infinity : 3;
+    const { count: openCount } = await supabase
+      .from("contractor_leads")
+      .select("id", { count: "exact", head: true })
+      .eq("property_id", property.id)
+      .is("contractor_id", null)
+      .eq("status", "new");
+    if ((openCount ?? 0) >= limit) {
+      // Only free homeowners can reach this: Plus is unlimited.
+      redirect("/plus?reason=job_limit");
+    }
   }
 
-  const { error } = await supabase.from("contractor_leads").insert({
+  // Photos ride on an issue (photos rows with related_type 'issue'), which is
+  // exactly what the pro board's has_photos signal reads (0028's
+  // open_jobs_for_me checks photos against the lead's issue_id). A job posted
+  // straight from this form has no issue yet, so create a lightweight one to
+  // carry the photos. Born converted_to_lead so the issue tracker never nudges
+  // the owner about it, and severity stays off the lead (issueSeverity is
+  // untouched) so no bogus severity chip appears on the pro's card.
+  // Best-effort: if the carrier issue can't be created, the post still goes
+  // through, just without photos.
+  let photoIssueId = issueId;
+  if (photoUrls.length && !photoIssueId) {
+    const issueCategory = ISSUE_CATEGORIES.some((c) => c.value === category)
+      ? category
+      : "other";
+    const { data: carrier } = await supabase
+      .from("issues")
+      .insert({
+        property_id: property.id,
+        category: issueCategory,
+        severity: "low",
+        description: (issueDescription ?? "").slice(0, 4000) || null,
+        converted_to_lead: true,
+      })
+      .select("id")
+      .single();
+    if (carrier) photoIssueId = carrier.id;
+  }
+
+  const leadRow = {
     property_id: property.id,
-    issue_id: issueId,
+    issue_id: photoIssueId,
     contractor_id: null, // open job: pros apply, homeowner picks later
     category,
     status: "new",
@@ -108,8 +168,40 @@ export async function postJobAction(formData: FormData) {
     issue_description: issueDescription,
     issue_severity: issueSeverity,
     timing,
-  });
+  };
+
+  // budget_range isn't in the generated types (and migration 0047 may not have
+  // run against this database yet): write it via `as any`, and on the
+  // missing-column fingerprint specifically, retry without it so posting never
+  // breaks. Same pattern as the contractors insert in pro/actions.
+  let { error } = await supabase
+    .from("contractor_leads")
+    .insert(
+      (budgetRange ? { ...leadRow, budget_range: budgetRange } : leadRow) as any
+    );
+  if (error && budgetRange) {
+    const missingColumn =
+      error.code === "42703" ||
+      /budget_range|column .* does not exist/i.test(error.message ?? "");
+    if (missingColumn) {
+      ({ error } = await supabase.from("contractor_leads").insert(leadRow as any));
+    }
+  }
   if (error) throw new Error(error.message);
+
+  // Attach the uploaded photos to the (existing or carrier) issue, exactly like
+  // the issue tracker does, so pros see the "Photos attached" quality chip.
+  // Best-effort: a photo hiccup should never break the post.
+  if (photoUrls.length && photoIssueId) {
+    await supabase.from("photos").insert(
+      photoUrls.map((url) => ({
+        property_id: property.id,
+        related_type: "issue",
+        related_id: photoIssueId!,
+        url,
+      }))
+    );
+  }
 
   // Mark the originating issue so we don't keep nudging the owner about it.
   if (issueId) {
@@ -118,6 +210,21 @@ export async function postJobAction(formData: FormData) {
       .update({ converted_to_lead: true })
       .eq("id", issueId);
   }
+
+  // Instant new-job alerts through the full notification stack (in-app now,
+  // email/SMS once those providers are configured). Normally a Hearth Pro
+  // member perk; while COLD_START_FREE_ALERTS is on, every category-matched
+  // pro gets one. Pros not alerted keep the nudge below unchanged.
+  // alertProsForNewLead catches everything internally and returns the ids it
+  // reached, so this can never break the post and members aren't pinged twice.
+  const alertedPros = await alertProsForNewLead({
+    category,
+    timing,
+    issue_description: issueDescription,
+    // For the cold-start free-alerts path's state-level locality check
+    // (null-safe, mirroring 0046: missing data never hides a job).
+    property_state: property.state ?? null,
+  });
 
   // Nudge matching pros that a fresh job just came in, so they see it while
   // it's still open and worth racing other applicants for. Best-effort only:
@@ -132,7 +239,7 @@ export async function postJobAction(formData: FormData) {
       .limit(50);
     const categoryLabel = labelFor(JOB_CATEGORIES, category);
     for (const match of matches ?? []) {
-      if (!match.user_id) continue;
+      if (!match.user_id || alertedPros.has(match.user_id)) continue;
       await admin.from("notifications").insert({
         user_id: match.user_id,
         kind: "new_lead",
@@ -228,4 +335,97 @@ export async function chooseApplicantAction(formData: FormData) {
       "success"
     );
   revalidatePath("/contractors");
+}
+
+// Homeowner re-hires a pro they've already worked with (My Pros). The repeat
+// lead is free for the pro: rehire_pro() inserts it already assigned, with no
+// apply fee and no wallet charge, so nobody pays to work together again.
+// rehire_pro isn't in the generated types yet, so the rpc client is cast to
+// any (same pattern as choose_applicant/apply_to_lead above).
+export async function rehireProAction(formData: FormData) {
+  const property = await getActiveProperty();
+  if (!property) throw new Error("No active property");
+  const supabase = createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/signin");
+
+  const contractorId = String(formData.get("contractor_id") || "");
+  const category = String(formData.get("category") || "");
+  const description = ((formData.get("description") as string) || "").trim();
+
+  if (!contractorId || !category) {
+    setFlash("Something went wrong. Please try again.", "error");
+    redirect("/contractors");
+  }
+
+  // Mirror postJobAction: the pro needs a real description to go on, even on a
+  // repeat job.
+  if (description.length < 20) {
+    setFlash(
+      "Please describe the job in at least 20 characters so your pro knows what to expect.",
+      "error"
+    );
+    redirect("/contractors");
+  }
+
+  const rpc = supabase as any;
+  const { data: leadId, error } = await rpc.rpc("rehire_pro", {
+    p_property: property.id,
+    p_contractor: contractorId,
+    p_category: category,
+    p_description: description,
+  });
+
+  if (error) {
+    // Migration 0030 may not have run against this database yet: degrade to a
+    // soft message instead of crashing the page.
+    const missingFn =
+      error.code === "PGRST202" ||
+      (/rehire_pro/i.test(error.message ?? "") &&
+        /(does not exist|schema cache|not find)/i.test(error.message ?? ""));
+    setFlash(
+      missingFn
+        ? "Hiring a pro again isn't available yet. Please check back soon."
+        : "Something went wrong. Please try again.",
+      "error"
+    );
+    revalidatePath("/contractors");
+    redirect("/contractors");
+  }
+
+  // Nudge the pro that a free repeat lead just came in. Best-effort only, same
+  // as the new-job notification in postJobAction: a hiccup here should never
+  // break the rehire itself.
+  try {
+    const { data: profile } = await supabase
+      .from("users")
+      .select("full_name")
+      .eq("id", user.id)
+      .maybeSingle();
+    const homeownerName = profile?.full_name || "A homeowner";
+
+    const { data: contractor } = await supabase
+      .from("contractors")
+      .select("user_id")
+      .eq("id", contractorId)
+      .maybeSingle();
+    if (contractor?.user_id) {
+      const admin = createAdminClient();
+      await admin.from("notifications").insert({
+        user_id: contractor.user_id,
+        kind: "new_lead",
+        title: `${homeownerName} wants to hire you again: free repeat lead`,
+        body: "No apply fee, they already trust your work. Check your jobs to say hi.",
+        url: "/pro",
+      });
+    }
+  } catch {
+    // Notifications are a nice-to-have here, not part of the rehire flow.
+  }
+
+  revalidatePath("/contractors");
+  redirect(`/chats?lead=${leadId}`);
 }

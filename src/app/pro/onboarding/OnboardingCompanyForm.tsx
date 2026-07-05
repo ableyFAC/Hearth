@@ -4,6 +4,7 @@ import { saveCompanyAction } from "../actions";
 import CategoryPicker from "../CategoryPicker";
 import FieldIcon from "../FieldIcon";
 import PhoneInput from "@/components/PhoneInput";
+import { STATE_NAMES } from "@/lib/forecast";
 
 // First-time company setup. Same visual language as the edit-profile form
 // (matching fields + category cards) but lean: no tabs, no account-security, no
@@ -11,8 +12,10 @@ import PhoneInput from "@/components/PhoneInput";
 // Posts to saveCompanyAction, which inserts the new contractor row.
 export default function OnboardingCompanyForm({
   defaultEmail,
+  defaultReferralCode = "",
 }: {
   defaultEmail: string;
+  defaultReferralCode?: string;
 }) {
   return (
     <form
@@ -105,6 +108,33 @@ export default function OnboardingCompanyForm({
               </div>
 
               <div>
+                <label className="label">State You Serve</label>
+                <div className="relative">
+                  <FieldIcon>
+                    <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15" />
+                  </FieldIcon>
+                  <select
+                    name="service_state"
+                    className="input pl-9"
+                    required
+                    defaultValue=""
+                  >
+                    <option value="" disabled>
+                      Select a state
+                    </option>
+                    {Object.entries(STATE_NAMES).map(([code, name]) => (
+                      <option key={code} value={code}>
+                        {name.replace(/^the /, "")} ({code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="mt-1 text-xs text-stone-400">
+                  Your job board only shows homeowner jobs in this state.
+                </p>
+              </div>
+
+              <div>
                 <label className="label">State License Number</label>
                 <div className="relative">
                   <FieldIcon>
@@ -117,8 +147,31 @@ export default function OnboardingCompanyForm({
                   />
                 </div>
                 <p className="mt-1 text-xs text-stone-400">
-                  We verify this before your company goes live. It can&apos;t be
-                  changed later.
+                  We keep this on file, show homeowners a &quot;license on
+                  file&quot; badge, and flag it for verification. It can&apos;t
+                  be changed later.
+                </p>
+              </div>
+
+              <div>
+                <label className="label">
+                  Referral code{" "}
+                  <span className="font-normal text-stone-400">(optional)</span>
+                </label>
+                <div className="relative">
+                  <FieldIcon>
+                    <path d="M20 8h-9M20 8a2 2 0 012 2v9a2 2 0 01-2 2H4a2 2 0 01-2-2v-9a2 2 0 012-2h3M20 8V6a2 2 0 00-2-2h-2M9 12h6" />
+                  </FieldIcon>
+                  <input
+                    name="referral_code"
+                    className="input pl-9"
+                    defaultValue={defaultReferralCode}
+                    placeholder="From the pro who invited you"
+                  />
+                </div>
+                <p className="mt-1 text-xs text-stone-400">
+                  Invited by another Hearth pro? Enter their code: you both get
+                  $25 of application credit when you win your first job.
                 </p>
               </div>
             </div>
