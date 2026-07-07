@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import {
@@ -11,9 +10,13 @@ import {
   iconFor,
   COLD_START_FREE_POSTING,
 } from "@/lib/constants";
-import { setFlash } from "@/lib/flash";
 import { hasPlus } from "@/lib/subscription";
-import { postJobAction, chooseApplicantAction, rehireProAction } from "./actions";
+import {
+  postJobAction,
+  chooseApplicantAction,
+  rehireProAction,
+  saveReviewAction,
+} from "./actions";
 import CategoryFilter from "./CategoryFilter";
 import LeadChat from "@/components/LeadChat";
 import PhoneInput from "@/components/PhoneInput";
@@ -31,32 +34,6 @@ import { redactContact } from "@/lib/redact";
 // Must match the markers LeadChat posts when either side closes a thread.
 const isCloseMarker = (b: string) =>
   b.startsWith("Conversation closed") || b === "Chat closed by the contractor.";
-
-// Save a homeowner's star rating + comment for a finished job. Goes through the
-// leave_review() RPC, which derives the contractor from the lead, verifies the
-// caller owns the job, and enforces one review per job, so the contractor being
-// reviewed can't be forged from the form, and ratings can't be manipulated.
-async function saveReviewAction(formData: FormData) {
-  "use server";
-  const supabase = createClient();
-  const lead_id = String(formData.get("lead_id"));
-  const rating = Number(formData.get("rating"));
-  const comment = String(formData.get("comment") || "").trim();
-  if (!rating || rating < 1 || rating > 5) {
-    setFlash("Please pick a star rating.", "error");
-    return;
-  }
-  const { error } = await supabase.rpc("leave_review", {
-    p_lead: lead_id,
-    p_rating: rating,
-    p_comment: comment,
-  });
-  setFlash(
-    error ? error.message : "Thanks for your review!",
-    error ? "error" : "success"
-  );
-  revalidatePath("/contractors");
-}
 
 export default async function ContractorsPage({
   searchParams,
@@ -108,6 +85,8 @@ export default async function ContractorsPage({
     name: string;
     lastCategory: string;
     lastDescription: string | null;
+    rating: number | null;
+    reviewCount: number;
   }[] = [];
   const seenContractors = new Set<string>();
   for (const l of leads) {
@@ -120,6 +99,8 @@ export default async function ContractorsPage({
       name: l.contractors?.name ?? "Your pro",
       lastCategory: l.category,
       lastDescription: l.issue_description ?? null,
+      rating: l.contractors?.review_count > 0 ? l.contractors.rating : null,
+      reviewCount: l.contractors?.review_count ?? 0,
     });
   }
 
@@ -193,7 +174,18 @@ export default async function ContractorsPage({
                 className="card flex items-center justify-between gap-3"
               >
                 <div className="min-w-0">
-                  <p className="font-medium text-stone-900">{p.name}</p>
+                  <p className="font-medium text-stone-900">
+                    {p.name}
+                    {p.rating != null && (
+                      <span className="ml-2 text-xs text-amber-600">
+                        ★ {p.rating}
+                        <span className="text-stone-400">
+                          {" "}
+                          · {p.reviewCount} review{p.reviewCount === 1 ? "" : "s"}
+                        </span>
+                      </span>
+                    )}
+                  </p>
                   <p className="truncate text-sm text-stone-500">
                     Last hired for {labelFor(JOB_CATEGORIES, p.lastCategory)}
                     {p.lastDescription ? `: ${p.lastDescription}` : ""}

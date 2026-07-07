@@ -69,8 +69,9 @@ export default function ReviewButton({
               <textarea
                 name="comment"
                 rows={3}
+                maxLength={600}
                 defaultValue={existing?.comment ?? ""}
-                placeholder="Anything to add? (optional)"
+                placeholder="Anything to add? (optional, up to 600 characters)"
                 className="input w-full"
               />
 

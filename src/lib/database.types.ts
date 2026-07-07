@@ -10,6 +10,17 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
+// One line item read off a pro's past invoice or quote. All monetary values
+// are kept as strings, exactly as printed on the source document: nothing
+// here is recomputed.
+export interface ProPastJobLineItem {
+  label: string;
+  category: string;
+  quantity: string | null;
+  unit_price: string | null;
+  line_total: string | null;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -219,6 +230,9 @@ export interface Database {
           user_id: string | null;
           name: string;
           license_number: string | null;
+          license_expires: string | null;
+          license_doc_path: string | null;
+          insurance_doc_path: string | null;
           categories: string[] | null;
           service_area: string | null;
           contact_email: string | null;
@@ -234,6 +248,9 @@ export interface Database {
           user_id?: string | null;
           name: string;
           license_number?: string | null;
+          license_expires?: string | null;
+          license_doc_path?: string | null;
+          insurance_doc_path?: string | null;
           categories?: string[] | null;
           service_area?: string | null;
           contact_email?: string | null;
@@ -627,6 +644,116 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["reports"]["Insert"]>;
         Relationships: [];
       };
+      household_members: {
+        Row: {
+          id: string;
+          property_id: string;
+          invited_email: string;
+          member_user_id: string | null;
+          status: string;
+          invited_by: string;
+          created_at: string;
+          accepted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          property_id: string;
+          invited_email: string;
+          member_user_id?: string | null;
+          status?: string;
+          invited_by: string;
+          created_at?: string;
+          accepted_at?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["household_members"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      pro_clients: {
+        Row: {
+          id: string;
+          contractor_id: string;
+          lead_id: string | null;
+          client_name: string;
+          stage: string;
+          note: string | null;
+          follow_up_on: string | null;
+          phone: string | null;
+          email: string | null;
+          address: string | null;
+          est_value_cents: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          contractor_id: string;
+          lead_id?: string | null;
+          client_name: string;
+          stage?: string;
+          note?: string | null;
+          follow_up_on?: string | null;
+          phone?: string | null;
+          email?: string | null;
+          address?: string | null;
+          est_value_cents?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["pro_clients"]["Insert"]>;
+        Relationships: [];
+      };
+      pro_client_notes: {
+        Row: {
+          id: string;
+          client_id: string;
+          body: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          body: string;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["pro_client_notes"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      pro_past_jobs: {
+        Row: {
+          id: string;
+          contractor_id: string;
+          doc_type: string;
+          job_type: string | null;
+          job_summary: string | null;
+          document_date: string | null;
+          location: string | null;
+          line_items: ProPastJobLineItem[];
+          subtotal: string | null;
+          total: string | null;
+          currency: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          contractor_id: string;
+          doc_type?: string;
+          job_type?: string | null;
+          job_summary?: string | null;
+          document_date?: string | null;
+          location?: string | null;
+          line_items?: ProPastJobLineItem[];
+          subtotal?: string | null;
+          total?: string | null;
+          currency?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["pro_past_jobs"]["Insert"]>;
+        Relationships: [];
+      };
       subscriptions: {
         Row: {
           id: string;
@@ -669,6 +796,10 @@ export interface Database {
     };
     Functions: {
       owns_property: {
+        Args: { p_property_id: string };
+        Returns: boolean;
+      };
+      is_active_member: {
         Args: { p_property_id: string };
         Returns: boolean;
       };
@@ -729,3 +860,7 @@ export type Contractor = T["contractors"]["Row"];
 export type ContractorLead = T["contractor_leads"]["Row"];
 export type SystemLifespan = T["system_lifespans"]["Row"];
 export type Subscription = T["subscriptions"]["Row"];
+export type HouseholdMember = T["household_members"]["Row"];
+export type ProClient = T["pro_clients"]["Row"];
+export type ProClientNote = T["pro_client_notes"]["Row"];
+export type ProPastJob = T["pro_past_jobs"]["Row"];

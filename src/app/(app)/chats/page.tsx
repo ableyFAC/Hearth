@@ -11,6 +11,8 @@ import MarkChatSeen from "@/components/MarkChatSeen";
 import MarkChatsSeen from "@/components/MarkChatsSeen";
 import AskHearth from "@/components/AskHearth";
 import { getProactiveGreeting } from "@/lib/greeting";
+import ReviewButton from "@/app/(app)/contractors/ReviewButton";
+import { saveReviewAction } from "@/app/(app)/contractors/actions";
 
 // Homeowner-side "seen" cookie (kept separate from the contractor's).
 const SEEN_COOKIE = "hearth_ho_chat_seen";
@@ -131,6 +133,19 @@ export default async function HomeownerChatsPage({
   const selected = askSelected
     ? null
     : (convos.find((l) => l.id === searchParams.lead) ?? null);
+
+  // The selected thread already has a pro assigned (accepted or closed; the
+  // convos query above only includes leads with contractor_id set), so a
+  // review is allowed here per leave_review() (0017) regardless of whether the
+  // conversation itself has been closed yet. Look up any existing review so the
+  // thread shows "Leave a review" or a quiet "You reviewed this pro" state.
+  const { data: existingReview } = selected
+    ? await supabase
+        .from("reviews")
+        .select("rating, comment")
+        .eq("lead_id", selected.id)
+        .maybeSingle()
+    : { data: null };
 
   return (
     <div className="space-y-4">
@@ -271,15 +286,46 @@ export default async function HomeownerChatsPage({
               <AskHearth fill greeting={greeting} />
             </div>
           ) : selected ? (
-            <div className="h-[60vh] rounded-xl border border-stone-200 bg-white p-3 md:h-[calc(100vh-13rem)]">
-              <LeadChat
-                key={selected.id}
-                leadId={selected.id}
-                role="homeowner"
-                embedded
-                title={nameOf(selected)}
-                subtitle={labelFor(JOB_CATEGORIES, selected.category)}
-              />
+            <div className="flex h-[60vh] flex-col rounded-xl border border-stone-200 bg-white p-3 md:h-[calc(100vh-13rem)]">
+              {/* A pro is assigned on every thread here, so a review is always
+                  allowed (leave_review only requires an assigned pro, not a
+                  closed conversation): "Leave a review" while working
+                  together, or a quiet "You reviewed this pro" once done. */}
+              <div className="mb-2 flex shrink-0 items-center justify-between gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm">
+                {existingReview ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-amber-500">
+                      {"★".repeat(existingReview.rating)}
+                      <span className="text-stone-300">
+                        {"★".repeat(5 - existingReview.rating)}
+                      </span>
+                    </span>
+                    <span className="text-xs text-stone-400">
+                      You reviewed this pro
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-stone-500">
+                    Worked with {nameOf(selected)}?
+                  </span>
+                )}
+                <ReviewButton
+                  leadId={selected.id}
+                  contractorName={nameOf(selected)}
+                  action={saveReviewAction}
+                  existing={existingReview ?? undefined}
+                />
+              </div>
+              <div className="min-h-0 flex-1">
+                <LeadChat
+                  key={selected.id}
+                  leadId={selected.id}
+                  role="homeowner"
+                  embedded
+                  title={nameOf(selected)}
+                  subtitle={labelFor(JOB_CATEGORIES, selected.category)}
+                />
+              </div>
             </div>
           ) : (
             <div className="flex h-[60vh] items-center justify-center rounded-xl border border-dashed border-stone-300 text-sm text-stone-400 md:h-[calc(100vh-13rem)]">

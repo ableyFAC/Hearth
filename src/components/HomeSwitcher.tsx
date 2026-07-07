@@ -3,15 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { setActiveHomeAction } from "@/lib/homeActions";
 import RemoveHomeButton from "@/components/RemoveHomeButton";
-import type { Property } from "@/lib/database.types";
+import type { PropertyWithShared } from "@/lib/property";
 
-// Dropdown of the owner's homes - switch, remove, or add. Closes on outside
+// Dropdown of the user's homes: switch, remove, or add. Closes on outside
 // click or Escape (no need to click the toggle again).
 export default function HomeSwitcher({
   homes,
   activeId,
 }: {
-  homes: Property[];
+  homes: PropertyWithShared[];
   activeId: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -63,17 +63,27 @@ export default function HomeSwitcher({
               {h.id === active?.id ? (
                 <span className="flex-1 truncate text-sm font-medium text-stone-900">
                   ✓ {h.address_line1}
+                  {h.isShared && (
+                    <span className="ml-1 text-xs font-normal text-stone-400">
+                      Shared
+                    </span>
+                  )}
                 </span>
               ) : (
                 <form action={setActiveHomeAction} className="min-w-0 flex-1">
                   <input type="hidden" name="id" value={h.id} />
                   <button className="w-full truncate text-left text-sm text-stone-700 hover:text-hearth-700">
                     {h.address_line1}
+                    {h.isShared && (
+                      <span className="ml-1 text-xs font-normal text-stone-400">
+                        Shared
+                      </span>
+                    )}
                   </button>
                 </form>
               )}
 
-              <RemoveHomeButton id={h.id} label={h.address_line1} />
+              {!h.isShared && <RemoveHomeButton id={h.id} label={h.address_line1} />}
             </div>
           ))}
 

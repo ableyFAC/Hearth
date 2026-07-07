@@ -337,6 +337,97 @@ export async function chooseApplicantAction(formData: FormData) {
   revalidatePath("/contractors");
 }
 
+// Review comment length cap: generous enough for real feedback, short enough to
+// keep the pro's review list scannable.
+const REVIEW_COMMENT_MAX = 600;
+
+// Homeowner leaves (or edits) a star rating + comment for a job. Goes through
+// the leave_review() RPC (0017), which derives the contractor from the lead,
+// verifies the caller owns the job, and enforces one review per job, so the
+// contractor being reviewed can't be forged from the form and ratings can't be
+// manipulated. The RPC upserts (one row per lead_id), so resubmitting just
+// edits the existing review instead of being rejected: there is no unhappy
+// path to steer around, which is exactly the point. This is the only place a
+// review is written, so both /contractors and /chats can share it.
+export async function saveReviewAction(formData: FormData) {
+  const supabase = createClient();
+  const leadId = String(formData.get("lead_id") || "");
+  const rating = Number(formData.get("rating"));
+  const comment = String(formData.get("comment") || "").trim();
+
+  if (!leadId || !Number.isInteger(rating) || rating < 1 || rating > 5) {
+    setFlash("Please pick a star rating between 1 and 5.", "error");
+    return;
+  }
+  if (comment.length > REVIEW_COMMENT_MAX) {
+    setFlash(
+      `Reviews are capped at ${REVIEW_COMMENT_MAX} characters. Please shorten yours.`,
+      "error"
+    );
+    return;
+  }
+
+  // Check whether this lead already has a review before the upsert, so the pro
+  // is notified once, on the first review, not on every later edit.
+  const { data: already } = await supabase
+    .from("reviews")
+    .select("id")
+    .eq("lead_id", leadId)
+    .maybeSingle();
+
+  const { error } = await supabase.rpc("leave_review", {
+    p_lead: leadId,
+    p_rating: rating,
+    p_comment: comment,
+  });
+
+  if (error) {
+    setFlash(error.message, "error");
+    revalidatePath("/contractors");
+    revalidatePath("/chats");
+    return;
+  }
+  setFlash("Thanks for your review!", "success");
+
+  // Tell the pro a review came in. Best-effort: a notification hiccup should
+  // never undo a review that already saved. Only on the first review for this
+  // job, not on later edits.
+  if (!already) {
+    try {
+      const { data: lead } = await supabase
+        .from("contractor_leads")
+        .select("contractor_id")
+        .eq("id", leadId)
+        .maybeSingle();
+      if (lead?.contractor_id) {
+        const { data: contractor } = await supabase
+          .from("contractors")
+          .select("user_id")
+          .eq("id", lead.contractor_id)
+          .maybeSingle();
+        if (contractor?.user_id) {
+          const admin = createAdminClient();
+          await admin.from("notifications").insert({
+            user_id: contractor.user_id,
+            kind: "new_review",
+            title: "You received a new review",
+            body: "A homeowner just reviewed a completed job. Check your profile to see it.",
+            url: "/pro",
+          });
+        }
+      }
+    } catch (err) {
+      console.error(
+        "review notification:",
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+
+  revalidatePath("/contractors");
+  revalidatePath("/chats");
+}
+
 // Homeowner re-hires a pro they've already worked with (My Pros). The repeat
 // lead is free for the pro: rehire_pro() inserts it already assigned, with no
 // apply fee and no wallet charge, so nobody pays to work together again.

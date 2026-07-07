@@ -3,23 +3,30 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { hasProPlan } from "@/lib/subscription";
 import { countAiUsage } from "@/lib/aiUsage";
+import { JOB_CATEGORIES } from "@/lib/constants";
+import type { ProPastJobLineItem } from "@/lib/database.types";
 
 export const runtime = "nodejs";
 
-// AI back office (Hearth Pro membership): three writing tools for the
+// AI back office (Hearth Pro membership): five writing tools for the
 // paperwork pros hate. The pro describes the job in plain words and Gemini
-// drafts a clean estimate, invoice, or follow-up message they can copy and
-// send. Members only: this is brand-new surface, nothing free moves behind it.
+// drafts a clean estimate, invoice, follow-up message, review response, or
+// overdue invoice reminder they can copy and send. Members only: this is
+// brand-new surface, nothing free moves behind it.
 //
 // Input:  { tool: "estimate", description, category?, price?, materials? }
 //       | { tool: "invoice", description, amount, workDone? }
 //       | { tool: "followup", situation: "no_reply" | "review" | "checkin", context? }
+//       | { tool: "review_response", reviewText, rating?, story? }
+//       | { tool: "overdue", stage: "friendly" | "firm" | "final", amount, overdue, job, context? }
 // Output: { result: string }
 //       | { result: null, reason: "no_key" | "rate_limited" | "failed" }
 
 const MAX_DESCRIPTION = 4000;
 const MAX_NOTES = 2000;
 const MAX_SHORT = 120;
+const MAX_REVIEW = 1500;
+const MAX_STORY = 1000;
 
 // Same fallback list as /api/analyze-quote: each free-tier model has its own
 // daily quota, so a 429 on one falls through to the next.
@@ -80,6 +87,67 @@ const FOLLOWUP_SCHEMA = {
   required: ["message"],
 };
 
+// Turn a printed dollar string into a plain number so a past-job total or
+// line item can feed the labor/materials split below. Anything that doesn't
+// parse cleanly (blank, more than one decimal point, no digits) returns null
+// and the caller skips that line rather than guessing at it.
+function parseMoney(v: string | null | undefined): number | null {
+  if (!v) return null;
+  const cleaned = v.replace(/[^0-9.]/g, "");
+  if (!cleaned || (cleaned.match(/\./g) ?? []).length > 1) return null;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Labor versus materials percentage split for one past job, computed here in
+// TypeScript (never handed to the model to compute) from whichever line
+// items parse cleanly. Returns null when there isn't enough parseable data
+// in either bucket to make a split meaningful.
+function laborMaterialsSplit(
+  lineItems: ProPastJobLineItem[] | null | undefined
+): { laborPct: number; materialsPct: number } | null {
+  if (!Array.isArray(lineItems)) return null;
+  let labor = 0;
+  let materials = 0;
+  for (const item of lineItems) {
+    const amount = parseMoney(item?.line_total);
+    if (amount == null) continue;
+    if (item?.category === "labor") labor += amount;
+    else if (item?.category === "materials") materials += amount;
+  }
+  const total = labor + materials;
+  if (total <= 0) return null;
+  return {
+    laborPct: Math.round((labor / total) * 100),
+    materialsPct: Math.round((materials / total) * 100),
+  };
+}
+
+// One compact reference line for a past job: job type, date, total, and a
+// labor/materials split when the line items allow one. Returns null if the
+// row has nothing usable to say (so callers can drop it from the prompt).
+function formatPastJobLine(job: {
+  job_type: string | null;
+  document_date: string | null;
+  total: string | null;
+  line_items: ProPastJobLineItem[] | null;
+}): string | null {
+  const parts: string[] = [];
+  if (job.job_type) {
+    const known = JOB_CATEGORIES.find((c) => c.value === job.job_type);
+    parts.push(known ? known.label : job.job_type);
+  }
+  if (job.document_date) parts.push(job.document_date);
+  if (job.total) parts.push(`total ${job.total}`);
+  const split = laborMaterialsSplit(job.line_items);
+  if (split) {
+    parts.push(
+      `about ${split.laborPct}% labor and ${split.materialsPct}% materials`
+    );
+  }
+  return parts.length ? parts.join(", ") : null;
+}
+
 const FOLLOWUP_SITUATIONS: Record<string, string> = {
   no_reply:
     "The pro sent this customer a quote and hasn't heard back. Write a short, easy-going nudge: reference the quote, offer to answer questions or adjust scope, and make replying feel low-pressure. Never guilt-trip.",
@@ -87,6 +155,18 @@ const FOLLOWUP_SITUATIONS: Record<string, string> = {
     "The pro just finished this customer's job. Write a short thank-you that asks for a review: thank them for the work, mention you'd appreciate a quick review if they were happy, and invite them to reach out if anything needs a touch-up.",
   checkin:
     "The pro wants to check in with a past customer they haven't worked with in a while. Write a warm, no-pressure hello: reference the past work if described, ask how it's holding up, and mention you're around if anything needs attention. Not salesy.",
+};
+
+// Fixed stage briefs for the overdue invoice ladder, the same lookup pattern
+// as FOLLOWUP_SITUATIONS above since these three stages are a closed set with
+// no numeric branching.
+const OVERDUE_STAGES: Record<string, string> = {
+  friendly:
+    "This is a friendly first reminder, about two weeks after the invoice was due. Assume good faith, since the customer likely just forgot. Make one clear, no-pressure ask that states the amount owed and a simple way to pay.",
+  firm:
+    "This is a firmer notice, about a month after the invoice was due. Restate the history plainly using only what the pro's context describes. Set a specific, courteous expectation to hear back: if the pro's context names a number of days, use that number, otherwise ask for a reply within seven days.",
+  final:
+    "This is a final notice. State plainly that the invoice remains unpaid and that the pro may need to look into the options available to them if it stays unresolved. Do not name or threaten any specific legal action, collection process, or lien, and do not give legal advice. Add one gentle sentence suggesting the pro check the rules where they work before taking any further step.",
 };
 
 export async function POST(req: NextRequest) {
@@ -141,6 +221,21 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Ground the estimate in the pro's own pricing history, if any is on
+    // file (uploaded through /api/pro-past-jobs). Newest first, capped at 40
+    // so the prompt stays small. This read costs nothing against the daily
+    // AI cap; only the write in /api/pro-past-jobs counts against it.
+    const { data: pastJobRows } = await supabase
+      .from("pro_past_jobs")
+      .select("job_type, document_date, total, line_items")
+      .eq("contractor_id", contractor.id)
+      .order("created_at", { ascending: false })
+      .limit(40);
+    const pastJobLines = (pastJobRows ?? [])
+      .map((job) => formatPastJobLine(job))
+      .filter((line): line is string => Boolean(line));
+
     schema = ESTIMATE_SCHEMA;
     instruction =
       VOICE +
@@ -150,14 +245,30 @@ export async function POST(req: NextRequest) {
       "line_items: break the work into 2 to 6 short labeled parts (labor, materials, haul-away, and so on). Put an amount on a line ONLY if the pro's notes give a number for that specific part; otherwise leave amount empty. " +
       "total: the pro's overall price exactly as they gave it, formatted cleanly with a dollar sign if it is a plain number. If they gave no price, leave total empty. " +
       "terms: two or three short sentences of standard estimate terms: how long the estimate is good for, that changes in scope may change the price, and anything the pro's notes call for. Do not invent deposit percentages or payment schedules the pro didn't mention.";
+    // If the pro has no past jobs on file, behavior stays exactly as above
+    // and the output never mentions past jobs. Only when reference lines
+    // exist do we extend the strict "only the pro's own numbers" rule from
+    // VOICE to also allow these past-job numbers, and only as a range.
+    if (pastJobLines.length) {
+      instruction +=
+        " Pricing rule for this estimate: you may use ONLY numbers the pro typed in this request or the past job reference lines given below, never any other number. " +
+        "If you draw on the past job references for the total, present it as a range (write it with the word 'to', for example: $1,600 to $2,200, never a hyphen or dash), state plainly that the range is based on the pro's own past jobs, and invite the pro to adjust it for this job. Never present a past based number as a single confident price.";
+    }
     const promptLines = [
       `The pro describes the job like this: ${description}`,
       category ? `Job category: ${category}` : "",
       price ? `The price the pro has in mind: ${price}` : "The pro gave no price, so write the estimate without amounts.",
       materials ? `Materials notes from the pro: ${materials}` : "",
       `The pro's company name: ${contractor.name}`,
-    ].filter(Boolean);
-    userPrompt = promptLines.join("\n") + "\n\nWrite the estimate.";
+    ];
+    if (pastJobLines.length) {
+      promptLines.push(
+        "---- Past job reference (the pro's own past invoices and quotes, for pricing context only) ----",
+        ...pastJobLines,
+        "---- End past job reference ----"
+      );
+    }
+    userPrompt = promptLines.filter(Boolean).join("\n") + "\n\nWrite the estimate.";
   } else if (tool === "invoice") {
     const description = field(body.description, MAX_DESCRIPTION);
     const amount = field(body.amount, MAX_SHORT);
@@ -218,6 +329,100 @@ export async function POST(req: NextRequest) {
       `The pro's company name: ${contractor.name}`,
     ].filter(Boolean);
     userPrompt = promptLines.join("\n") + "\n\nWrite the follow-up message.";
+  } else if (tool === "review_response") {
+    const reviewText = field(body.reviewText, MAX_REVIEW);
+    const ratingRaw = field(body.rating, MAX_SHORT);
+    const rating = /^[1-5]$/.test(ratingRaw) ? ratingRaw : "";
+    const story = field(body.story, MAX_STORY);
+    if (!reviewText) {
+      return NextResponse.json(
+        { error: "Paste the review first." },
+        { status: 400 }
+      );
+    }
+
+    schema = FOLLOWUP_SCHEMA; // same shape as follow-up: a single message string
+    const ratingNum = rating ? Number(rating) : null;
+    // Never offer a discount, a refund, free work, or any other exchange in
+    // return for changing or removing a review: that is an FTC rule against
+    // incentivized reviews, so this tool will not draft language that runs
+    // into it.
+    const toneRule =
+      ratingNum !== null && ratingNum <= 3
+        ? "This is a lower rated review. Apologize for the experience described, state one concrete step the pro will take to make it right, and invite the customer to continue the conversation offline by phone or email."
+        : ratingNum !== null && ratingNum >= 4
+        ? "This is a higher rated review. Thank the reviewer briefly and mention the trade or type of work naturally, without sounding scripted."
+        : "No star rating was given, so read the tone of the review text itself. If it reads as a complaint, apologize for the experience described, state one concrete step the pro will take to make it right, and invite the customer to continue the conversation offline by phone or email. If it reads as positive, thank the reviewer briefly and mention the trade or type of work naturally.";
+    instruction =
+      VOICE +
+      " Write a professional response to a customer review, ready for the pro to copy and post publicly. " +
+      "Open with a brief greeting that acknowledges the reviewer once, then do not use their name again anywhere else in the response. " +
+      "Stay warm and never sound defensive, irritated, or sarcastic, even if the review is unfair. " +
+      "Never admit legal fault, and never offer or promise compensation, a discount, a refund, or free work in exchange for changing or removing the review. " +
+      toneRule +
+      " Keep the whole response under 150 words. Plain sentences only.";
+    const promptLines = [
+      `The customer's review: ${reviewText}`,
+      rating ? `Star rating given: ${rating} out of 5` : "No star rating was given.",
+      story ? `The pro's side of the story, for context only: ${story}` : "",
+      `The pro's company name: ${contractor.name}`,
+    ].filter(Boolean);
+    userPrompt = promptLines.join("\n") + "\n\nWrite the review response.";
+  } else if (tool === "overdue") {
+    const stage = field(body.stage, MAX_SHORT);
+    const amount = field(body.amount, MAX_SHORT);
+    const overdue = field(body.overdue, MAX_SHORT);
+    const job = field(body.job, MAX_SHORT);
+    const context = field(body.context, MAX_NOTES);
+    // Own-key check for the same reason as the follow-up situation lookup
+    // above: a prototype name sent as the stage can't resolve to an
+    // inherited value and slip past validation.
+    const stageBrief = Object.prototype.hasOwnProperty.call(
+      OVERDUE_STAGES,
+      stage
+    )
+      ? OVERDUE_STAGES[stage]
+      : undefined;
+    if (!stageBrief) {
+      return NextResponse.json(
+        { error: "Pick a stage first." },
+        { status: 400 }
+      );
+    }
+    if (!amount) {
+      return NextResponse.json(
+        { error: "Enter the amount owed." },
+        { status: 400 }
+      );
+    }
+    if (!overdue) {
+      return NextResponse.json(
+        { error: "Say how long it's been overdue." },
+        { status: 400 }
+      );
+    }
+    if (!job) {
+      return NextResponse.json(
+        { error: "Describe the job first." },
+        { status: 400 }
+      );
+    }
+
+    schema = FOLLOWUP_SCHEMA; // same shape as follow-up: a single message string
+    instruction =
+      VOICE +
+      " Write a short payment reminder from the pro to a customer about an overdue invoice, 3 to 6 sentences, ready to send as a text or email body. " +
+      stageBrief +
+      " Never threaten the customer, never claim or imply any legal outcome, and never add interest, late fees, or any charge the pro did not mention. Use the amount owed exactly as the pro typed it, and never recompute or estimate it. " +
+      "No subject line, no signature block: end with the company name on its own line. Plain sentences only.";
+    const promptLines = [
+      `The job: ${job}`,
+      `Amount owed: ${amount}`,
+      `How overdue: ${overdue}`,
+      context ? `Context from the pro: ${context}` : "",
+      `The pro's company name: ${contractor.name}`,
+    ].filter(Boolean);
+    userPrompt = promptLines.join("\n") + "\n\nWrite the reminder message.";
   } else {
     return NextResponse.json({ error: "Unknown tool." }, { status: 400 });
   }
@@ -267,13 +472,13 @@ export async function POST(req: NextRequest) {
       try {
         parsed = JSON.parse(responseText);
       } catch {
-        continue; // malformed - try the next model
+        continue; // malformed, try the next model
       }
       const result = assemble(tool, parsed, contractor.name);
-      if (!result) continue; // missing required text - try the next model
+      if (!result) continue; // missing required text, try the next model
       return NextResponse.json({ result });
     } catch {
-      // network error - try the next model
+      // network error, try the next model
     }
   }
 
@@ -339,6 +544,6 @@ function assemble(tool: string, raw: any, company: string): string | null {
     ].join("\n");
   }
 
-  // followup
+  // followup, review_response, and overdue all share this single message shape
   return str(raw?.message);
 }

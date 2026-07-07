@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { hasProPlan } from "@/lib/subscription";
 import ProToolsClient from "./ProToolsClient";
@@ -93,6 +94,17 @@ export default async function ProToolsPage() {
     );
   }
 
+  // The estimate tool's "your past jobs" section, fed by uploads to
+  // /api/pro-past-jobs. Fetched here (server side) and handed to the client
+  // component as its starting list; ProToolsClient keeps its own copy in
+  // state so an upload or a remove updates the screen immediately.
+  const supabase = createClient();
+  const { data: pastJobRows } = await supabase
+    .from("pro_past_jobs")
+    .select("*")
+    .eq("contractor_id", contractor.id)
+    .order("created_at", { ascending: false });
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="text-center">
@@ -104,7 +116,7 @@ export default async function ProToolsPage() {
           look it over and send it.
         </p>
       </div>
-      <ProToolsClient />
+      <ProToolsClient initialPastJobs={pastJobRows ?? []} />
       <p className="text-center text-xs text-stone-400">
         Drafts use only the details you type in. Always give them a quick read
         before sending.

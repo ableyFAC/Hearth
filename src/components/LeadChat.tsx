@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { censor } from "@/lib/censor";
 import { extractQuote, formatUSD } from "@/lib/quotes";
@@ -63,6 +64,7 @@ export default function LeadChat({
   subtitle?: string;
 }) {
   const supabase = createClient();
+  const router = useRouter();
   const [open, setOpen] = useState(embedded);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [body, setBody] = useState("");
@@ -398,10 +400,15 @@ export default function LeadChat({
     setTimeout(() => setNotice(null), 4000);
   }
 
-  // End the conversation (after confirmation). No reason is recorded.
+  // End the conversation (after confirmation). No reason is recorded. On the
+  // homeowner side, this is the job-completion moment, so refresh the page
+  // around this component too: the surrounding server page (e.g. /contractors,
+  // /chats) re-fetches and its "Leave a review" prompt shows up right away
+  // instead of waiting for the next manual reload.
   async function confirmClose() {
     await postSystem(`${CLOSE_PREFIX} by the ${role}.`);
     setConfirmingClose(false);
+    router.refresh();
   }
 
   // Flag this conversation for the Hearth team to review.

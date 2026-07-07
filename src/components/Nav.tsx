@@ -4,7 +4,7 @@ import NavLinks from "@/components/NavLinks";
 import ProfileMenu from "@/components/ProfileMenu";
 import GlobalSearch from "@/components/GlobalSearch";
 import NotificationBell from "@/components/NotificationBell";
-import type { Property } from "@/lib/database.types";
+import type { PropertyWithShared } from "@/lib/property";
 
 export default function Nav({
   homes,
@@ -12,7 +12,7 @@ export default function Nav({
   name,
   hasPlus,
 }: {
-  homes: Property[];
+  homes: PropertyWithShared[];
   activeId: string;
   name: string | null;
   hasPlus: boolean;
@@ -42,7 +42,7 @@ export default function Nav({
             <GlobalSearch />
           </div>
           <NotificationBell />
-          {/* Account / Log out - mirrors the contractor profile menu. */}
+          {/* Account / Log out: mirrors the contractor profile menu. */}
           <ProfileMenu
           name={name}
           hasPlus={hasPlus}
@@ -70,10 +70,11 @@ export default function Nav({
             { href: "/value", label: "Home value" },
             { href: "/taxes", label: "Property taxes" },
             { href: "/inspection", label: "Home inspection" },
+            { href: "/learn", label: "Learn" },
           ]}
           moreLinks={[
-            { href: "/learn", label: "Learn" },
             { href: "/account", label: "Edit profile" },
+            { href: "/account/household", label: "Household" },
             { href: "/account/notifications", label: "Notifications" },
             { href: "/account/security", label: "Account security" },
             { href: "/account/help", label: "Help" },

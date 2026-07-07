@@ -97,6 +97,15 @@ async function runCron(req: NextRequest) {
 
   let refunded = 0;
 
+  // Only the notification layer changed below: refunds this run actually
+  // performed are collected per contractor so one summary notification can
+  // go out instead of one per refund. The refund itself (the rpc call, the
+  // ok check, and the refunded count) is untouched.
+  const refundsByContractor = new Map<
+    string,
+    { userId: string; feeCents: number }[]
+  >();
+
   for (const app of candidates) {
     try {
       const { data: ok } = await supabase.rpc("ghost_refund_application", {
@@ -105,22 +114,50 @@ async function runCron(req: NextRequest) {
       if (ok !== true) continue;
       refunded += 1;
 
-      // Tell the pro their money came back. Best-effort: the refund itself is
-      // already committed, and a notification hiccup must not stop the run.
       const userId = userByContractor.get(app.contractor_id);
       if (userId) {
-        await supabase.from("notifications").insert({
-          user_id: userId,
-          kind: "ghost_refund",
-          title: "Ghost protection: your fee came back",
-          body: `The homeowner never responded, so your ${feeLabel(
-            Number(app.fee_cents)
-          )} apply fee was returned to your wallet.`,
-          url: "/pro",
-        });
+        const list = refundsByContractor.get(app.contractor_id) ?? [];
+        list.push({ userId, feeCents: Number(app.fee_cents) });
+        refundsByContractor.set(app.contractor_id, list);
       }
     } catch {
       // One bad application shouldn't stop the rest of the run.
+      continue;
+    }
+  }
+
+  // Tell each pro their money came back, once per contractor for this run.
+  // Best-effort: the refunds are already committed, and a notification
+  // hiccup must not stop the run. No extra dedupe key is needed here: a
+  // same-day rerun would find zero eligible candidates above, since
+  // ghost_refund_application guards on refunded_at, so this batch can never
+  // fire twice for the same refunds.
+  for (const refunds of refundsByContractor.values()) {
+    try {
+      const userId = refunds[0].userId;
+      const totalCents = refunds.reduce((sum, r) => sum + r.feeCents, 0);
+      const title =
+        refunds.length === 1
+          ? "Ghost protection: your fee came back"
+          : "Ghost protection: your fees came back";
+      const body =
+        refunds.length === 1
+          ? `The homeowner never responded, so your ${feeLabel(
+              refunds[0].feeCents
+            )} apply fee was returned to your wallet.`
+          : `Your apply fee was returned on ${refunds.length} jobs today: the homeowners never responded, so ${feeLabel(
+              totalCents
+            )} total went back to your wallet.`;
+
+      await supabase.from("notifications").insert({
+        user_id: userId,
+        kind: "ghost_refund",
+        title,
+        body,
+        url: "/pro",
+      });
+    } catch {
+      // One bad notification shouldn't stop the rest of the run.
       continue;
     }
   }

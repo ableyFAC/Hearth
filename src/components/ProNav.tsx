@@ -4,14 +4,14 @@ import ProfileMenu from "@/components/ProfileMenu";
 import NotificationBell from "@/components/NotificationBell";
 
 export default function ProNav({ company }: { company: string | null }) {
-  // Company / Billing / Sign out now live in the profile menu (ProMenu).
+  // Primary nav stays to the four or five destinations a pro checks daily.
+  // Playbook, Tools, and Membership moved into the profile menu's "Grow"
+  // group below: useful, but not a daily-use tab.
   const LINKS = [
     { href: "/pro", label: "Leads" },
     { href: "/pro/chats", label: "Messages", liveBadge: "contractor" as const },
+    { href: "/pro/crm", label: "Clients" },
     { href: "/pro/business", label: "My Business" },
-    { href: "/pro/playbook", label: "Playbook" },
-    { href: "/pro/tools", label: "Tools" },
-    { href: "/pro/plus", label: "Membership" },
   ];
 
   return (
@@ -29,11 +29,16 @@ export default function ProNav({ company }: { company: string | null }) {
           <NotificationBell />
           <ProfileMenu
             name={company}
+            linksLabel="Grow"
             links={[
+              { href: "/pro/playbook", label: "Playbook" },
+              { href: "/pro/tools", label: "Tools" },
+              { href: "/pro/plus", label: "Membership" },
+            ]}
+            moreLinks={[
               { href: "/pro/profile", label: "Company profile" },
               { href: "/pro/billing", label: "Billing" },
             ]}
-            moreLinks={[{ href: "/pro/playbook", label: "Playbook" }]}
           />
         </div>
       </div>

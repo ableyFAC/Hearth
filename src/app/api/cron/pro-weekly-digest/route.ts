@@ -7,31 +7,43 @@ import { MAX_APPLICANTS_PER_JOB } from "@/lib/constants";
 export const runtime = "nodejs";
 
 // Weekly job (Vercel Cron, see vercel.json) that sends every contractor, free
-// and member alike, one short factual digest of their trades: how many jobs
-// were posted in their categories in the last 7 days and how many are still
-// open (status new, unassigned, under the applicant cap), how many of their
-// own applications are still pending, and how many open jobs in their trades
-// currently carry an aging discount. Numbers only, no manufactured urgency:
-// a pro with nothing to report (zero jobs posted AND zero pending apps) gets
-// nothing at all.
+// and member alike, one short business brief. This started as a pure trade
+// activity digest (jobs posted in their categories, pending applications,
+// aging discounts) and now folds in the rest of a pro's weekly picture, so a
+// pro gets a single weekly notification instead of several competing ones:
 //
-// Noise control: at most one digest per pro per run, and a dup guard (same
-// kind written in the last 6 days) makes an accidental second run a no-op
-// while never suppressing next week's legitimate digest.
+//   1. Follow ups: pro_clients rows (src/app/pro/crm) whose follow_up_on is
+//      today or earlier, with up to 2 client names.
+//   2. Pipeline pulse: applications submitted and jobs won in the last 7
+//      days, from the same lead_applications and contractor_leads tables
+//      /pro/business reads, plus the original jobs posted, pending
+//      application, and aging deal counts.
+//   3. Renewals: license_expires and insurance_expires on contractors
+//      (migration 0051, added by a separate change) expiring within 30 days.
+//      Queried defensively: if those columns do not exist yet on this
+//      database, the section is skipped cleanly rather than failing the run.
+//
+// The notification leads with whichever section is most urgent (a client
+// waiting on a follow up beats a renewal beats plain trade numbers), links to
+// the matching page, and is skipped entirely when a contractor has nothing to
+// report: silence beats noise.
+//
+// Dedupe: one brief per contractor per ISO week. The week key (e.g. "2026-
+// W27") rides as a query param on the notification url, and a brief whose url
+// already carries this week's key for that contractor is never sent twice,
+// the same existing-notification-lookup pattern the other crons use, just
+// keyed to the calendar week instead of a rolling time window so an
+// early or late cron run can never suppress or duplicate a real week's brief.
 
 const MAX_CONTRACTORS = 1000; // cap the work a single run does
 const MAX_JOBS = 2000; // sanity cap on each job scan
+const MAX_ROWS_PER_CHUNK = 5000; // sanity cap on each per-chunk bulk read
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const DIGEST_WINDOW_MS = 7 * DAY_MS;
-
-// Dup-guard lookback. Shorter than 7 days so a scheduler that fires a few
-// hours early never suppresses next week's legitimate digest.
-const DUP_GUARD_MS = 6 * DAY_MS;
+const RENEWAL_WINDOW_DAYS = 30;
 
 const DIGEST_KIND = "weekly_digest";
-const DIGEST_URL = "/pro";
-const DIGEST_TITLE = "This week in your trades";
 
 // Keep .in() lists and Promise.all fan-out bounded.
 const QUERY_CHUNK = 200;
@@ -62,6 +74,38 @@ function plural(n: number, word: string): string {
   return n === 1 ? `${n} ${word}` : `${n} ${word}s`;
 }
 
+// ISO 8601 week key, e.g. "2026-W27". Used only as a stable per-week dedupe
+// key on the notification url, never shown to the pro.
+function isoWeekKey(d: Date): string {
+  const date = new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+  );
+  const dayNum = (date.getUTCDay() + 6) % 7; // Monday = 0 .. Sunday = 6
+  date.setUTCDate(date.getUTCDate() - dayNum + 3); // nearest Thursday
+  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+  const firstDayNum = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayNum + 3);
+  const week =
+    1 +
+    Math.round((date.getTime() - firstThursday.getTime()) / (7 * DAY_MS));
+  return `${date.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
+// Whole days between now and a plain YYYY-MM-DD date column, timezone safe
+// (never Date-parse a bare date string on its own, which JS treats as UTC and
+// can shift a day once local math gets involved), same approach as the
+// insurance-renewal cron.
+function daysUntil(dateStr: string, nowMs: number): number {
+  const target = new Date(`${dateStr}T00:00:00Z`).getTime();
+  return Math.round((target - nowMs) / DAY_MS);
+}
+
+function renewalClause(label: string, days: number): string {
+  if (days < 0) return `Your ${label} expired ${plural(Math.abs(days), "day")} ago.`;
+  if (days === 0) return `Your ${label} expires today.`;
+  return `Your ${label} expires in ${plural(days, "day")}.`;
+}
+
 async function runCron(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -69,8 +113,9 @@ async function runCron(req: NextRequest) {
 
   const supabase = createAdminClient();
   const nowMs = Date.now();
+  const weekKey = isoWeekKey(new Date(nowMs));
 
-  // Everyone with a pro profile gets the digest, free and member alike.
+  // Everyone with a pro profile gets the brief, free and member alike.
   // Oldest first so the recipient set stays stable when a run hits the cap.
   const { data: rawContractors, error: contractorsError } = await supabase
     .from("contractors")
@@ -89,7 +134,9 @@ async function runCron(req: NextRequest) {
   if (contractors.length === 0) {
     return NextResponse.json({ checked: 0, notified: 0 });
   }
+  const contractorIds = contractors.map((c) => c.id);
 
+  // ---- Pipeline pulse: jobs posted in their categories -----------------------
   // Jobs posted in the last 7 days (any status: "posted" is the fact being
   // reported; openness is checked separately below).
   const weekCutoff = new Date(nowMs - DIGEST_WINDOW_MS).toISOString();
@@ -141,7 +188,7 @@ async function runCron(req: NextRequest) {
 
   // Each contractor's pending applications (still sitting at 'applied').
   const pendingByContractor = new Map<string, number>();
-  for (const ids of chunk(contractors.map((c) => c.id), QUERY_CHUNK)) {
+  for (const ids of chunk(contractorIds, QUERY_CHUNK)) {
     const { data: pending } = await supabase
       .from("lead_applications")
       .select("contractor_id")
@@ -155,23 +202,141 @@ async function runCron(req: NextRequest) {
     }
   }
 
-  // Dup guard: anyone who already got a digest in the last 6 days (e.g. the
-  // cron ran twice) is skipped.
-  const guardCutoff = new Date(nowMs - DUP_GUARD_MS).toISOString();
+  // ---- Pipeline pulse: applications submitted and jobs won, last 7 days ------
+  // Same lead_applications table /pro/business reads (via my_applications):
+  // every application row this contractor created in the window, regardless
+  // of its current status.
+  const appsSubmittedByContractor = new Map<string, number>();
+  for (const ids of chunk(contractorIds, QUERY_CHUNK)) {
+    const { data: submitted } = await supabase
+      .from("lead_applications")
+      .select("contractor_id")
+      .in("contractor_id", ids)
+      .gte("created_at", weekCutoff)
+      .order("contractor_id", { ascending: true })
+      .limit(MAX_ROWS_PER_CHUNK);
+    for (const s of submitted ?? []) {
+      appsSubmittedByContractor.set(
+        s.contractor_id,
+        (appsSubmittedByContractor.get(s.contractor_id) ?? 0) + 1
+      );
+    }
+  }
+
+  // Same contractor_leads table /pro/business reads for "Jobs won". A job is
+  // won the moment choose_applicant() stamps paid_at (migration 0005/0028),
+  // which is the real win event, unlike created_at which is when the job was
+  // first posted, so filtering on paid_at is what makes this "last 7 days"
+  // instead of "posted in the last 7 days and happens to be won".
+  const wonByContractor = new Map<string, number>();
+  for (const ids of chunk(contractorIds, QUERY_CHUNK)) {
+    const { data: won } = await supabase
+      .from("contractor_leads")
+      .select("contractor_id")
+      .in("contractor_id", ids)
+      .gte("paid_at", weekCutoff)
+      .order("contractor_id", { ascending: true })
+      .limit(MAX_ROWS_PER_CHUNK);
+    for (const w of won ?? []) {
+      if (!w.contractor_id) continue;
+      wonByContractor.set(
+        w.contractor_id,
+        (wonByContractor.get(w.contractor_id) ?? 0) + 1
+      );
+    }
+  }
+
+  // ---- Follow ups: pro_clients due today or overdue --------------------------
+  // Same rule /pro/crm uses for its "Follow up today" section: follow_up_on
+  // at or before today's date, oldest due date first.
+  const todayStr = new Date(nowMs).toISOString().slice(0, 10);
+  const followUpsByContractor = new Map<
+    string,
+    { client_name: string; follow_up_on: string }[]
+  >();
+  for (const ids of chunk(contractorIds, QUERY_CHUNK)) {
+    const { data: dueClients } = await supabase
+      .from("pro_clients")
+      .select("contractor_id, client_name, follow_up_on")
+      .in("contractor_id", ids)
+      .not("follow_up_on", "is", null)
+      .lte("follow_up_on", todayStr)
+      .order("follow_up_on", { ascending: true })
+      .limit(MAX_ROWS_PER_CHUNK);
+    for (const row of dueClients ?? []) {
+      const list = followUpsByContractor.get(row.contractor_id) ?? [];
+      list.push({
+        client_name: row.client_name,
+        follow_up_on: row.follow_up_on as string,
+      });
+      followUpsByContractor.set(row.contractor_id, list);
+    }
+  }
+
+  // ---- Renewals: license_expires / insurance_expires, within 30 days --------
+  // Migration 0051 (a separate, parallel change) adds these two columns to
+  // contractors. Query them defensively: on a database where that migration
+  // has not run yet, Postgres rejects the select with 42703 (undefined
+  // column), and the section is skipped for this run instead of failing the
+  // whole brief. Not yet in the generated types, so the query goes through a
+  // cast, same pattern as insurance_renewal_date on the insurance-renewal cron.
+  let renewalsAvailable = true;
+  const renewalByContractor = new Map<
+    string,
+    { license_expires: string | null; insurance_expires: string | null }
+  >();
+  try {
+    for (const ids of chunk(contractorIds, QUERY_CHUNK)) {
+      const { data: renewalRows, error: renewalError } = await (
+        supabase.from("contractors") as any
+      )
+        .select("id, license_expires, insurance_expires")
+        .in("id", ids)
+        .order("id", { ascending: true });
+      if (renewalError) {
+        if (renewalError.code && renewalError.code !== "42703") {
+          console.error(
+            "pro-weekly-digest cron: renewals query failed:",
+            renewalError.message
+          );
+        }
+        renewalsAvailable = false;
+        break;
+      }
+      for (const row of renewalRows ?? []) {
+        renewalByContractor.set(row.id, {
+          license_expires: row.license_expires ?? null,
+          insurance_expires: row.insurance_expires ?? null,
+        });
+      }
+    }
+  } catch {
+    renewalsAvailable = false;
+  }
+  if (!renewalsAvailable) renewalByContractor.clear();
+
+  // Dedupe: anyone who already has a brief for this ISO week (the "brief="
+  // param on the notification url is the exact key) is skipped. A bulk
+  // pre-check, chunked the same way as every other lookup here.
   const alreadyNotified = new Set<string>();
-  for (const ids of chunk(contractors.map((c) => c.user_id), QUERY_CHUNK)) {
+  for (const ids of chunk(
+    contractors.map((c) => c.user_id),
+    QUERY_CHUNK
+  )) {
     const { data: recent } = await supabase
       .from("notifications")
       .select("user_id")
       .in("user_id", ids)
       .eq("kind", DIGEST_KIND)
-      .gte("created_at", guardCutoff);
+      .like("url", `%brief=${weekKey}`)
+      .order("user_id", { ascending: true });
     for (const r of recent ?? []) alreadyNotified.add(r.user_id);
   }
 
-  // Build each pro's digest. Numbers only: that's the product voice.
+  // Build each pro's brief.
   let checked = 0;
-  const digests: { userId: string; body: string }[] = [];
+  const briefs: { userId: string; title: string; body: string; url: string }[] =
+    [];
 
   for (const contractor of contractors) {
     try {
@@ -189,40 +354,112 @@ async function runCron(req: NextRequest) {
           j.contractor_id === null && j.status === "new" && jobHasRoom(j.id)
       );
       const pending = pendingByContractor.get(contractor.id) ?? 0;
+      const appsSubmitted = appsSubmittedByContractor.get(contractor.id) ?? 0;
+      const wonThisWeek = wonByContractor.get(contractor.id) ?? 0;
       const deals = (agingJobs ?? []).filter(
         (j) => inTrades(j.category) && jobHasRoom(j.id)
       );
 
-      // Nothing to say, nothing sent.
-      if (posted.length === 0 && pending === 0) continue;
+      const dueClients = followUpsByContractor.get(contractor.id) ?? [];
+      const followUpCount = dueClients.length;
+      const followUpNames = dueClients.slice(0, 2).map((c) => c.client_name);
 
-      const parts: string[] = [];
-      parts.push(
-        posted.length === 0
-          ? "No new jobs in your trades this week."
-          : `${plural(posted.length, "job")} posted in your trades this week, ${
-              stillOpen.length
-            } still open.`
-      );
+      const renewalInfo = renewalByContractor.get(contractor.id);
+      const renewalItems: { label: string; days: number }[] = [];
+      if (renewalInfo?.license_expires) {
+        const d = daysUntil(renewalInfo.license_expires, nowMs);
+        if (d <= RENEWAL_WINDOW_DAYS) renewalItems.push({ label: "license", days: d });
+      }
+      if (renewalInfo?.insurance_expires) {
+        const d = daysUntil(renewalInfo.insurance_expires, nowMs);
+        if (d <= RENEWAL_WINDOW_DAYS) renewalItems.push({ label: "insurance", days: d });
+      }
+
+      const pipelineParts: string[] = [];
+      if (posted.length > 0) {
+        pipelineParts.push(
+          `${plural(posted.length, "job")} posted in your trades this week, ${
+            stillOpen.length
+          } still open.`
+        );
+      }
+      if (appsSubmitted > 0) {
+        pipelineParts.push(
+          `You submitted ${plural(appsSubmitted, "application")} this week.`
+        );
+      }
+      if (wonThisWeek > 0) {
+        pipelineParts.push(`You won ${plural(wonThisWeek, "job")} this week.`);
+      }
       if (pending > 0) {
-        parts.push(`You have ${plural(pending, "pending application")}.`);
+        pipelineParts.push(`You have ${plural(pending, "pending application")}.`);
       }
       if (deals.length > 0) {
-        parts.push(
+        pipelineParts.push(
           `${plural(deals.length, "open job")} in your trades ${
             deals.length === 1 ? "has" : "have"
           } a reduced apply fee right now.`
         );
       }
 
-      digests.push({ userId: contractor.user_id, body: parts.join(" ") });
+      // Nothing to say, nothing sent: silence beats noise.
+      if (
+        followUpCount === 0 &&
+        renewalItems.length === 0 &&
+        pipelineParts.length === 0
+      ) {
+        continue;
+      }
+
+      let followUpSentence: string | null = null;
+      if (followUpCount === 1) {
+        followUpSentence = `1 client is due for a follow up: ${followUpNames[0]}.`;
+      } else if (followUpCount === 2) {
+        followUpSentence = `2 clients are due for a follow up: ${followUpNames[0]} and ${followUpNames[1]}.`;
+      } else if (followUpCount > 2) {
+        followUpSentence = `${followUpCount} clients are due for a follow up, including ${followUpNames[0]} and ${followUpNames[1]}.`;
+      }
+
+      const renewalSentence =
+        renewalItems.length > 0
+          ? renewalItems.map((r) => renewalClause(r.label, r.days)).join(" ")
+          : null;
+
+      // Lead with whichever section is most urgent: a client waiting on a
+      // follow up is the most actionable, a compliance renewal is next, and
+      // plain trade numbers are the fallback. The link always points at the
+      // page for the leading section.
+      let title: string;
+      let url: string;
+      const parts: string[] = [];
+      if (followUpSentence) {
+        title = "Clients waiting on a follow up";
+        url = "/pro/crm";
+        parts.push(followUpSentence);
+        if (renewalSentence) parts.push(renewalSentence);
+      } else if (renewalSentence) {
+        title = "A renewal is coming up";
+        url = "/pro/business";
+        parts.push(renewalSentence);
+      } else {
+        title = "This week in your trades";
+        url = "/pro";
+      }
+      parts.push(...pipelineParts);
+
+      briefs.push({
+        userId: contractor.user_id,
+        title,
+        body: parts.join(" "),
+        url: `${url}?brief=${weekKey}`,
+      });
     } catch {
       // One bad contractor shouldn't stop the rest of the run.
       continue;
     }
   }
 
-  if (digests.length === 0) {
+  if (briefs.length === 0) {
     return NextResponse.json({ checked, notified: 0 });
   }
 
@@ -232,7 +469,7 @@ async function runCron(req: NextRequest) {
     string,
     { id: string; email: string | null; phone: string | null }
   >();
-  for (const ids of chunk(digests.map((d) => d.userId), QUERY_CHUNK)) {
+  for (const ids of chunk(briefs.map((d) => d.userId), QUERY_CHUNK)) {
     const { data: users } = await supabase
       .from("users")
       .select("id, email, phone")
@@ -242,7 +479,7 @@ async function runCron(req: NextRequest) {
 
   // Send in bounded parallel batches.
   let notified = 0;
-  for (const batch of chunk(digests, SEND_CHUNK)) {
+  for (const batch of chunk(briefs, SEND_CHUNK)) {
     await Promise.all(
       batch.map(async (d) => {
         try {
@@ -250,9 +487,9 @@ async function runCron(req: NextRequest) {
           const sent = await sendNotification(supabase, {
             userId: d.userId,
             kind: DIGEST_KIND,
-            title: DIGEST_TITLE,
+            title: d.title,
             body: d.body,
-            url: DIGEST_URL,
+            url: d.url,
             email: contact?.email ?? null,
             phone: contact?.phone ?? null,
           });

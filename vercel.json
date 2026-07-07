@@ -37,6 +37,10 @@
       "schedule": "0 14 1 * *"
     },
     {
+      "path": "/api/cron/pro-compliance",
+      "schedule": "0 17 * * *"
+    },
+    {
       "path": "/api/cron/filter-reminders",
       "schedule": "15 17 * * *"
     },

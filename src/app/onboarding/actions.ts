@@ -10,7 +10,7 @@ import { DEFAULT_LIFESPANS } from "@/lib/health";
 import { hasPlus } from "@/lib/subscription";
 import { setFlash } from "@/lib/flash";
 
-// Systems virtually every home has - auto-added so the owner doesn't start from
+// Systems virtually every home has, auto-added so the owner doesn't start from
 // a blank inventory. Install years are ESTIMATED from the build year; real
 // install/repair/remodel dates come from permit data once that API is wired.
 const STARTER_SYSTEMS = [
@@ -41,11 +41,14 @@ export async function claimPropertyAction(formData: FormData) {
 
   // Free vs Plus home limits: a free homeowner may claim 1 home; Plus unlocks
   // up to 5 so a landlord/multi-property owner can track them all in one place.
+  // Homes merely shared with the user as a household member do not count
+  // against their own limit, so only owned homes are tallied here.
   const [existingHomes, plus] = await Promise.all([getProperties(), hasPlus()]);
-  if (!plus && existingHomes.length >= 1) {
+  const ownedHomes = existingHomes.filter((h) => !h.isShared);
+  if (!plus && ownedHomes.length >= 1) {
     redirect("/plus?reason=home_limit");
   }
-  if (plus && existingHomes.length >= 5) {
+  if (plus && ownedHomes.length >= 5) {
     setFlash("Hearth Plus covers up to 5 homes.", "error");
     redirect("/dashboard");
   }
@@ -114,7 +117,7 @@ export async function claimPropertyAction(formData: FormData) {
       system_type,
       install_year,
       expected_lifespan_years: lifespan,
-      // No per-system note - the "auto-estimated" notice lives at the top of
+      // No per-system note: the "auto-estimated" notice lives at the top of
       // the Home Profile page instead.
       notes: null as string | null,
     };

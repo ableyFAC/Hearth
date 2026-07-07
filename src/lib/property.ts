@@ -9,8 +9,20 @@ import type { Property } from "@/lib/database.types";
 // stale/forged value just falls back to their first home.
 export const ACTIVE_HOME_COOKIE = "hearth_active_home";
 
+// A property row plus whether it belongs to the signed-in user or was shared
+// with them as a household member.
+export type PropertyWithShared = Property & { isShared: boolean };
+
 // Cached per request so calling it twice (e.g. layout) only queries once.
-export const getProperties = cache(async (): Promise<Property[]> => {
+//
+// No .eq("user_id", ...) filter here on purpose: once 0048_household_sharing
+// has run, the "properties member select" RLS policy lets this same query
+// also return homes shared with the caller, alongside the ones they own.
+// Before that migration runs, the member select policy simply does not
+// exist yet, so RLS still only returns owned rows, which is fine. If the
+// query itself errors for any reason, fall back to an empty list rather
+// than throwing.
+export const getProperties = cache(async (): Promise<PropertyWithShared[]> => {
   const user = await getUser();
   if (!user) return [];
 
@@ -18,10 +30,21 @@ export const getProperties = cache(async (): Promise<Property[]> => {
   const { data } = await supabase
     .from("properties")
     .select("*")
-    .eq("user_id", user.id)
     .order("created_at", { ascending: true });
 
-  return data ?? [];
+  const rows = data ?? [];
+  const withShared = rows.map((row) => ({
+    ...row,
+    isShared: row.user_id !== user.id,
+  }));
+
+  // Owned homes first, then shared homes, each group ordered by created_at.
+  withShared.sort((a, b) => {
+    if (a.isShared !== b.isShared) return a.isShared ? 1 : -1;
+    return a.created_at.localeCompare(b.created_at);
+  });
+
+  return withShared;
 });
 
 export async function getActiveProperty(): Promise<Property | null> {

@@ -4,7 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor, getRole } from "@/lib/contractor";
 import { hasProPlan } from "@/lib/subscription";
 import { buildProStats } from "@/lib/proStats";
-import ReferralCard from "@/components/pro/ReferralCard";
+import AccountPanel from "@/components/pro/AccountPanel";
+import WinShareButton from "@/components/pro/WinShareButton";
 import {
   labelFor,
   iconFor,
@@ -50,8 +51,15 @@ export default async function ProBusinessPage() {
       (supabase as any).rpc("my_applications"),
       supabase
         .from("contractor_leads")
-        .select("id, category, status, created_at")
+        // paid is fetched alongside status so the row below can decide
+        // whether to offer a win share card using the same win definition
+        // as src/app/api/win-card/[leadId]/route.tsx: paid, or accepted or
+        // closed in the pipeline. The status filter keeps this list honest:
+        // an assigned job that later fell through (lost) is not a win and
+        // should never sit under a "Jobs won" heading.
+        .select("id, category, status, paid, created_at")
         .eq("contractor_id", contractor.id)
+        .in("status", ["accepted", "closed"])
         .order("created_at", { ascending: false })
         .limit(5),
       supabase
@@ -168,14 +176,25 @@ export default async function ProBusinessPage() {
         </Link>
       </section>
 
-      {/* Refer a pro: free for everyone. The code is the pro's public slug
-          when the 0043 migration has run, else the first 8 chars of their id
-          (both resolve at onboarding). */}
-      <ReferralCard
-        code={
+      {/* Account: referral code and the license/insurance compliance
+          calendar, folded into one collapsed-by-default panel. The code is
+          the pro's public slug when the 0043 migration has run, else the
+          first 8 chars of their id (both resolve at onboarding); the
+          compliance dates come off migration 0051 columns (insurance_expires
+          itself is the older 0033 column). */}
+      <AccountPanel
+        referralCode={
           ((contractor as any).slug as string | null | undefined) ||
           contractor.id.slice(0, 8)
         }
+        license={{
+          expires: contractor.license_expires ?? null,
+          docPath: contractor.license_doc_path ?? null,
+        }}
+        insurance={{
+          expires: (contractor as any).insurance_expires ?? null,
+          docPath: contractor.insurance_doc_path ?? null,
+        }}
       />
 
       {/* Insights: the Pro membership's deeper analytics, computed entirely
@@ -540,9 +559,17 @@ export default async function ProBusinessPage() {
                   </span>{" "}
                   {labelFor(JOB_CATEGORIES, l.category)}
                 </span>
-                <span className="shrink-0 text-xs text-stone-400">
-                  {STATUS_LABEL[l.status] ?? l.status} ·{" "}
-                  {new Date(l.created_at).toLocaleDateString()}
+                <span className="flex shrink-0 items-center gap-3">
+                  <span className="text-xs text-stone-400">
+                    {STATUS_LABEL[l.status] ?? l.status} ·{" "}
+                    {new Date(l.created_at).toLocaleDateString()}
+                  </span>
+                  {/* This recent-leads query isn't filtered to won rows, so
+                      the button only shows for one that actually is: paid,
+                      or accepted / closed in the pipeline. */}
+                  {(l.paid || l.status === "accepted" || l.status === "closed") && (
+                    <WinShareButton leadId={l.id} businessName={contractor.name} />
+                  )}
                 </span>
               </li>
             ))}

@@ -548,49 +548,51 @@ export default async function HomePage({
                 </details>
               </div>
             </ChecklistProvider>
+
+            {/* Warranties from the documents vault, folded in as a compact
+                sub-block under this month's tasks instead of a standalone
+                section further down the page. */}
+            {warranties.length > 0 && (
+              <div className="mt-4 border-t border-stone-100 pt-3">
+                <p className="text-sm font-medium text-stone-700">
+                  Warranties ({warranties.length})
+                </p>
+                <ul className="mt-1.5 divide-y divide-stone-100">
+                  {warranties.map((w) => (
+                    <li
+                      key={w.id}
+                      className="flex items-center justify-between gap-3 py-1.5 first:pt-0"
+                    >
+                      <span className="flex min-w-0 items-center gap-2 text-sm text-stone-800">
+                        <span>
+                          {w.system_type ? iconFor(SYSTEM_TYPES, w.system_type) : "📄"}
+                        </span>
+                        <span className="truncate">{w.title ?? "Home document"}</span>
+                      </span>
+                      <span
+                        className={`chip shrink-0 ${
+                          w.days <= 60
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-stone-100 text-stone-500"
+                        }`}
+                      >
+                        {warrantyLeft(w.days)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-1.5 text-xs text-stone-400">
+                  Pulled from your{" "}
+                  <Link href="/documents" className="text-hearth-700 hover:underline">
+                    documents
+                  </Link>
+                  .
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </section>
-
-      {/* Upcoming warranties from the documents vault */}
-      {warranties.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="flex items-center text-lg font-semibold text-stone-900">Warranties</h2>
-          <div className="card divide-y divide-stone-100">
-            {warranties.map((w) => (
-              <div
-                key={w.id}
-                className="flex items-center justify-between gap-3 py-2 first:pt-0"
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <span className="icon-chip">
-                    {w.system_type ? iconFor(SYSTEM_TYPES, w.system_type) : "📄"}
-                  </span>
-                  <span className="truncate text-sm text-stone-800">
-                    {w.title ?? "Home document"}
-                  </span>
-                </span>
-                <span
-                  className={`chip shrink-0 ${
-                    w.days <= 60
-                      ? "bg-amber-100 text-amber-700"
-                      : "bg-stone-100 text-stone-500"
-                  }`}
-                >
-                  {warrantyLeft(w.days)}
-                </span>
-              </div>
-            ))}
-            <p className="pt-2 text-xs text-stone-400">
-              Pulled from your{" "}
-              <Link href="/documents" className="text-hearth-700 hover:underline">
-                documents
-              </Link>
-              .
-            </p>
-          </div>
-        </section>
-      )}
 
       {/* Hearth Plus: one cohesive "plan ahead" block (plan + premium tools) */}
       <section className="space-y-3">
