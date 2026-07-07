@@ -111,6 +111,17 @@ export default function SlabLeakSignsGuide() {
             plumbing. It's a pattern of the era and construction method, not
             a reflection of how well any individual home has been cared for.
           </p>
+          <p className="mt-2 text-sm text-stone-500">
+            See what Hearth offers homeowners in{" "}
+            <a href="/fountain-valley" className="text-hearth-700 hover:underline">
+              Fountain Valley
+            </a>{" "}
+            or{" "}
+            <a href="/huntington-beach" className="text-hearth-700 hover:underline">
+              Huntington Beach
+            </a>
+            .
+          </p>
         </section>
 
         <section>

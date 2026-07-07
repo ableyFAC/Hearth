@@ -1,7 +1,8 @@
 import type { MetadataRoute } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-// Sitemap for crawlers: the public landing pages, the public guide pages
+// Sitemap for crawlers: the public landing pages, the two city landing pages
+// (src/app/fountain-valley, src/app/huntington-beach), the public guide pages
 // (src/app/guides/..., anon-readable, see the middleware allowlist), plus
 // every pro's public page (/p/..., anon-readable by design). The contractors
 // table is NOT publicly readable, so the list comes from the service-role
@@ -20,6 +21,7 @@ const GUIDE_PATHS = [
   "/guides/slab-leak-signs",
   "/guides/home-maintenance-schedule",
   "/guides/is-my-contractor-quote-fair",
+  "/guides/socal-home-maintenance-calendar",
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -32,6 +34,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     {
       url: `${SITE_URL}/pros`,
       changeFrequency: "weekly",
+      priority: 0.8,
+    },
+    {
+      url: `${SITE_URL}/fountain-valley`,
+      changeFrequency: "monthly",
+      priority: 0.8,
+    },
+    {
+      url: `${SITE_URL}/huntington-beach`,
+      changeFrequency: "monthly",
       priority: 0.8,
     },
     ...GUIDE_PATHS.map((path) => ({

@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getRole } from "@/lib/contractor";
+import { FOUNDER, LEAD_TIER_FEES, COLD_START_FREE_ALERTS } from "@/lib/constants";
+import { AGING_LEAD_TIERS } from "@/lib/leadPricing";
 
 // Marketing front door for contractors. Every claim here is a real product
 // behavior (lead fee shown up front, aging markdowns, pay-per-apply wallet),
@@ -17,6 +19,13 @@ export default async function ProsLanding() {
   if (user && (await getRole()) === "contractor") {
     redirect("/pro");
   }
+
+  // Aging discount sentence, built from the real tiers instead of a hardcoded
+  // string, so a change to leadPricing.ts can never drift out of sync here.
+  const agingCopy = [...AGING_LEAD_TIERS]
+    .sort((a, b) => a.days - b.days)
+    .map((t) => `${t.days}+ days old, ${t.off}% off`)
+    .join("; ");
 
   const PROMISES = [
     {
@@ -35,9 +44,26 @@ export default async function ProsLanding() {
       body: "Jobs that sit unclaimed are automatically marked down 15-30%, so patient pros get real deals.",
     },
     {
+      icon: "⚡",
+      title: "Instant job alerts, free for now",
+      // COLD START: while COLD_START_FREE_ALERTS is on, every pro gets these
+      // alerts free, worded the same as the perk on /pro/plus so the two
+      // pages never contradict each other.
+      body:
+        "The moment a job posts in your trades and area, it hits your email and your phone." +
+        (COLD_START_FREE_ALERTS
+          ? " Included for every pro right now while Hearth is new."
+          : " A Pro membership perk."),
+    },
+    {
+      icon: "✅",
+      title: "Free license verification",
+      body: "We check your CSLB number against the state's public database and show homeowners a verified badge on your profile. Free, no membership needed.",
+    },
+    {
       icon: "🚫",
       title: "No subscription required",
-      body: "Load your wallet with deposits from $5 and pay per application. An optional Pro membership adds perks like bonus credit and instant alerts, but it never changes which jobs you can see or apply to.",
+      body: "Load your wallet with deposits from $5 and pay per application. An optional Pro membership adds perks like bonus credit and an AI back office, but it never changes which jobs you can see or apply to.",
     },
   ];
 
@@ -97,20 +123,80 @@ export default async function ProsLanding() {
       </div>
 
       <div className="mx-auto max-w-3xl px-6">
-      {/* Ghost protection gets top billing: it is the promise no competitor
-          keeps, so it stands alone above the grid. */}
-      <section className="mt-14 rounded-2xl border border-hearth-200 bg-hearth-50 p-6 text-center shadow-sm">
+      {/* Ghost protection and the first-application guarantee get top
+          billing, side by side: they are the two promises no lead-platform
+          competitor keeps. */}
+      <div className="mt-14 grid gap-4 sm:grid-cols-2">
+        <section className="rounded-2xl border border-hearth-200 bg-hearth-50 p-6 text-center shadow-sm">
+          <div className="text-3xl" aria-hidden>
+            👻
+          </div>
+          <h2 className="mt-2 text-xl font-semibold text-stone-900">
+            Ghost protection: if the lead is dead, you don&apos;t pay.
+          </h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-stone-600">
+            If a homeowner never responds within 7 days, your apply fee comes
+            back to your wallet automatically. No request form, no support
+            ticket, no arguing.
+          </p>
+        </section>
+        <section className="rounded-2xl border border-hearth-200 bg-hearth-50 p-6 text-center shadow-sm">
+          <div className="text-3xl" aria-hidden>
+            🎟️
+          </div>
+          <h2 className="mt-2 text-xl font-semibold text-stone-900">
+            Your first application is guaranteed.
+          </h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-stone-600">
+            Not chosen: the fee comes back as wallet credit, automatically.
+            One time, for licensed pros.
+          </p>
+        </section>
+      </div>
+
+      {/* Who's behind this: founder identity is the trust signal a national
+          lead platform can never offer. Details are owner-fillable in
+          src/lib/constants.ts; until they're filled in, this stays honest and
+          generic instead of showing a placeholder name. */}
+      <section className="mt-6 rounded-2xl bg-stone-900 px-6 py-8 text-center">
         <div className="text-3xl" aria-hidden>
-          👻
+          👋
         </div>
-        <h2 className="mt-2 text-xl font-semibold text-stone-900">
-          Ghost protection: if the lead is dead, you don&apos;t pay.
+        <h2 className="mt-2 text-xl font-semibold text-white">
+          Who&apos;s behind this
         </h2>
-        <p className="mx-auto mt-2 max-w-md text-sm text-stone-600">
-          If a homeowner never responds within 7 days, your apply fee comes
-          back to your wallet automatically. No request form, no support
-          ticket, no arguing.
+        <p className="mx-auto mt-2 max-w-md text-sm text-stone-300">
+          {FOUNDER.name
+            ? `Hearth is built by ${FOUNDER.name}, one person${
+                FOUNDER.city ? `, based in ${FOUNDER.city}` : ""
+              }. No call center, no sales team.`
+            : "Hearth is built by one local founder, not a corporation. You will talk to the same person every time."}
         </p>
+        {FOUNDER.name && FOUNDER.cellPhone && (
+          <p className="mt-1 text-sm text-stone-300">
+            Cell: {FOUNDER.cellPhone}
+          </p>
+        )}
+        {/* The in-app help page requires an onboarded contractor account, so
+            it is exactly wrong for the signed-out prospective pros this page
+            targets. Contact renders only from owner-fillable FOUNDER fields:
+            an email (mailto) or phone (tel), and NOTHING when both are blank:
+            no link beats a link that bounces to /signin. */}
+        {FOUNDER.email ? (
+          <a
+            href={`mailto:${FOUNDER.email}`}
+            className="mt-4 inline-block text-sm text-hearth-300 hover:underline"
+          >
+            Questions? Email {FOUNDER.email} →
+          </a>
+        ) : FOUNDER.cellPhone ? (
+          <a
+            href={`tel:${FOUNDER.cellPhone.replace(/[^\d+]/g, "")}`}
+            className="mt-4 inline-block text-sm text-hearth-300 hover:underline"
+          >
+            Questions? Call or text {FOUNDER.cellPhone} →
+          </a>
+        ) : null}
       </section>
 
       {/* The promises */}
@@ -124,6 +210,94 @@ export default async function ProsLanding() {
             <p className="mt-1 text-sm text-stone-600">{p.body}</p>
           </div>
         ))}
+      </section>
+
+      {/* Pricing, in writing: the real per-category fees and the real aging
+          markdown, both read straight from src/lib/constants.ts and
+          src/lib/leadPricing.ts so this section can never drift from what
+          checkout actually charges. */}
+      <section className="mt-16 rounded-2xl border border-stone-200 bg-white p-6 text-center shadow-sm">
+        <h2 className="text-xl font-semibold text-stone-900">
+          The price, in writing
+        </h2>
+        <p className="mx-auto mt-2 max-w-md text-sm text-stone-600">
+          ${LEAD_TIER_FEES.light} light work, ${LEAD_TIER_FEES.skilled}{" "}
+          skilled trades, ${LEAD_TIER_FEES.major} big-ticket jobs, printed on
+          every job card before you pay.
+        </p>
+        <p className="mx-auto mt-2 max-w-md text-sm text-stone-600">
+          Jobs that sit unclaimed get cheaper: {agingCopy}.
+        </p>
+      </section>
+
+      {/* Single-player value: worth having even before the first job comes
+          in. Every item here is verified against the shipped feature, and
+          the AI back office is labeled honestly as a Pro membership perk
+          rather than lumped in as free. */}
+      <section className="mt-16">
+        <h2 className="text-center text-2xl font-semibold text-stone-900">
+          Worth it even before your first job
+        </h2>
+        <div className="mx-auto mt-6 grid max-w-2xl gap-4 sm:grid-cols-2">
+          <div className="card">
+            <div className="icon-chip" aria-hidden>
+              🌐
+            </div>
+            <h3 className="mt-3 font-semibold text-stone-900">
+              A free public profile page
+            </h3>
+            <p className="mt-1 text-sm text-stone-600">
+              Your own shareable page with your services and real Hearth
+              reviews, built to rank on Google. Every pro gets one, free, no
+              membership required.
+            </p>
+          </div>
+          <div className="card">
+            <div className="icon-chip" aria-hidden>
+              ✅
+            </div>
+            <h3 className="mt-3 font-semibold text-stone-900">
+              A free CSLB-verified badge
+            </h3>
+            <p className="mt-1 text-sm text-stone-600">
+              We check your license number against the state database and
+              show it on that same page. Free, not a membership perk.
+            </p>
+          </div>
+          <div className="card">
+            <div className="icon-chip" aria-hidden>
+              📅
+            </div>
+            <h3 className="mt-3 font-semibold text-stone-900">
+              A compliance calendar
+            </h3>
+            <p className="mt-1 text-sm text-stone-600">
+              Upload your license and insurance once and get a heads up
+              before either one expires. Free for every pro.
+            </p>
+          </div>
+          <div className="card">
+            <div className="icon-chip" aria-hidden>
+              📇
+            </div>
+            <h3 className="mt-3 font-semibold text-stone-900">
+              A simple CRM
+            </h3>
+            <p className="mt-1 text-sm text-stone-600">
+              Track every lead through quoted, won, and lost, with notes and
+              a follow-up date. Free for every pro.
+            </p>
+          </div>
+        </div>
+        <p className="mx-auto mt-6 max-w-md text-center text-sm text-stone-500">
+          Hearth Pro membership adds an AI back office on top: estimates
+          drafted from your own past invoices, review replies, and
+          overdue-invoice reminders.{" "}
+          <a href="/pro/plus" className="text-hearth-700 hover:underline">
+            See what&apos;s included
+          </a>
+          .
+        </p>
       </section>
 
       {/* How it works */}

@@ -38,6 +38,13 @@ const GUIDES = [
     blurb:
       "How to read a quote line by line, red flags to watch for, and what a fair bidding process looks like.",
   },
+  {
+    href: "/guides/socal-home-maintenance-calendar",
+    icon: "📅",
+    title: "SoCal home maintenance calendar",
+    blurb:
+      "A month-by-month calendar for coastal Southern California: AC strain, termite swarm season, Santa Ana wind prep, and first-rain checks.",
+  },
 ];
 
 export const metadata: Metadata = {

@@ -16,6 +16,23 @@
 export const COLD_START_FREE_POSTING = true;
 export const COLD_START_FREE_ALERTS = true;
 
+// =============================================================================
+// FOUNDER: owner-fillable identity for the /pros landing page's "Who's behind
+// this" section. Left blank on purpose: fill these in with real details, do
+// not invent a name, city, or phone number. When name is blank the page falls
+// back to an honest generic line instead of a placeholder like "Jane Doe".
+// =============================================================================
+export const FOUNDER = {
+  name: "",
+  city: "",
+  cellPhone: "",
+  // Public contact email for prospective pros (shown on /pros). The in-app
+  // help page needs an account, so signed-out visitors need SOME reachable
+  // channel; until this is filled the page simply shows no contact link
+  // rather than a dead one.
+  email: "",
+};
+
 export const SYSTEM_TYPES = [
   { value: "roof", label: "Roof", icon: "🏠" },
   { value: "hvac", label: "HVAC", icon: "❄️" },

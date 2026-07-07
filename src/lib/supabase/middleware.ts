@@ -54,6 +54,16 @@ export async function updateSession(request: NextRequest) {
     // Public SEO guide pages (src/app/guides/...): informational content
     // meant to be read by anonymous search visitors, not gated behind login.
     path.startsWith("/guides") ||
+    // City landing pages (src/app/fountain-valley, src/app/huntington-beach):
+    // local SEO + Nextdoor/chamber citation targets, same reasoning as the
+    // guide pages above. startsWith with the slash variant too: these pages
+    // exist to receive EXTERNAL links (directories, QR codes) that sometimes
+    // append a trailing slash, and an exact match would bounce those
+    // visitors to /signin.
+    path === "/fountain-valley" ||
+    path.startsWith("/fountain-valley/") ||
+    path === "/huntington-beach" ||
+    path.startsWith("/huntington-beach/") ||
     // SEO endpoints (src/app/sitemap.ts, robots.ts): crawlers have no
     // session, and a 307 to /signin here would hide the whole site from them.
     path === "/sitemap.xml" ||
