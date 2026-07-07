@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { labelFor, iconFor, JOB_CATEGORIES } from "@/lib/constants";
-import { extractQuote, formatUSD } from "@/lib/quotes";
+import { extractQuote, formatUSDCents } from "@/lib/quotes";
 import LeadChat from "@/components/LeadChat";
 import MarkChatSeen from "@/components/MarkChatSeen";
 import MarkChatsSeen from "@/components/MarkChatsSeen";
@@ -13,6 +13,7 @@ import AskHearth from "@/components/AskHearth";
 import { getProactiveGreeting } from "@/lib/greeting";
 import ReviewButton from "@/app/(app)/contractors/ReviewButton";
 import { saveReviewAction } from "@/app/(app)/contractors/actions";
+import { acceptQuoteAction, declineQuoteAction } from "./actions";
 
 // Homeowner-side "seen" cookie (kept separate from the contractor's).
 const SEEN_COOKIE = "hearth_ho_chat_seen";
@@ -83,7 +84,10 @@ export default async function HomeownerChatsPage({
   // Latest message per conversation, for preview + unread.
   const ids = convos.map((l) => l.id);
   const lastByLead = new Map<string, any>();
-  // The latest price each pro has stated in chat, so the homeowner can compare.
+  // The latest price each pro has quoted, in cents, so the homeowner can
+  // compare. A structured quote (lead_quotes) is preferred when one exists;
+  // the regex guess off plain chat text is only a fallback for threads that
+  // never got one.
   const quoteByLead = new Map<string, number>();
   if (ids.length) {
     const { data: msgs } = await supabase
@@ -97,8 +101,26 @@ export default async function HomeownerChatsPage({
       // is that pro's most recent quote.
       if (m.sender_role === "contractor" && !quoteByLead.has(m.lead_id)) {
         const q = extractQuote(m.body);
-        if (q != null) quoteByLead.set(m.lead_id, q);
+        if (q != null) quoteByLead.set(m.lead_id, q * 100);
       }
+    }
+
+    // Structured quotes take priority: fetch the latest per lead and
+    // overwrite any regex-based guess for that lead.
+    // Withdrawn quotes are excluded: the pro retracted that price, so it is
+    // not their standing offer. Declined ones still count as the last price
+    // the pro actually stated.
+    const { data: structuredQuotes } = await supabase
+      .from("lead_quotes")
+      .select("lead_id, total_cents, created_at")
+      .in("lead_id", ids)
+      .neq("status", "withdrawn")
+      .order("created_at", { ascending: false });
+    const latestStructured = new Set<string>();
+    for (const q of structuredQuotes ?? []) {
+      if (latestStructured.has(q.lead_id)) continue;
+      latestStructured.add(q.lead_id);
+      quoteByLead.set(q.lead_id, q.total_cents);
     }
   }
 
@@ -189,7 +211,7 @@ export default async function HomeownerChatsPage({
                     </span>
                   )}
                   <span className="font-semibold text-stone-900">
-                    {formatUSD(q.amount)}
+                    {formatUSDCents(q.amount)}
                   </span>
                 </span>
               </li>
@@ -271,7 +293,7 @@ export default async function HomeownerChatsPage({
                     </p>
                     {quoteByLead.has(l.id) && (
                       <span className="mt-1 inline-block rounded-full bg-hearth-50 px-2 py-0.5 text-[10px] font-semibold text-hearth-700">
-                        Quote {formatUSD(quoteByLead.get(l.id)!)}
+                        Quote {formatUSDCents(quoteByLead.get(l.id)!)}
                       </span>
                     )}
                   </Link>
@@ -324,6 +346,9 @@ export default async function HomeownerChatsPage({
                   embedded
                   title={nameOf(selected)}
                   subtitle={labelFor(JOB_CATEGORIES, selected.category)}
+                  contractorName={nameOf(selected)}
+                  acceptQuoteAction={acceptQuoteAction}
+                  declineQuoteAction={declineQuoteAction}
                 />
               </div>
             </div>

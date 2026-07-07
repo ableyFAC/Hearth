@@ -7,6 +7,7 @@ import { getCurrentContractor } from "@/lib/contractor";
 import { labelFor, iconFor, JOB_CATEGORIES } from "@/lib/constants";
 import LeadChat from "@/components/LeadChat";
 import MarkChatSeen from "@/components/MarkChatSeen";
+import { sendQuoteAction, withdrawQuoteAction } from "./actions";
 
 // Seen-state cookie shared with the layout's unread badge.
 const SEEN_COOKIE = "hearth_chat_seen"; // { [leadId]: ISO timestamp last viewed }
@@ -179,6 +180,9 @@ export default async function ProChatsPage({
                 subtitle={`${labelFor(JOB_CATEGORIES, selected.category)}${
                   selected.property_address ? ` · ${selected.property_address}` : ""
                 }`}
+                contractorName={contractor.name}
+                sendQuoteAction={sendQuoteAction}
+                withdrawQuoteAction={withdrawQuoteAction}
               />
             </div>
           ) : (

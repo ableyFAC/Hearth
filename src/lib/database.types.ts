@@ -21,6 +21,14 @@ export interface ProPastJobLineItem {
   line_total: string | null;
 }
 
+// One line item on a structured quote sent in chat (lead_quotes.line_items).
+// amount_cents is the only money value stored per item; it is computed once,
+// server side, from the dollar string the pro typed.
+export interface QuoteLineItem {
+  label: string;
+  amount_cents: number;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -780,6 +788,32 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["subscriptions"]["Insert"]>;
         Relationships: [];
       };
+      lead_quotes: {
+        Row: {
+          id: string;
+          lead_id: string;
+          contractor_id: string;
+          total_cents: number;
+          line_items: QuoteLineItem[];
+          note: string | null;
+          status: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          lead_id: string;
+          contractor_id: string;
+          total_cents: number;
+          line_items?: QuoteLineItem[];
+          note?: string | null;
+          status?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["lead_quotes"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: {
       lead_previews: {
@@ -864,3 +898,4 @@ export type HouseholdMember = T["household_members"]["Row"];
 export type ProClient = T["pro_clients"]["Row"];
 export type ProClientNote = T["pro_client_notes"]["Row"];
 export type ProPastJob = T["pro_past_jobs"]["Row"];
+export type LeadQuote = T["lead_quotes"]["Row"];

@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { censor } from "@/lib/censor";
-import { extractQuote, formatUSD } from "@/lib/quotes";
+import { extractQuote, formatUSD, dollarsToCents, formatUSDCents } from "@/lib/quotes";
 import { imgSrc } from "@/lib/storage";
+import type { QuoteLineItem } from "@/lib/database.types";
 
 type Msg = {
   id: string;
@@ -13,6 +14,27 @@ type Msg = {
   body: string;
   created_at: string;
 };
+
+// A structured quote a pro composed and sent in this thread (lead_quotes).
+type Quote = {
+  id: string;
+  contractor_id: string;
+  total_cents: number;
+  line_items: QuoteLineItem[];
+  note: string | null;
+  status: "sent" | "accepted" | "declined" | "withdrawn";
+  created_at: string;
+};
+
+// A quote or a message, merged into one feed and shown in created_at order.
+type FeedItem =
+  | { kind: "message"; created_at: string; data: Msg }
+  | { kind: "quote"; created_at: string; data: Quote };
+
+// The companion plain message a sent quote posts alongside itself (see
+// sendQuoteAction). Its own rich card renders right next to it, so the old
+// regex "Quoted $X" badge would just be noise here and is skipped for it.
+const isQuoteCompanionBody = (body: string) => body.startsWith("Sent a quote:");
 
 // System-message markers used to open/close a thread. They're stored as normal
 // rows (sender_role = "system") so both sides see them with no schema change.
@@ -56,19 +78,41 @@ export default function LeadChat({
   embedded = false,
   title,
   subtitle,
+  contractorName,
+  sendQuoteAction,
+  withdrawQuoteAction,
+  acceptQuoteAction,
+  declineQuoteAction,
 }: {
   leadId: string;
   role: "homeowner" | "contractor";
   embedded?: boolean;
   title?: string;
   subtitle?: string;
+  // The pro's company name, used on every quote card ("Quote from {company}")
+  // regardless of which side is viewing.
+  contractorName?: string;
+  sendQuoteAction?: (formData: FormData) => Promise<void>;
+  withdrawQuoteAction?: (formData: FormData) => Promise<void>;
+  acceptQuoteAction?: (formData: FormData) => Promise<void>;
+  declineQuoteAction?: (formData: FormData) => Promise<void>;
 }) {
   const supabase = createClient();
   const router = useRouter();
   const [open, setOpen] = useState(embedded);
   const [messages, setMessages] = useState<Msg[]>([]);
+  const [quotes, setQuotes] = useState<Quote[]>([]);
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showQuoteForm, setShowQuoteForm] = useState(false);
+  const [quoteRows, setQuoteRows] = useState<
+    { label: string; amount: string }[]
+  >([{ label: "", amount: "" }]);
+  const [quoteNote, setQuoteNote] = useState("");
+  const [quoteBusy, setQuoteBusy] = useState(false);
+  const [confirmWithdrawId, setConfirmWithdrawId] = useState<string | null>(
+    null
+  );
   const [filtered, setFiltered] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [reportReason, setReportReason] = useState("");
@@ -95,6 +139,15 @@ export default function LeadChat({
       .eq("lead_id", leadId)
       .order("created_at", { ascending: true });
     setMessages(data ?? []);
+
+    // Structured quotes sent in this thread. If the table isn't set up yet,
+    // keep whatever's on screen (optimistic) instead of wiping it.
+    const { data: quoteData, error: quoteErr } = await supabase
+      .from("lead_quotes")
+      .select("id, contractor_id, total_cents, line_items, note, status, created_at")
+      .eq("lead_id", leadId)
+      .order("created_at", { ascending: true });
+    if (!quoteErr) setQuotes((quoteData ?? []) as unknown as Quote[]);
 
     // Reactions. If the table isn't set up yet, keep whatever's on screen
     // (optimistic) instead of wiping it.
@@ -145,6 +198,16 @@ export default function LeadChat({
         },
         () => load()
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "lead_quotes",
+          filter: `lead_id=eq.${leadId}`,
+        },
+        () => load()
+      )
       .subscribe();
 
     const t = setInterval(load, 15000);
@@ -185,6 +248,25 @@ export default function LeadChat({
     }
     return null;
   }, [messages, role]);
+
+  // Messages and quotes merged into a single feed, oldest first, so a quote
+  // card shows up right where it was sent relative to the surrounding chat.
+  const feed = useMemo<FeedItem[]>(() => {
+    const items: FeedItem[] = [
+      ...messages.map((m) => ({
+        kind: "message" as const,
+        created_at: m.created_at,
+        data: m,
+      })),
+      ...quotes.map((q) => ({
+        kind: "quote" as const,
+        created_at: q.created_at,
+        data: q,
+      })),
+    ];
+    items.sort((a, b) => a.created_at.localeCompare(b.created_at));
+    return items;
+  }, [messages, quotes]);
 
   async function ensureUid() {
     if (!uidRef.current) {
@@ -425,6 +507,77 @@ export default function LeadChat({
     setReported(true);
   }
 
+  // ---- Structured quote composer (pro side) --------------------------------
+
+  function addQuoteRow() {
+    setQuoteRows((rows) => [...rows, { label: "", amount: "" }]);
+  }
+
+  function removeQuoteRow(idx: number) {
+    setQuoteRows((rows) => rows.filter((_, i) => i !== idx));
+  }
+
+  function updateQuoteRow(idx: number, field: "label" | "amount", value: string) {
+    setQuoteRows((rows) =>
+      rows.map((r, i) => (i === idx ? { ...r, [field]: value } : r))
+    );
+  }
+
+  // Live preview only: the number actually saved is computed once, server
+  // side, in sendQuoteAction. Uses the same dollarsToCents helper so the two
+  // can never disagree.
+  const quotePreviewCents = quoteRows.reduce(
+    (sum, r) => sum + (dollarsToCents(r.amount) ?? 0),
+    0
+  );
+
+  async function submitQuote(e: React.FormEvent) {
+    e.preventDefault();
+    if (!sendQuoteAction) return;
+    const clean = quoteRows.filter(
+      (r) => r.label.trim() && (dollarsToCents(r.amount) ?? 0) > 0
+    );
+    if (clean.length === 0) return;
+    setQuoteBusy(true);
+    const fd = new FormData();
+    fd.set("lead_id", leadId);
+    fd.set("note", quoteNote);
+    for (const r of clean) {
+      fd.append("label", r.label.trim());
+      fd.append("amount", r.amount);
+    }
+    await sendQuoteAction(fd);
+    setQuoteBusy(false);
+    setShowQuoteForm(false);
+    setQuoteRows([{ label: "", amount: "" }]);
+    setQuoteNote("");
+    load();
+  }
+
+  async function withdrawQuote(quoteId: string) {
+    if (!withdrawQuoteAction) return;
+    setConfirmWithdrawId(null);
+    setBusy(true);
+    const fd = new FormData();
+    fd.set("quote_id", quoteId);
+    await withdrawQuoteAction(fd);
+    setBusy(false);
+    load();
+  }
+
+  async function respondToQuote(
+    quoteId: string,
+    action: ((formData: FormData) => Promise<void>) | undefined
+  ) {
+    if (!action) return;
+    setBusy(true);
+    const fd = new FormData();
+    fd.set("quote_id", quoteId);
+    await action(fd);
+    setBusy(false);
+    load();
+  }
+
   if (!embedded && !open) {
     return (
       <button
@@ -523,10 +676,36 @@ export default function LeadChat({
             : "max-h-48 space-y-2 overflow-y-auto"
         }
       >
-        {messages.length === 0 ? (
+        {feed.length === 0 ? (
           <p className="text-xs text-stone-400">No messages yet. Say hello.</p>
         ) : (
-          messages.map((m) => {
+          feed.map((item) => {
+            if (item.kind === "quote") {
+              return (
+                <QuoteCard
+                  key={`q-${item.data.id}`}
+                  quote={item.data}
+                  role={role}
+                  contractorName={contractorName}
+                  busy={busy}
+                  confirmWithdraw={confirmWithdrawId === item.data.id}
+                  onAskWithdraw={() => setConfirmWithdrawId(item.data.id)}
+                  onCancelWithdraw={() => setConfirmWithdrawId(null)}
+                  onWithdraw={() => withdrawQuote(item.data.id)}
+                  onAccept={
+                    acceptQuoteAction
+                      ? () => respondToQuote(item.data.id, acceptQuoteAction)
+                      : undefined
+                  }
+                  onDecline={
+                    declineQuoteAction
+                      ? () => respondToQuote(item.data.id, declineQuoteAction)
+                      : undefined
+                  }
+                />
+              );
+            }
+            const m = item.data;
             if (m.sender_role === "system") {
               return (
                 <div key={m.id} className="flex justify-center">
@@ -538,9 +717,12 @@ export default function LeadChat({
             }
             const mine = m.sender_role === role;
             // A price the contractor stated gets labelled as a quote, so it is
-            // easy to spot and compare in the thread.
+            // easy to spot and compare in the thread. Skipped for a quote's own
+            // companion message, which already gets a rich card above/below it.
             const quote =
-              m.sender_role === "contractor" && !isImageBody(m.body)
+              m.sender_role === "contractor" &&
+              !isImageBody(m.body) &&
+              !isQuoteCompanionBody(m.body)
                 ? extractQuote(m.body)
                 : null;
             // You can unsend your own messages for up to an hour.
@@ -720,6 +902,92 @@ export default function LeadChat({
         </p>
       )}
 
+      {!closed && role === "contractor" && sendQuoteAction && (
+        <div className="mt-2">
+          {showQuoteForm ? (
+            <form
+              onSubmit={submitQuote}
+              className="space-y-2 rounded-lg border border-stone-200 bg-stone-50 p-3"
+            >
+              <p className="text-xs font-medium uppercase tracking-wide text-stone-500">
+                Send a quote
+              </p>
+              {quoteRows.map((row, idx) => (
+                <div key={idx} className="flex gap-2">
+                  <input
+                    className="input flex-1"
+                    placeholder="Line item, e.g. Labor"
+                    value={row.label}
+                    onChange={(e) => updateQuoteRow(idx, "label", e.target.value)}
+                  />
+                  <input
+                    className="input w-28"
+                    placeholder="$0"
+                    inputMode="decimal"
+                    value={row.amount}
+                    onChange={(e) => updateQuoteRow(idx, "amount", e.target.value)}
+                  />
+                  {quoteRows.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeQuoteRow(idx)}
+                      className="text-stone-400 hover:text-red-600"
+                      aria-label="Remove line item"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={addQuoteRow}
+                className="text-xs font-medium text-hearth-700 hover:underline"
+              >
+                + Add line item
+              </button>
+              <textarea
+                value={quoteNote}
+                onChange={(e) => setQuoteNote(e.target.value)}
+                rows={2}
+                maxLength={1000}
+                placeholder="Note to the homeowner (optional)"
+                className="input w-full text-sm"
+              />
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-stone-900">
+                  Total: {formatUSDCents(quotePreviewCents)}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowQuoteForm(false)}
+                    className="btn-secondary text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={quoteBusy || quotePreviewCents <= 0}
+                    className="btn-primary text-sm disabled:opacity-50"
+                  >
+                    Send quote
+                  </button>
+                </div>
+              </div>
+            </form>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowQuoteForm(true)}
+              className="text-sm font-medium text-hearth-700 hover:underline"
+            >
+              💵 Send a quote
+            </button>
+          )}
+        </div>
+      )}
+
       {closed ? (
         <p className="mt-2 rounded-lg bg-stone-100 px-3 py-2 text-center text-xs text-stone-500">
           This conversation is finished.
@@ -823,6 +1091,156 @@ export default function LeadChat({
           >
             ⚠ Report chat
           </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const STATUS_LABEL: Record<Quote["status"], string> = {
+  sent: "Sent",
+  accepted: "Accepted",
+  declined: "Declined",
+  withdrawn: "Withdrawn",
+};
+
+const STATUS_PILL_CLASS: Record<Quote["status"], string> = {
+  sent: "bg-hearth-50 text-hearth-700",
+  accepted: "bg-green-100 text-green-700",
+  declined: "bg-stone-200 text-stone-600",
+  withdrawn: "bg-stone-200 text-stone-500",
+};
+
+// A structured quote, rendered inline in the thread wherever it falls by
+// created_at. Homeowner gets Accept/Decline on a 'sent' quote, the pro who
+// sent it gets Withdraw. Accepting only ever flips this row's status: it
+// never touches choose_applicant or any money logic.
+function QuoteCard({
+  quote,
+  role,
+  contractorName,
+  busy,
+  confirmWithdraw,
+  onAskWithdraw,
+  onCancelWithdraw,
+  onWithdraw,
+  onAccept,
+  onDecline,
+}: {
+  quote: Quote;
+  role: "homeowner" | "contractor";
+  contractorName?: string;
+  busy: boolean;
+  confirmWithdraw: boolean;
+  onAskWithdraw: () => void;
+  onCancelWithdraw: () => void;
+  onWithdraw: () => void;
+  onAccept?: () => void;
+  onDecline?: () => void;
+}) {
+  const mine = role === "contractor";
+  return (
+    <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+      <div className="w-full max-w-[85%] rounded-lg border border-stone-200 bg-white p-3 shadow-sm">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-stone-900">
+            Quote from {contractorName || "your pro"}
+          </p>
+          <span
+            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${STATUS_PILL_CLASS[quote.status]}`}
+          >
+            {STATUS_LABEL[quote.status]}
+          </span>
+        </div>
+
+        <ul className="mt-2 space-y-1">
+          {quote.line_items.map((li, idx) => (
+            <li
+              key={idx}
+              className="flex items-center justify-between text-sm text-stone-600"
+            >
+              <span className="truncate pr-2">{li.label}</span>
+              <span className="shrink-0">{formatUSDCents(li.amount_cents)}</span>
+            </li>
+          ))}
+        </ul>
+
+        <div className="mt-2 flex items-center justify-between border-t border-stone-100 pt-2">
+          <span className="text-sm font-semibold text-stone-900">Total</span>
+          <span className="text-sm font-semibold text-stone-900">
+            {formatUSDCents(quote.total_cents)}
+          </span>
+        </div>
+
+        {quote.note && (
+          <p className="mt-2 whitespace-pre-wrap text-xs text-stone-500">
+            {quote.note}
+          </p>
+        )}
+
+        {role === "homeowner" && quote.status === "sent" && (onAccept || onDecline) && (
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={onAccept}
+              disabled={busy}
+              className="btn-primary flex-1 text-sm disabled:opacity-50"
+            >
+              Accept
+            </button>
+            <button
+              type="button"
+              onClick={onDecline}
+              disabled={busy}
+              className="btn-secondary flex-1 text-sm disabled:opacity-50"
+            >
+              Decline
+            </button>
+          </div>
+        )}
+
+        {role === "homeowner" && quote.status === "accepted" && (
+          <p className="mt-3 rounded-md bg-green-50 px-2 py-1.5 text-xs text-green-700">
+            Quote accepted. Head to your{" "}
+            <a href="/contractors" className="font-medium underline">
+              Contractors page
+            </a>{" "}
+            to keep this job moving.
+          </p>
+        )}
+
+        {role === "contractor" && quote.status === "sent" && (
+          <div className="mt-3 flex justify-end">
+            {confirmWithdraw ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-stone-500">Withdraw this quote?</span>
+                <button
+                  type="button"
+                  onClick={onWithdraw}
+                  disabled={busy}
+                  className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-50"
+                >
+                  Confirm
+                </button>
+                <button
+                  type="button"
+                  onClick={onCancelWithdraw}
+                  className="text-xs text-stone-400 hover:text-stone-600"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={onAskWithdraw}
+                disabled={busy}
+                className="text-xs font-medium text-stone-400 hover:text-red-600 disabled:opacity-50"
+              >
+                Withdraw
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>
