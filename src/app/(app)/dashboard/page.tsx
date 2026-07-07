@@ -107,6 +107,9 @@ export default async function HomePage({
 
   const sys = systems ?? [];
   const openIssues = issues ?? [];
+  // Systems whose details are still an onboarding estimate (migration 0056:
+  // confirmed_at null), powering the "walk your home" entry points below.
+  const unconfirmedCount = sys.filter((s) => !s.confirmed_at).length;
   const { score, lines: scoreLines } = scoreBreakdown(sys, openIssues);
   const band = scoreBand(score);
 
@@ -377,9 +380,14 @@ export default async function HomePage({
         <div className="rounded-xl border border-hearth-200 bg-hearth-50 p-4 text-sm text-hearth-800">
           {sys.length > 0 ? (
             <>
-              🎉 Your home is claimed. We pre-filled {sys.length} systems from
-              your home&apos;s details. Confirm or adjust them below to sharpen
-              your Health Score.
+              🎉 Your home is claimed. We started {sys.length} system
+              {sys.length === 1 ? "" : "s"} with estimated details based on
+              your home&apos;s age.{" "}
+              <Link href="/walkthrough" className="font-medium underline">
+                Walk your home
+              </Link>{" "}
+              and snap each data plate to swap the estimates for the real
+              thing.
             </>
           ) : (
             <>
@@ -548,6 +556,29 @@ export default async function HomePage({
                 </details>
               </div>
             </ChecklistProvider>
+
+            {/* Nudge toward the walkthrough while any system still carries an
+                onboarding estimate instead of a confirmed real fact. Folded in
+                here rather than a standalone section, same as Warranties
+                below. */}
+            {unconfirmedCount > 0 && (
+              <div className="mt-4 border-t border-stone-100 pt-3">
+                <p className="text-sm font-medium text-stone-700">
+                  Confirm your home&apos;s details
+                </p>
+                <p className="mt-1 text-xs text-stone-500">
+                  {unconfirmedCount} system{unconfirmedCount === 1 ? "" : "s"}{" "}
+                  still {unconfirmedCount === 1 ? "has" : "have"} estimated
+                  details. It makes every answer smarter.
+                </p>
+                <Link
+                  href="/walkthrough"
+                  className="mt-1.5 inline-block text-sm font-medium text-hearth-700 hover:underline"
+                >
+                  Walk your home →
+                </Link>
+              </div>
+            )}
 
             {/* Warranties from the documents vault, folded in as a compact
                 sub-block under this month's tasks instead of a standalone

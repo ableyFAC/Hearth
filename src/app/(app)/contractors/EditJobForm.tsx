@@ -74,7 +74,7 @@ export default function EditJobForm({ job }: { job: any }) {
           />
         </div>
         <div>
-          <label className="label">Email</label>
+          <label className="label">Email (optional)</label>
           <input
             name="homeowner_email"
             type="email"
@@ -83,11 +83,14 @@ export default function EditJobForm({ job }: { job: any }) {
           />
         </div>
         <div>
-          <label className="label">Phone</label>
+          <label className="label">Phone (optional)</label>
           <PhoneInput
             name="homeowner_phone"
             defaultValue={job.homeowner_phone ?? ""}
           />
+          <p className="mt-1 text-xs text-stone-400">
+            So pros can reach you faster (optional).
+          </p>
         </div>
       </div>
       <div className="flex gap-2">

@@ -3,9 +3,21 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-// Unified sign-in for everyone. After authentication we send the user to "/",
-// which reads their role and routes homeowners to /dashboard and contractors
-// to /pro - so a single sign-in works for both sides.
+// Only ever follow a RELATIVE path from ?next=: an absolute URL (or a
+// protocol-relative //host) in that param would be an open redirect an
+// attacker could use to bounce a signed-in victim to a look-alike site.
+function safeNextPath(): string | null {
+  if (typeof window === "undefined") return null;
+  const next = new URLSearchParams(window.location.search).get("next");
+  if (next && next.startsWith("/") && !next.startsWith("//")) return next;
+  return null;
+}
+
+// Unified sign-in for everyone. After authentication we send the user to the
+// page they were originally headed to (?next=, set by the middleware when it
+// bounced them here), or to "/", which reads their role and routes
+// homeowners to /dashboard and contractors to /pro - so a single sign-in
+// works for both sides.
 export default function SignInPage() {
   const supabase = createClient();
   const [email, setEmail] = useState("");
@@ -33,8 +45,8 @@ export default function SignInPage() {
       return;
     }
 
-    // Role-based routing happens at "/".
-    window.location.href = "/";
+    // Back to where they were headed, or "/" for role-based routing.
+    window.location.href = safeNextPath() ?? "/";
   }
 
   return (

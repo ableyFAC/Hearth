@@ -23,6 +23,12 @@ const CATEGORY_ICON: Record<string, JSX.Element> = {
   cleaning: <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z" />,
   windows: <path d="M4 4h16v16H4zM12 4v16M4 12h16" />,
   painting: <path d="M4 4h12v5H4zM16 6h3v4h-8v3M10 13h3v8h-3z" />,
+  pest: (
+    <path d="M12 4v3M9 7h6M8 10h8M12 10v8M8 12H5M19 12h-3M8 15H5.5M18.5 15H16M9 19l-2 2M15 19l2 2" />
+  ),
+  garage_door: (
+    <path d="M4 21V11l8-7 8 7v10M4 21h16M6 15h12M6 18h12" />
+  ),
   other: <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" />,
 };
 

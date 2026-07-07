@@ -69,6 +69,8 @@ export const SERVICE_CATEGORIES = [
   { value: "windows", label: "Windows", icon: "🪟" },
   { value: "painting", label: "Painting", icon: "🎨" },
   { value: "home_inspection", label: "Home inspection", icon: "🔍" },
+  { value: "pest", label: "Pest & termite control", icon: "🐜" },
+  { value: "garage_door", label: "Garage door", icon: "🚪" },
 ] as const;
 
 // Every value a job's category can take, for labels/icons when displaying a
@@ -88,7 +90,7 @@ export const REMODEL_PROJECTS = [
   { label: "Flooring", icon: "🪵", category: "remodeling" },
   { label: "Deck / patio", icon: "🌳", category: "structural" },
   { label: "Interior painting", icon: "🎨", category: "painting" },
-  { label: "Garage door", icon: "🚪", category: "structural" },
+  { label: "Garage door", icon: "🚪", category: "garage_door" },
   { label: "Roof replacement", icon: "🏠", category: "roof" },
   { label: "Panel upgrade", icon: "⚡", category: "electrical" },
   { label: "HVAC install", icon: "❄️", category: "hvac" },
@@ -145,7 +147,8 @@ export const BUDGET_RANGES = [
 // marketplaces (Angi $15-85+/lead plus a ~$300/yr fee; Thumbtack ~$20-75) so
 // Hearth undercuts them, with no annual fee:
 //   Tier 1  $25  light / low-ticket work (cleaning, landscaping, painting)
-//   Tier 2  $50  skilled trades + replacements (plumbing, electrical, HVAC, windows)
+//   Tier 2  $50  skilled trades + replacements (plumbing, electrical, HVAC,
+//                windows, garage door, pest & termite control)
 //   Tier 3  $90  big-ticket (roofing, structural, remodeling / general contracting)
 export const LEAD_TIER_FEES = { light: 25, skilled: 50, major: 90 } as const;
 
@@ -160,6 +163,8 @@ export const LEAD_FEES: Record<string, number> = {
   electrical: LEAD_TIER_FEES.skilled,
   windows: LEAD_TIER_FEES.skilled,
   home_inspection: LEAD_TIER_FEES.skilled,
+  garage_door: LEAD_TIER_FEES.skilled,
+  pest: LEAD_TIER_FEES.skilled,
   // Tier 1 - light
   landscaping: LEAD_TIER_FEES.light,
   cleaning: LEAD_TIER_FEES.light,
@@ -216,7 +221,7 @@ export const SYSTEM_CATEGORY: Record<string, string> = {
   appliance: "other",
   gutters: "roof",
   siding: "structural",
-  garage_door: "other",
+  garage_door: "garage_door",
   deck: "structural",
   driveway: "other",
   sump_pump: "plumbing",

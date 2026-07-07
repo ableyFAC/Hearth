@@ -313,7 +313,7 @@ export default async function HomeownerChatsPage({
                   allowed (leave_review only requires an assigned pro, not a
                   closed conversation): "Leave a review" while working
                   together, or a quiet "You reviewed this pro" once done. */}
-              <div className="mb-2 flex shrink-0 items-center justify-between gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm">
+              <div className="mb-2 flex flex-wrap shrink-0 items-center justify-between gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm">
                 {existingReview ? (
                   <div className="flex items-center gap-2">
                     <span className="text-amber-500">
@@ -336,6 +336,8 @@ export default async function HomeownerChatsPage({
                   contractorName={nameOf(selected)}
                   action={saveReviewAction}
                   existing={existingReview ?? undefined}
+                  proProfilePath={`/p/${selected.contractor_id}`}
+                  categoryLabel={labelFor(JOB_CATEGORIES, selected.category)}
                 />
               </div>
               <div className="min-h-0 flex-1">

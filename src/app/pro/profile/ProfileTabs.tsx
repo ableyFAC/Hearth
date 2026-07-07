@@ -5,6 +5,7 @@ import PublicProfileForm from "./PublicProfileForm";
 import PublicPageCard from "./PublicPageCard";
 import ProjectsCard, { type ProProject } from "./ProjectsCard";
 import AccountSecurity from "./AccountSecurity";
+import BackgroundCheckCard from "./BackgroundCheckCard";
 import type { Contractor } from "@/lib/database.types";
 
 const TABS = [
@@ -38,10 +39,15 @@ export default function ProfileTabs({
   contractor,
   member,
   projects,
+  checkrEnabled,
 }: {
   contractor: Contractor;
   member: boolean;
   projects: ProProject[];
+  // Checkr background checks (0057): only passed true when CHECKR_API_KEY is
+  // set server-side (isCheckrConfigured() in page.tsx). Fully dormant
+  // otherwise - BackgroundCheckCard never renders.
+  checkrEnabled: boolean;
 }) {
   const [tab, setTab] = useState<"public" | "page" | "projects" | "security">(
     "public"
@@ -78,7 +84,10 @@ export default function ProfileTabs({
       </div>
 
       {tab === "public" ? (
-        <PublicProfileForm contractor={contractor} />
+        <div className="space-y-6">
+          <PublicProfileForm contractor={contractor} />
+          {checkrEnabled && <BackgroundCheckCard contractor={contractor} />}
+        </div>
       ) : tab === "page" ? (
         <PublicPageCard contractor={contractor} member={member} />
       ) : tab === "projects" ? (

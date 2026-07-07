@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { hasProPlan } from "@/lib/subscription";
+import { isCheckrConfigured } from "@/lib/checkr";
 import ProfileTabs from "./ProfileTabs";
 import type { ProProject, ProProjectPhoto } from "./ProjectsCard";
 
@@ -43,9 +44,18 @@ export default async function ProProfilePage() {
       .sort((a, b) => a.sort - b.sort),
   }));
 
+  // Checkr background checks (0057): dormant without CHECKR_API_KEY, so this
+  // gates the whole card, not just the button inside it.
+  const checkrEnabled = isCheckrConfigured();
+
   return (
     <div className="mx-auto max-w-4xl">
-      <ProfileTabs contractor={contractor} member={member} projects={projects} />
+      <ProfileTabs
+        contractor={contractor}
+        member={member}
+        projects={projects}
+        checkrEnabled={checkrEnabled}
+      />
     </div>
   );
 }

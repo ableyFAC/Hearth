@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveProperty } from "@/lib/property";
+import {
+  computeResponseTimeMinutesBatch,
+  formatResponseTime,
+} from "@/lib/responseTime";
 import {
   JOB_CATEGORIES,
   TIMING_OPTIONS,
@@ -148,6 +153,27 @@ export default async function ContractorsPage({
     }
   }
 
+  // Reply-speed line on each applicant card: one batched computation for
+  // every applying pro across every job on this page (never one query per
+  // pro, never one query per job). Needs the admin client - a pro's reply
+  // history spans jobs posted by other homeowners too, which this
+  // homeowner's own RLS-scoped client has no way to read.
+  const applicantContractorIds = Array.from(
+    new Set(
+      Array.from(appsByLead.values())
+        .flat()
+        .map((a: any) => a.contractor_id)
+        .filter(Boolean)
+    )
+  );
+  const replyMinutesByContractor =
+    applicantContractorIds.length > 0
+      ? await computeResponseTimeMinutesBatch(
+          createAdminClient(),
+          applicantContractorIds
+        )
+      : new Map<string, number | null>();
+
   return (
     <div className="space-y-8">
       <div>
@@ -274,7 +300,7 @@ export default async function ContractorsPage({
             />
           </div>
           <div>
-            <label className="label">Email</label>
+            <label className="label">Email (optional)</label>
             <input
               name="homeowner_email"
               type="email"
@@ -284,22 +310,28 @@ export default async function ContractorsPage({
             />
           </div>
           <div>
-            <label className="label">Phone</label>
+            <label className="label">Phone (optional)</label>
             <PhoneInput
               name="homeowner_phone"
               defaultValue={profile?.phone ?? ""}
             />
+            <p className="mt-1 text-xs text-stone-400">
+              So pros can reach you faster (optional).
+            </p>
           </div>
         </div>
 
         <div>
-          <label className="label">Details about your project (optional)</label>
+          {/* Not labeled optional: postJobAction enforces a 20-character floor
+              on the description for a standalone post (a post linked to an
+              issue can fall back to the issue's own description). */}
+          <label className="label">Details about your project</label>
           <textarea
             name="message"
             className="textarea"
             rows={3}
             defaultValue={searchParams.desc ?? ""}
-            placeholder="What needs doing? Pros see this when deciding whether to apply."
+            placeholder="What needs doing? A sentence or two helps pros give you an accurate quote."
           />
         </div>
 
@@ -397,45 +429,55 @@ export default async function ContractorsPage({
                       </div>
                       <LeadChat leadId={l.id} role="homeowner" />
 
-                      {/* Review the pro once the conversation has been closed. */}
-                      {closedIds.has(l.id) &&
-                        (reviewByLead.has(l.id) ? (
-                          <div className="flex items-center justify-between gap-2 rounded-lg border border-stone-200 p-3">
-                            <div className="text-sm">
-                              <span className="text-amber-500">
-                                {"★".repeat(reviewByLead.get(l.id)!.rating)}
-                                <span className="text-stone-300">
-                                  {"★".repeat(5 - reviewByLead.get(l.id)!.rating)}
+                      {/* Review the pro once the conversation has been closed.
+                          Both branches keep the SAME tree shape (outer div >
+                          flex div > [content, ReviewButton]) so React updates
+                          ReviewButton in place when the post-submit
+                          revalidation flips this row from "no review" to
+                          "reviewed": a shape change here would remount it and
+                          wipe the just-shown "Share your pro" card. */}
+                      {closedIds.has(l.id) && (
+                        <div
+                          className={
+                            reviewByLead.has(l.id)
+                              ? "rounded-lg border border-stone-200 p-3"
+                              : "rounded-lg border border-dashed border-stone-300 p-3"
+                          }
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            {reviewByLead.has(l.id) ? (
+                              <div className="text-sm">
+                                <span className="text-amber-500">
+                                  {"★".repeat(reviewByLead.get(l.id)!.rating)}
+                                  <span className="text-stone-300">
+                                    {"★".repeat(
+                                      5 - reviewByLead.get(l.id)!.rating
+                                    )}
+                                  </span>
                                 </span>
-                              </span>
-                              {reviewByLead.get(l.id)!.comment && (
-                                <p className="mt-0.5 text-stone-500">
-                                  {reviewByLead.get(l.id)!.comment}
-                                </p>
-                              )}
-                            </div>
+                                {reviewByLead.get(l.id)!.comment && (
+                                  <p className="mt-0.5 text-stone-500">
+                                    {reviewByLead.get(l.id)!.comment}
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-stone-500">
+                                Job wrapped up? Leave{" "}
+                                {l.contractors?.name ?? "your pro"} a review.
+                              </p>
+                            )}
                             <ReviewButton
                               leadId={l.id}
                               contractorName={l.contractors?.name ?? "your pro"}
                               action={saveReviewAction}
                               existing={reviewByLead.get(l.id)}
+                              proProfilePath={`/p/${l.contractor_id}`}
+                              categoryLabel={labelFor(JOB_CATEGORIES, l.category)}
                             />
                           </div>
-                        ) : (
-                          <div className="rounded-lg border border-dashed border-stone-300 p-3">
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-sm text-stone-500">
-                                Job wrapped up? Leave {l.contractors?.name ?? "your pro"} a
-                                review.
-                              </p>
-                              <ReviewButton
-                                leadId={l.id}
-                                contractorName={l.contractors?.name ?? "your pro"}
-                                action={saveReviewAction}
-                              />
-                            </div>
-                          </div>
-                        ))}
+                        </div>
+                      )}
                     </div>
                   ) : apps.length === 0 ? (
                     <div className="space-y-2">
@@ -498,6 +540,18 @@ export default async function ContractorsPage({
                                   ? ` · Lic. ${a.contractors.license_number}`
                                   : ""}
                               </p>
+                              {formatResponseTime(
+                                replyMinutesByContractor.get(a.contractor_id) ??
+                                  null
+                              ) && (
+                                <p className="text-xs font-medium text-green-700">
+                                  {formatResponseTime(
+                                    replyMinutesByContractor.get(
+                                      a.contractor_id
+                                    ) ?? null
+                                  )}
+                                </p>
+                              )}
                               {a.message && (
                                 <p className="mt-1 text-sm text-stone-600">
                                   {redactContact(a.message)}

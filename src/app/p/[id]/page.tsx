@@ -52,6 +52,16 @@ type PublicProfile = {
   about: string | null;
   has_license: boolean;
   has_insurance: boolean;
+  // Optional: absent until migration 0055 runs. Real CSLB verification
+  // timestamp, only ever set on an actually-confirmed license (0055) - never
+  // gated behind Pro membership, unlike has_license/has_insurance above.
+  license_verified_at?: string | null;
+  // Optional: absent until migration 0057 runs. Real Checkr background
+  // check timestamp, only ever set on a 'clear' result (0057) - never gated
+  // behind Pro membership, same reasoning as license_verified_at. A
+  // 'consider' or in-progress check is never exposed here at all: it is
+  // indistinguishable from having never started one.
+  background_checked_at?: string | null;
   reviews: PublicReview[];
   // Optional: absent until migration 0045 runs (older payloads have no
   // projects key).
@@ -255,6 +265,30 @@ export default async function PublicProPage({
   // Guard: the RPC only includes 'projects' once migration 0045 has run, so
   // older payloads simply render no section.
   const projects = Array.isArray(profile.projects) ? profile.projects : [];
+  // Real CSLB verification (0055): free feature, not gated behind Pro
+  // membership like showBadge/badgeLabel above. A 'failed' or 'pending'
+  // check is never shown publicly at all - this page only ever renders the
+  // positive, confirmed case, straight off a real timestamp.
+  const licenseVerifiedAt = profile.license_verified_at ?? null;
+  const licenseVerifiedLabel = licenseVerifiedAt
+    ? new Date(licenseVerifiedAt).toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      })
+    : null;
+  // Real Checkr background check (0057): same rules as license_verified_at
+  // above - free feature, not gated on membership, and a 'consider' or
+  // in-progress check is never shown publicly (indistinguishable from
+  // 'none'). This page only ever renders the positive, confirmed case.
+  const backgroundCheckedAt = profile.background_checked_at ?? null;
+  const backgroundCheckedLabel = backgroundCheckedAt
+    ? new Date(backgroundCheckedAt).toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      })
+    : null;
 
   return (
     <main className="mx-auto max-w-2xl px-6 pb-16 pt-10">
@@ -326,6 +360,53 @@ export default async function PublicProPage({
                 Details provided by the business. Not independently verified by
                 Hearth.
               </p>
+            </div>
+          )}
+
+          {(licenseVerifiedLabel || backgroundCheckedLabel) && (
+            <div className="mt-3 flex flex-wrap gap-3">
+              {licenseVerifiedLabel && (
+                <div>
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-3.5 w-3.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M20 6L9 17l-5-5" />
+                    </svg>
+                    License verified
+                  </span>
+                  <p className="mt-1 text-[11px] text-stone-400">
+                    Checked against the CSLB public database on {licenseVerifiedLabel}.
+                  </p>
+                </div>
+              )}
+              {backgroundCheckedLabel && (
+                <div>
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-3.5 w-3.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M20 6L9 17l-5-5" />
+                    </svg>
+                    Background checked
+                  </span>
+                  <p className="mt-1 text-[11px] text-stone-400">
+                    Background check run by Checkr on {backgroundCheckedLabel}.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

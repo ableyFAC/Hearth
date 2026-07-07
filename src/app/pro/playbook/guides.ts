@@ -281,4 +281,51 @@ export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
       },
     ],
   },
+  {
+    id: "recommendation-threads",
+    icon: "🏘️",
+    title: "Win the \"anyone know a good plumber?\" thread",
+    summary:
+      "Where a neighbor's recommendation turns into your next job, done the honest way.",
+    sections: [
+      {
+        title: "Join the groups where these threads happen",
+        body: [
+          "Join 3 to 5 local Facebook groups that cover your service area, plus Nextdoor. Homeowners ask \"anyone know a good plumber\" (or electrician, or roofer) in these groups constantly, often before they ever search online.",
+        ],
+      },
+      {
+        title: "Show up helpful before you need anything",
+        body: [
+          "Answer general questions in the group for a while without mentioning your business. Someone who's already seen you give a straight, useful answer trusts your reply a lot more once a recommendation thread actually shows up.",
+        ],
+      },
+      {
+        title: "When a thread matches your trade, help first",
+        body: [
+          "Reply with one sentence of real, specific help for their actual problem, then add your Hearth profile link so they can see your reviews and reach you. A reply that's all pitch and no help gets scrolled past.",
+        ],
+      },
+      {
+        title: "Ask happy customers to mention you on Nextdoor",
+        body: [
+          "After a job goes well, ask if they'd be willing to mention you the next time a neighbor asks. Most Nextdoor users say they value recommendations from their neighbors, so one genuine mention from a real customer carries real weight.",
+        ],
+      },
+      {
+        title: "Never recommend yourself",
+        body: [
+          "Posting a fake recommendation of your own business, or asking a friend to do it, is banned on every one of these platforms, and it's illegal under FTC rules against deceptive endorsements. Every mention has to come from an actual customer, or it isn't worth having.",
+        ],
+      },
+      {
+        title: "A blurb you can paste into a thread",
+        body: [
+          "Keep it short and about their problem first, your link second:",
+          "This sounds like something in my line of work. Happy to take a look, here are my reviews and how to reach me: [your Hearth profile link]",
+        ],
+        quote: 1,
+      },
+    ],
+  },
 ];

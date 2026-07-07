@@ -1,7 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { applyToJobAction } from "./actions";
+
+// Quick-apply starter templates: plain string substitution, no AI and no cost.
+// They prefill the textarea so a pro can tap one, then personalize before
+// sending. Kept short and generic on purpose: the pro's own message is what
+// actually persuades a homeowner, these just remove the blank-page problem.
+function quickApplyTemplates(category: string): { label: string; text: string }[] {
+  return [
+    {
+      label: "Available this week",
+      text: `Hi, I do ${category} work in your area and can take a look this week. A couple of questions first: `,
+    },
+    {
+      label: "Can start right away",
+      text: `Hi, I do ${category} work in your area and can start right away if you're ready. A couple of questions first: `,
+    },
+    {
+      label: "Happy to give a free estimate",
+      text: `Hi, I do ${category} work in your area and I'm happy to come give you a free estimate. A couple of questions first: `,
+    },
+  ];
+}
 
 // Apply to an open job. Applying charges the per-category fee from the wallet,
 // so it always takes an explicit confirmation first (and lets the pro add a note
@@ -10,11 +31,16 @@ export default function ApplyJobButton({
   leadId,
   fee,
   canAfford,
+  category,
   billingHref = "/pro/billing",
 }: {
   leadId: string;
   fee: string;
   canAfford: boolean;
+  // Job category label (already resolved via labelFor on the board), used to
+  // personalize the quick-apply templates. Optional so nothing breaks if a
+  // caller doesn't have it handy; the templates just fall back to "this".
+  category?: string;
   // Billing link carrying job context (?need=&category=) so the deposit page
   // can say what the funds are for and preselect an amount that covers it.
   billingHref?: string;
@@ -23,6 +49,32 @@ export default function ApplyJobButton({
   const [message, setMessage] = useState("");
   const [drafting, setDrafting] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Prefill from a quick-apply template, then move the cursor to the end so
+  // the pro can keep typing right where the template left off (never
+  // auto-sends: this only touches the textarea's value). A hand-typed
+  // message is never silently discarded: swapping between untouched
+  // templates is free, but replacing custom text asks first.
+  function useTemplate(text: string) {
+    const current = message.trim();
+    const isTemplate = quickApplyTemplates(category || "this").some(
+      (t) => t.text.trim() === current
+    );
+    if (current && !isTemplate) {
+      const ok = window.confirm(
+        "Replace the message you've written with this template?"
+      );
+      if (!ok) return;
+    }
+    setMessage(text);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.selectionStart = el.selectionEnd = text.length;
+    });
+  }
 
   // Ask the drafter route for a first-pass apply message and drop it into the
   // textarea, still fully editable. Errors show inline and never block typing
@@ -87,7 +139,20 @@ export default function ApplyJobButton({
       className="space-y-2 rounded-lg border border-stone-200 bg-stone-50 p-3"
     >
       <input type="hidden" name="id" value={leadId} />
+      <div className="flex flex-wrap gap-1.5">
+        {quickApplyTemplates(category || "this").map((t) => (
+          <button
+            key={t.label}
+            type="button"
+            onClick={() => useTemplate(t.text)}
+            className="chip border border-stone-200 bg-white text-stone-600 hover:border-hearth-300 hover:text-hearth-700"
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
       <textarea
+        ref={textareaRef}
         name="message"
         rows={3}
         className="textarea w-full text-sm"

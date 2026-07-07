@@ -1,6 +1,6 @@
 "use client";
 
-import { saveCompanyAction } from "../actions";
+import { saveCompanyAction, verifyLicenseNowAction } from "../actions";
 import CategoryPicker from "../CategoryPicker";
 import FieldIcon from "../FieldIcon";
 import PhoneInput from "@/components/PhoneInput";
@@ -10,12 +10,32 @@ import type { Contractor } from "@/lib/database.types";
 // Redesigned contractor profile editor. Posts to the same saveCompanyAction the
 // onboarding form uses, so field names must stay: name, contact_email,
 // contact_phone, service_area, categories. The license is read-only once set.
+//
+// License verification (0055): license_verified_status (0037) drives the
+// badge and copy below. 'unverified'/'pending' show the same honest "we're
+// checking" copy as before real CSLB verification existed; 'verified' shows
+// a real, dated confirmation; 'failed' shows why (from license_verify_detail)
+// with a way to reverify after fixing it with the state. The "Verify now" /
+// "Reverify" button is a formAction on a button inside this SAME form
+// (not a nested form, which HTML disallows) so it can post to
+// verifyLicenseNowAction instead of saveCompanyAction for that one click.
+function formatVerifiedDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 export default function PublicProfileForm({
   contractor,
 }: {
   contractor: Contractor;
 }) {
   const licenseLocked = Boolean(contractor.license_number);
+  const verifyStatus = contractor.license_verified_status ?? "unverified";
+  const verifiedAt = contractor.license_verified_at ?? null;
+  const verifyDetail = contractor.license_verify_detail ?? null;
 
   return (
     <form action={saveCompanyAction} className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
@@ -155,14 +175,28 @@ export default function PublicProfileForm({
               <div>
                 <label className="label flex items-center gap-2">
                   State License Number
-                  {/* No real license verification exists yet (contractors.vetted
-                      is auto-set true at signup), so never claim "Verified" -
-                      an honest "pending" until a genuine review flag exists. */}
-                  {licenseLocked && (
-                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
-                      Verification pending
+                  {/* license_verified_status (0037/0055): a real CSLB check now
+                      backs 'verified' and 'failed'. Never claim "Verified"
+                      beyond what was actually confirmed. */}
+                  {licenseLocked && verifyStatus === "verified" && (
+                    <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                      <svg viewBox="0 0 24 24" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 6L9 17l-5-5" />
+                      </svg>
+                      License verified
                     </span>
                   )}
+                  {licenseLocked && verifyStatus === "failed" && (
+                    <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700">
+                      Not confirmed
+                    </span>
+                  )}
+                  {licenseLocked &&
+                    (verifyStatus === "pending" || verifyStatus === "unverified") && (
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                        Verification pending
+                      </span>
+                    )}
                 </label>
                 {licenseLocked ? (
                   <>
@@ -174,10 +208,44 @@ export default function PublicProfileForm({
                         {contractor.license_number}
                       </div>
                     </div>
-                    <p className="mt-1 text-xs text-stone-400">
-                      We&apos;re reviewing your license. You can keep applying
-                      to jobs meanwhile. Contact support to update it.
-                    </p>
+                    {verifyStatus === "verified" ? (
+                      <p className="mt-1 text-xs text-emerald-600">
+                        Checked against the CSLB public database
+                        {verifiedAt ? ` on ${formatVerifiedDate(verifiedAt)}` : ""}.
+                      </p>
+                    ) : verifyStatus === "failed" ? (
+                      <>
+                        <p className="mt-1 text-xs text-red-500">
+                          {verifyDetail?.statusText
+                            ? `CSLB says: ${verifyDetail.statusText}`
+                            : "The CSLB public database did not confirm this license."}{" "}
+                          If this is out of date, update it with the state, then
+                          reverify below.
+                        </p>
+                        <button
+                          type="submit"
+                          formAction={verifyLicenseNowAction}
+                          className="mt-2 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50"
+                        >
+                          Reverify
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <p className="mt-1 text-xs text-stone-400">
+                          We&apos;re checking your license against the CSLB
+                          public database. You can keep applying to jobs
+                          meanwhile.
+                        </p>
+                        <button
+                          type="submit"
+                          formAction={verifyLicenseNowAction}
+                          className="mt-2 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50"
+                        >
+                          Verify now
+                        </button>
+                      </>
+                    )}
                   </>
                 ) : (
                   <div className="relative">

@@ -34,6 +34,16 @@ const DUP_GUARD_MS = 25 * DAY_MS;
 const DIGEST_KIND = "home_digest";
 const DIGEST_URL = "/dashboard";
 
+// Closing line on every digest that actually goes out: word of mouth (a
+// neighbor tip) is how most homeowners find Hearth in the first place, and
+// the check-in is a warm, non-salesy moment to ask. One sentence, no reward.
+// Skipped entirely when NEXT_PUBLIC_SITE_URL is unset: a digest inviting
+// people to "localhost:3000" would be worse than no invitation at all.
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL;
+const NEIGHBOR_LINE = SITE_URL
+  ? `Know a neighbor who'd want this kind of heads-up about their home? Send them to ${SITE_URL}.`
+  : null;
+
 // PostgREST silently truncates every response at its max-rows cap (default
 // 1000 rows), so an unbounded .in() fetch can quietly drop rows. Property
 // chunks of 25 keep the per-property child queries (systems, open issues,
@@ -287,6 +297,7 @@ async function runCron(req: NextRequest) {
       // Nothing to say, nothing sent.
       if (parts.length === 0) continue;
 
+      if (NEIGHBOR_LINE) parts.push(NEIGHBOR_LINE);
       digests.push({ userId, body: parts.join(" ") });
     } catch {
       // One bad property shouldn't stop the rest of the run.

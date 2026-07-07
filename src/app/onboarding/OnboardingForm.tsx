@@ -29,8 +29,8 @@ export default function OnboardingForm() {
               What&apos;s your home address?
             </h2>
             <p className="mt-1 text-sm text-stone-500">
-              We&apos;ll pull the public records so you don&apos;t have to type
-              it all in.
+              Tell us your home&apos;s year built, size, and a few other
+              details, or skip them and add them later.
             </p>
           </div>
 
@@ -83,8 +83,7 @@ export default function OnboardingForm() {
               Does this look right?
             </h2>
             <p className="mt-1 text-sm text-stone-500">
-              We auto-filled what we could from public records. Edit anything
-              that&apos;s off.
+              Fill in what you know. Anything you skip you can add later.
             </p>
           </div>
 
@@ -127,7 +126,7 @@ export default function OnboardingForm() {
                 name="year_built"
                 type="number"
                 className="input"
-                placeholder="We try to find this automatically"
+                placeholder="Skip if you're not sure"
                 defaultValue={facts.year_built ?? ""}
               />
             </div>

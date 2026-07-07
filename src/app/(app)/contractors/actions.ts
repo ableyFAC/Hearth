@@ -396,7 +396,7 @@ export async function saveReviewAction(formData: FormData) {
     try {
       const { data: lead } = await supabase
         .from("contractor_leads")
-        .select("contractor_id")
+        .select("contractor_id, homeowner_name")
         .eq("id", leadId)
         .maybeSingle();
       if (lead?.contractor_id) {
@@ -407,13 +407,34 @@ export async function saveReviewAction(formData: FormData) {
           .maybeSingle();
         if (contractor?.user_id) {
           const admin = createAdminClient();
-          await admin.from("notifications").insert({
-            user_id: contractor.user_id,
-            kind: "new_review",
-            title: "You received a new review",
-            body: "A homeowner just reviewed a completed job. Check your profile to see it.",
-            url: "/pro",
-          });
+          // A 4 or 5 star review gets a ready-made share card (see
+          // src/app/api/review-card/[reviewId]/route.tsx), so its
+          // notification points straight at the share spot instead of the
+          // generic message below. This REPLACES the generic notification
+          // rather than adding to it, so a first 4/5-star review still
+          // produces exactly one notification, not two.
+          if (rating >= 4) {
+            // Capped: homeowner_name has no length limit at the source, and
+            // this is a notification title, not a place for a 500-char "name".
+            const firstName =
+              (lead.homeowner_name ?? "").trim().split(/\s+/)[0].slice(0, 40) ||
+              "A homeowner";
+            await admin.from("notifications").insert({
+              user_id: contractor.user_id,
+              kind: "new_review",
+              title: `New ${rating}-star review from ${firstName}, your share card is ready`,
+              body: "Download a share card and a ready-to-post caption for social media.",
+              url: "/pro/business#share-reviews",
+            });
+          } else {
+            await admin.from("notifications").insert({
+              user_id: contractor.user_id,
+              kind: "new_review",
+              title: "You received a new review",
+              body: "A homeowner just reviewed a completed job. Check your profile to see it.",
+              url: "/pro",
+            });
+          }
         }
       }
     } catch (err) {

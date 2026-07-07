@@ -382,7 +382,7 @@ export default function SystemRow({
                   Estimated replacement cost
                 </dt>
                 <dd className="text-stone-500">
-                  {money(cost.low)}–{money(cost.high)}
+                  {money(cost.low)} to {money(cost.high)}
                   {yearsAway === 0
                     ? " · due now"
                     : monthly

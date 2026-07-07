@@ -51,6 +51,10 @@
     {
       "path": "/api/cron/applicant-nudge",
       "schedule": "30 18 * * *"
+    },
+    {
+      "path": "/api/cron/license-recheck",
+      "schedule": "0 16 * * 1"
     }
   ]
 }

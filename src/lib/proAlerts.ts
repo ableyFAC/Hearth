@@ -163,13 +163,18 @@ export async function alertProsForNewLead(
     const description = (lead.issue_description ?? "").trim();
     const snippet =
       description.length > 120 ? `${description.slice(0, 117)}...` : description;
+    // Honest urgency: 78% of homeowners go with the first pro to respond, and
+    // this instant alert is the whole point of racing them there, so the body
+    // says so plainly instead of staying silent about why speed matters.
+    const urgencyLine = "Heads up: the first pro to reply usually wins the job.";
     const body =
-      [
+      ([
         timingLabel ? `Timing: ${timingLabel}.` : null,
         snippet ? `"${snippet}"` : null,
       ]
         .filter(Boolean)
-        .join(" ") || "A homeowner just posted a job that matches your services.";
+        .join(" ") || "A homeowner just posted a job that matches your services.") +
+      ` ${urgencyLine}`;
 
     for (let i = 0; i < targetIds.length; i += ALERT_BATCH_SIZE) {
       const batch = targetIds.slice(i, i + ALERT_BATCH_SIZE);

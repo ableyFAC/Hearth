@@ -58,7 +58,7 @@ export default function AskHearthDock({ greeting }: { greeting?: string }) {
               title="Minimize"
               className="text-lg leading-none hover:text-stone-700"
             >
-              –
+              −
             </button>
             <button
               type="button"

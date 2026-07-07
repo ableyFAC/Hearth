@@ -10,6 +10,30 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
+// contractors.license_verify_detail (migration 0055): what src/lib/cslb.ts's
+// CslbLookupResult carries onto the row, minus the outcome itself (that's
+// license_verified_status). Set on both a 'verified' and a 'failed' check;
+// left alone on an 'error' outcome.
+export interface CslbVerifyDetail {
+  businessName: string | null;
+  statusText: string | null;
+  classifications: string[] | null;
+  expires: string | null;
+}
+
+// contractors.background_check_detail (migration 0057): report id, package
+// slug, completed_at, and the last processed webhook event id (for replay
+// dedupe in src/app/api/checkr/webhook). NEVER the report contents - Hearth
+// stores status, not findings. All fields optional: an 'invited'/'none'
+// contractor has no report yet, and every branch merges onto whatever was
+// already here rather than replacing it wholesale.
+export interface BackgroundCheckDetail {
+  report_id?: string | null;
+  package?: string | null;
+  completed_at?: string | null;
+  last_event_id?: string | null;
+}
+
 // One line item read off a pro's past invoice or quote. All monetary values
 // are kept as strings, exactly as printed on the source document: nothing
 // here is recomputed.
@@ -112,6 +136,7 @@ export interface Database {
           expected_lifespan_years: number | null;
           notes: string | null;
           created_at: string;
+          confirmed_at: string | null;
         };
         Insert: {
           id?: string;
@@ -124,6 +149,7 @@ export interface Database {
           expected_lifespan_years?: number | null;
           notes?: string | null;
           created_at?: string;
+          confirmed_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["home_systems"]["Insert"]>;
         Relationships: [];
@@ -241,6 +267,17 @@ export interface Database {
           license_expires: string | null;
           license_doc_path: string | null;
           insurance_doc_path: string | null;
+          // license_verified_status: migration 0037. license_verified_at /
+          // license_verify_detail: migration 0055 (real CSLB verification).
+          license_verified_status: "unverified" | "pending" | "verified" | "failed";
+          license_verified_at: string | null;
+          license_verify_detail: CslbVerifyDetail | null;
+          // Checkr background check (migration 0057). Opt-in, Hearth-paid;
+          // dormant without CHECKR_API_KEY (src/lib/checkr.ts).
+          background_check_status: "none" | "invited" | "pending" | "clear" | "consider";
+          background_checked_at: string | null;
+          checkr_candidate_id: string | null;
+          background_check_detail: BackgroundCheckDetail | null;
           categories: string[] | null;
           service_area: string | null;
           contact_email: string | null;
@@ -259,6 +296,13 @@ export interface Database {
           license_expires?: string | null;
           license_doc_path?: string | null;
           insurance_doc_path?: string | null;
+          license_verified_status?: "unverified" | "pending" | "verified" | "failed";
+          license_verified_at?: string | null;
+          license_verify_detail?: CslbVerifyDetail | null;
+          background_check_status?: "none" | "invited" | "pending" | "clear" | "consider";
+          background_checked_at?: string | null;
+          checkr_candidate_id?: string | null;
+          background_check_detail?: BackgroundCheckDetail | null;
           categories?: string[] | null;
           service_area?: string | null;
           contact_email?: string | null;

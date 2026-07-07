@@ -52,7 +52,7 @@ export default async function Home({
     { n: "1", text: "Type your address." },
     {
       n: "2",
-      text: "We fill in your home's details from public records, so you don't have to type it all in.",
+      text: "Add a few home details, or skip them and fill them in later.",
     },
     {
       n: "3",

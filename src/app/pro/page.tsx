@@ -496,6 +496,7 @@ export default async function ProDashboard({
                     <ApplyJobButton
                       leadId={j.id}
                       fee={feeStr}
+                      category={labelFor(JOB_CATEGORIES, j.category)}
                       canAfford={balance >= fee}
                       billingHref={`/pro/billing?need=${Math.max(
                         0,

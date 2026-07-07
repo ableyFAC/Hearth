@@ -5,7 +5,7 @@ import PlaybookGuide from "./PlaybookGuide";
 import type { PlaybookGuideData } from "./guides";
 
 // Client shell for the playbook: a live search box over the guide list,
-// mirroring the homeowner Learn tab (minus the filter chips - eight guides
+// mirroring the homeowner Learn tab (minus the filter chips - nine guides
 // don't need categories).
 export default function PlaybookGuides({
   guides,

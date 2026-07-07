@@ -1,6 +1,11 @@
 // Parcel pre-fill (Screen 1). Looks up baseline property facts from a parcel
-// layer so onboarding feels magic. In Phase 1 this returns mock data unless a
-// REGRID_API_TOKEN is configured - wire the real lookup in fetchFromRegrid().
+// layer so onboarding can skip re-typing what a real records source already
+// knows. No real source is wired up yet (fetchFromRegrid() is a stub even
+// when REGRID_API_TOKEN is set), so lookupParcel() never invents facts: it
+// only echoes back what the homeowner typed into the address field, parsed
+// into its parts, and leaves everything it doesn't actually know (year
+// built, sqft, beds/baths, lot size, property type) null for them to fill in
+// or skip.
 
 export interface ParcelFacts {
   parcel_id: string | null;
@@ -14,7 +19,7 @@ export interface ParcelFacts {
   baths: number | null;
   lot_size_sqft: number | null;
   property_type: string | null;
-  source: "regrid" | "mock";
+  source: "regrid" | "none";
 }
 
 export async function lookupParcel(rawAddress: string): Promise<ParcelFacts> {
@@ -24,10 +29,10 @@ export async function lookupParcel(rawAddress: string): Promise<ParcelFacts> {
       const real = await fetchFromRegrid(rawAddress, token);
       if (real) return real;
     } catch (err) {
-      console.error("Regrid lookup failed, falling back to mock:", err);
+      console.error("Regrid lookup failed:", err);
     }
   }
-  return mockParcel(rawAddress);
+  return blankFacts(rawAddress);
 }
 
 // TODO (needs API key): autofill ALL property facts from a real source -
@@ -36,7 +41,8 @@ export async function lookupParcel(rawAddress: string): Promise<ParcelFacts> {
 //   - city -> ZIP (geocode) so ZIP autofills when the city is entered
 //   - permit history -> last install / repair / remodel dates per system
 //     (feed these into the auto-built starter inventory in onboarding/actions.ts)
-// Until a token is set, lookupParcel() returns mockParcel() below.
+// Until this is wired up, lookupParcel() always falls through to blankFacts()
+// below - it never fabricates a records lookup.
 async function fetchFromRegrid(
   _address: string,
   _token: string
@@ -44,21 +50,26 @@ async function fetchFromRegrid(
   return null;
 }
 
-// Deterministic placeholder so onboarding has something to confirm in dev.
-function mockParcel(rawAddress: string): ParcelFacts {
-  const parts = rawAddress.split(",").map((s) => s.trim());
+// No real records source is configured (or the lookup failed): return only
+// what the homeowner actually typed, split into address/city/state/zip so
+// they don't have to retype it, with every fact we don't actually have left
+// null. Nothing here is a guess or a placeholder - it never gets shown as if
+// it came from a records lookup.
+function blankFacts(rawAddress: string): ParcelFacts {
+  const parts = rawAddress.split(",").map((s) => s.trim()).filter(Boolean);
+  const [stateGuess, zipGuess] = (parts[2] ?? "").split(" ").filter(Boolean);
   return {
     parcel_id: null,
     address_line1: parts[0] || rawAddress,
-    city: parts[1] || "San Francisco",
-    state: parts[2]?.split(" ")[0] || "CA",
-    zip: parts[2]?.split(" ")[1] || "94110",
-    year_built: 1978,
-    sqft: 1640,
-    beds: 3,
-    baths: 2,
-    lot_size_sqft: 3200,
-    property_type: "single_family",
-    source: "mock",
+    city: parts[1] || null,
+    state: stateGuess || null,
+    zip: zipGuess || null,
+    year_built: null,
+    sqft: null,
+    beds: null,
+    baths: null,
+    lot_size_sqft: null,
+    property_type: null,
+    source: "none",
   };
 }

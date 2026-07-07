@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -10,6 +11,79 @@ import { labelFor, JOB_CATEGORIES, LEAD_STATUSES } from "@/lib/constants";
 import { agingLeadFee } from "@/lib/leadPricing";
 import { hasProPlan } from "@/lib/subscription";
 import { requestReviewForWonLead } from "@/lib/reviewRequest";
+import { lookupCslbLicense, type CslbLookupResult } from "@/lib/cslb";
+import { createCandidateAndInvite } from "@/lib/checkr";
+
+// Real CSLB check (0055) is debounced off the most recent check we recorded:
+// license_verified_at (stamped only on a 'verified' outcome) or the
+// checked_at stamped inside license_verify_detail on every decided outcome,
+// verified or failed. Either one inside the window skips the network call,
+// so a burst of profile saves or "Verify now" clicks can't hammer CSLB even
+// while a license keeps failing.
+const LICENSE_RECHECK_DEBOUNCE_MS = 10 * 60 * 1000;
+
+// Runs a real CSLB lookup for a contractor's license number and writes the
+// result onto license_verified_status/_at/_verify_detail (0037/0055).
+// Returns null if the debounce window skipped the fetch, otherwise the raw
+// CSLB result (so callers can show the pro why a check did or didn't pass).
+// An 'error' outcome (CSLB unreachable, timed out, or its page shape
+// changed) NEVER changes license_verified_status: a fetch failure must never
+// be treated as a failed license check.
+async function verifyContractorLicense(
+  supabase: ReturnType<typeof createClient>,
+  contractorId: string,
+  licenseNumber: string,
+  currentVerifiedAt: string | null | undefined,
+  currentDetail?: unknown
+): Promise<CslbLookupResult | null> {
+  const lastCheckedAt =
+    ((currentDetail as { checked_at?: string } | null | undefined)
+      ?.checked_at as string | undefined) ?? currentVerifiedAt;
+  if (lastCheckedAt) {
+    const age = Date.now() - new Date(lastCheckedAt).getTime();
+    if (Number.isFinite(age) && age < LICENSE_RECHECK_DEBOUNCE_MS) return null;
+  }
+
+  const result = await lookupCslbLicense(licenseNumber);
+
+  const detail = {
+    businessName: result.businessName ?? null,
+    statusText: result.statusText ?? null,
+    classifications: result.classifications ?? null,
+    expires: result.expires ?? null,
+    checked_at: new Date().toISOString(),
+  };
+
+  let fields: Record<string, unknown> | null = null;
+  if (result.outcome === "active") {
+    fields = {
+      license_verified_status: "verified",
+      license_verified_at: new Date().toISOString(),
+      license_verify_detail: detail,
+    };
+  } else if (result.outcome === "not_found" || result.outcome === "inactive") {
+    fields = {
+      license_verified_status: "failed",
+      // Cleared, not kept: the public badge on /p/<id> keys off
+      // license_verified_at alone, so leaving a stale timestamp here would
+      // keep showing "License verified" for a license that just failed.
+      license_verified_at: null,
+      license_verify_detail: detail,
+    };
+  }
+  // outcome === 'error': fields stays null, status is left exactly as-is.
+
+  if (fields) {
+    const { error } = await (supabase.from("contractors") as any)
+      .update(fields)
+      .eq("id", contractorId);
+    if (error) {
+      console.error("license verification write failed:", error.message);
+    }
+  }
+
+  return result;
+}
 
 // Resolve a referral code to a contractor id, or null. A code is another
 // pro's slug (0043) or the first 8 hex chars of their contractor id (or the
@@ -131,14 +205,43 @@ export async function saveCompanyAction(formData: FormData) {
       }
     }
     if (error) throw new Error(error.message);
+
+    // Real CSLB check (0055), only when this save is what actually puts a
+    // license number on file for the first time: license_number is locked
+    // once set (above), so an already-verified/pending/failed pro re-saving
+    // unrelated fields never re-triggers a CSLB fetch here. Re-checking an
+    // existing license is "Verify now" (verifyLicenseNowAction below) or the
+    // weekly recheck cron. Best-effort: a CSLB hiccup must never block the
+    // profile save that already succeeded.
+    if (!existing.license_number && fields.license_number) {
+      try {
+        await verifyContractorLicense(
+          supabase,
+          existing.id,
+          fields.license_number,
+          existing.license_verified_at,
+          (existing as any).license_verify_detail
+        );
+      } catch (err) {
+        console.error(
+          "license verification failed:",
+          err instanceof Error ? err.message : err
+        );
+      }
+    }
+
     setFlash("Profile saved.");
     revalidatePath("/pro/profile");
     redirect("/pro/profile");
   }
 
   // First-time setup. vetted = true so the company is matchable immediately
-  // (in production this would be a manual verification step).
+  // (in production this would be a manual verification step). id is
+  // generated here (instead of left to the column default) so a CSLB check
+  // right after the insert has the new row's id without a second round trip.
+  const newContractorId = randomUUID();
   const base = {
+    id: newContractorId,
     ...fields,
     user_id: user.id,
     vetted: true,
@@ -180,6 +283,26 @@ export async function saveCompanyAction(formData: FormData) {
     }
   }
   if (error) throw new Error(error.message);
+
+  // Real CSLB check (0055) for a license number supplied at onboarding.
+  // Best-effort: a CSLB hiccup must never block account creation, which
+  // already succeeded above.
+  if (fields.license_number) {
+    try {
+      await verifyContractorLicense(
+        supabase,
+        newContractorId,
+        fields.license_number,
+        null
+      );
+    } catch (err) {
+      console.error(
+        "license verification failed:",
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+
   setFlash("You're all set. Leads will appear here.");
   revalidatePath("/", "layout");
   redirect("/pro");
@@ -189,6 +312,145 @@ async function assertContractor() {
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/signin");
   return contractor;
+}
+
+// "Verify now" button on /pro/profile: an on-demand CSLB re-check for a pro
+// whose license number is on file but not yet verified. Same
+// verifyContractorLicense used by saveCompanyAction and the weekly recheck
+// cron, so the debounce and the never-downgrade-on-'error' rule apply here
+// too.
+export async function verifyLicenseNowAction() {
+  const contractor = await assertContractor();
+  const licenseNumber = contractor.license_number;
+  if (!licenseNumber) {
+    setFlash("Add a license number first.", "error");
+    revalidatePath("/pro/profile");
+    return;
+  }
+
+  const supabase = createClient();
+  const result = await verifyContractorLicense(
+    supabase,
+    contractor.id,
+    licenseNumber,
+    contractor.license_verified_at,
+    (contractor as any).license_verify_detail
+  );
+
+  if (!result) {
+    setFlash("Already checked recently. Try again in a few minutes.", "info");
+  } else if (result.outcome === "active") {
+    setFlash("License verified against the CSLB database.", "success");
+  } else if (result.outcome === "not_found" || result.outcome === "inactive") {
+    setFlash(
+      result.statusText
+        ? `CSLB says: ${result.statusText}`
+        : "CSLB could not confirm this license.",
+      "error"
+    );
+  } else {
+    setFlash("Couldn't reach the CSLB site. Try again later.", "info");
+  }
+  revalidatePath("/pro/profile");
+}
+
+// "Start my background check" button on /pro/profile (0057): opt-in only,
+// never auto-run. Creates a Checkr candidate + invitation and saves the
+// candidate id so the webhook (src/app/api/checkr/webhook) can match Checkr's
+// events back to this contractor. Checkr does the rest by email - Hearth
+// never collects the candidate's sensitive info itself.
+export async function startBackgroundCheckAction(formData: FormData) {
+  const contractor = await assertContractor();
+
+  // Every check costs Hearth real money, so only the two states that
+  // legitimately allow a (re)start may reach the Checkr API: 'none' (never
+  // started) and 'consider' (retry after a non-clear result). 'invited',
+  // 'pending', and 'clear' all bail out: this closes the double-click /
+  // replayed-POST path that could otherwise create unlimited paid
+  // candidates. Read fresh from the DB, not from any client-supplied state.
+  const status =
+    ((contractor as any).background_check_status as string | undefined) ??
+    "none";
+  if (status !== "none" && status !== "consider") {
+    setFlash(
+      status === "clear"
+        ? "Your background check has already cleared."
+        : "Your background check is already in progress. Check your email for Checkr's invitation.",
+      "info"
+    );
+    revalidatePath("/pro/profile");
+    return;
+  }
+
+  const email = contractor.contact_email;
+  if (!email) {
+    setFlash("Add an email address to your profile first.", "error");
+    revalidatePath("/pro/profile");
+    return;
+  }
+
+  // The check runs against a PERSON, so it needs their legal name, not the
+  // business name ("Bob's Plumbing LLC" split into first/last would risk a
+  // check against a garbled identity). The card's form collects it
+  // explicitly and it goes only to Checkr, never stored by Hearth.
+  const firstName = String(formData.get("legal_first_name") ?? "")
+    .trim()
+    .slice(0, 80);
+  const lastName = String(formData.get("legal_last_name") ?? "")
+    .trim()
+    .slice(0, 80);
+  if (!firstName || !lastName) {
+    setFlash("Enter your legal first and last name to start.", "error");
+    revalidatePath("/pro/profile");
+    return;
+  }
+
+  // Checkr requires a work location state. contractors.service_state (0046)
+  // isn't in the generated types, so it's read off an any-cast; a pro who
+  // left it blank ("all states") falls back to CA, matching Hearth's
+  // current Fountain Valley / Huntington Beach, CA launch markets.
+  const workLocationState =
+    (contractor as any).service_state || "CA";
+
+  const result = await createCandidateAndInvite({
+    email,
+    firstName,
+    lastName,
+    workLocationState,
+  });
+
+  if (!result.ok) {
+    console.error("startBackgroundCheckAction failed:", result.error);
+    setFlash(
+      "Couldn't start your background check. Try again in a few minutes.",
+      "error"
+    );
+    revalidatePath("/pro/profile");
+    return;
+  }
+
+  const supabase = createClient();
+  const { error } = await (supabase.from("contractors") as any)
+    .update({
+      checkr_candidate_id: result.candidateId,
+      background_check_status: "invited",
+    })
+    .eq("id", contractor.id);
+  if (error) {
+    console.error("startBackgroundCheckAction: save failed:", error.message);
+    setFlash(
+      "Your check started, but we couldn't save it here. Contact support.",
+      "error"
+    );
+    revalidatePath("/pro/profile");
+    return;
+  }
+
+  setFlash(
+    "Background check started. Check your email for Checkr's invitation.",
+    "success"
+  );
+  revalidatePath("/pro/profile");
 }
 
 export async function updateLeadStatusAction(formData: FormData) {

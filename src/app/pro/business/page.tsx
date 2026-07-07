@@ -1,17 +1,26 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentContractor, getRole } from "@/lib/contractor";
 import { hasProPlan } from "@/lib/subscription";
 import { buildProStats } from "@/lib/proStats";
+import {
+  computeResponseTimeMinutes,
+  formatResponseTime,
+} from "@/lib/responseTime";
 import AccountPanel from "@/components/pro/AccountPanel";
 import WinShareButton from "@/components/pro/WinShareButton";
+import ReviewShareRow from "@/components/pro/ReviewShareRow";
 import {
   labelFor,
   iconFor,
   JOB_CATEGORIES,
   GHOST_PROTECTION_DAYS,
+  COLD_START_FREE_ALERTS,
 } from "@/lib/constants";
+
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 function dollars(cents: number | string | null) {
   const v = Number(cents ?? 0);
@@ -46,32 +55,70 @@ export default async function ProBusinessPage() {
 
   const supabase = createClient();
 
-  const [{ data: myApps }, { data: wonData }, { data: wallet }, isPro] =
-    await Promise.all([
-      (supabase as any).rpc("my_applications"),
-      supabase
-        .from("contractor_leads")
-        // paid is fetched alongside status so the row below can decide
-        // whether to offer a win share card using the same win definition
-        // as src/app/api/win-card/[leadId]/route.tsx: paid, or accepted or
-        // closed in the pipeline. The status filter keeps this list honest:
-        // an assigned job that later fell through (lost) is not a win and
-        // should never sit under a "Jobs won" heading.
-        .select("id, category, status, paid, created_at")
-        .eq("contractor_id", contractor.id)
-        .in("status", ["accepted", "closed"])
-        .order("created_at", { ascending: false })
-        .limit(5),
-      supabase
-        .from("wallets")
-        .select("id, cash_balance_cents, bonus_balance_cents")
-        .eq("contractor_id", contractor.id)
-        .maybeSingle(),
-      hasProPlan(),
-    ]);
+  const [
+    { data: myApps },
+    { data: wonData },
+    { data: wallet },
+    { data: reviewRows },
+    isPro,
+  ] = await Promise.all([
+    (supabase as any).rpc("my_applications"),
+    supabase
+      .from("contractor_leads")
+      // paid is fetched alongside status so the row below can decide
+      // whether to offer a win share card using the same win definition
+      // as src/app/api/win-card/[leadId]/route.tsx: paid, or accepted or
+      // closed in the pipeline. The status filter keeps this list honest:
+      // an assigned job that later fell through (lost) is not a win and
+      // should never sit under a "Jobs won" heading.
+      .select("id, category, status, paid, created_at")
+      .eq("contractor_id", contractor.id)
+      .in("status", ["accepted", "closed"])
+      .order("created_at", { ascending: false })
+      .limit(5),
+    supabase
+      .from("wallets")
+      .select("id, cash_balance_cents, bonus_balance_cents")
+      .eq("contractor_id", contractor.id)
+      .maybeSingle(),
+    // Recent reviews worth sharing: same >= 4 star floor as the review-card
+    // route (src/app/api/review-card/[reviewId]/route.tsx), so nothing shown
+    // here ever links to a card that route would 404 on.
+    supabase
+      .from("reviews")
+      .select("id, rating, comment, created_at")
+      .eq("contractor_id", contractor.id)
+      .gte("rating", 4)
+      .order("created_at", { ascending: false })
+      .limit(5),
+    hasProPlan(),
+  ]);
 
   const apps = (myApps ?? []) as any[];
   const won = (wonData ?? []) as any[];
+  const shareableReviews = reviewRows ?? [];
+
+  // Reply speed: median minutes from job-posted to this pro's application,
+  // over their last up to 20 applications. Needs the admin client because most
+  // of a pro's application history is against jobs that stayed open or went to
+  // another pro, and "leads contractor select" RLS only covers leads currently
+  // assigned to them - a user-scoped client can't read those leads' posted-at
+  // timestamps. Only timestamps/ids are read here, nothing homeowner-facing.
+  const medianReplyMinutes = await computeResponseTimeMinutes(
+    createAdminClient(),
+    contractor.id
+  );
+  const replySpeedText = formatResponseTime(medianReplyMinutes);
+  // A slow median (or one too slow for formatResponseTime to say anything
+  // about, per its "show nothing slow" rule) is exactly when the nudge below
+  // is worth showing; a fast one gets the stat line instead.
+  const showReplyNudge = medianReplyMinutes !== null && medianReplyMinutes > 60;
+  // Public profile URL, same slug-preferred pattern as win-card and
+  // src/app/p/[id]/page.tsx: the real slug (0043) when the pro has one, the
+  // bare contractor id otherwise. Never the truncated 8-char id used for the
+  // referral code above; this one has to resolve on /p/<...>.
+  const proSlug = (contractor as any).slug as string | null | undefined;
+  const profileUrl = `${SITE_URL}/p/${proSlug || contractor.id}`;
 
   const cash = Number((wallet as any)?.cash_balance_cents ?? 0);
   const bonus = Number((wallet as any)?.bonus_balance_cents ?? 0);
@@ -123,6 +170,36 @@ export default async function ProBusinessPage() {
           78% of homeowners go with the first pro to respond. Fast replies win
           jobs.
         </p>
+        {(replySpeedText || showReplyNudge) && (
+          <div className="mt-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2">
+            {replySpeedText && (
+              <p className="text-sm font-medium text-stone-900">
+                {replySpeedText}
+              </p>
+            )}
+            <p className="text-xs text-stone-500">
+              Jobs go to the first responder far more often than not.
+            </p>
+            {showReplyNudge && (
+              <p className="mt-1 text-xs text-amber-700">
+                {COLD_START_FREE_ALERTS || isPro ? (
+                  "You already get instant alerts the moment a matching job posts, open Hearth as soon as one comes in to keep that edge."
+                ) : (
+                  <>
+                    Turn on instant job alerts with a{" "}
+                    <Link
+                      href="/pro/plus"
+                      className="font-medium underline"
+                    >
+                      Hearth Pro membership
+                    </Link>{" "}
+                    so you see new jobs the moment they post.
+                  </>
+                )}
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* The three numbers a lead-buying business runs on. */}
@@ -529,8 +606,10 @@ export default async function ProBusinessPage() {
         )}
       </section>
 
-      {/* Recent wins - the payoff column. */}
-      <section className="space-y-3">
+      {/* Recent wins - the payoff column. Share-worthy reviews fold in here
+          too (id="share-reviews" is where the new-review notification
+          links), rather than opening a whole new section for them. */}
+      <section id="share-reviews" className="space-y-3">
         <h2 className="text-lg font-semibold text-stone-900">
           Jobs won <span className="text-stone-400">({won.length})</span>
         </h2>
@@ -574,6 +653,32 @@ export default async function ProBusinessPage() {
               </li>
             ))}
           </ul>
+        )}
+
+        {/* Share your reviews: every 4 or 5 star review gets a ready-made
+            card + caption. Same >= 4 star floor as review-card's own 404
+            check, so nothing offered here can 404 when clicked. */}
+        {shareableReviews.length > 0 && (
+          <div className="border-t border-stone-100 pt-4">
+            <h3 className="text-sm font-semibold text-stone-900">
+              Share your reviews
+            </h3>
+            <p className="mt-0.5 text-xs text-stone-400">
+              Turn a great review into a share card and a ready-to-post
+              caption.
+            </p>
+            <ul className="mt-2 space-y-2">
+              {shareableReviews.map((r) => (
+                <ReviewShareRow
+                  key={r.id}
+                  reviewId={r.id}
+                  rating={r.rating}
+                  comment={r.comment}
+                  profileUrl={profileUrl}
+                />
+              ))}
+            </ul>
+          </div>
         )}
       </section>
     </div>
