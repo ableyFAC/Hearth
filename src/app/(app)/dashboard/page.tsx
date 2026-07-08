@@ -25,6 +25,7 @@ import SystemRow from "../profile/SystemRow";
 import SeasonalChecklist from "@/components/SeasonalChecklist";
 import ChecklistProvider from "@/components/ChecklistProvider";
 import ReminderItem from "./ReminderItem";
+import WalkthroughNudge from "./WalkthroughNudge";
 import HomeAlerts from "@/components/HomeAlerts";
 import { estimateHomeValue, calculateEquity } from "@/lib/homeValue";
 import {
@@ -259,8 +260,10 @@ export default async function HomePage({
   const URGENCY_TONE: Record<Urgency, string> = {
     overdue: "text-red-600",
     soon: "text-amber-600",
-    later: "text-stone-400",
-    done: "text-stone-400",
+    // stone-500, not stone-400: stone-400 on the card's white background is
+    // only ~2.5:1 contrast, below the 4.5:1 minimum for this small text.
+    later: "text-stone-500",
+    done: "text-stone-500",
   };
   function daysUntil(dateStr: string): number {
     const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -416,6 +419,7 @@ export default async function HomePage({
       {/* This month: focus + one merged checklist (reminders + seasonal) */}
       <section id="this-month" className="scroll-mt-20 space-y-3">
         <h2 className="flex items-center text-lg font-semibold text-stone-900">This month</h2>
+        <WalkthroughNudge count={unconfirmedCount} />
         <div className="card space-y-3">
           <div className="rounded-lg bg-hearth-50 p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-hearth-700">
@@ -519,7 +523,7 @@ export default async function HomePage({
                   .map((u) => (
                     <details key={u} open={planOpen} className="group">
                       <summary
-                        className={`cursor-pointer list-none [&::-webkit-details-marker]:hidden px-2 text-xs font-semibold uppercase tracking-wide ${URGENCY_TONE[u]}`}
+                        className={`cursor-pointer list-none [&::-webkit-details-marker]:hidden px-2 text-sm font-semibold uppercase tracking-wide ${URGENCY_TONE[u]}`}
                       >
                         <span className="mr-1 inline-block transition-transform group-open:rotate-90">
                           ▸
@@ -541,7 +545,7 @@ export default async function HomePage({
                   ))}
 
                 <details open={planOpen || remindersTotal === 0} className="group">
-                  <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden px-2 text-xs font-semibold uppercase tracking-wide text-stone-400">
+                  <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden px-2 text-sm font-semibold uppercase tracking-wide text-stone-500">
                     <span className="mr-1 inline-block transition-transform group-open:rotate-90">
                       ▸
                     </span>
@@ -556,29 +560,6 @@ export default async function HomePage({
                 </details>
               </div>
             </ChecklistProvider>
-
-            {/* Nudge toward the walkthrough while any system still carries an
-                onboarding estimate instead of a confirmed real fact. Folded in
-                here rather than a standalone section, same as Warranties
-                below. */}
-            {unconfirmedCount > 0 && (
-              <div className="mt-4 border-t border-stone-100 pt-3">
-                <p className="text-sm font-medium text-stone-700">
-                  Confirm your home&apos;s details
-                </p>
-                <p className="mt-1 text-xs text-stone-500">
-                  {unconfirmedCount} system{unconfirmedCount === 1 ? "" : "s"}{" "}
-                  still {unconfirmedCount === 1 ? "has" : "have"} estimated
-                  details. It makes every answer smarter.
-                </p>
-                <Link
-                  href="/walkthrough"
-                  className="mt-1.5 inline-block text-sm font-medium text-hearth-700 hover:underline"
-                >
-                  Walk your home →
-                </Link>
-              </div>
-            )}
 
             {/* Warranties from the documents vault, folded in as a compact
                 sub-block under this month's tasks instead of a standalone

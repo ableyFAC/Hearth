@@ -25,9 +25,9 @@ const MAX_IMAGE_B64_CHARS = 14_000_000;
 // A rough mapping from a job category to the closest system_type Hearth
 // already keeps a national cost range for, so the model gets a grounded
 // baseline instead of guessing. Categories with no clean match (structural,
-// remodeling, landscaping, cleaning, painting, home_inspection, pest, other)
-// fall back to no baseline, and the model is told to use its own general
-// knowledge.
+// remodeling, landscaping, cleaning, painting, home_inspection, pest,
+// handyman, other) fall back to no baseline, and the model is told to use its
+// own general knowledge.
 const CATEGORY_TO_SYSTEM: Record<string, string> = {
   roof: "roof",
   hvac: "hvac",

@@ -6,6 +6,7 @@ import { getActiveProperty } from "@/lib/property";
 import { setFlash } from "@/lib/flash";
 import { DEFAULT_LIFESPANS } from "@/lib/health";
 import { labelFor, SYSTEM_TYPES } from "@/lib/constants";
+import { isMissingSchemaError } from "@/lib/dbErrors";
 
 // The vault's write path. The client uploads the file and runs vision
 // extraction first; these actions persist the result and, on the owner's
@@ -30,7 +31,7 @@ export async function saveDocumentAction(formData: FormData) {
   const yearRaw = s(formData, "install_year");
   const year = yearRaw ? Number(yearRaw) : null;
 
-  const { error } = await supabase.from("documents").insert({
+  const full = {
     property_id: property.id,
     file_url: fileUrl,
     doc_type: s(formData, "doc_type"),
@@ -41,8 +42,35 @@ export async function saveDocumentAction(formData: FormData) {
     warranty_expires: s(formData, "warranty_expires"),
     system_type: s(formData, "system_type"),
     summary: s(formData, "summary"),
-  });
-  if (error) throw new Error(error.message);
+  };
+
+  let { error } = await supabase.from("documents").insert(full);
+  if (error && isMissingSchemaError(error)) {
+    // Live DB missing the 0019 vault columns: keep the document itself (the
+    // file + a title beats losing the upload), drop only the extracted-fact
+    // columns that do not exist yet. Same degradation pattern as taxes/value.
+    ({ error } = await supabase.from("documents").insert({
+      property_id: property.id,
+      file_url: fileUrl,
+      title: full.title,
+    } as any));
+  }
+  if (error) {
+    // Total failure: never crash the request (the old throw here put a raw
+    // Next error overlay in front of the owner), and never strand the
+    // already-uploaded file as an unfindable orphan in the bucket.
+    console.error("saveDocumentAction failed:", error.message);
+    const path = fileUrl.split("/home-photos/")[1];
+    if (path) {
+      await supabase.storage.from("home-photos").remove([path]);
+    }
+    setFlash(
+      "Couldn't save that document right now. Please try again in a bit.",
+      "error"
+    );
+    revalidatePath("/documents");
+    return;
+  }
 
   setFlash("Saved to your documents.", "success");
   revalidatePath("/documents");

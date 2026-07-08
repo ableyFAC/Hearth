@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { SYSTEM_TYPES } from "@/lib/constants";
 import { saveDocumentAction } from "@/lib/document-actions";
-import { imgSrc } from "@/lib/storage";
 
 const DOC_TYPES = [
   { value: "warranty", label: "Warranty" },
@@ -41,62 +40,51 @@ function toBase64(file: File): Promise<string> {
 // The vault's "add" surface: pick a photo/PDF of a warranty, manual, receipt,
 // or an appliance data plate; Hearth reads the facts off it; the owner confirms
 // and saves. Then the saved card offers a one-tap "Add to my home".
+//
+// The file itself is only uploaded to storage once the owner actually saves
+// (below). Extraction only needs the bytes, not a stored object, so picking a
+// file and then canceling or navigating away leaves nothing orphaned in the
+// private bucket.
 export default function DocumentUpload({ propertyId }: { propertyId: string }) {
   const supabase = createClient();
   const [phase, setPhase] = useState<"idle" | "working" | "review">("idle");
   const [note, setNote] = useState<string | null>(null);
-  const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [fields, setFields] = useState<Extracted | null>(null);
   const [saving, startSave] = useTransition();
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const input = e.target;
-    const file = input.files?.[0];
+    const picked = input.files?.[0];
     input.value = ""; // allow re-picking the same file
-    if (!file) return;
+    if (!picked) return;
 
     // Guard the size before we read it into memory and POST it to the vision
     // endpoint (cost/DoS + browser OOM). accept="" is only a hint.
     const MAX_BYTES = 15 * 1024 * 1024; // 15MB
-    if (file.size > MAX_BYTES) {
+    if (picked.size > MAX_BYTES) {
       setPhase("idle");
       setNote("That file is too large (max 15MB). Try a smaller photo or PDF.");
       return;
     }
 
     setPhase("working");
-    setNote("Uploading…");
-    setFields(null);
-
-    // 1. Store the file under the property folder so RLS can gate it.
-    const ext = file.name.split(".").pop() || "jpg";
-    const path = `${propertyId}/docs/${crypto.randomUUID()}.${ext}`;
-    const { error: upErr } = await supabase.storage
-      .from("home-photos")
-      .upload(path, file, { upsert: false });
-    if (upErr) {
-      setPhase("idle");
-      setNote(
-        "Couldn't upload the file (is the home-photos bucket set up?). Try again."
-      );
-      return;
-    }
-    const { data: pub } = supabase.storage
-      .from("home-photos")
-      .getPublicUrl(path);
-    setFileUrl(pub.publicUrl);
-    setPreview(file.type.startsWith("image/") ? pub.publicUrl : null);
-
-    // 2. Ask Hearth to read the facts off it.
     setNote("Reading the document…");
+    setFields(null);
+    setFile(picked);
+    // Local preview only, no storage object: a blob URL renders directly, no
+    // signing needed, and it never touches the (private) home-photos bucket.
+    setPreview(picked.type.startsWith("image/") ? URL.createObjectURL(picked) : null);
+
+    // Ask Hearth to read the facts off it.
     let extracted: Extracted | null = null;
     try {
-      const b64 = await toBase64(file);
+      const b64 = await toBase64(picked);
       const resp = await fetch("/api/extract-document", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ image: b64, mime: file.type || "image/jpeg" }),
+        body: JSON.stringify({ image: b64, mime: picked.type || "image/jpeg" }),
       });
       const data = await resp.json();
       extracted = data?.doc ?? null;
@@ -104,7 +92,7 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
       extracted = null;
     }
 
-    // 3. Fall back to a blank, editable form if extraction was unavailable.
+    // Fall back to a blank, editable form if extraction was unavailable.
     setFields(
       extracted ?? {
         doc_type: "other",
@@ -127,14 +115,44 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
 
   function save(formData: FormData) {
     startSave(async () => {
+      if (!file) return;
+      setNote("Uploading…");
+      // Only now, on the owner's actual say-so, does the file land in
+      // storage: the property-scoped path lets RLS gate it.
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `${propertyId}/docs/${crypto.randomUUID()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("home-photos")
+        .upload(path, file, { upsert: false });
+      if (upErr) {
+        setNote(
+          "Couldn't upload the file (is the home-photos bucket set up?). Try again."
+        );
+        return;
+      }
+      const { data: pub } = supabase.storage
+        .from("home-photos")
+        .getPublicUrl(path);
+      formData.set("file_url", pub.publicUrl);
+
       await saveDocumentAction(formData);
       // Reset for the next upload; the saved card appears in the list below.
+      if (preview) URL.revokeObjectURL(preview);
       setPhase("idle");
       setFields(null);
-      setFileUrl(null);
+      setFile(null);
       setPreview(null);
       setNote("Saved. It's in your documents below.");
     });
+  }
+
+  function cancel() {
+    if (preview) URL.revokeObjectURL(preview);
+    setPhase("idle");
+    setFile(null);
+    setFields(null);
+    setPreview(null);
+    setNote(null);
   }
 
   const val = (v: string | number | null) => (v == null ? "" : String(v));
@@ -173,12 +191,10 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
 
       {phase === "review" && fields && (
         <form action={save} className="mt-3 space-y-3">
-          <input type="hidden" name="file_url" value={fileUrl ?? ""} />
-
           {preview && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={imgSrc(preview) ?? preview}
+              src={preview}
               alt="Document preview"
               className="mb-1 max-h-40 rounded-lg border border-stone-200 object-contain"
             />
@@ -287,11 +303,7 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
             </button>
             <button
               type="button"
-              onClick={() => {
-                setPhase("idle");
-                setFields(null);
-                setNote(null);
-              }}
+              onClick={cancel}
               className="text-sm text-stone-500 hover:text-stone-700"
             >
               Cancel

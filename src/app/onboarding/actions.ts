@@ -9,6 +9,7 @@ import { lookupParcel, type ParcelFacts } from "@/lib/parcel";
 import { DEFAULT_LIFESPANS } from "@/lib/health";
 import { hasPlus } from "@/lib/subscription";
 import { setFlash } from "@/lib/flash";
+import { safeNextPath } from "@/lib/safeNext";
 
 // Systems virtually every home has, auto-added so the owner doesn't start from
 // a blank inventory. Install years are ESTIMATED from the build year; real
@@ -125,6 +126,13 @@ export async function claimPropertyAction(formData: FormData) {
   await supabase.from("home_systems").insert(starterRows);
 
   revalidatePath("/", "layout");
-  // Send them to their Home page to add systems next.
-  redirect("/dashboard?welcome=1");
+  // Send them where they were originally headed (?next=, carried here from
+  // the sign-up funnel via a hidden field - see OnboardingForm.tsx), now that
+  // they have a claimed home to get there with. Re-validate with the same
+  // guard used everywhere else ?next= is read: a form field is still
+  // attacker-influenced input, not any more trustworthy than a query string.
+  // No original destination - the ordinary path - lands on the Home page to
+  // add systems next.
+  const next = safeNextPath(formData.get("next") as string | null);
+  redirect(next ?? "/dashboard?welcome=1");
 }

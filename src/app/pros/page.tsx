@@ -364,6 +364,15 @@ export default async function ProsLanding() {
         <a href="/" className="text-sm text-stone-500 hover:text-hearth-700">
           Looking after your own home instead? Hearth for homeowners →
         </a>
+        <p className="mt-2 text-xs text-stone-400">
+          <a href="/privacy" className="hover:text-hearth-700 hover:underline">
+            Privacy
+          </a>{" "}
+          ·{" "}
+          <a href="/terms" className="hover:text-hearth-700 hover:underline">
+            Terms
+          </a>
+        </p>
       </footer>
       </div>
     </main>

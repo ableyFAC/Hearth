@@ -176,7 +176,10 @@ export default function WaterHeaterReplacementCostGuide() {
         </section>
       </div>
 
-      <GuideCta />
+      <GuideCta
+        signedInHref="/walkthrough"
+        signedInLabel="Check your water heater's actual age"
+      />
     </main>
   );
 }

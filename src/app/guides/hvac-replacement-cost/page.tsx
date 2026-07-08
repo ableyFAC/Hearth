@@ -169,7 +169,10 @@ export default function HvacReplacementCostGuide() {
         </section>
       </div>
 
-      <GuideCta />
+      <GuideCta
+        signedInHref="/walkthrough"
+        signedInLabel="Check your HVAC's actual age"
+      />
     </main>
   );
 }

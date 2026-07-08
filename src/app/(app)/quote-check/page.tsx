@@ -27,9 +27,12 @@ export default async function QuoteCheckPage() {
         .select("free_quote_used_at")
         .eq("id", user.id)
         .maybeSingle();
-      // If the column isn't live yet (migration 0027 not run), error is set
-      // and we fall back to the old Plus-only redirect.
-      freeTaste = !error && !!row && row.free_quote_used_at === null;
+      // FAIL OPEN if the column isn't live yet (migration 0027 not run):
+      // a brand-new user must never be told "you've used your free check"
+      // when they never did. Pre-migration the burn can't be recorded, so a
+      // user could get more than one free check: that generous failure is
+      // honest; the old fail-closed redirect was a lie.
+      freeTaste = error ? true : !!row && row.free_quote_used_at === null;
     }
     if (!freeTaste) redirect("/plus?reason=quote");
   }
@@ -53,7 +56,8 @@ export default async function QuoteCheckPage() {
         <div className="card border-hearth-200 bg-hearth-50 text-center">
           <p className="text-sm text-hearth-800">
             This one&apos;s on us. Your first quote check is free, Hearth Plus
-            makes it unlimited.
+            makes it unlimited. It only counts as used once an analysis
+            actually succeeds, so a failed upload never burns it.
           </p>
         </div>
       )}

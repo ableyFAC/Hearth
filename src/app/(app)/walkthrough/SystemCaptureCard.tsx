@@ -1,10 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { confirmSystemAction } from "./actions";
 import { labelFor, iconFor, SYSTEM_TYPES } from "@/lib/constants";
-import { imgSrc } from "@/lib/storage";
 import type { HomeSystem } from "@/lib/database.types";
 
 type Suggestion = {
@@ -49,6 +47,11 @@ function scoreMessage(before: number, after: number): string {
 // One card in the "walk your home" flow: snap the data plate, Hearth reads a
 // SUGGESTION off it (never auto-written), the owner confirms or edits it, and
 // the card shows the real Home Health Score payoff for that one scan.
+//
+// The photo itself is never uploaded to storage: confirmSystemAction only
+// ever writes the extracted fields (brand/model/serial/year), never a photo
+// URL, so a stored object would just be an orphan whether the owner confirms
+// or abandons the scan. The preview thumbnail is a local blob URL instead.
 export default function SystemCaptureCard({
   system,
   propertyId,
@@ -56,7 +59,6 @@ export default function SystemCaptureCard({
   system: HomeSystem;
   propertyId: string;
 }) {
-  const supabase = createClient();
   const [phase, setPhase] = useState<"idle" | "working" | "review" | "confirmed">(
     "idle"
   );
@@ -88,23 +90,12 @@ export default function SystemCaptureCard({
     }
 
     setPhase("working");
-    setNote("Uploading…");
-    setSuggestion(null);
-
-    const ext = file.name.split(".").pop() || "jpg";
-    const path = `${propertyId}/systems/${system.id}/${crypto.randomUUID()}.${ext}`;
-    const { error: upErr } = await supabase.storage
-      .from("home-photos")
-      .upload(path, file, { upsert: false });
-    if (upErr) {
-      setPhase("idle");
-      setNote("Couldn't upload the photo. Try again.");
-      return;
-    }
-    const { data: pub } = supabase.storage.from("home-photos").getPublicUrl(path);
-    setPreview(pub.publicUrl);
-
     setNote("Reading the data plate…");
+    setSuggestion(null);
+    // Local preview only; nothing is written to storage (see the note above
+    // the component).
+    setPreview(URL.createObjectURL(file));
+
     let read: Suggestion | null = null;
     let failNote =
       "Couldn't read it automatically. Fill in what you can and confirm.";
@@ -152,6 +143,7 @@ export default function SystemCaptureCard({
   function confirm(formData: FormData) {
     startSave(async () => {
       const result = await confirmSystemAction(formData);
+      if (preview) URL.revokeObjectURL(preview);
       setDelta(result);
       setPhase("confirmed");
     });
@@ -220,7 +212,7 @@ export default function SystemCaptureCard({
           {preview && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={imgSrc(preview) ?? preview}
+              src={preview}
               alt={`${name} data plate`}
               className="max-h-32 rounded-lg border border-stone-200 object-contain"
             />
@@ -285,8 +277,10 @@ export default function SystemCaptureCard({
               type="button"
               className="btn-secondary"
               onClick={() => {
+                if (preview) URL.revokeObjectURL(preview);
                 setPhase("idle");
                 setSuggestion(null);
+                setPreview(null);
                 setNote(null);
               }}
             >

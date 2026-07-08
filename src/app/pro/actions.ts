@@ -13,6 +13,7 @@ import { hasProPlan } from "@/lib/subscription";
 import { requestReviewForWonLead } from "@/lib/reviewRequest";
 import { lookupCslbLicense, type CslbLookupResult } from "@/lib/cslb";
 import { createCandidateAndInvite } from "@/lib/checkr";
+import { isMissingSchemaError } from "@/lib/dbErrors";
 
 // Real CSLB check (0055) is debounced off the most recent check we recorded:
 // license_verified_at (stamped only on a 'verified' outcome) or the
@@ -193,16 +194,11 @@ export async function saveCompanyAction(formData: FormData) {
       .eq("id", existing.id);
     // Same graceful missing-column retry as the insert path below: if 0046
     // hasn't run yet, save everything else rather than failing the whole form.
-    if (error && hasStateWrite) {
-      const missingColumn =
-        error.code === "42703" ||
-        /service_state|column .* does not exist/i.test(error.message ?? "");
-      if (missingColumn) {
-        ({ error } = await supabase
-          .from("contractors")
-          .update(fields)
-          .eq("id", existing.id));
-      }
+    if (error && hasStateWrite && isMissingSchemaError(error)) {
+      ({ error } = await supabase
+        .from("contractors")
+        .update(fields)
+        .eq("id", existing.id));
     }
     if (error) throw new Error(error.message);
 
@@ -273,10 +269,11 @@ export async function saveCompanyAction(formData: FormData) {
         .from("contractors")
         .insert({ ...base, ...referral, ...stateWrite } as any);
   if (error && (fields.license_number || referredBy || hasStateWrite)) {
-    const missingColumn =
-      error.code === "42703" ||
-      /license_verified_status|column .* does not exist/i.test(error.message ?? "");
-    if (missingColumn) {
+    // isMissingSchemaError, not a hand-rolled regex: PostgREST reports a
+    // missing INSERT column as PGRST204 "schema cache", which the old
+    // pattern here missed, hard-500ing every new pro signup on a live DB
+    // without 0046 instead of falling back to the base insert.
+    if (isMissingSchemaError(error)) {
       ({ error } = await supabase.from("contractors").insert(base));
     } else {
       console.error("contractors insert failed:", error.message);

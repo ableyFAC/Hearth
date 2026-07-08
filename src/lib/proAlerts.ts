@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/notify";
+import { isMissingSchemaError } from "@/lib/dbErrors";
 import {
   labelFor,
   JOB_CATEGORIES,
@@ -60,6 +61,11 @@ export async function alertProsForNewLead(
     // migration 0046 and may not exist on this database yet: on the
     // missing-column fingerprint, retry without it and treat every pro's state
     // as unknown (which, per the null-safe rule, includes them all).
+    // isMissingSchemaError, not a hand-rolled regex: PostgREST reports a
+    // missing SELECT column as PGRST204 "schema cache" just as often as it
+    // reports 42703, and the old code-42703-or-literal-name pattern here
+    // missed that, silently swallowing the whole query (and every alert with
+    // it) on a live DB without 0046 instead of falling back cleanly.
     type ContractorRow = { user_id: string | null; service_state?: string | null };
     let contractors: ContractorRow[] = [];
     {
@@ -70,10 +76,7 @@ export async function alertProsForNewLead(
         .or(`categories.is.null,categories.cs.{${lead.category}}`)
         .limit(1000);
       if (res.error) {
-        const missingColumn =
-          res.error.code === "42703" ||
-          /service_state|column .* does not exist/i.test(res.error.message ?? "");
-        if (!missingColumn) throw res.error;
+        if (!isMissingSchemaError(res.error)) throw res.error;
         const retry = await admin
           .from("contractors")
           .select("user_id")

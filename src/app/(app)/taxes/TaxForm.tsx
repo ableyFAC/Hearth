@@ -53,11 +53,13 @@ export default function TaxForm({
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label className="label">Assessed value</label>
+          {/* step="any": assessed values are never round thousands, and a
+              1000 step makes the browser reject real ones outright. */}
           <input
             name="assessed_value"
             type="number"
             min="1"
-            step="1000"
+            step="any"
             className="input"
             placeholder="320000"
             defaultValue={assessedValue ?? ""}

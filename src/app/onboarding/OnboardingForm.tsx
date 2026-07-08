@@ -5,7 +5,11 @@ import { lookupParcelAction, claimPropertyAction } from "./actions";
 import type { ParcelFacts } from "@/lib/parcel";
 import { PROPERTY_TYPES } from "@/lib/constants";
 
-export default function OnboardingForm() {
+export default function OnboardingForm({
+  next,
+}: {
+  next?: string | null;
+}) {
   const [step, setStep] = useState<"address" | "confirm">("address");
   const [address, setAddress] = useState("");
   const [facts, setFacts] = useState<ParcelFacts | null>(null);
@@ -88,6 +92,7 @@ export default function OnboardingForm() {
           </div>
 
           <input type="hidden" name="parcel_id" value={facts.parcel_id ?? ""} />
+          <input type="hidden" name="next" value={next ?? ""} />
 
           <div>
             <label className="label">Address</label>

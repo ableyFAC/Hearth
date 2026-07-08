@@ -245,6 +245,15 @@ export default async function Home({
           <p className="text-xs text-stone-400">
             🏡 Hearth · Your home, looked after
           </p>
+          <p className="mt-2 text-xs text-stone-400">
+            <a href="/privacy" className="hover:text-hearth-700 hover:underline">
+              Privacy
+            </a>{" "}
+            ·{" "}
+            <a href="/terms" className="hover:text-hearth-700 hover:underline">
+              Terms
+            </a>
+          </p>
         </footer>
       </div>
     </main>

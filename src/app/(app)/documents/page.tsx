@@ -66,7 +66,7 @@ export default async function DocumentsPage() {
   const property = (await getActiveProperty())!;
   const supabase = createClient();
 
-  const { data: docs } = await supabase
+  const { data: docs, error: docsError } = await supabase
     .from("documents")
     .select(
       "id, title, doc_type, system_type, brand, model, install_year, warranty_expires, summary, file_url, applied_at, uploaded_at"
@@ -117,7 +117,18 @@ export default async function DocumentsPage() {
       <DocumentUpload propertyId={property.id} />
 
       <div className="mt-6 space-y-3">
-        {list.length === 0 && (
+        {/* If the select itself errored (e.g. a drifted DB schema), say so
+            plainly instead of falling through to the empty state, which would
+            read as "your files are gone" when they're actually just not
+            loaded right now. */}
+        {docsError && (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            We couldn&apos;t load your documents right now. They&apos;re safe,
+            try again shortly.
+          </div>
+        )}
+
+        {!docsError && list.length === 0 && (
           <div className="rounded-xl border border-dashed border-stone-300 px-4 py-8 text-center">
             <div className="flex justify-center">
               <span className="icon-chip">📄</span>

@@ -21,6 +21,14 @@ function quickApplyTemplates(category: string): { label: string; text: string }[
       label: "Happy to give a free estimate",
       text: `Hi, I do ${category} work in your area and I'm happy to come give you a free estimate. A couple of questions first: `,
     },
+    {
+      label: "Done a lot of this nearby",
+      text: `Hi, I've done a lot of ${category} work in your neighborhood and would be glad to help with yours too. A couple of questions first: `,
+    },
+    {
+      label: "Happy to talk it through by phone",
+      text: `Hi, I do ${category} work in your area. Happy to hop on a quick call first to talk through options if that's easier than typing. A couple of questions first: `,
+    },
   ];
 }
 
@@ -169,10 +177,28 @@ export default function ApplyJobButton({
         >
           {drafting ? "Drafting..." : "✨ Draft it for me"}
         </button>
-        {draftError && (
-          <span className="text-xs text-red-600">{draftError}</span>
-        )}
       </div>
+      {/* Matches the app's toast styling (see Toaster.tsx) so this reads as an
+          error, not a stray line of text. This form lives inside a client
+          component that isn't rendered from a server action, so it can't use
+          the flash-cookie toast; a styled inline card is the smallest honest
+          stand-in. */}
+      {draftError && (
+        <div
+          role="alert"
+          className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-800"
+        >
+          <span className="flex-1">{draftError}</span>
+          <button
+            type="button"
+            onClick={() => setDraftError(null)}
+            aria-label="Dismiss"
+            className="shrink-0 text-red-400 hover:text-red-600"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       <p className="text-xs text-stone-500">
         Applying charges the {fee} lead fee from your wallet. This can&apos;t be
         undone.

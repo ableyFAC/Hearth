@@ -1,4 +1,5 @@
 import GuideCta from "@/components/GuideCta";
+import { createClient } from "@/lib/supabase/server";
 
 // Shared shell for the two city landing pages (src/app/fountain-valley,
 // src/app/huntington-beach): same structure and same value-prop cards, only
@@ -12,6 +13,11 @@ import GuideCta from "@/components/GuideCta";
 // kind of overreach the /p/[id] pro pages explicitly avoid for a pro's own
 // site. Service + areaServed is the honest match for "software available to
 // homeowners in this city."
+//
+// Session-aware header/hero CTA: same reasoning as src/app/guides/layout.tsx
+// - a signed-in visitor shouldn't be pitched "get started free" again. These
+// routes are already dynamically rendered (the root layout reads cookies for
+// auth), so checking auth.getUser() here adds no new rendering cost.
 
 const VALUE = [
   {
@@ -77,13 +83,18 @@ export function buildCityServiceJsonLd(city: string, siteUrl: string, path: stri
   };
 }
 
-export default function CityLandingPage({
+export default async function CityLandingPage({
   city,
   housingParagraph,
 }: {
   city: string;
   housingParagraph: string;
 }) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   return (
     <div className="min-h-screen">
       <header className="mx-auto flex max-w-2xl items-center justify-between px-6 pt-6">
@@ -93,12 +104,21 @@ export default function CityLandingPage({
         >
           <span aria-hidden>🏡</span> Hearth
         </a>
-        <a
-          href="/get-started"
-          className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700"
-        >
-          Get started free
-        </a>
+        {user ? (
+          <a
+            href="/dashboard"
+            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700"
+          >
+            Open your dashboard
+          </a>
+        ) : (
+          <a
+            href="/get-started"
+            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700"
+          >
+            Get started free
+          </a>
+        )}
       </header>
 
       <main className="mx-auto max-w-2xl px-6 pb-16 pt-10">
@@ -109,12 +129,21 @@ export default function CityLandingPage({
           <p className="mx-auto mt-4 max-w-xl text-stone-600">
             {housingParagraph}
           </p>
-          <a
-            href="/get-started"
-            className="btn-primary mt-6 inline-block px-6 py-3 text-base shadow-md"
-          >
-            Get started free
-          </a>
+          {user ? (
+            <a
+              href="/dashboard"
+              className="btn-primary mt-6 inline-block px-6 py-3 text-base shadow-md"
+            >
+              Open your dashboard
+            </a>
+          ) : (
+            <a
+              href="/get-started"
+              className="btn-primary mt-6 inline-block px-6 py-3 text-base shadow-md"
+            >
+              Get started free
+            </a>
+          )}
         </div>
 
         <section className="mt-14">

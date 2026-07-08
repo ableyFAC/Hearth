@@ -1,6 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
-import { SYSTEM_TYPES, ISSUE_CATEGORIES, labelFor } from "@/lib/constants";
+import {
+  SYSTEM_TYPES,
+  ISSUE_CATEGORIES,
+  labelFor,
+  categoryForSystem,
+} from "@/lib/constants";
 import { DEFAULT_LIFESPANS, assessSystem } from "@/lib/health";
 import AskHearth from "@/components/AskHearth";
 import LearnGuides, { type GuideData } from "./LearnGuides";
@@ -169,20 +174,25 @@ export default async function LearnPage() {
   // most recent open issue, to seed a personal starter question.
   const byType = new Map<string, any>();
   let openIssueCategory: string | null = null;
+  // Most recent open issue per category, so a pure age-estimate can be told
+  // apart from a system with a real reported problem (mirrors SystemRow's
+  // isPureAgeEstimate below).
+  const openIssueByCat = new Map<string, any>();
   if (property) {
     const [{ data: systems }, { data: issues }] = await Promise.all([
       supabase.from("home_systems").select("*").eq("property_id", property.id),
       supabase
         .from("issues")
-        .select("category")
+        .select("category, severity")
         .eq("property_id", property.id)
         .eq("status", "open")
-        .order("created_at", { ascending: false })
-        .limit(1),
+        .order("created_at", { ascending: false }),
     ]);
     for (const s of systems ?? [])
       if (!byType.has(s.system_type)) byType.set(s.system_type, s);
     if (issues && issues.length) openIssueCategory = issues[0].category;
+    for (const i of issues ?? [])
+      if (!openIssueByCat.has(i.category)) openIssueByCat.set(i.category, i);
   }
 
   // Only the systems the owner actually has; fall back to all if none added yet.
@@ -224,6 +234,17 @@ export default async function LearnPage() {
     const h = instance ? assessSystem(instance) : null;
     const aging = h?.stage === "due" || h?.stage === "aging";
     const label = t.label.toLowerCase();
+    // A "due" status with no walkthrough confirmation, no owner-entered
+    // condition, and no reported issue is only an age-based guess, not a
+    // confirmed problem, so it shouldn't read as scary-red (same softening as
+    // profile/SystemRow.tsx's isPureAgeEstimate/estimatedDue).
+    const openIssue = openIssueByCat.get(categoryForSystem(t.value)) ?? null;
+    const isPureAgeEstimate =
+      !!instance &&
+      !instance.confirmed_at &&
+      instance.condition_rating == null &&
+      !openIssue;
+    const estimatedDue = h?.stage === "due" && isPureAgeEstimate;
     return {
       systemType: t.value,
       label: t.label,
@@ -231,8 +252,16 @@ export default async function LearnPage() {
       category: CATEGORY[t.value] ?? "Other",
       summary: SUMMARY[t.value] ?? "",
       lifespan: DEFAULT_LIFESPANS[t.value] ?? "varies",
-      statusLabel: h ? STAGE_LABEL[h.stage] : undefined,
-      statusStyle: h ? STAGE_STYLE[h.stage] : undefined,
+      statusLabel: estimatedDue
+        ? "Check soon (estimated)"
+        : h
+          ? STAGE_LABEL[h.stage]
+          : undefined,
+      statusStyle: estimatedDue
+        ? "border-amber-200 bg-amber-50 text-amber-700"
+        : h
+          ? STAGE_STYLE[h.stage]
+          : undefined,
       age: h?.age ?? null,
       tips: LEARN[t.value] ?? [],
       askQuestion: aging

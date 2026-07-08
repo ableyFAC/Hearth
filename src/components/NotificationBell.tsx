@@ -36,6 +36,11 @@ export default function NotificationBell() {
   const [items, setItems] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
+  // How many notifications the panel currently shows. Starts at 20 (the old
+  // hard cap), "Show more" bumps it by 30 at a time instead of navigating to
+  // a separate page (there isn't one yet, so this is the smaller change).
+  const [limit, setLimit] = useState(20);
+  const [hasMore, setHasMore] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   async function loadCount() {
@@ -51,14 +56,16 @@ export default function NotificationBell() {
     }
   }
 
-  async function loadList() {
+  async function loadList(lim: number) {
     try {
       const { data } = await supabase
         .from("notifications")
         .select("id, kind, title, body, url, read_at, created_at")
         .order("created_at", { ascending: false })
-        .limit(20);
+        .limit(lim);
       setItems(data ?? []);
+      // A full page back means there's likely more beyond it.
+      setHasMore((data ?? []).length >= lim);
 
       const unreadIds = (data ?? [])
         .filter((n) => !n.read_at)
@@ -79,6 +86,31 @@ export default function NotificationBell() {
       }
     } catch {
       // Leave whatever was already shown.
+    }
+  }
+
+  // Loads 30 more beyond the current limit, in place, instead of a "view all" page.
+  async function showMore() {
+    const next = limit + 30;
+    setLimit(next);
+    await loadList(next);
+  }
+
+  // Clears every unread notification, not just the batch currently loaded
+  // (loadList above only marks-read the rows it fetched, which can leave the
+  // badge count wrong if there are more unread than the current limit).
+  async function markAllRead() {
+    try {
+      await supabase
+        .from("notifications")
+        .update({ read_at: new Date().toISOString() })
+        .is("read_at", null);
+      setItems((cur) =>
+        cur.map((n) => (n.read_at ? n : { ...n, read_at: new Date().toISOString() }))
+      );
+      setUnread(0);
+    } catch {
+      // Leave whatever was already shown; next poll will reconcile.
     }
   }
 
@@ -130,7 +162,10 @@ export default function NotificationBell() {
   function togglePanel() {
     const next = !open;
     setOpen(next);
-    if (next) loadList();
+    if (next) {
+      setLimit(20);
+      loadList(20);
+    }
   }
 
   return (
@@ -164,8 +199,19 @@ export default function NotificationBell() {
           role="menu"
           className="absolute right-0 z-20 mt-1 w-80 overflow-hidden rounded-xl border border-stone-200 bg-white shadow-lg"
         >
-          <div className="border-b border-stone-100 px-4 py-2 text-sm font-semibold text-stone-900">
-            Notifications
+          <div className="flex items-center justify-between border-b border-stone-100 px-4 py-2">
+            <span className="text-sm font-semibold text-stone-900">
+              Notifications
+            </span>
+            {items.length > 0 && (
+              <button
+                type="button"
+                onClick={markAllRead}
+                className="text-xs font-medium text-hearth-700 hover:underline"
+              >
+                Mark all read
+              </button>
+            )}
           </div>
           <div className="max-h-80 overflow-y-auto">
             {items.length === 0 ? (
@@ -209,6 +255,15 @@ export default function NotificationBell() {
               })
             )}
           </div>
+          {hasMore && (
+            <button
+              type="button"
+              onClick={showMore}
+              className="block w-full border-t border-stone-100 px-4 py-2 text-center text-xs font-medium text-hearth-700 hover:bg-hearth-50 hover:underline"
+            >
+              Show more
+            </button>
+          )}
         </div>
       )}
     </div>

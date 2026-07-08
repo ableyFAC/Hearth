@@ -18,7 +18,14 @@ export default function Toaster({ flash }: { flash: Flash | null }) {
     lastId.current = flash.id;
     setShown(flash);
     document.cookie = `${FLASH_COOKIE}=; Max-Age=0; path=/`;
-    const t = setTimeout(() => setShown(null), 3500);
+    // Errors stay much longer than successes: 3.5s is enough to read "Saved"
+    // but slow readers were losing error messages before finishing them, and
+    // an unread error is a silent failure. Errors also get a dismiss button
+    // below instead of relying on the timer alone.
+    const t = setTimeout(
+      () => setShown(null),
+      flash.type === "error" ? 12000 : 3500
+    );
     return () => clearTimeout(t);
   }, [flash]);
 
@@ -34,10 +41,20 @@ export default function Toaster({ flash }: { flash: Flash | null }) {
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">
       <div
-        role="status"
-        className={`pointer-events-auto rounded-xl border px-4 py-3 text-sm font-medium shadow-lg ${tone}`}
+        role={shown.type === "error" ? "alert" : "status"}
+        className={`pointer-events-auto flex items-center gap-3 rounded-xl border px-4 py-3 text-sm font-medium shadow-lg ${tone}`}
       >
-        {shown.message}
+        <span>{shown.message}</span>
+        {shown.type === "error" && (
+          <button
+            type="button"
+            onClick={() => setShown(null)}
+            aria-label="Dismiss"
+            className="shrink-0 text-red-400 hover:text-red-600"
+          >
+            ✕
+          </button>
+        )}
       </div>
     </div>
   );

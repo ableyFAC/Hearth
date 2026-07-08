@@ -100,7 +100,9 @@ export default async function ProBillingPage({
         <h1 className="text-2xl font-semibold text-stone-900">Billing</h1>
         <p className="mt-1 text-sm text-stone-500">
           Deposit credit, then spend it unlocking leads. Lead prices vary by
-          service.
+          service, and jobs that sit unclaimed get cheaper: 15% off after 3
+          days, 30% off after 7. The discounted price is what your wallet is
+          charged.
         </p>
       </div>
 

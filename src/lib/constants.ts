@@ -88,6 +88,7 @@ export const SERVICE_CATEGORIES = [
   { value: "home_inspection", label: "Home inspection", icon: "🔍" },
   { value: "pest", label: "Pest & termite control", icon: "🐜" },
   { value: "garage_door", label: "Garage door", icon: "🚪" },
+  { value: "handyman", label: "Handyman", icon: "🧰" },
 ] as const;
 
 // Every value a job's category can take, for labels/icons when displaying a
@@ -163,7 +164,8 @@ export const BUDGET_RANGES = [
 // worth a slice of the expected job profit). Benchmarked below the big lead
 // marketplaces (Angi $15-85+/lead plus a ~$300/yr fee; Thumbtack ~$20-75) so
 // Hearth undercuts them, with no annual fee:
-//   Tier 1  $25  light / low-ticket work (cleaning, landscaping, painting)
+//   Tier 1  $25  light / low-ticket work (cleaning, landscaping, painting,
+//                handyman)
 //   Tier 2  $50  skilled trades + replacements (plumbing, electrical, HVAC,
 //                windows, garage door, pest & termite control)
 //   Tier 3  $90  big-ticket (roofing, structural, remodeling / general contracting)
@@ -186,6 +188,7 @@ export const LEAD_FEES: Record<string, number> = {
   landscaping: LEAD_TIER_FEES.light,
   cleaning: LEAD_TIER_FEES.light,
   painting: LEAD_TIER_FEES.light,
+  handyman: LEAD_TIER_FEES.light,
   other: LEAD_TIER_FEES.light,
 };
 

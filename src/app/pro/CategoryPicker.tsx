@@ -29,6 +29,9 @@ const CATEGORY_ICON: Record<string, JSX.Element> = {
   garage_door: (
     <path d="M4 21V11l8-7 8 7v10M4 21h16M6 15h12M6 18h12" />
   ),
+  handyman: (
+    <path d="M14.5 3.5a4 4 0 00-5.4 5.4L3 15v4h4l6.1-6.1a4 4 0 005.4-5.4l-2.7 2.7-2-2 2.7-2.7z" />
+  ),
   other: <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" />,
 };
 

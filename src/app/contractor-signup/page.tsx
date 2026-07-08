@@ -2,13 +2,28 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { safeNextPath } from "@/lib/safeNext";
 
 // Real per-user contractor sign-up. Creates a Supabase Auth account tagged with
 // role=contractor, then sends them to set up their company. If email
 // confirmation is OFF in Supabase they're signed in immediately; if ON, we ask
 // them to verify first.
-export default function ContractorSignUpPage() {
+//
+// ?next=: carried in from /get-started same as the homeowner sign-up. Note
+// it only survives as far as /pro/onboarding: the company-setup form there
+// posts to saveCompanyAction (src/app/pro/actions.ts, owned by another fix),
+// which redirects on its own, so a contractor's original destination isn't
+// honored past this point. Left alone rather than reaching into that file.
+export default function ContractorSignUpPage({
+  searchParams,
+}: {
+  searchParams?: { next?: string };
+}) {
   const supabase = createClient();
+  const next = safeNextPath(
+    typeof searchParams?.next === "string" ? searchParams.next : null
+  );
+  const nextQuery = next ? `?next=${encodeURIComponent(next)}` : "";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<string | null>(null);
@@ -43,7 +58,7 @@ export default function ContractorSignUpPage() {
 
     // Confirmation OFF → session returned → go set up the company.
     if (data.session) {
-      window.location.href = "/pro/onboarding";
+      window.location.href = `/pro/onboarding${nextQuery}`;
       return;
     }
 
@@ -102,6 +117,17 @@ export default function ContractorSignUpPage() {
           <button className="btn-primary w-full" disabled={busy}>
             {busy ? "Creating account…" : "Sign up"}
           </button>
+          <p className="text-center text-xs text-stone-400">
+            By creating an account you agree to the{" "}
+            <a href="/terms" className="text-hearth-700 hover:underline">
+              Terms
+            </a>{" "}
+            and{" "}
+            <a href="/privacy" className="text-hearth-700 hover:underline">
+              Privacy Policy
+            </a>
+            .
+          </p>
         </form>
 
         {status && (
@@ -112,7 +138,10 @@ export default function ContractorSignUpPage() {
 
         <div className="mt-6 border-t border-stone-100 pt-4 text-center">
           <p className="text-sm text-stone-500">Already have an account?</p>
-          <a href="/signin" className="btn-secondary mt-2 inline-block w-full">
+          <a
+            href={`/signin${nextQuery}`}
+            className="btn-secondary mt-2 inline-block w-full"
+          >
             Sign in
           </a>
         </div>
@@ -120,7 +149,10 @@ export default function ContractorSignUpPage() {
 
       <p className="mt-6 text-center text-xs text-stone-400">
         Want to track your own home instead?{" "}
-        <a href="/homeowner-signup" className="text-hearth-700 hover:underline">
+        <a
+          href={`/homeowner-signup${nextQuery}`}
+          className="text-hearth-700 hover:underline"
+        >
           Sign up as a homeowner
         </a>
         .

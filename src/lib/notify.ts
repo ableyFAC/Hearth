@@ -37,7 +37,12 @@ export async function sendNotification(
     body: input.body ?? null,
     url: input.url ?? null,
   });
-  if (error) return false;
+  if (error) {
+    // Was a silent no-op: the in-app row is the source of truth, so a failed
+    // insert here means the recipient gets nothing and nothing says why.
+    console.error("sendNotification: insert failed:", error.message ?? error);
+    return false;
+  }
 
   await Promise.all([sendEmail(input), sendSms(input)]);
   return true;

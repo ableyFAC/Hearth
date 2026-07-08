@@ -669,6 +669,26 @@ export default function AskHearth({
     );
   }
 
+  // Retention control: which of the compact card and dock views renders it
+  // depends on `fill` (see below) - kept as one element so the two views
+  // can't drift on wording or options.
+  const retentionControl = (
+    <p className="text-[11px] text-stone-400">
+      {retention === "never" ? "Chats are kept " : "Chats clear after "}
+      <select
+        value={retention}
+        onChange={(e) => changeRetention(e.target.value as Retention)}
+        aria-label="How long chats are kept"
+        className="cursor-pointer appearance-none border-0 bg-transparent p-0 text-[11px] text-stone-400 underline decoration-dotted hover:text-stone-600 focus:outline-none"
+      >
+        <option value="24h">24 hours</option>
+        <option value="2w">2 weeks</option>
+        <option value="1m">1 month</option>
+        <option value="never">forever</option>
+      </select>
+    </p>
+  );
+
   // The input row: photo attach + text + send. Shared by both views.
   const composer = (
     <div>
@@ -733,20 +753,10 @@ export default function AskHearth({
         Hearth&apos;s cost figures are ballpark estimates. Confirm with a
         local pro before you commit.
       </p>
-      <p className="mt-0.5 text-[11px] text-stone-400">
-        {retention === "never" ? "Chats are kept " : "Chats clear after "}
-        <select
-          value={retention}
-          onChange={(e) => changeRetention(e.target.value as Retention)}
-          aria-label="How long chats are kept"
-          className="cursor-pointer appearance-none border-0 bg-transparent p-0 text-[11px] text-stone-400 underline decoration-dotted hover:text-stone-600 focus:outline-none"
-        >
-          <option value="24h">24 hours</option>
-          <option value="2w">2 weeks</option>
-          <option value="1m">1 month</option>
-          <option value="never">forever</option>
-        </select>
-      </p>
+      {/* In the dock (fill), this control moves to the header instead - */}
+      {/* down here it sat below the whole conversation, off-screen until */}
+      {/* scrolled to. The compact card has no such scroll, so it stays put. */}
+      {!fill && <div className="mt-0.5">{retentionControl}</div>}
     </div>
   );
 
@@ -821,13 +831,19 @@ export default function AskHearth({
             Your home assistant. Answers use your systems and their ages.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={clearChat}
-          className="shrink-0 text-xs text-stone-400 hover:text-stone-700"
-        >
-          Clear
-        </button>
+        {/* Surfaced here (next to Clear) instead of only below the input: */}
+        {/* the dock is short and scrollable, and buried at the bottom it */}
+        {/* was easy to never see. */}
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          {retentionControl}
+          <button
+            type="button"
+            onClick={clearChat}
+            className="text-xs text-stone-400 hover:text-stone-700"
+          >
+            Clear
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 space-y-2 overflow-y-auto py-2">

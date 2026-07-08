@@ -2,15 +2,14 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { safeNextPath } from "@/lib/safeNext";
 
-// Only ever follow a RELATIVE path from ?next=: an absolute URL (or a
-// protocol-relative //host) in that param would be an open redirect an
-// attacker could use to bounce a signed-in victim to a look-alike site.
-function safeNextPath(): string | null {
+// Read ?next= straight off the browser URL (used at submit time). Guarded by
+// the shared safeNextPath so a malicious absolute/protocol-relative value
+// never gets followed.
+function currentNextPath(): string | null {
   if (typeof window === "undefined") return null;
-  const next = new URLSearchParams(window.location.search).get("next");
-  if (next && next.startsWith("/") && !next.startsWith("//")) return next;
-  return null;
+  return safeNextPath(new URLSearchParams(window.location.search).get("next"));
 }
 
 // Unified sign-in for everyone. After authentication we send the user to the
@@ -18,8 +17,23 @@ function safeNextPath(): string | null {
 // bounced them here), or to "/", which reads their role and routes
 // homeowners to /dashboard and contractors to /pro - so a single sign-in
 // works for both sides.
-export default function SignInPage() {
+export default function SignInPage({
+  searchParams,
+}: {
+  searchParams?: { next?: string };
+}) {
   const supabase = createClient();
+  // Same ?next=, read from the server-provided prop instead of window so it's
+  // available for the "Get started" link below with no hydration mismatch:
+  // a signed-out visitor who lands here via a gated CTA and decides to sign
+  // up instead of signing in should not lose their destination (see
+  // /get-started and the sign-up pages, which carry it the rest of the way).
+  const next = safeNextPath(
+    typeof searchParams?.next === "string" ? searchParams.next : null
+  );
+  const getStartedHref = next
+    ? `/get-started?next=${encodeURIComponent(next)}`
+    : "/get-started";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<string | null>(null);
@@ -46,7 +60,7 @@ export default function SignInPage() {
     }
 
     // Back to where they were headed, or "/" for role-based routing.
-    window.location.href = safeNextPath() ?? "/";
+    window.location.href = currentNextPath() ?? "/";
   }
 
   return (
@@ -108,7 +122,7 @@ export default function SignInPage() {
         <div className="mt-6 border-t border-stone-100 pt-4 text-center">
           <p className="text-sm text-stone-500">New to Hearth?</p>
           <a
-            href="/get-started"
+            href={getStartedHref}
             className="btn-secondary mt-2 inline-block w-full"
           >
             Get started

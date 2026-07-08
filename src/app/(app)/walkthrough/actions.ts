@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { homeHealthScore } from "@/lib/health";
+import { isMissingSchemaError } from "@/lib/dbErrors";
 import type { HomeSystem, Issue } from "@/lib/database.types";
 
 function s(formData: FormData, key: string): string | null {
@@ -101,7 +102,7 @@ export async function confirmSystemAction(
     .from("home_systems")
     .update(update)
     .eq("id", systemId);
-  if (error && (error.code === "42703" || /confirmed_at/.test(error.message))) {
+  if (error && isMissingSchemaError(error)) {
     // Live DB hasn't run migration 0056 yet (confirmed_at column missing).
     // Save everything else rather than losing the owner's typed values; the
     // row just stays "estimated" until the migration runs. Same graceful

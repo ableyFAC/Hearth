@@ -52,11 +52,14 @@ export default function ValueForm({
       <div className="grid gap-3 sm:grid-cols-3">
         <div>
           <label className="label">What you paid</label>
+          {/* step="any": a step of 1000 makes the browser REJECT real prices
+              like 652500 with a native validation error (values must land on
+              the step grid). Real purchase prices are not round thousands. */}
           <input
             name="purchase_price"
             type="number"
             min="1"
-            step="1000"
+            step="any"
             className="input"
             placeholder="350000"
             defaultValue={purchasePrice ?? ""}
@@ -82,7 +85,7 @@ export default function ValueForm({
             name="mortgage_balance"
             type="number"
             min="0"
-            step="1000"
+            step="any"
             className="input"
             placeholder="0 if paid off"
             defaultValue={mortgageBalance ?? ""}

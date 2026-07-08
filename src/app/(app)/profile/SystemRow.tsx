@@ -71,9 +71,17 @@ export default function SystemRow({
   // tab severity instead).
   const issueSeverity = openIssue?.severity ?? null;
   const mustDo = s.condition_rating === 1 || issueSeverity === "urgent";
-  // Red-bordered if it needs attention: must-do, due, or a medium issue.
+  // A "due" status the owner has never weighed in on: no walkthrough
+  // confirmation, no owner-entered condition, no reported issue, so the age
+  // estimate is the ONLY thing behind it. That's a guess, not a confirmed
+  // problem, so it shouldn't read as scary-red like a real issue does.
+  const isPureAgeEstimate =
+    !s.confirmed_at && s.condition_rating == null && !openIssue;
+  const estimatedDue = h.stage === "due" && !mustDo && isPureAgeEstimate;
+  // Red-bordered if it needs attention: must-do, due (and not just a guess),
+  // or a medium issue.
   const needsBorder =
-    mustDo || h.stage === "due" || issueSeverity === "medium";
+    mustDo || (h.stage === "due" && !estimatedDue) || issueSeverity === "medium";
 
   // Plain-language detail lines shown when the owner expands a system.
   const ageText =
@@ -296,7 +304,11 @@ export default function SystemRow({
     <li
       onClick={() => setExpanded((v) => !v)}
       className={`card flex cursor-pointer items-start justify-between gap-4 ${
-        needsBorder ? "!border !border-red-400" : ""
+        needsBorder
+          ? "!border !border-red-400"
+          : estimatedDue
+            ? "!border !border-amber-300"
+            : ""
       }`}
     >
       <div className="min-w-0 flex-1">
@@ -311,10 +323,16 @@ export default function SystemRow({
             className={`rounded-full border px-2 py-0.5 text-xs ${
               mustDo
                 ? "border-red-300 bg-red-100 font-semibold text-red-700"
-                : STAGE_STYLE[h.stage]
+                : estimatedDue
+                  ? "border-amber-300 bg-amber-100 text-amber-700"
+                  : STAGE_STYLE[h.stage]
             }`}
           >
-            {mustDo ? "🚨 Must do" : (STAGE_LABEL[h.stage] ?? h.stage)}
+            {mustDo
+              ? "🚨 Must do"
+              : estimatedDue
+                ? "Check soon (estimated)"
+                : (STAGE_LABEL[h.stage] ?? h.stage)}
           </span>
         </div>
         <button

@@ -39,7 +39,7 @@ export default function HomeSwitcher({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1 text-sm text-stone-500 hover:text-stone-700"
+        className="-my-2.5 flex items-center gap-1 py-2.5 text-sm text-stone-500 hover:text-stone-700"
       >
         <span className="max-w-[12rem] truncate">{active?.address_line1}</span>
         <span

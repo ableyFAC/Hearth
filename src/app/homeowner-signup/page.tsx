@@ -2,12 +2,29 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { safeNextPath } from "@/lib/safeNext";
 
 // Real per-user sign-up. Creates a Supabase Auth account from the user's email
 // + password. If email confirmation is OFF in Supabase, the user is signed in
 // immediately and sent to claim their home; if it's ON, we tell them to verify.
-export default function HomeownerSignUpPage() {
+//
+// ?next=: carried in from /get-started (originally from /signin, ultimately
+// from the middleware bouncing a signed-out visitor off a gated page). Read
+// via the searchParams prop rather than window/useSearchParams so it's
+// available with no hydration mismatch or Suspense boundary. Passed through
+// to /onboarding on success; the claimed-home gate still routes a brand-new
+// homeowner through onboarding first (see onboarding/actions.ts), but their
+// destination isn't lost along the way.
+export default function HomeownerSignUpPage({
+  searchParams,
+}: {
+  searchParams?: { next?: string };
+}) {
   const supabase = createClient();
+  const next = safeNextPath(
+    typeof searchParams?.next === "string" ? searchParams.next : null
+  );
+  const nextQuery = next ? `?next=${encodeURIComponent(next)}` : "";
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -43,7 +60,7 @@ export default function HomeownerSignUpPage() {
 
     // Confirmation OFF → a session is returned immediately → go claim a home.
     if (data.session) {
-      window.location.href = "/onboarding";
+      window.location.href = `/onboarding${nextQuery}`;
       return;
     }
 
@@ -117,6 +134,17 @@ export default function HomeownerSignUpPage() {
           <button className="btn-primary w-full" disabled={busy}>
             {busy ? "Creating account…" : "Sign up"}
           </button>
+          <p className="text-center text-xs text-stone-400">
+            By creating an account you agree to the{" "}
+            <a href="/terms" className="text-hearth-700 hover:underline">
+              Terms
+            </a>{" "}
+            and{" "}
+            <a href="/privacy" className="text-hearth-700 hover:underline">
+              Privacy Policy
+            </a>
+            .
+          </p>
         </form>
 
         {status && (
@@ -127,7 +155,10 @@ export default function HomeownerSignUpPage() {
 
         <div className="mt-6 border-t border-stone-100 pt-4 text-center">
           <p className="text-sm text-stone-500">Already have an account?</p>
-          <a href="/signin" className="btn-secondary mt-2 inline-block w-full">
+          <a
+            href={`/signin${nextQuery}`}
+            className="btn-secondary mt-2 inline-block w-full"
+          >
             Sign in
           </a>
         </div>
@@ -135,7 +166,10 @@ export default function HomeownerSignUpPage() {
 
       <p className="mt-6 text-center text-xs text-stone-400">
         Are you a contractor?{" "}
-        <a href="/contractor-signup" className="text-hearth-700 hover:underline">
+        <a
+          href={`/contractor-signup${nextQuery}`}
+          className="text-hearth-700 hover:underline"
+        >
           Sign up for Hearth for Pros
         </a>
         .

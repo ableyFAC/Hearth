@@ -161,7 +161,10 @@ export default function IsMyContractorQuoteFairGuide() {
         </section>
       </div>
 
-      <GuideCta />
+      <GuideCta
+        signedInHref="/quote-check"
+        signedInLabel="Check your quote"
+      />
     </main>
   );
 }

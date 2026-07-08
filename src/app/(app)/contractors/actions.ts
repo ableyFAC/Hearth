@@ -16,6 +16,7 @@ import {
 import { setFlash } from "@/lib/flash";
 import { hasPlus } from "@/lib/subscription";
 import { alertProsForNewLead } from "@/lib/proAlerts";
+import { isMissingSchemaError } from "@/lib/dbErrors";
 
 // Photo URLs come from our own upload component (PhotoUpload), so anything
 // oversized is not a real URL; drop it quietly instead of storing a broken
@@ -179,13 +180,8 @@ export async function postJobAction(formData: FormData) {
     .insert(
       (budgetRange ? { ...leadRow, budget_range: budgetRange } : leadRow) as any
     );
-  if (error && budgetRange) {
-    const missingColumn =
-      error.code === "42703" ||
-      /budget_range|column .* does not exist/i.test(error.message ?? "");
-    if (missingColumn) {
-      ({ error } = await supabase.from("contractor_leads").insert(leadRow as any));
-    }
+  if (error && budgetRange && isMissingSchemaError(error)) {
+    ({ error } = await supabase.from("contractor_leads").insert(leadRow as any));
   }
   if (error) throw new Error(error.message);
 

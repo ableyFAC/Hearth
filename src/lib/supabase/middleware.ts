@@ -64,10 +64,28 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/fountain-valley/") ||
     path === "/huntington-beach" ||
     path.startsWith("/huntington-beach/") ||
+    // Privacy policy + Terms of Service (src/app/privacy, src/app/terms):
+    // legally need to be readable by anyone, logged in or not, same reasoning
+    // as the guide and city pages above.
+    path === "/privacy" ||
+    path.startsWith("/privacy/") ||
+    path === "/terms" ||
+    path.startsWith("/terms/") ||
     // SEO endpoints (src/app/sitemap.ts, robots.ts): crawlers have no
     // session, and a 307 to /signin here would hide the whole site from them.
     path === "/sitemap.xml" ||
     path === "/robots.txt" ||
+    // Cron routes authenticate via CRON_SECRET (Bearer/header/query), not a
+    // user session. Vercel Cron sends no session cookie, so WITHOUT this
+    // entry every scheduled job would 307 to /signin (an HTML 200!) before
+    // its own secret check ever ran, and the platform would report the runs
+    // as successful while nothing executed. The secret check inside each
+    // route remains the real gate.
+    path.startsWith("/api/cron/") ||
+    // The embeddable rating widget is fetched by THIRD-PARTY sites (a pro's
+    // own website embeds it), so there is never a session on the request. It
+    // serves aggregate-only public data by design.
+    path.startsWith("/api/pro-widget/") ||
     // Stripe webhook authenticates via its signature, not a user session, and
     // must never be redirected: Stripe doesn't follow redirects and would treat
     // the 307 as a failed delivery, so deposits would never be credited.

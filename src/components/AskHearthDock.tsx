@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import AskHearth from "@/components/AskHearth";
 
 // A floating Ask Hearth widget pinned to the bottom-right. Always available; a
 // little tab that opens into the full, scrollable conversation.
 export default function AskHearthDock({ greeting }: { greeting?: string }) {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   // A question that arrived while the dock was closed; handed to the freshly
   // mounted AskHearth (which submits it once) when the dock opens for it.
@@ -38,6 +40,12 @@ export default function AskHearthDock({ greeting }: { greeting?: string }) {
     setOpen(false);
     setPendingQuestion(null);
   }
+
+  // Panic buttons must never be occluded: /emergency is the one screen where
+  // a floating chat trigger sitting on top of the call/text/prep actions is a
+  // safety issue, not just a layout nit, so the dock doesn't render there at
+  // all (hooks above still run - only the output is suppressed).
+  if (pathname?.startsWith("/emergency")) return null;
 
   return (
     <div className="fixed bottom-4 right-4 z-40 print:hidden">
