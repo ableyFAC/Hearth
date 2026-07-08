@@ -55,6 +55,10 @@
     {
       "path": "/api/cron/license-recheck",
       "schedule": "0 16 * * 1"
+    },
+    {
+      "path": "/api/cron/expire-bonus",
+      "schedule": "0 8 * * *"
     }
   ]
 }

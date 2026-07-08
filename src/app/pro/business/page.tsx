@@ -309,28 +309,23 @@ export default async function ProBusinessPage() {
                 </p>
               </div>
               <div className="card">
-                <p className="stat-label">Return on fees</p>
+                <p className="stat-label">Jobs won</p>
                 <p className="stat-number mt-1 text-2xl text-stone-900">
-                  {stats.roiPercent !== null
-                    ? `${stats.roiPercent >= 0 ? "+" : ""}${stats.roiPercent}%`
-                    : "-"}
+                  {stats.wins}
                 </p>
                 <p className="mt-1 text-xs text-stone-500">
-                  {stats.roiPercent !== null
-                    ? `${dollars(Math.abs(stats.netCents))} ${
-                        stats.netCents >= 0 ? "ahead of" : "behind"
-                      } your fees`
-                    : "Shows after your first paid application"}
+                  {stats.wins > 0
+                    ? `out of ${stats.liveApplications} paid applications`
+                    : "No wins yet"}
                 </p>
               </div>
               <div className="card">
-                <p className="stat-label">Fees vs revenue</p>
+                <p className="stat-label">Fees spent</p>
                 <p className="stat-number mt-1 text-2xl text-stone-900">
-                  {dollars(stats.revenueWonCents)}
+                  {dollars(stats.feesSpentCents)}
                 </p>
                 <p className="mt-1 text-xs text-stone-500">
-                  won on {dollars(stats.feesSpentCents)} in fees, net of
-                  refunds
+                  On leads, net of ghost refunds
                 </p>
               </div>
             </div>
@@ -517,7 +512,7 @@ export default async function ProBusinessPage() {
                 </p>
               </div>
               <div className="card ring-1 ring-hearth-200">
-                <p className="stat-label">Fees vs revenue</p>
+                <p className="stat-label">Fees spent</p>
                 <p
                   aria-hidden="true"
                   className="stat-number mt-1 select-none text-2xl text-stone-300 blur-[3px]"

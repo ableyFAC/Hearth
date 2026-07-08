@@ -45,6 +45,49 @@ async function upsertSubscriptionRow(
   }
 }
 
+// True when an RPC error is the "this signature isn't on the live DB yet"
+// fingerprint, so a call can fall back to an older overload instead of failing.
+function isMissingFn(error: any, fn: string): boolean {
+  const msg = error?.message ?? "";
+  return (
+    error?.code === "PGRST202" ||
+    error?.code === "42883" ||
+    (new RegExp(fn, "i").test(msg) &&
+      /(does not exist|schema cache|not find)/i.test(msg))
+  );
+}
+
+// Apply a deposit exactly once. Prefers the event-keyed 0058 signature, so a
+// duplicated Stripe delivery of the same checkout.session.completed becomes a
+// no-op in the database. If the live DB predates 0058 (or 0032), the call
+// degrades to the older overloads, which still credit correctly but without
+// idempotency - acceptable because Stripe live mode, and therefore any real
+// duplicate delivery, is not enabled until the migration is applied. A non
+// missing-function error stops the ladder: blindly retrying a call that may
+// already have applied the deposit could double-credit.
+async function applyDepositOnce(
+  admin: any,
+  contractorId: string,
+  cents: number,
+  boostPts: number,
+  eventId: string
+): Promise<void> {
+  const ladder: Record<string, unknown>[] = [
+    { p_contractor: contractorId, p_deposit_cents: cents, p_bonus_boost_pts: boostPts, p_event_id: eventId },
+    { p_contractor: contractorId, p_deposit_cents: cents, p_bonus_boost_pts: boostPts },
+    { p_contractor: contractorId, p_deposit_cents: cents },
+  ];
+  for (let i = 0; i < ladder.length; i++) {
+    const { error } = await admin.rpc("apply_deposit", ladder[i]);
+    if (!error) return;
+    if (isMissingFn(error, "apply_deposit") && i < ladder.length - 1) {
+      continue; // older DB: try the next-oldest overload
+    }
+    console.error("apply_deposit failed, not retrying:", error.message ?? error);
+    return;
+  }
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.text();
   const sig = req.headers.get("stripe-signature") ?? "";
@@ -80,10 +123,16 @@ export async function POST(req: NextRequest) {
             .eq("id", meta.contractor_id)
             .maybeSingle();
           if (proRow?.user_id) {
+            // Filter to the pro row explicitly. Since migration 0036 a user can
+            // hold BOTH homeowner Plus and a Pro membership, so a bare
+            // .eq(user_id).maybeSingle() would throw on two rows and silently
+            // cost a paying Pro member their boost. A user holds at most one
+            // pro_ plan, so this stays single-row (and works pre-0036 too).
             const { data: proSub } = await (admin as any)
               .from("subscriptions")
               .select("plan, status, current_period_end")
               .eq("user_id", proRow.user_id)
+              .like("plan", "pro_%")
               .maybeSingle();
             const activePro =
               proSub?.plan?.startsWith("pro_") &&
@@ -96,43 +145,16 @@ export async function POST(req: NextRequest) {
           // Boost is a perk, deposits are not: swallow and continue unboosted.
         }
 
-        // Credits cash, computes + grants the tier bonus, and writes the ledger.
-        const depositArgs = {
-          p_contractor: meta.contractor_id,
-          p_deposit_cents: cents,
-        };
-        let runUnboosted = boostPts <= 0;
-        if (boostPts > 0) {
-          const { error } = await (admin as any).rpc("apply_deposit", {
-            ...depositArgs,
-            p_bonus_boost_pts: boostPts,
-          });
-          if (error) {
-            // Graceful degradation, but ONLY for the missing-function
-            // fingerprint (migration 0032 not on the live DB yet, so the
-            // boosted signature doesn't exist, same detection as
-            // rehireProAction). Any other error means the boosted call may
-            // have already applied the deposit, and a blind retry risks
-            // double-crediting: losing the boost beats applying it twice.
-            const msg = error.message ?? "";
-            const missingFn =
-              error.code === "PGRST202" ||
-              error.code === "42883" ||
-              (/apply_deposit/i.test(msg) &&
-                /(does not exist|schema cache|not find)/i.test(msg));
-            if (missingFn) {
-              runUnboosted = true;
-            } else {
-              console.error(
-                "apply_deposit (boosted) failed, NOT retrying:",
-                msg || error
-              );
-            }
-          }
-        }
-        if (runUnboosted) {
-          await (admin as any).rpc("apply_deposit", depositArgs);
-        }
+        // Credits cash, computes + grants the tier bonus, writes the ledger,
+        // and (on the 0058 signature) dedups on the Stripe event id so a
+        // duplicate delivery can't double-credit.
+        await applyDepositOnce(
+          admin,
+          meta.contractor_id,
+          cents,
+          Math.max(boostPts, 0),
+          event.id
+        );
       }
     }
 

@@ -50,11 +50,12 @@ export interface ProStats {
   winRatePercent: number | null;
   // Fees net of ghost refunds: refunded rows contribute nothing.
   feesSpentCents: number;
-  // Sum of payout_amount across won (chosen) applications, in cents.
-  revenueWonCents: number;
-  netCents: number; // revenueWonCents - feesSpentCents
-  // Percent return on fees: (revenue - fees) / fees. Null when fees are zero.
-  roiPercent: number | null;
+  // NOTE: there is deliberately no "revenue won" or "ROI" here. The only job
+  // amount the app records is contractor_leads.payout_amount, which is the LEAD
+  // FEE (set to leadFeeFor(category) at post time), not what the pro earns on
+  // the job. Summing it as revenue and dividing for a return would compare fees
+  // to fees, so we do not compute or show it. Win rate, wins, and fees spent
+  // are the honest signals of whether buying leads is working.
   // Sorted most applications first.
   categories: CategoryStats[];
   // Oldest month first, always exactly `months` entries ending at currentDate.
@@ -118,17 +119,6 @@ export function buildProStats(
 
   // Fees net of refunds: refunded rows cost nothing in the end.
   const feesSpentCents = liveApps.reduce((sum, a) => sum + num(a.fee_cents), 0);
-
-  // Revenue won: the payout of every job the homeowner picked this pro for.
-  // payout_amount is in dollars; null payouts count as 0, never NaN.
-  const revenueWonCents = wins.reduce(
-    (sum, a) => sum + Math.round(num(a.payout_amount) * 100),
-    0
-  );
-
-  const netCents = revenueWonCents - feesSpentCents;
-  const roiPercent =
-    feesSpentCents > 0 ? Math.round((netCents / feesSpentCents) * 100) : null;
 
   // ---- Per-category breakdown ----------------------------------------------
   const byCategory = new Map<string, ProApplicationRow[]>();
@@ -201,9 +191,6 @@ export function buildProStats(
     wins: wins.length,
     winRatePercent,
     feesSpentCents,
-    revenueWonCents,
-    netCents,
-    roiPercent,
     categories,
     trend,
     daysSinceLastApplication: daysSince(latest(apps), nowMs),
