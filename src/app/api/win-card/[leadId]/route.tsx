@@ -93,6 +93,41 @@ function notFound() {
   return NextResponse.json({ error: "Not found" }, { status: 404 });
 }
 
+// Build an absolute, fetchable URL for the logo. Stored values are usually a
+// full public URL (getPublicUrl output), but legacy rows can hold a bare
+// object path (see src/lib/storage.ts). Satori calls new URL() on an <img
+// src>, so a bare path throws "Invalid URL" and 500s the whole card, which the
+// browser then surfaces as a failed download ("no internet"). Normalize first,
+// and skip the logo entirely if we can't make it absolute.
+function absoluteLogoUrl(value: string | null): string | null {
+  if (!value) return null;
+  if (/^https?:\/\//i.test(value)) return value;
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base) return null;
+  const path = value.replace(/^\/+/, "").replace(/^pro-logos\//, "");
+  return `${base.replace(/\/+$/, "")}/storage/v1/object/public/pro-logos/${path}`;
+}
+
+// Fetch the logo and inline it as a data URI so satori never does its own
+// network fetch or URL parsing while streaming the image (a throw there can't
+// be caught by a try/catch around ImageResponse). Any failure (bad URL,
+// missing object, non-image, network) just drops the logo: the card still
+// renders, it simply leads with the business name.
+async function logoDataUri(value: string | null): Promise<string | null> {
+  const url = absoluteLogoUrl(value);
+  if (!url) return null;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    const type = resp.headers.get("content-type") || "image/png";
+    if (!type.startsWith("image/")) return null;
+    const buf = Buffer.from(await resp.arrayBuffer());
+    return `data:${type};base64,${buf.toString("base64")}`;
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: { leadId: string } }
@@ -133,7 +168,10 @@ export async function GET(
   // Contractor type (database.types.ts is not regenerated here), so they are
   // read off an any cast, same pattern as PublicPageCard.tsx.
   const extra = contractor as any;
-  const logoUrl: string | null = extra.logo_url ?? null;
+  // Inlined as a data URI (or null) so satori never parses/fetches the URL at
+  // render time - a bare legacy path here used to throw "Invalid URL" and 500
+  // the download.
+  const logoUrl = await logoDataUri(extra.logo_url ?? null);
   const slug: string | null = extra.slug ?? null;
 
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? req.nextUrl.origin;
