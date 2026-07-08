@@ -41,11 +41,13 @@ export default function AskHearthDock({ greeting }: { greeting?: string }) {
     setPendingQuestion(null);
   }
 
-  // Panic buttons must never be occluded: /emergency is the one screen where
-  // a floating chat trigger sitting on top of the call/text/prep actions is a
-  // safety issue, not just a layout nit, so the dock doesn't render there at
-  // all (hooks above still run - only the output is suppressed).
-  if (pathname?.startsWith("/emergency")) return null;
+  // Ask Hearth stays docked bottom-right on every screen, /emergency included.
+  // The one care there: the pill must not sit on top of a panic button (a
+  // wrong-tap in a real emergency). That's handled on the Emergency page by
+  // giving its content bottom clearance (pb) so the pill floats over empty
+  // space, not a card - see src/app/(app)/emergency/page.tsx. pathname is kept
+  // for potential per-route tweaks and to keep the hook order stable.
+  void pathname;
 
   return (
     <div className="fixed bottom-4 right-4 z-40 print:hidden">

@@ -24,7 +24,10 @@ export default async function EmergencyPage() {
   const noteFor = (key?: PrepKey) => (key ? prep[key]?.note ?? null : null);
 
   return (
-    <div className="space-y-8">
+    // pb-28 gives the always-on Ask Hearth dock (fixed bottom-right) empty
+    // space to float over, so its pill never sits on top of a panic card's
+    // tap zone even when scrolled to the bottom.
+    <div className="space-y-8 pb-28">
       <div>
         <h1 className="text-2xl font-semibold text-stone-900">Emergency</h1>
         <p className="mt-1 text-stone-500">
