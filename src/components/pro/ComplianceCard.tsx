@@ -64,7 +64,7 @@ export default function ComplianceCard({
         <h2 className="text-lg font-semibold text-stone-900">
           License and insurance
         </h2>
-        <p className="mt-1 text-xs text-stone-400">
+        <p className="mt-1 text-xs text-stone-500">
           Hearth stores your document and reminds you before it expires. It
           does not verify the license or the insurance policy.
         </p>
@@ -165,7 +165,7 @@ function ComplianceRow({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-sm font-medium text-stone-900">{label}</p>
-          <p className="text-xs text-stone-400">
+          <p className="text-xs text-stone-500">
             {state.expires
               ? `On file, expires ${fmt(state.expires)}`
               : "Nothing on file yet"}
@@ -218,7 +218,7 @@ function ComplianceRow({
         </div>
       )}
 
-      {busy && <p className="text-xs text-stone-400">Uploading, one moment.</p>}
+      {busy && <p className="text-xs text-stone-500">Uploading, one moment.</p>}
       {err && <p className="text-xs text-red-600">{err}</p>}
     </div>
   );

@@ -35,7 +35,7 @@ export default function ProPlanToggle() {
             <span className="block leading-tight">{PLANS[key].label}</span>
             <span
               className={`block text-[10px] font-normal leading-tight ${
-                plan === key ? "text-hearth-100" : "text-stone-400"
+                plan === key ? "text-hearth-100" : "text-stone-500"
               }`}
             >
               {PLANS[key].price}
@@ -59,7 +59,7 @@ export default function ProPlanToggle() {
             First month deal
           </p>
           <p className="text-4xl font-semibold text-stone-900">
-            <span className="mr-2 align-middle text-2xl font-normal text-stone-400 line-through">
+            <span className="mr-2 align-middle text-2xl font-normal text-stone-500 line-through">
               ${PRO_PLAN.monthly}
             </span>
             ${PRO_PLAN.introFirstMonth}
@@ -79,7 +79,7 @@ export default function ProPlanToggle() {
               an invented list price. */}
           <p className="text-sm font-medium text-hearth-700">Yearly deal</p>
           <p className="text-4xl font-semibold text-stone-900">
-            <span className="mr-2 align-middle text-2xl font-normal text-stone-400 line-through">
+            <span className="mr-2 align-middle text-2xl font-normal text-stone-500 line-through">
               ${PRO_PLAN.monthly}
             </span>
             ${(PRO_PLAN.yearly / 12).toFixed(2)}
@@ -100,7 +100,7 @@ export default function ProPlanToggle() {
             ? `Start for $${PRO_PLAN.introFirstMonth}`
             : "Get a year of Pro"}
         </button>
-        <p className="text-xs text-stone-400">
+        <p className="text-xs text-stone-500">
           Cancel anytime. Your lead access never changes either way.
         </p>
       </form>

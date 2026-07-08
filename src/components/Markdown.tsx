@@ -47,11 +47,11 @@ export default function Markdown({ text }: { text: string }) {
     ));
     blocks.push(
       list.ordered ? (
-        <ol key={key++} className="ml-4 list-decimal space-y-0.5">
+        <ol key={key++} className="ml-4 list-decimal space-y-1.5">
           {items}
         </ol>
       ) : (
-        <ul key={key++} className="ml-4 list-disc space-y-0.5">
+        <ul key={key++} className="ml-4 list-disc space-y-1.5">
           {items}
         </ul>
       )
@@ -95,5 +95,7 @@ export default function Markdown({ text }: { text: string }) {
   }
   flushList();
 
-  return <div className="space-y-1.5">{blocks}</div>;
+  // Generous vertical rhythm + relaxed line-height so answers read as calm,
+  // airy paragraphs instead of a dense wall of text.
+  return <div className="space-y-3 leading-relaxed">{blocks}</div>;
 }

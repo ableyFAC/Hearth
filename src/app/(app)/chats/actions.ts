@@ -5,6 +5,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveProperty } from "@/lib/property";
 import { formatUSDCents } from "@/lib/quotes";
+import { setFlash } from "@/lib/flash";
+
+// Mirrors contractors/actions: a generic, honest failure the homeowner can act
+// on, used for every guard miss and the status-update error below.
+const QUOTE_ERROR = "Couldn't update the quote, please try again.";
 
 // Shared body for accept/decline: verifies the quote is really on a lead
 // attached to the caller's own property before touching anything (the id
@@ -17,10 +22,18 @@ async function respondToQuote(
   newStatus: "accepted" | "declined"
 ) {
   const property = await getActiveProperty();
-  if (!property) return;
+  if (!property) {
+    setFlash(QUOTE_ERROR, "error");
+    revalidatePath("/chats");
+    return;
+  }
 
   const quoteId = String(formData.get("quote_id") || "");
-  if (!quoteId) return;
+  if (!quoteId) {
+    setFlash(QUOTE_ERROR, "error");
+    revalidatePath("/chats");
+    return;
+  }
 
   const supabase = createClient();
 
@@ -30,7 +43,12 @@ async function respondToQuote(
     .eq("id", quoteId)
     .eq("status", "sent")
     .maybeSingle();
-  if (!quote) return;
+  if (!quote) {
+    // Already accepted/declined/withdrawn, so there's nothing left to change.
+    setFlash("That quote can no longer be updated.", "error");
+    revalidatePath("/chats");
+    return;
+  }
 
   const { data: lead } = await supabase
     .from("contractor_leads")
@@ -38,14 +56,22 @@ async function respondToQuote(
     .eq("id", quote.lead_id)
     .eq("property_id", property.id)
     .maybeSingle();
-  if (!lead) return;
+  if (!lead) {
+    setFlash(QUOTE_ERROR, "error");
+    revalidatePath("/chats");
+    return;
+  }
 
   const { error } = await supabase
     .from("lead_quotes")
     .update({ status: newStatus, updated_at: new Date().toISOString() })
     .eq("id", quoteId)
     .eq("status", "sent");
-  if (error) return;
+  if (error) {
+    setFlash(QUOTE_ERROR, "error");
+    revalidatePath("/chats");
+    return;
+  }
 
   // Tell the pro their quote was answered. Best-effort: a notification
   // hiccup should never undo a status change that already saved.

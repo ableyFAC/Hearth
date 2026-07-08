@@ -171,12 +171,24 @@ export default function InspectionUpload() {
 
   function confirmAndSave(formData: FormData) {
     startSave(async () => {
-      await saveInspectionFindingsAction(formData);
-      setPhase("done");
-      setImages([]);
-      setPreviews([]);
-      setText("");
-      setResult(null);
+      const res = await saveInspectionFindingsAction(formData);
+      // Only celebrate when something was actually added. Otherwise stay on the
+      // review step and tell the truth about why nothing landed.
+      if (res.ok && res.added > 0) {
+        setPhase("done");
+        setImages([]);
+        setPreviews([]);
+        setText("");
+        setResult(null);
+        return;
+      }
+      if (!res.ok && res.reason === "error") {
+        setError(res.message);
+      } else if (!res.ok && res.reason === "nothing_selected") {
+        setError("Nothing was selected. Check at least one item to add.");
+      } else {
+        setError("Those items are already in your home, so nothing was added.");
+      }
     });
   }
 
@@ -319,6 +331,8 @@ export default function InspectionUpload() {
           </p>
         )}
 
+        {error && <p className="text-sm text-red-600">{error}</p>}
+
         <div className="flex gap-3">
           <button type="button" className="btn-secondary" onClick={startOver}>
             Cancel
@@ -363,7 +377,7 @@ export default function InspectionUpload() {
             <span className="text-sm font-medium text-stone-700">
               {previews.length ? "Add more pages" : "Upload photos of the inspection report"}
             </span>
-            <span className="text-xs text-stone-400">
+            <span className="text-xs text-stone-500">
               You can add every page as its own photo
             </span>
             <input

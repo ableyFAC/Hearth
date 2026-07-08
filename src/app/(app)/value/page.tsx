@@ -183,7 +183,7 @@ export default async function ValuePage() {
                   {timeline.map((p) => (
                     <span
                       key={p.year}
-                      className="min-w-[2.75rem] text-center text-[10px] text-stone-400"
+                      className="min-w-[2.75rem] text-center text-[10px] text-stone-500"
                     >
                       {p.year}
                     </span>
@@ -203,7 +203,7 @@ export default async function ValuePage() {
             />
           </div>
 
-          <p className="mt-6 text-xs text-stone-400">
+          <p className="mt-6 text-xs text-stone-500">
             This is an estimate based on statewide average price trends, not
             an appraisal. Your home&apos;s real value depends on its
             condition, upgrades, and what is actually selling nearby right

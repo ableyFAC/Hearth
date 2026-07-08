@@ -40,7 +40,7 @@ export default function ChatDock({
         <span className="truncate text-sm font-semibold text-stone-900">
           {chat.name}
         </span>
-        <div className="flex items-center gap-2 text-stone-400">
+        <div className="flex items-center gap-2 text-stone-500">
           <button
             type="button"
             onClick={() => setMinimized((m) => !m)}

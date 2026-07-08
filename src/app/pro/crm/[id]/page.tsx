@@ -210,7 +210,7 @@ export default async function ClientDetailPage({
           </button>
         </form>
         {notes.length === 0 ? (
-          <p className="text-sm text-stone-400">No notes yet.</p>
+          <p className="text-sm text-stone-500">No notes yet.</p>
         ) : (
           <ul className="space-y-2">
             {notes.map((n) => (
@@ -222,7 +222,7 @@ export default async function ClientDetailPage({
                   <p className="whitespace-pre-wrap text-sm text-stone-700">
                     {n.body}
                   </p>
-                  <p className="text-xs text-stone-400">
+                  <p className="text-xs text-stone-500">
                     {new Date(n.created_at).toLocaleString()}
                   </p>
                 </div>

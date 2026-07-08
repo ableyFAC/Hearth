@@ -78,7 +78,7 @@ export default async function GetStarted({
           Sign in
         </a>
       </p>
-      <a href="/" className="mt-3 text-sm text-stone-400 hover:underline">
+      <a href="/" className="mt-3 text-sm text-stone-500 hover:underline">
         ← Back
       </a>
     </main>

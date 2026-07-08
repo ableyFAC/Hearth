@@ -70,12 +70,12 @@ export default function BackgroundCheckCard({
           </p>
         </div>
       ) : status === "pending" ? (
-        <p className="text-xs text-stone-400">
+        <p className="text-xs text-stone-500">
           Your background check is in progress. We&apos;ll update this as
           soon as Checkr reports back.
         </p>
       ) : status === "invited" ? (
-        <p className="text-xs text-stone-400">
+        <p className="text-xs text-stone-500">
           Check your email for Checkr&apos;s invitation to complete your
           background check.
         </p>
@@ -99,7 +99,7 @@ export default function BackgroundCheckCard({
               className="input max-w-[180px] text-xs"
             />
           </div>
-          <p className="text-xs text-stone-400">
+          <p className="text-xs text-stone-500">
             Your legal name goes to Checkr to run the check. Hearth doesn&apos;t
             store it.
           </p>
@@ -111,7 +111,7 @@ export default function BackgroundCheckCard({
           </button>
         </form>
       ) : (
-        <p className="text-xs text-stone-400">
+        <p className="text-xs text-stone-500">
           Add an email address above first, then come back to start your
           background check.
         </p>

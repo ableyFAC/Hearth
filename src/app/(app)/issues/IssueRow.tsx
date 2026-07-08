@@ -143,7 +143,7 @@ export default function IssueRow({
             <div className="flex items-center gap-2">
               <span
                 className={`font-medium ${
-                  resolved ? "text-stone-400 line-through" : "text-stone-900"
+                  resolved ? "text-stone-500 line-through" : "text-stone-900"
                 }`}
               >
                 {iconFor(ISSUE_CATEGORIES, issue.category)}{" "}
@@ -163,7 +163,7 @@ export default function IssueRow({
             {issue.description && (
               <p
                 className={`mt-1 text-sm ${
-                  resolved ? "text-stone-400 line-through" : "text-stone-600"
+                  resolved ? "text-stone-500 line-through" : "text-stone-600"
                 }`}
               >
                 {issue.description}

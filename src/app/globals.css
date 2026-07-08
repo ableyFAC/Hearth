@@ -18,9 +18,11 @@ body {
   .input,
   .select,
   .textarea {
-    @apply w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm
-           shadow-sm focus:border-hearth-500 focus:outline-none focus:ring-1
-           focus:ring-hearth-500;
+    /* text-base (16px) on small screens stops iOS Safari from zooming the page
+       on focus; sm:text-sm keeps the compact 14px look on desktop. */
+    @apply w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-base
+           sm:text-sm shadow-sm focus:border-hearth-500 focus:outline-none
+           focus:ring-1 focus:ring-hearth-500;
   }
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2

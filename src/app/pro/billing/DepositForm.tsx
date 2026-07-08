@@ -120,7 +120,7 @@ export default function DepositForm({
             </span>
           )}
         </div>
-        <p className="mt-1 text-[11px] text-stone-400">
+        <p className="mt-1 text-[11px] text-stone-500">
           {boostPts > 0
             ? `Every deposit earns +${boostPts}% as a Pro member, tiers stack on top`
             : "$200+ earns bonus credit"}
@@ -128,7 +128,7 @@ export default function DepositForm({
         </p>
       </div>
 
-      <p className="text-xs text-stone-400">
+      <p className="text-xs text-stone-500">
         Deposits are non-refundable and can only be spent on leads. Bonus credit
         is promotional, has no cash value, and expires 60 days after it&apos;s
         added. Lead prices vary by service.

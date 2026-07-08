@@ -143,8 +143,14 @@ export default function SystemCaptureCard({
   function confirm(formData: FormData) {
     startSave(async () => {
       const result = await confirmSystemAction(formData);
+      if (!result.ok) {
+        // Surface the failure inline instead of silently dying: keep the review
+        // form so the owner can retry, and never show the "Confirmed" payoff.
+        setNote(result.error);
+        return;
+      }
       if (preview) URL.revokeObjectURL(preview);
-      setDelta(result);
+      setDelta({ before: result.before, after: result.after });
       setPhase("confirmed");
     });
   }
@@ -177,7 +183,7 @@ export default function SystemCaptureCard({
             <span className="text-sm font-medium text-stone-700">
               Snap the data plate
             </span>
-            <span className="text-xs text-stone-400">
+            <span className="text-xs text-stone-500">
               Hearth reads the brand, model, and age off it
             </span>
             <input
@@ -191,7 +197,7 @@ export default function SystemCaptureCard({
           <button
             type="button"
             onClick={skipToManual}
-            className="text-xs text-stone-400 hover:text-stone-600"
+            className="text-xs text-stone-500 hover:text-stone-600"
           >
             No photo handy? Enter details by hand
           </button>

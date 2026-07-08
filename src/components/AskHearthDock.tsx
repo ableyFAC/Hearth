@@ -7,7 +7,23 @@ import AskHearth from "@/components/AskHearth";
 
 // A floating Ask Hearth widget pinned to the bottom-right. Always available; a
 // little tab that opens into the full, scrollable conversation.
-export default function AskHearthDock({ greeting }: { greeting?: string }) {
+export default function AskHearthDock({
+  greeting,
+  endpoint,
+  storageKeyBase,
+  retentionKeyBase,
+  headingTitle = "✨ Ask Hearth",
+  headingSubtitle,
+}: {
+  greeting?: string;
+  // Override to mount a different-brained assistant (e.g. the pro copilot).
+  // Defaults leave the homeowner dock behaving exactly as before.
+  endpoint?: string;
+  storageKeyBase?: string;
+  retentionKeyBase?: string;
+  headingTitle?: string;
+  headingSubtitle?: string;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   // A question that arrived while the dock was closed; handed to the freshly
@@ -53,7 +69,7 @@ export default function AskHearthDock({ greeting }: { greeting?: string }) {
     <div className="fixed bottom-4 right-4 z-40 print:hidden">
       {open ? (
         <div className="flex h-[60vh] max-h-[560px] w-[22rem] max-w-[calc(100vw-2rem)] flex-col rounded-2xl border border-stone-200 bg-white p-3 shadow-2xl">
-          <div className="mb-1 flex items-center justify-end gap-3 text-stone-400">
+          <div className="mb-1 flex items-center justify-end gap-3 text-stone-500">
             <Link
               href="/chats?lead=ask-hearth"
               onClick={close}
@@ -84,6 +100,11 @@ export default function AskHearthDock({ greeting }: { greeting?: string }) {
               fill
               greeting={greeting}
               initialQuestion={pendingQuestion ?? undefined}
+              endpoint={endpoint}
+              storageKeyBase={storageKeyBase}
+              retentionKeyBase={retentionKeyBase}
+              headingTitle={headingTitle}
+              headingSubtitle={headingSubtitle}
             />
           </div>
         </div>
@@ -93,7 +114,7 @@ export default function AskHearthDock({ greeting }: { greeting?: string }) {
           onClick={() => setOpen(true)}
           className="flex items-center gap-2 rounded-full bg-hearth-600 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:bg-hearth-700"
         >
-          ✨ Ask Hearth
+          {headingTitle}
         </button>
       )}
     </div>

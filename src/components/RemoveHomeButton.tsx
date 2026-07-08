@@ -18,7 +18,7 @@ export default function RemoveHomeButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-xs font-medium text-stone-400 hover:text-red-600"
+        className="ml-1 flex min-h-[44px] items-center px-2 text-xs font-medium text-stone-500 hover:text-red-600"
         title="Delete this home"
       >
         Delete

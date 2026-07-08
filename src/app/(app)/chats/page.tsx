@@ -273,7 +273,7 @@ export default async function HomeownerChatsPage({
                           New
                         </span>
                       ) : (
-                        <span className="shrink-0 text-xs text-stone-400">
+                        <span className="shrink-0 text-xs text-stone-500">
                           {iconFor(JOB_CATEGORIES, l.category)}
                         </span>
                       )}
@@ -322,7 +322,7 @@ export default async function HomeownerChatsPage({
                         {"★".repeat(5 - existingReview.rating)}
                       </span>
                     </span>
-                    <span className="text-xs text-stone-400">
+                    <span className="text-xs text-stone-500">
                       You reviewed this pro
                     </span>
                   </div>
@@ -355,7 +355,7 @@ export default async function HomeownerChatsPage({
               </div>
             </div>
           ) : (
-            <div className="flex h-[60vh] items-center justify-center rounded-xl border border-dashed border-stone-300 text-sm text-stone-400 md:h-[calc(100vh-13rem)]">
+            <div className="flex h-[60vh] items-center justify-center rounded-xl border border-dashed border-stone-300 text-sm text-stone-500 md:h-[calc(100vh-13rem)]">
               Select a conversation
             </div>
           )}

@@ -23,6 +23,14 @@ type ConfirmedIssue = {
   description: string | null;
 };
 
+// Result the client branches on, so the "Added to your home" panel only shows
+// when something was actually written, and the nothing-selected / save-failed
+// cases are reported honestly instead of faking success.
+export type SaveFindingsResult =
+  | { ok: true; added: number; skipped: number }
+  | { ok: false; reason: "nothing_selected" }
+  | { ok: false; reason: "error"; message: string };
+
 function parseJsonArray(raw: FormDataEntryValue | null): any[] {
   if (typeof raw !== "string" || !raw) return [];
   try {
@@ -38,7 +46,9 @@ function parseJsonArray(raw: FormDataEntryValue | null): any[] {
 // against the same value lists the rest of the app uses, so a tampered
 // hidden field can't write an invalid system_type, category, or severity
 // into the home record.
-export async function saveInspectionFindingsAction(formData: FormData) {
+export async function saveInspectionFindingsAction(
+  formData: FormData
+): Promise<SaveFindingsResult> {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
   const supabase = createClient();
@@ -81,8 +91,11 @@ export async function saveInspectionFindingsAction(formData: FormData) {
 
   if (!systems.length && !issues.length) {
     setFlash("Nothing was selected to add.", "info");
-    return;
+    return { ok: false, reason: "nothing_selected" };
   }
+
+  const SAVE_ERROR =
+    "Couldn't save those findings right now. Please try again in a bit.";
 
   // Skip a system_type that already exists on this property, so re-adding a
   // report (or confirming twice) never creates duplicate system rows.
@@ -103,7 +116,12 @@ export async function saveInspectionFindingsAction(formData: FormData) {
         notes: s.notes,
       }))
     );
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error("saveInspectionFindingsAction systems insert failed:", error.message);
+      setFlash(SAVE_ERROR, "error");
+      revalidatePath("/dashboard");
+      return { ok: false, reason: "error", message: SAVE_ERROR };
+    }
   }
 
   if (issues.length) {
@@ -116,10 +134,28 @@ export async function saveInspectionFindingsAction(formData: FormData) {
         status: "open",
       }))
     );
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error("saveInspectionFindingsAction issues insert failed:", error.message);
+      setFlash(SAVE_ERROR, "error");
+      revalidatePath("/dashboard");
+      return { ok: false, reason: "error", message: SAVE_ERROR };
+    }
   }
 
   const skipped = systems.length - newSystems.length;
+  const added = newSystems.length + issues.length;
+
+  // Everything the owner picked already existed on the home: honest info, not a
+  // green "Added" panel.
+  if (added === 0) {
+    setFlash(
+      "Those were already in your home, so nothing new was added.",
+      "info"
+    );
+    revalidatePath("/dashboard");
+    return { ok: true, added: 0, skipped };
+  }
+
   setFlash(
     skipped
       ? `Added to your home. ${skipped} system${skipped === 1 ? "" : "s"} already existed and were skipped.`
@@ -127,4 +163,5 @@ export async function saveInspectionFindingsAction(formData: FormData) {
     "success"
   );
   revalidatePath("/dashboard");
+  return { ok: true, added, skipped };
 }

@@ -44,13 +44,13 @@ export default function ChatDrawer({
             <p className="truncate text-sm font-semibold text-stone-900">
               {chat.name}
             </p>
-            <p className="text-xs text-stone-400">Messages</p>
+            <p className="text-xs text-stone-500">Messages</p>
           </div>
           <button
             type="button"
             onClick={() => setChat(null)}
             title="Close"
-            className="text-lg leading-none text-stone-400 hover:text-red-600"
+            className="text-lg leading-none text-stone-500 hover:text-red-600"
           >
             ✕
           </button>

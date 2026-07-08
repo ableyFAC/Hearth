@@ -190,7 +190,7 @@ export default function QuoteAnalyzer({
               <span className="text-sm font-medium text-stone-700">
                 {preview ? "Use a different photo" : "Take or upload a photo of the quote"}
               </span>
-              <span className="text-xs text-stone-400">
+              <span className="text-xs text-stone-500">
                 A clear photo of every line item and the total works best
               </span>
               <input
@@ -268,6 +268,13 @@ export default function QuoteAnalyzer({
           </div>
 
           <p className="text-sm text-stone-700">{result.summary}</p>
+
+          {/* Same honest caveat Ask Hearth carries under its answers: this is an
+              AI read, not a professional appraisal. */}
+          <p className="text-[11px] text-stone-400">
+            Hearth&apos;s read is an AI estimate. Confirm with a licensed pro
+            before you decide.
+          </p>
 
           {result.line_items.length > 0 && (
             <div>
@@ -350,8 +357,8 @@ export default function QuoteAnalyzer({
       {result && freeTaste && (
         <div className="card space-y-3 border-hearth-200 bg-hearth-50 text-center">
           <p className="text-sm text-hearth-800">
-            That was your free check. Get every quote checked with Hearth
-            Plus, $4.99/mo after a free first month.
+            That was your free check. Get every quote checked with Hearth Plus,
+            $4.99/mo (first month free for new members).
           </p>
           <Link href="/plus?reason=quote" className="btn-primary inline-block">
             Get Hearth Plus

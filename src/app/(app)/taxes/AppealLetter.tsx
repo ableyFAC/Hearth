@@ -114,7 +114,7 @@ export default function AppealLetter({ isPlus }: { isPlus: boolean }) {
               {loading ? "Drafting..." : "Draft again"}
             </button>
           </div>
-          <p className="text-xs text-stone-400">
+          <p className="text-xs text-stone-500">
             This is a starting point, not legal or tax advice. Read it
             closely, correct anything that doesn&apos;t match your situation,
             and add the details only you have before you send it. Appeals are

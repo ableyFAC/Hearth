@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { createClient } from "@supabase/supabase-js";
 import { JOB_CATEGORIES, labelFor } from "@/lib/constants";
+import { ogFontOption } from "@/lib/ogFont";
 
 // Social share card for a pro's public page (/p/[id]). Rendered on demand by
 // next/og; Next wires it into the page's og:image / twitter:image tags.
@@ -133,7 +134,7 @@ export default async function OgImage({
           </div>
         </div>
       ),
-      size
+      { ...size, ...ogFontOption() }
     );
   }
 
@@ -210,6 +211,6 @@ export default async function OgImage({
         />
       </div>
     ),
-    size
+    { ...size, ...ogFontOption() }
   );
 }

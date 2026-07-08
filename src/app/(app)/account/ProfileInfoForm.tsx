@@ -6,7 +6,7 @@ import type { UserProfile } from "@/lib/database.types";
 
 function FieldIcon({ children }: { children: React.ReactNode }) {
   return (
-    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400">
+    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-500">
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         {children}
       </svg>
@@ -78,7 +78,7 @@ export default function ProfileInfoForm({
               placeholder="you@example.com"
             />
           </div>
-          <p className="mt-1 text-xs text-stone-400">
+          <p className="mt-1 text-xs text-stone-500">
             Changing this sends a confirmation link to the new address.
           </p>
         </div>

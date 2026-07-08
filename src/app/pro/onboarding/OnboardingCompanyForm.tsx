@@ -46,7 +46,7 @@ export default function OnboardingCompanyForm({
               <div>
                 <label className="label">
                   Company Name{" "}
-                  <span className="font-normal text-stone-400">
+                  <span className="font-normal text-stone-500">
                     (as it appears on your license)
                   </span>
                 </label>
@@ -102,7 +102,7 @@ export default function OnboardingCompanyForm({
                     placeholder="e.g. San Francisco Bay Area"
                   />
                 </div>
-                <p className="mt-1 text-xs text-stone-400">
+                <p className="mt-1 text-xs text-stone-500">
                   Where you are willing to travel for jobs.
                 </p>
               </div>
@@ -129,7 +129,7 @@ export default function OnboardingCompanyForm({
                     ))}
                   </select>
                 </div>
-                <p className="mt-1 text-xs text-stone-400">
+                <p className="mt-1 text-xs text-stone-500">
                   Your job board only shows homeowner jobs in this state.
                 </p>
               </div>
@@ -146,7 +146,7 @@ export default function OnboardingCompanyForm({
                     placeholder="LIC-000000-XX"
                   />
                 </div>
-                <p className="mt-1 text-xs text-stone-400">
+                <p className="mt-1 text-xs text-stone-500">
                   We keep this on file, show homeowners a &quot;license on
                   file&quot; badge, and flag it for verification. It can&apos;t
                   be changed later.
@@ -156,7 +156,7 @@ export default function OnboardingCompanyForm({
               <div>
                 <label className="label">
                   Referral code{" "}
-                  <span className="font-normal text-stone-400">(optional)</span>
+                  <span className="font-normal text-stone-500">(optional)</span>
                 </label>
                 <div className="relative">
                   <FieldIcon>
@@ -169,7 +169,7 @@ export default function OnboardingCompanyForm({
                     placeholder="From the pro who invited you"
                   />
                 </div>
-                <p className="mt-1 text-xs text-stone-400">
+                <p className="mt-1 text-xs text-stone-500">
                   Invited by another Hearth pro? Enter their code: you both get
                   $25 of application credit when you win your first job.
                 </p>

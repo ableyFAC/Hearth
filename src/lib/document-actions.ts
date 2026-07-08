@@ -19,8 +19,12 @@ function s(formData: FormData, key: string): string | null {
   return t.length ? t : null;
 }
 
-// Save an uploaded document + its extracted facts to the vault.
-export async function saveDocumentAction(formData: FormData) {
+// Save an uploaded document + its extracted facts to the vault. Returns a small
+// result so the client can tell the truth: only show "Saved" when ok is true,
+// and keep the review form (plus the error) when the save actually failed.
+export async function saveDocumentAction(
+  formData: FormData
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
   const supabase = createClient();
@@ -64,16 +68,16 @@ export async function saveDocumentAction(formData: FormData) {
     if (path) {
       await supabase.storage.from("home-photos").remove([path]);
     }
-    setFlash(
-      "Couldn't save that document right now. Please try again in a bit.",
-      "error"
-    );
+    const message =
+      "Couldn't save that document right now. Please try again in a bit.";
+    setFlash(message, "error");
     revalidatePath("/documents");
-    return;
+    return { ok: false, error: message };
   }
 
   setFlash("Saved to your documents.", "success");
   revalidatePath("/documents");
+  return { ok: true };
 }
 
 // Push a saved document's facts into the digital twin: update the matching home

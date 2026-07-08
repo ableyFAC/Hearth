@@ -58,7 +58,7 @@ export default function PublicProfileForm({
         <div className="-mt-10 mb-6">
           <button
             type="button"
-            className="relative flex h-20 w-20 items-center justify-center rounded-2xl border border-dashed border-stone-300 bg-stone-50 text-stone-400 shadow-sm hover:bg-stone-100"
+            className="relative flex h-20 w-20 items-center justify-center rounded-2xl border border-dashed border-stone-300 bg-stone-50 text-stone-500 shadow-sm hover:bg-stone-100"
           >
             <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 21V5l8-2 8 2v16M9 9h.01M9 13h.01M15 9h.01M15 13h.01M10 21v-4h4v4" />
@@ -80,7 +80,7 @@ export default function PublicProfileForm({
               <div>
                 <label className="label">
                   Company Name{" "}
-                  <span className="font-normal text-stone-400">
+                  <span className="font-normal text-stone-500">
                     (as it appears on your license)
                   </span>
                 </label>
@@ -142,7 +142,7 @@ export default function PublicProfileForm({
                     placeholder="e.g. San Francisco Bay Area"
                   />
                 </div>
-                <p className="mt-1 text-xs text-stone-400">
+                <p className="mt-1 text-xs text-stone-500">
                   Where you are willing to travel for jobs.
                 </p>
               </div>
@@ -166,7 +166,7 @@ export default function PublicProfileForm({
                     ))}
                   </select>
                 </div>
-                <p className="mt-1 text-xs text-stone-400">
+                <p className="mt-1 text-xs text-stone-500">
                   Jobs from homeowners in this state show first; leave blank to
                   see everything.
                 </p>
@@ -204,7 +204,7 @@ export default function PublicProfileForm({
                       <FieldIcon>
                         <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M9 13h6M9 17h6" />
                       </FieldIcon>
-                      <div className="input cursor-not-allowed select-none bg-stone-100 pl-9 text-stone-400">
+                      <div className="input cursor-not-allowed select-none bg-stone-100 pl-9 text-stone-500">
                         {contractor.license_number}
                       </div>
                     </div>
@@ -232,7 +232,7 @@ export default function PublicProfileForm({
                       </>
                     ) : (
                       <>
-                        <p className="mt-1 text-xs text-stone-400">
+                        <p className="mt-1 text-xs text-stone-500">
                           We&apos;re checking your license against the CSLB
                           public database. You can keep applying to jobs
                           meanwhile.

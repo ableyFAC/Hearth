@@ -86,7 +86,7 @@ export default async function ProToolsPage() {
           ))}
         </section>
 
-        <p className="text-center text-xs text-stone-400">
+        <p className="text-center text-xs text-stone-500">
           Membership never changes which jobs you can see or apply to. Leads
           stay pay-per-apply for everyone.
         </p>
@@ -117,7 +117,7 @@ export default async function ProToolsPage() {
         </p>
       </div>
       <ProToolsClient initialPastJobs={pastJobRows ?? []} />
-      <p className="text-center text-xs text-stone-400">
+      <p className="text-center text-xs text-stone-500">
         Drafts use only the details you type in. Always give them a quick read
         before sending.
       </p>

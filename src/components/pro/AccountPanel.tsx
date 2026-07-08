@@ -41,7 +41,7 @@ export default function AccountPanel({
 
   return (
     <details className="group space-y-4">
-      <summary className="flex w-fit cursor-pointer list-none items-center gap-2 text-lg font-semibold text-stone-900 marker:text-stone-400 [&::-webkit-details-marker]:hidden">
+      <summary className="flex w-fit cursor-pointer list-none items-center gap-2 text-lg font-semibold text-stone-900 marker:text-stone-500 [&::-webkit-details-marker]:hidden">
         <span className="inline-block transition-transform group-open:rotate-90">
           ▸
         </span>

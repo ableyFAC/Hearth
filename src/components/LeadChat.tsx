@@ -606,7 +606,7 @@ export default function LeadChat({
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="text-xs text-stone-400 hover:text-stone-600"
+            className="text-xs text-stone-500 hover:text-stone-600"
           >
             Close
           </button>
@@ -677,7 +677,7 @@ export default function LeadChat({
         }
       >
         {feed.length === 0 ? (
-          <p className="text-xs text-stone-400">No messages yet. Say hello.</p>
+          <p className="text-xs text-stone-500">No messages yet. Say hello.</p>
         ) : (
           feed.map((item) => {
             if (item.kind === "quote") {
@@ -856,7 +856,7 @@ export default function LeadChat({
                 )}
 
                 {mine && m.id === lastMineId && (
-                  <span className="mt-0.5 text-[10px] text-stone-400">
+                  <span className="mt-0.5 text-[10px] text-stone-500">
                     {otherReadAt && otherReadAt >= m.created_at
                       ? "Seen"
                       : "Delivered"}
@@ -931,7 +931,7 @@ export default function LeadChat({
                     <button
                       type="button"
                       onClick={() => removeQuoteRow(idx)}
-                      className="text-stone-400 hover:text-red-600"
+                      className="text-stone-500 hover:text-red-600"
                       aria-label="Remove line item"
                     >
                       ✕
@@ -1005,7 +1005,7 @@ export default function LeadChat({
               <button
                 type="button"
                 onClick={() => setReplyingTo(null)}
-                className="ml-2 text-stone-400 hover:text-stone-700"
+                className="ml-2 text-stone-500 hover:text-stone-700"
               >
                 ✕
               </button>
@@ -1053,7 +1053,7 @@ export default function LeadChat({
 
       <div className="mt-2 border-t border-stone-100 pt-2">
         {reported ? (
-          <p className="text-xs text-stone-400">
+          <p className="text-xs text-stone-500">
             ✓ Reported. Our team will review this conversation.
           </p>
         ) : reporting ? (
@@ -1077,7 +1077,7 @@ export default function LeadChat({
               <button
                 type="button"
                 onClick={() => setReporting(false)}
-                className="text-xs text-stone-400 hover:text-stone-600"
+                className="text-xs text-stone-500 hover:text-stone-600"
               >
                 Cancel
               </button>
@@ -1087,7 +1087,7 @@ export default function LeadChat({
           <button
             type="button"
             onClick={() => setReporting(true)}
-            className="text-xs text-stone-400 hover:text-red-600"
+            className="text-xs text-stone-500 hover:text-red-600"
           >
             ⚠ Report chat
           </button>
@@ -1225,7 +1225,7 @@ function QuoteCard({
                 <button
                   type="button"
                   onClick={onCancelWithdraw}
-                  className="text-xs text-stone-400 hover:text-stone-600"
+                  className="text-xs text-stone-500 hover:text-stone-600"
                 >
                   Cancel
                 </button>
@@ -1235,7 +1235,7 @@ function QuoteCard({
                 type="button"
                 onClick={onAskWithdraw}
                 disabled={busy}
-                className="text-xs font-medium text-stone-400 hover:text-red-600 disabled:opacity-50"
+                className="text-xs font-medium text-stone-500 hover:text-red-600 disabled:opacity-50"
               >
                 Withdraw
               </button>

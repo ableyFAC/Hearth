@@ -46,7 +46,7 @@ export default async function OnboardingPage({
       {!isFirst && (
         <Link
           href="/dashboard"
-          className="mt-4 text-center text-sm text-stone-400 hover:underline"
+          className="mt-4 text-center text-sm text-stone-500 hover:underline"
         >
           Cancel
         </Link>

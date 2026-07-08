@@ -260,10 +260,12 @@ export default async function HomePage({
   const URGENCY_TONE: Record<Urgency, string> = {
     overdue: "text-red-600",
     soon: "text-amber-600",
-    // stone-500, not stone-400: stone-400 on the card's white background is
-    // only ~2.5:1 contrast, below the 4.5:1 minimum for this small text.
-    later: "text-stone-500",
-    done: "text-stone-500",
+    // stone-600, not stone-400: stone-400 on the card's white background is
+    // only ~2.5:1 contrast, below the 4.5:1 minimum for this small text. These
+    // labels are also tappable disclosure headers, so the darker weight helps
+    // them read as buttons rather than dim captions.
+    later: "text-stone-600",
+    done: "text-stone-600",
   };
   function daysUntil(dateStr: string): number {
     const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -450,7 +452,7 @@ export default async function HomePage({
                   : "No maintenance tasks yet"}
               </p>
               {remindersTotal > 0 && (
-                <p className="text-xs text-stone-400">
+                <p className="text-xs text-stone-500">
                   {remindersDone} of {remindersTotal} done
                 </p>
               )}
@@ -545,7 +547,7 @@ export default async function HomePage({
                   ))}
 
                 <details open={planOpen || remindersTotal === 0} className="group">
-                  <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden px-2 text-sm font-semibold uppercase tracking-wide text-stone-500">
+                  <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden px-2 text-sm font-semibold uppercase tracking-wide text-stone-600">
                     <span className="mr-1 inline-block transition-transform group-open:rotate-90">
                       ▸
                     </span>
@@ -593,7 +595,7 @@ export default async function HomePage({
                     </li>
                   ))}
                 </ul>
-                <p className="mt-1.5 text-xs text-stone-400">
+                <p className="mt-1.5 text-xs text-stone-500">
                   Pulled from your{" "}
                   <Link href="/documents" className="text-hearth-700 hover:underline">
                     documents
@@ -820,7 +822,7 @@ export default async function HomePage({
 
       {/* Systems inventory (the old Home Profile) */}
       <details id="systems" open className="space-y-4">
-        <summary className="w-fit cursor-pointer text-lg font-semibold text-stone-900 marker:text-stone-400">
+        <summary className="w-fit cursor-pointer text-lg font-semibold text-stone-900 marker:text-stone-500">
           Your systems{sortedSys.length > 0 ? ` (${sortedSys.length})` : ""}
           {mustCount > 0 ? (
             <span className="chip ml-2 border border-red-300 bg-red-100 text-red-700">

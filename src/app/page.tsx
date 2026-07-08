@@ -44,7 +44,7 @@ export default async function Home({
     {
       icon: "🧰",
       title: "The right pro, fast",
-      body: "Reach a vetted pro the moment something breaks, with your home's details ready to send.",
+      body: "Reach a local pro the moment something breaks, with your home's details ready to send.",
     },
   ];
 
@@ -108,7 +108,7 @@ export default async function Home({
             </h1>
             <p className="mt-5 max-w-xl text-lg text-stone-600">
               Hearth watches over your house, tells you what needs attention,
-              and finds a trusted pro when something breaks.
+              and finds a local pro when something breaks.
             </p>
             <a
               href="/get-started"
@@ -173,7 +173,7 @@ export default async function Home({
                 </ul>
               </div>
             </div>
-            <p className="mt-3 text-xs text-stone-400">
+            <p className="mt-3 text-xs text-stone-500">
               Your home&apos;s report card
             </p>
           </section>
@@ -216,7 +216,7 @@ export default async function Home({
         <p className="text-sm font-medium text-stone-700">
           Free for your first home.
         </p>
-        <p className="mt-2 text-xs text-stone-400">
+        <p className="mt-2 text-xs text-stone-500">
           We&apos;re upfront about data: you decide what, if anything, is ever
           shared with an agent.
         </p>
@@ -242,10 +242,10 @@ export default async function Home({
       </section>
 
         <footer className="mt-12 border-t border-stone-200 pt-6 text-center">
-          <p className="text-xs text-stone-400">
+          <p className="text-xs text-stone-500">
             🏡 Hearth · Your home, looked after
           </p>
-          <p className="mt-2 text-xs text-stone-400">
+          <p className="mt-2 text-xs text-stone-500">
             <a href="/privacy" className="hover:text-hearth-700 hover:underline">
               Privacy
             </a>{" "}

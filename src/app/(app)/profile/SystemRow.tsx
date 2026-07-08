@@ -181,7 +181,7 @@ export default function SystemRow({
               <button
                 type="button"
                 onClick={() => setConfirmRemove(true)}
-                className="text-xs text-stone-400 hover:text-red-600"
+                className="text-xs text-stone-500 hover:text-red-600"
               >
                 Remove
               </button>
@@ -408,7 +408,7 @@ export default function SystemRow({
                           yearsAway === 1 ? "" : "s"
                         }`
                       : ""}
-                  <span className="block text-[10px] text-stone-400">
+                  <span className="block text-[10px] text-stone-500">
                     Based on this system&apos;s age and condition
                   </span>
                 </dd>

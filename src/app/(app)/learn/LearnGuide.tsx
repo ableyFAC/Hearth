@@ -83,7 +83,7 @@ export default function LearnGuide({
           )}
         </span>
         <span
-          className={`shrink-0 text-lg text-stone-400 transition-transform duration-200 ${
+          className={`shrink-0 text-lg text-stone-500 transition-transform duration-200 ${
             open ? "rotate-180" : ""
           }`}
           aria-hidden="true"
@@ -103,7 +103,7 @@ export default function LearnGuide({
         }`}
       >
         <div className="overflow-hidden">
-          <p className="text-xs text-stone-400">
+          <p className="text-xs text-stone-500">
             Typical lifespan: {lifespan} years
             {age != null ? ` · yours is about ${age} yrs old` : ""}
           </p>
@@ -128,7 +128,7 @@ export default function LearnGuide({
                   </span>
                   <span
                     className={
-                      checked[i] ? "text-stone-400 line-through" : "text-stone-600"
+                      checked[i] ? "text-stone-500 line-through" : "text-stone-600"
                     }
                   >
                     {t}

@@ -46,7 +46,7 @@ export default function GlobalSearch() {
         className="relative"
         role="search"
       >
-        <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400">
+        <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-500">
           <svg
             viewBox="0 0 24 24"
             className="h-4 w-4"
@@ -67,13 +67,13 @@ export default function GlobalSearch() {
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search"
           aria-label="Search"
-          className="w-32 rounded-full border border-stone-200 bg-white py-1.5 pl-8 pr-3 text-sm text-stone-700 transition-all placeholder:text-stone-400 focus:w-48 focus:border-hearth-400 focus:outline-none"
+          className="w-32 rounded-full border border-stone-200 bg-white py-1.5 pl-8 pr-3 text-sm text-stone-700 transition-all placeholder:text-stone-500 focus:w-48 focus:border-hearth-400 focus:outline-none"
         />
       </form>
 
       {focused && (
         <div className="absolute right-0 z-30 mt-1 w-56 rounded-xl border border-stone-200 bg-white p-2 shadow-lg">
-          <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-stone-400">
+          <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-stone-500">
             Try searching
           </p>
           {EXAMPLES.map((ex) => (

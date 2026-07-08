@@ -131,7 +131,7 @@ export default async function HouseholdPage() {
             <h2 className="text-base font-semibold text-stone-900">
               {home.address_line1}
             </h2>
-            <p className="mt-1 text-xs text-stone-400">
+            <p className="mt-1 text-xs text-stone-500">
               Up to {MAX_MEMBERS_PER_HOME} members per home.
             </p>
 
@@ -144,7 +144,7 @@ export default async function HouseholdPage() {
                   >
                     <div>
                       <p className="text-sm text-stone-900">{m.invited_email}</p>
-                      <p className="text-xs text-stone-400">Member</p>
+                      <p className="text-xs text-stone-500">Member</p>
                     </div>
                     <form action={removeMemberAction}>
                       <input type="hidden" name="id" value={m.id} />
@@ -164,7 +164,7 @@ export default async function HouseholdPage() {
                   >
                     <div>
                       <p className="text-sm text-stone-900">{m.invited_email}</p>
-                      <p className="text-xs text-stone-400">
+                      <p className="text-xs text-stone-500">
                         Invited. Waiting for them to sign up or sign in with
                         this email.
                       </p>
@@ -217,7 +217,7 @@ export default async function HouseholdPage() {
                 <h2 className="text-base font-semibold text-stone-900">
                   {home.address_line1}
                 </h2>
-                <p className="mt-1 text-xs text-stone-400">Shared with you.</p>
+                <p className="mt-1 text-xs text-stone-500">Shared with you.</p>
               </div>
               {membership && (
                 <form action={leaveHomeAction}>

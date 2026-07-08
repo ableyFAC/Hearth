@@ -232,7 +232,7 @@ export default async function ForecastPage() {
                 {forecast.yearlySpend.map((y) => (
                   <span
                     key={y.year}
-                    className="min-w-[2.5rem] text-center text-[10px] text-stone-400"
+                    className="min-w-[2.5rem] text-center text-[10px] text-stone-500"
                   >
                     {y.year}
                   </span>
@@ -279,7 +279,7 @@ export default async function ForecastPage() {
                   </Link>
                 </div>
               )}
-              <p className="text-xs text-stone-400">
+              <p className="text-xs text-stone-500">
                 Ballpark from typical energy prices and 30-year weather
                 averages for your state, give or take 30%. Your thermostat
                 habits matter more than any formula.
@@ -305,7 +305,7 @@ export default async function ForecastPage() {
                       <p className="text-sm font-medium text-stone-900">
                         {labelFor(SYSTEM_TYPES, item.system_type)}
                       </p>
-                      <p className="text-xs text-stone-400">
+                      <p className="text-xs text-stone-500">
                         {item.timingEstimated ? (
                           "Timing unknown, add an install year for a real estimate"
                         ) : (
@@ -332,7 +332,7 @@ export default async function ForecastPage() {
                     </p>
                     {!item.timingEstimated &&
                       item.replacementYear - currentYear > 1 && (
-                        <p className="text-xs text-stone-400">
+                        <p className="text-xs text-stone-500">
                           closer to ~{money(item.futureCost)} by{" "}
                           {item.replacementYear}
                         </p>

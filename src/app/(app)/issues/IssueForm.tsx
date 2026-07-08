@@ -84,7 +84,7 @@ export default function IssueForm({
         </button>
         <SubmitButton pendingLabel="Logging…">Log issue</SubmitButton>
       </div>
-      <p className="text-xs text-stone-400">
+      <p className="text-xs text-stone-500">
         After logging, we&apos;ll offer to connect you with a vetted local pro.
       </p>
     </form>

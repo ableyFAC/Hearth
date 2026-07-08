@@ -7,6 +7,7 @@ import {
   labelFor,
   JOB_CATEGORIES,
   PRO_DEPOSIT_BOOST_PTS,
+  LEAD_TIER_FEES,
 } from "@/lib/constants";
 import DepositForm from "./DepositForm";
 import Confetti from "@/components/Confetti";
@@ -100,9 +101,12 @@ export default async function ProBillingPage({
         <h1 className="text-2xl font-semibold text-stone-900">Billing</h1>
         <p className="mt-1 text-sm text-stone-500">
           Deposit credit, then spend it unlocking leads. Lead prices vary by
-          service, and jobs that sit unclaimed get cheaper: 15% off after 3
-          days, 30% off after 7. The discounted price is what your wallet is
-          charged.
+          service: ${LEAD_TIER_FEES.light} for lighter jobs like cleaning and
+          handyman work, ${LEAD_TIER_FEES.skilled} for skilled trades like
+          plumbing and HVAC, ${LEAD_TIER_FEES.major} for big-ticket work like
+          roofing and remodels. Jobs that sit unclaimed get cheaper: 15% off
+          after 3 days, 30% off after 7. The discounted price is what your
+          wallet is charged.
         </p>
       </div>
 
@@ -210,7 +214,7 @@ export default async function ProBillingPage({
                     <span className="font-medium text-stone-900">
                       {txLabel(t.type)}
                     </span>
-                    <p className="text-xs text-stone-400">
+                    <p className="text-xs text-stone-500">
                       {new Date(t.created_at).toLocaleString()}
                     </p>
                   </div>

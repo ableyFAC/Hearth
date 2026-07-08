@@ -88,7 +88,7 @@ export default function EditJobForm({ job }: { job: any }) {
             name="homeowner_phone"
             defaultValue={job.homeowner_phone ?? ""}
           />
-          <p className="mt-1 text-xs text-stone-400">
+          <p className="mt-1 text-xs text-stone-500">
             So pros can reach you faster (optional).
           </p>
         </div>

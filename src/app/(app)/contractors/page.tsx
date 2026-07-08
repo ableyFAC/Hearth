@@ -179,8 +179,8 @@ export default async function ContractorsPage({
       <div>
         <h1 className="text-2xl font-semibold text-stone-900">Post a job</h1>
         <p className="mt-1 text-sm text-stone-500">
-          Describe what you need and post it. Vetted local pros apply, then you
-          review them and pick the one you want.
+          Describe what you need and post it. Local pros apply, then you review
+          them and pick the one you want.
         </p>
       </div>
 
@@ -205,7 +205,7 @@ export default async function ContractorsPage({
                     {p.rating != null && (
                       <span className="ml-2 text-xs text-amber-600">
                         ★ {p.rating}
-                        <span className="text-stone-400">
+                        <span className="text-stone-500">
                           {" "}
                           · {p.reviewCount} review{p.reviewCount === 1 ? "" : "s"}
                         </span>
@@ -315,7 +315,7 @@ export default async function ContractorsPage({
               name="homeowner_phone"
               defaultValue={profile?.phone ?? ""}
             />
-            <p className="mt-1 text-xs text-stone-400">
+            <p className="mt-1 text-xs text-stone-500">
               So pros can reach you faster (optional).
             </p>
           </div>
@@ -338,7 +338,7 @@ export default async function ContractorsPage({
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <PhotoUpload propertyId={property.id} />
-            <p className="mt-1 text-xs text-stone-400">
+            <p className="mt-1 text-xs text-stone-500">
               Pros quote more accurately when they can see the job.
             </p>
           </div>
@@ -352,7 +352,7 @@ export default async function ContractorsPage({
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-xs text-stone-400">
+            <p className="mt-1 text-xs text-stone-500">
               Helps pros give realistic quotes. Not a commitment.
             </p>
           </div>
@@ -361,7 +361,7 @@ export default async function ContractorsPage({
         <StrongPostMeter />
 
         <PostJobButton />
-        <p className="text-xs text-stone-400">
+        <p className="text-xs text-stone-500">
           Your contact stays private. Only the pro you choose from the applicants
           gets your name, address, and contact details.
         </p>
@@ -406,7 +406,7 @@ export default async function ContractorsPage({
                           {l.contractors?.review_count > 0 ? (
                             <span className="ml-2 text-xs text-amber-600">
                               ★ {l.contractors.rating}
-                              <span className="text-stone-400">
+                              <span className="text-stone-500">
                                 {" "}
                                 · {l.contractors.review_count} review
                                 {l.contractors.review_count === 1 ? "" : "s"}
@@ -491,7 +491,7 @@ export default async function ContractorsPage({
                             has none. When issue_id exists we can't tell
                             without another query, so the tip stays quiet. */}
                         {!l.issue_id && (
-                          <p className="mt-1 text-xs text-stone-400">
+                          <p className="mt-1 text-xs text-stone-500">
                             Tip: adding photos or more detail helps pros decide
                             to apply and quote accurately.
                           </p>
@@ -516,14 +516,14 @@ export default async function ContractorsPage({
                                 {a.contractors?.review_count > 0 ? (
                                   <span className="text-xs text-amber-600">
                                     ★ {a.contractors.rating}
-                                    <span className="text-stone-400">
+                                    <span className="text-stone-500">
                                       {" "}
                                       · {a.contractors.review_count} review
                                       {a.contractors.review_count === 1 ? "" : "s"}
                                     </span>
                                   </span>
                                 ) : (
-                                  <span className="text-xs text-stone-400">
+                                  <span className="text-xs text-stone-500">
                                     New
                                   </span>
                                 )}
@@ -580,7 +580,7 @@ export default async function ContractorsPage({
         </section>
       )}
 
-      <p className="text-center text-sm text-stone-400">
+      <p className="text-center text-sm text-stone-500">
         <Link href="/issues" className="hover:underline">
           ← Back to issues
         </Link>

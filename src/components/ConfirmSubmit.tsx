@@ -30,7 +30,7 @@ export default function ConfirmSubmit({
         onClick={() => setArmed(true)}
         className={
           subtle
-            ? "text-xs text-stone-400 underline-offset-2 hover:text-stone-600 hover:underline"
+            ? "text-xs text-stone-500 underline-offset-2 hover:text-stone-600 hover:underline"
             : "btn-secondary"
         }
       >

@@ -69,7 +69,7 @@ export default function OnboardingForm({
               onChange={(e) => setAddress(e.target.value)}
               required
             />
-            <p className="mt-1 text-xs text-stone-400">
+            <p className="mt-1 text-xs text-stone-500">
               We ask so we can personalize maintenance and local pricing for
               your home, it takes about 30 seconds.
             </p>

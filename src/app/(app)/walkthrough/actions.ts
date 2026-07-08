@@ -25,12 +25,17 @@ function s(formData: FormData, key: string): string | null {
 // confirmed_at. Some scans genuinely move the score down (a data plate can
 // reveal a system is older or worse than the onboarding estimate assumed) -
 // this always reports the real before/after, never a made-up "win".
+export type ConfirmSystemResult =
+  | { ok: true; before: number; after: number }
+  | { ok: false; error: string };
+
 export async function confirmSystemAction(
   formData: FormData
-): Promise<{ before: number; after: number }> {
+): Promise<ConfirmSystemResult> {
   const supabase = createClient();
   const systemId = s(formData, "system_id");
-  if (!systemId) throw new Error("No system");
+  if (!systemId)
+    return { ok: false, error: "Something went wrong. Please try again." };
 
   // RLS ("home_systems owner all", gated by owns_property()) scopes this to a
   // system on a property the caller owns or shares; a miss means "not yours".
@@ -39,7 +44,11 @@ export async function confirmSystemAction(
     .select("*")
     .eq("id", systemId)
     .maybeSingle();
-  if (!target) throw new Error("System not found");
+  if (!target)
+    return {
+      ok: false,
+      error: "That system couldn't be found. Please refresh and try again.",
+    };
 
   const propertyId = target.property_id;
   const [{ data: systems }, { data: issues }] = await Promise.all([
@@ -113,7 +122,13 @@ export async function confirmSystemAction(
       .update(withoutConfirm)
       .eq("id", systemId));
   }
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("confirmSystemAction failed:", error.message);
+    return {
+      ok: false,
+      error: "Couldn't save that right now. Please try again in a bit.",
+    };
+  }
 
   const updatedSystems = allSystems.map((sys) =>
     sys.id === systemId ? { ...sys, ...update } : sys
@@ -123,5 +138,5 @@ export async function confirmSystemAction(
   revalidatePath("/walkthrough");
   revalidatePath("/dashboard");
 
-  return { before, after };
+  return { ok: true, before, after };
 }

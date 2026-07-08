@@ -51,8 +51,8 @@ const PERKS: Array<{ icon: string; title: string; body: string }> = [
   },
   {
     icon: "🌐",
-    title: "Your public business page",
-    body: "A clean, shareable page with your services, reviews, and contact info. Send one link instead of ten screenshots.",
+    title: "A richer public page",
+    body: "Every pro already gets a public page with their services, reviews, and contact info. Pro adds your logo, work photos, and an about section so it looks fully yours. Send one link instead of ten screenshots.",
   },
   {
     icon: "📊",
@@ -103,7 +103,7 @@ export default async function ProPlusPage({
           <Link href="/pro" className="btn-primary">
             Back to my leads
           </Link>
-          <p className="text-xs text-stone-400">
+          <p className="text-xs text-stone-500">
             If a perk still looks off, give it a minute to sync, then refresh.
           </p>
         </div>
@@ -174,7 +174,7 @@ export default async function ProPlusPage({
             ))}
           </ul>
         </div>
-        <p className="text-center text-xs text-stone-400">
+        <p className="text-center text-xs text-stone-500">
           Membership never changes which jobs you can see or apply to. Leads
           stay pay-per-apply for everyone.
         </p>
@@ -197,7 +197,7 @@ export default async function ProPlusPage({
           <a href="#pricing" className="btn-primary">
             Start my Pro membership
           </a>
-          <p className="mt-2 text-xs text-stone-400">
+          <p className="mt-2 text-xs text-stone-500">
             First month ${PRO_PLAN.introFirstMonth}, then ${PRO_PLAN.monthly}
             /month after, cancel anytime. Or ${PRO_PLAN.yearly}/year, save $
             {Math.round(PRO_PLAN.monthly * 12 - PRO_PLAN.yearly)} vs monthly.
@@ -223,7 +223,7 @@ export default async function ProPlusPage({
 
       <ProPlanToggle />
 
-      <p className="text-center text-xs text-stone-400">
+      <p className="text-center text-xs text-stone-500">
         Questions about billing?{" "}
         <Link href="/pro/billing" className="hover:underline">
           Visit billing

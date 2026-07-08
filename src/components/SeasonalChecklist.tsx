@@ -70,24 +70,24 @@ export default function SeasonalChecklist({
     <>
       {tasks.map((t, i) =>
         hidden[i] ? null : (
-          <li key={i} className="flex items-center gap-2">
+          <li key={i} className="flex items-center gap-3">
             <button
               type="button"
               onClick={() => toggle(i)}
-              className="flex items-start gap-2 text-left text-sm"
+              className="flex min-h-[44px] items-center gap-2 py-1.5 text-left text-sm"
             >
               <span
-                className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
+                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
                   done[i]
                     ? "border-green-500 bg-green-500 text-white"
-                    : "border-stone-300 text-transparent"
+                    : "border-stone-400 text-transparent"
                 }`}
               >
                 ✓
               </span>
               <span
                 className={
-                  done[i] ? "text-stone-400 line-through" : "text-stone-800"
+                  done[i] ? "text-stone-500 line-through" : "text-stone-800"
                 }
               >
                 {t}
@@ -97,7 +97,7 @@ export default function SeasonalChecklist({
               <button
                 type="button"
                 onClick={() => remove(i)}
-                className="text-xs text-stone-400 hover:text-red-600"
+                className="flex min-h-[44px] items-center px-1 text-xs text-stone-500 hover:text-red-600"
               >
                 Delete
               </button>

@@ -156,7 +156,7 @@ export default function CategoryPicker({
           value={other}
           onChange={(e) => setOther(e.target.value)}
           placeholder="Describe the service you provide"
-          className="min-w-0 flex-1 border-0 bg-transparent text-sm text-stone-700 placeholder:text-stone-400 focus:outline-none focus:ring-0"
+          className="min-w-0 flex-1 border-0 bg-transparent text-sm text-stone-700 placeholder:text-stone-500 focus:outline-none focus:ring-0"
         />
       </div>
 

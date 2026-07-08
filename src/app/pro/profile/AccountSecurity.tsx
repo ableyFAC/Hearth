@@ -13,7 +13,7 @@ function LockIcon({ className }: { className?: string }) {
 
 function FieldIcon({ children }: { children: React.ReactNode }) {
   return (
-    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400">
+    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-500">
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         {children}
       </svg>

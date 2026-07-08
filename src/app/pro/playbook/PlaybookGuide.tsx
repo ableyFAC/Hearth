@@ -26,7 +26,7 @@ export default function PlaybookGuide({ guide }: { guide: PlaybookGuideData }) {
           {guide.icon} {guide.title}
         </span>
         <span
-          className={`shrink-0 text-lg text-stone-400 transition-transform duration-200 ${
+          className={`shrink-0 text-lg text-stone-500 transition-transform duration-200 ${
             open ? "rotate-180" : ""
           }`}
           aria-hidden="true"
@@ -60,7 +60,7 @@ export default function PlaybookGuide({ guide }: { guide: PlaybookGuideData }) {
                   >
                     {s.title}
                     <span
-                      className={`shrink-0 text-stone-400 transition-transform duration-200 ${
+                      className={`shrink-0 text-stone-500 transition-transform duration-200 ${
                         active ? "rotate-180" : ""
                       }`}
                       aria-hidden="true"

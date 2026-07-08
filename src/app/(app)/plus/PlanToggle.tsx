@@ -12,7 +12,16 @@ const PLANS = {
 // month free then $4.99/mo; yearly is $39.99 (about $3.33/mo, a real 33% off,
 // so it clearly beats paying monthly). Charged amounts live in the checkout
 // action, these are display only.
-export default function PlanToggle() {
+//
+// `trialEligible` mirrors the exact signal startPlusCheckoutAction uses to grant
+// the free month (no existing homeowner subscription row). Only eligible users
+// see the "first month free" language; a returning subscriber sees the honest
+// price and a plain Subscribe button, since they will be charged right away.
+export default function PlanToggle({
+  trialEligible = true,
+}: {
+  trialEligible?: boolean;
+}) {
   const [plan, setPlan] = useState<"monthly" | "yearly">("monthly");
 
   return (
@@ -33,7 +42,7 @@ export default function PlanToggle() {
             <span className="block leading-tight">{PLANS[key].label}</span>
             <span
               className={`block text-[10px] font-normal leading-tight ${
-                plan === key ? "text-hearth-100" : "text-stone-400"
+                plan === key ? "text-hearth-100" : "text-stone-500"
               }`}
             >
               {PLANS[key].price}
@@ -49,13 +58,19 @@ export default function PlanToggle() {
 
       {plan === "monthly" ? (
         <div className="space-y-0.5">
-          <p className="text-sm font-medium text-hearth-700">First month free</p>
+          {trialEligible && (
+            <p className="text-sm font-medium text-hearth-700">
+              First month free
+            </p>
+          )}
           <p className="text-4xl font-semibold text-stone-900">
             $4.99
             <span className="text-base font-normal text-stone-500">/mo</span>
           </p>
           <p className="text-xs text-stone-500">
-            after your free month. Cancel anytime.
+            {trialEligible
+              ? "after your free month. Cancel anytime."
+              : "billed monthly. Cancel anytime."}
           </p>
         </div>
       ) : (
@@ -73,9 +88,13 @@ export default function PlanToggle() {
       <form action={startPlusCheckoutAction} className="space-y-2">
         <input type="hidden" name="plan" value={plan} />
         <button className="btn-primary w-full">
-          {plan === "monthly" ? "Start my free month" : "Get a year of Plus"}
+          {plan === "monthly"
+            ? trialEligible
+              ? "Start my free month"
+              : "Subscribe to monthly"
+            : "Get a year of Plus"}
         </button>
-        <p className="text-xs text-stone-400">Cancel anytime. No commitment.</p>
+        <p className="text-xs text-stone-500">Cancel anytime. No commitment.</p>
       </form>
     </div>
   );

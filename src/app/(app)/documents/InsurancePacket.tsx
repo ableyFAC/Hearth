@@ -118,7 +118,7 @@ export default function InsurancePacket({ isPlus }: { isPlus: boolean }) {
               {loading ? "Building..." : "Build again"}
             </button>
           </div>
-          <p className="text-xs text-stone-400">
+          <p className="text-xs text-stone-500">
             This is a starting point, not insurance advice, and requoting is
             never guaranteed to save money. Read it closely, correct anything
             that doesn&apos;t match your home, and add the details only you

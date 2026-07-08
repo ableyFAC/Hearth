@@ -26,7 +26,7 @@ export default async function ProHelpPage() {
       <ProSupportForm member={member} />
 
       {!member && (
-        <p className="text-xs text-stone-400">
+        <p className="text-xs text-stone-500">
           Pro members get priority support.{" "}
           <Link href="/pro/plus" className="underline hover:text-stone-600">
             See Hearth Pro

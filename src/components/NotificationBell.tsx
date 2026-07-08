@@ -215,7 +215,7 @@ export default function NotificationBell() {
           </div>
           <div className="max-h-80 overflow-y-auto">
             {items.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-stone-400">
+              <p className="px-4 py-6 text-center text-sm text-stone-500">
                 Nothing new right now.
               </p>
             ) : (
@@ -228,7 +228,7 @@ export default function NotificationBell() {
                         {n.body}
                       </p>
                     )}
-                    <p className="mt-1 text-[11px] text-stone-400">
+                    <p className="mt-1 text-[11px] text-stone-500">
                       {timeAgo(n.created_at)}
                     </p>
                   </>

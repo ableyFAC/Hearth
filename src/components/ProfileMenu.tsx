@@ -73,7 +73,7 @@ export default function ProfileMenu({
         className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 text-sm font-medium text-stone-700 hover:bg-hearth-50"
       >
         {/* Placeholder avatar - blank humanoid head + torso. */}
-        <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-stone-200 text-stone-400">
+        <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-stone-200 text-stone-500">
           <svg
             viewBox="0 0 24 24"
             className="h-7 w-7"
@@ -90,7 +90,7 @@ export default function ProfileMenu({
         {/* Dropdown indicator. */}
         <svg
           viewBox="0 0 20 20"
-          className={`h-4 w-4 text-stone-400 transition-transform ${
+          className={`h-4 w-4 text-stone-500 transition-transform ${
             open ? "rotate-180" : ""
           }`}
           fill="currentColor"
@@ -116,7 +116,7 @@ export default function ProfileMenu({
               onClick={() => setOpen(false)}
               className={
                 hasPlus
-                  ? "block border-b border-stone-100 px-4 py-2 text-sm text-stone-400"
+                  ? "block border-b border-stone-100 px-4 py-2 text-sm text-stone-500"
                   : "block border-b border-stone-100 bg-hearth-50 px-4 py-2 text-sm font-medium text-hearth-700 hover:bg-hearth-100"
               }
             >
@@ -131,7 +131,7 @@ export default function ProfileMenu({
             }
           >
             {linksLabel && (
-              <p className="px-4 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-400">
+              <p className="px-4 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-500">
                 {linksLabel}
               </p>
             )}
@@ -153,7 +153,7 @@ export default function ProfileMenu({
           </div>
           {plusTools && plusTools.length > 0 && (
             <div className="border-b border-stone-100 py-1">
-              <p className="px-4 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-400">
+              <p className="px-4 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-500">
                 Plus tools
               </p>
               {plusTools.map((l) => (
@@ -163,7 +163,7 @@ export default function ProfileMenu({
                   role="menuitem"
                   onClick={() => setOpen(false)}
                   className={`mx-1 flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm hover:bg-hearth-50 ${
-                    l.locked ? "text-stone-400" : "text-stone-700"
+                    l.locked ? "text-stone-500" : "text-stone-700"
                   }`}
                 >
                   <span>{l.label}</span>
@@ -181,7 +181,7 @@ export default function ProfileMenu({
               type="button"
               role="menuitem"
               onClick={() => setShowMore(true)}
-              className="mx-1 flex w-[calc(100%-0.5rem)] items-center gap-1 rounded-md px-3 py-2 text-left text-sm text-stone-400 hover:bg-hearth-50 hover:text-stone-600"
+              className="mx-1 flex w-[calc(100%-0.5rem)] items-center gap-1 rounded-md px-3 py-2 text-left text-sm text-stone-500 hover:bg-hearth-50 hover:text-stone-600"
             >
               More
               <svg

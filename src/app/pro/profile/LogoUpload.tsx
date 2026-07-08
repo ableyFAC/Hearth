@@ -67,7 +67,7 @@ export default function LogoUpload({
             className="h-14 w-14 rounded-xl border border-stone-200 object-cover"
           />
         ) : (
-          <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-dashed border-stone-300 bg-stone-50 text-stone-400">
+          <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-dashed border-stone-300 bg-stone-50 text-stone-500">
             <svg
               viewBox="0 0 24 24"
               className="h-6 w-6"
@@ -88,7 +88,7 @@ export default function LogoUpload({
           className="block w-full text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-hearth-100 file:px-3 file:py-1.5 file:text-hearth-800"
         />
       </div>
-      {busy && <p className="mt-1 text-xs text-stone-400">Uploading…</p>}
+      {busy && <p className="mt-1 text-xs text-stone-500">Uploading…</p>}
       {err && <p className="mt-1 text-xs text-amber-600">{err}</p>}
       {url && <input type="hidden" name="logo_url" value={url} />}
     </div>

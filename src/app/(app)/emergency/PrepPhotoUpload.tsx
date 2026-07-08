@@ -74,7 +74,7 @@ export default function PrepPhotoUpload({
           className="h-28 w-full rounded-md object-cover"
         />
       ) : (
-        <div className="flex h-28 items-center justify-center rounded-md bg-stone-50 text-xs text-stone-400">
+        <div className="flex h-28 items-center justify-center rounded-md bg-stone-50 text-xs text-stone-500">
           No photo yet
         </div>
       )}
@@ -84,7 +84,7 @@ export default function PrepPhotoUpload({
         onChange={onPick}
         className="block w-full text-xs text-stone-500 file:mr-2 file:rounded-md file:border-0 file:bg-hearth-100 file:px-2 file:py-1 file:text-hearth-800"
       />
-      {busy && <p className="text-xs text-stone-400">Uploading…</p>}
+      {busy && <p className="text-xs text-stone-500">Uploading…</p>}
       {err && <p className="text-xs text-amber-600">{err}</p>}
       <textarea
         name="note"

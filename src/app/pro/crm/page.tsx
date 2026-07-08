@@ -1,9 +1,60 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor, getRole } from "@/lib/contractor";
-import { labelFor, iconFor, JOB_CATEGORIES } from "@/lib/constants";
+import { hasProPlan } from "@/lib/subscription";
+import { labelFor, iconFor, JOB_CATEGORIES, PRO_PLAN } from "@/lib/constants";
 import ClientRow from "./ClientRow";
 import { addClientAction, trackLeadAction } from "./actions";
+
+// The premium CRM upgrades a Hearth Pro membership adds on top of the free
+// pipeline. Honest framing: these are perks Pro unlocks, not buttons that
+// already work here. Shown in full (never blurred) so a free pro can see
+// exactly what is there; tapping any card sends a non-member to /pro/plus, and
+// a member to the real tool where one exists (via `href`).
+const PRO_CRM_FEATURES: Array<{
+  icon: string;
+  title: string;
+  body: string;
+  href?: string;
+}> = [
+  {
+    icon: "⏰",
+    title: "Automated follow-up reminders",
+    body: "Nudges schedule themselves after each stage, so no client goes cold while you're on a job.",
+  },
+  {
+    icon: "⭐",
+    title: "Automated review requests",
+    body: "The moment you mark a job won, Hearth asks the customer for a review for you.",
+  },
+  {
+    icon: "📝",
+    title: "Saved quote & estimate templates",
+    body: "Keep your best quotes on file and reuse them in seconds instead of retyping.",
+  },
+  {
+    icon: "🏷️",
+    title: "Customer tags & filtering",
+    body: "Tag clients by trade, source, or priority and filter your pipeline down to who matters now.",
+  },
+  {
+    icon: "♾️",
+    title: "Unlimited clients",
+    body: "The free pipeline is capped. Pro removes the cap so your whole book of business lives here.",
+  },
+  {
+    icon: "📊",
+    title: "Pipeline analytics & CSV export",
+    body: "See value by stage and win rate over time, and export the whole pipeline to a spreadsheet.",
+  },
+  {
+    icon: "🤖",
+    title: "AI back office",
+    body: "The estimate, invoice, and follow-up writer, plus instant alerts and automation perks.",
+    href: "/pro/tools",
+  },
+];
 
 const STAGES: { value: string; label: string }[] = [
   { value: "lead", label: "Lead" },
@@ -44,7 +95,7 @@ export default async function ProCrmPage({
   const supabase = createClient();
   const q = (searchParams.q ?? "").trim();
 
-  const [{ data: clientRows }, { data: leadRows }] = await Promise.all([
+  const [{ data: clientRows }, { data: leadRows }, member] = await Promise.all([
     supabase
       .from("pro_clients")
       .select("*")
@@ -57,6 +108,9 @@ export default async function ProCrmPage({
       .select("id, category, status, homeowner_name, created_at")
       .eq("contractor_id", contractor.id)
       .order("created_at", { ascending: false }),
+    // Paying Pro-member check: drives the locked upgrade teaser below only. It
+    // never gates any of the CRM functionality above.
+    hasProPlan(),
   ]);
 
   const clients = clientRows ?? [];
@@ -127,7 +181,7 @@ export default async function ProCrmPage({
               <p className="stat-number mt-1 text-2xl text-stone-900">
                 {items.length}
               </p>
-              <p className="mt-1 text-xs text-stone-400">
+              <p className="mt-1 text-xs text-stone-500">
                 {dollarsFromCents(total)} estimated
               </p>
             </div>
@@ -157,7 +211,7 @@ export default async function ProCrmPage({
         <section className="card-hero space-y-3">
           <h2 className="text-lg font-semibold text-stone-900">
             Follow up today{" "}
-            <span className="text-stone-400">({dueForFollowUp.length})</span>
+            <span className="text-stone-500">({dueForFollowUp.length})</span>
           </h2>
           <ul className="space-y-2">
             {dueForFollowUp.map((c) => (
@@ -224,7 +278,7 @@ export default async function ProCrmPage({
             <h2 className="text-lg font-semibold text-stone-900">
               Track from your jobs
             </h2>
-            <p className="text-xs text-stone-400">
+            <p className="text-xs text-stone-500">
               Jobs a homeowner already chose you for. One tap adds them to
               your client list.
             </p>
@@ -246,7 +300,7 @@ export default async function ProCrmPage({
                       </span>{" "}
                       {suggestedName}
                     </span>
-                    <p className="text-xs text-stone-400">
+                    <p className="text-xs text-stone-500">
                       {labelFor(JOB_CATEGORIES, l.category)} ·{" "}
                       {new Date(l.created_at).toLocaleDateString()}
                     </p>
@@ -276,7 +330,7 @@ export default async function ProCrmPage({
       <section className="space-y-6">
         <h2 className="text-lg font-semibold text-stone-900">
           Your clients{" "}
-          <span className="text-stone-400">({displayClients.length})</span>
+          <span className="text-stone-500">({displayClients.length})</span>
         </h2>
         {displayClients.length === 0 ? (
           <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
@@ -290,7 +344,7 @@ export default async function ProCrmPage({
             if (items.length === 0) return null;
             return (
               <div key={s.value} className="space-y-2">
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-stone-400">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-stone-500">
                   {s.label}{" "}
                   <span className="normal-case text-stone-300">
                     ({items.length})
@@ -310,6 +364,61 @@ export default async function ProCrmPage({
             );
           })
         )}
+      </section>
+
+      {/* More with Pro: the premium CRM upgrades, shown in FULL (never hidden
+          behind a blur). Every card is visible and tappable. A non-member who
+          taps one is sent to /pro/plus to unlock it; a member is sent to the
+          real tool where one exists (href), or to /pro/plus otherwise. */}
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-semibold text-stone-900">
+              More with Pro{" "}
+              <span className="chip ml-1 bg-hearth-100 align-middle text-hearth-800">
+                Pro
+              </span>
+            </h2>
+            <p className="text-xs text-stone-500">
+              Automations and templates that run the admin side of your pipeline
+              for you.{" "}
+              {member
+                ? "These come with your membership."
+                : "Tap any to see how Pro unlocks it."}
+            </p>
+          </div>
+          {!member && (
+            <Link href="/pro/plus" className="btn-primary shrink-0">
+              Upgrade to Pro (${PRO_PLAN.monthly}/mo)
+            </Link>
+          )}
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          {PRO_CRM_FEATURES.map((f) => {
+            const href = member && f.href ? f.href : "/pro/plus";
+            return (
+              <Link
+                key={f.title}
+                href={href}
+                className="card group ring-1 ring-transparent transition hover:ring-hearth-300"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="icon-chip">{f.icon}</span>
+                  {!member && (
+                    <span className="chip bg-hearth-100 text-hearth-800">
+                      Pro
+                    </span>
+                  )}
+                </div>
+                <p className="mt-2 font-semibold text-stone-900 group-hover:text-hearth-800">
+                  {f.title}
+                </p>
+                <p className="mt-1 text-sm text-stone-600">{f.body}</p>
+              </Link>
+            );
+          })}
+        </div>
       </section>
     </div>
   );

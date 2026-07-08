@@ -134,7 +134,7 @@ export default function HomeownerSignUpPage({
           <button className="btn-primary w-full" disabled={busy}>
             {busy ? "Creating account…" : "Sign up"}
           </button>
-          <p className="text-center text-xs text-stone-400">
+          <p className="text-center text-xs text-stone-500">
             By creating an account you agree to the{" "}
             <a href="/terms" className="text-hearth-700 hover:underline">
               Terms
@@ -164,7 +164,7 @@ export default function HomeownerSignUpPage({
         </div>
       </div>
 
-      <p className="mt-6 text-center text-xs text-stone-400">
+      <p className="mt-6 text-center text-xs text-stone-500">
         Are you a contractor?{" "}
         <a
           href={`/contractor-signup${nextQuery}`}

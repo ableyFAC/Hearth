@@ -355,7 +355,7 @@ export default async function ProsLanding() {
       </section>
 
       {/* Honesty line: this matches the wallet's actual bonus terms */}
-      <p className="mx-auto mt-12 max-w-md text-center text-xs text-stone-400">
+      <p className="mx-auto mt-12 max-w-md text-center text-xs text-stone-500">
         Deposits of $200+ earn bonus credit. Bonus credit expires 60 days after
         each grant, so plan to use it.
       </p>
@@ -364,7 +364,7 @@ export default async function ProsLanding() {
         <a href="/" className="text-sm text-stone-500 hover:text-hearth-700">
           Looking after your own home instead? Hearth for homeowners →
         </a>
-        <p className="mt-2 text-xs text-stone-400">
+        <p className="mt-2 text-xs text-stone-500">
           <a href="/privacy" className="hover:text-hearth-700 hover:underline">
             Privacy
           </a>{" "}

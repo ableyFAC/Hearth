@@ -166,7 +166,7 @@ export default async function ProBusinessPage() {
         <p className="mt-1 text-sm text-stone-500">
           Your numbers, your wallet, and everything in flight.
         </p>
-        <p className="mt-1 text-xs text-stone-400">
+        <p className="mt-1 text-xs text-stone-500">
           78% of homeowners go with the first pro to respond. Fast replies win
           jobs.
         </p>
@@ -209,7 +209,7 @@ export default async function ProBusinessPage() {
           <p className="stat-number mt-1 text-2xl text-stone-900">
             {winRate !== null ? `${winRate}%` : "-"}
           </p>
-          <p className="mt-1 text-xs text-stone-400">
+          <p className="mt-1 text-xs text-stone-500">
             {winRate !== null
               ? `${wonCount} won of ${appliedCount} applications`
               : "Shows after 3 applications"}
@@ -220,7 +220,7 @@ export default async function ProBusinessPage() {
           <p className="stat-number mt-1 text-2xl text-stone-900">
             {dollars(spentCents)}
           </p>
-          <p className="mt-1 text-xs text-stone-400">
+          <p className="mt-1 text-xs text-stone-500">
             Ghost-protection refunds already added back
           </p>
         </div>
@@ -229,7 +229,7 @@ export default async function ProBusinessPage() {
           <p className="stat-number mt-1 text-2xl text-stone-900">
             {costPerWin !== null ? dollars(costPerWin) : "-"}
           </p>
-          <p className="mt-1 text-xs text-stone-400">
+          <p className="mt-1 text-xs text-stone-500">
             {costPerWin !== null
               ? "Total spend divided by wins"
               : "Shows after your first win"}
@@ -244,7 +244,7 @@ export default async function ProBusinessPage() {
           <p className="stat-number mt-1 text-4xl text-stone-900">
             {dollars(cash + bonus)}
           </p>
-          <p className="text-xs text-stone-400 [font-variant-numeric:tabular-nums]">
+          <p className="text-xs text-stone-500 [font-variant-numeric:tabular-nums]">
             {dollars(cash)} cash · {dollars(bonus)} bonus credit
           </p>
         </div>
@@ -285,7 +285,7 @@ export default async function ProBusinessPage() {
               Pro
             </span>
           </h2>
-          <p className="text-xs text-stone-400">
+          <p className="text-xs text-stone-500">
             Where your application budget is actually earning its keep.
           </p>
         </div>
@@ -302,7 +302,7 @@ export default async function ProBusinessPage() {
                     ? `${stats.winRatePercent}%`
                     : "-"}
                 </p>
-                <p className="mt-1 text-xs text-stone-400">
+                <p className="mt-1 text-xs text-stone-500">
                   {stats.winRatePercent !== null
                     ? `${stats.wins} won of ${stats.liveApplications} paid applications`
                     : "Apply to a job to start tracking"}
@@ -315,7 +315,7 @@ export default async function ProBusinessPage() {
                     ? `${stats.roiPercent >= 0 ? "+" : ""}${stats.roiPercent}%`
                     : "-"}
                 </p>
-                <p className="mt-1 text-xs text-stone-400">
+                <p className="mt-1 text-xs text-stone-500">
                   {stats.roiPercent !== null
                     ? `${dollars(Math.abs(stats.netCents))} ${
                         stats.netCents >= 0 ? "ahead of" : "behind"
@@ -328,14 +328,14 @@ export default async function ProBusinessPage() {
                 <p className="stat-number mt-1 text-2xl text-stone-900">
                   {dollars(stats.revenueWonCents)}
                 </p>
-                <p className="mt-1 text-xs text-stone-400">
+                <p className="mt-1 text-xs text-stone-500">
                   won on {dollars(stats.feesSpentCents)} in fees, net of
                   refunds
                 </p>
               </div>
             </div>
 
-            <p className="text-xs text-stone-400">
+            <p className="text-xs text-stone-500">
               {stats.daysSinceLastApplication !== null
                 ? `Last application ${
                     stats.daysSinceLastApplication === 0
@@ -365,7 +365,7 @@ export default async function ProBusinessPage() {
                 </p>
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-left text-xs text-stone-400">
+                    <tr className="text-left text-xs text-stone-500">
                       <th className="pb-2 pr-3 font-medium">Category</th>
                       <th className="pb-2 pr-3 text-right font-medium">
                         Apps
@@ -415,7 +415,7 @@ export default async function ProBusinessPage() {
                 <p className="text-sm font-medium text-stone-500">
                   Last 6 months
                 </p>
-                <p className="flex items-center gap-3 text-[10px] text-stone-400">
+                <p className="flex items-center gap-3 text-[10px] text-stone-500">
                   <span className="flex items-center gap-1">
                     <span className="inline-block h-2 w-2 rounded-sm bg-gradient-to-t from-hearth-500 to-hearth-400" />
                     Applications
@@ -478,7 +478,7 @@ export default async function ProBusinessPage() {
                   {stats.trend.map((m) => (
                     <span
                       key={m.key}
-                      className="min-w-[2.5rem] text-center text-[10px] text-stone-400"
+                      className="min-w-[2.5rem] text-center text-[10px] text-stone-500"
                     >
                       {m.label}
                     </span>
@@ -497,7 +497,7 @@ export default async function ProBusinessPage() {
                 <p className="stat-number mt-1 text-2xl text-stone-900">
                   {appliedCount}
                 </p>
-                <p className="mt-1 text-xs text-stone-400">
+                <p className="mt-1 text-xs text-stone-500">
                   All-time, refunds included
                 </p>
               </div>
@@ -509,7 +509,7 @@ export default async function ProBusinessPage() {
                 >
                   --%
                 </p>
-                <p className="mt-1 flex items-center justify-center gap-1.5 text-xs text-stone-400">
+                <p className="mt-1 flex items-center justify-center gap-1.5 text-xs text-stone-500">
                   <span aria-hidden="true" className="icon-chip">
                     🔒
                   </span>
@@ -524,7 +524,7 @@ export default async function ProBusinessPage() {
                 >
                   $-,---
                 </p>
-                <p className="mt-1 flex items-center justify-center gap-1.5 text-xs text-stone-400">
+                <p className="mt-1 flex items-center justify-center gap-1.5 text-xs text-stone-500">
                   <span aria-hidden="true" className="icon-chip">
                     🔒
                   </span>
@@ -552,9 +552,9 @@ export default async function ProBusinessPage() {
         <div>
           <h2 className="text-lg font-semibold text-stone-900">
             Pending applications{" "}
-            <span className="text-stone-400">({pendingApps.length})</span>
+            <span className="text-stone-500">({pendingApps.length})</span>
           </h2>
-          <p className="text-xs text-stone-400">
+          <p className="text-xs text-stone-500">
             Ghost protection: a fee comes back automatically if the homeowner
             never responds.
           </p>
@@ -592,7 +592,7 @@ export default async function ProBusinessPage() {
                       </p>
                     )}
                   </div>
-                  <span className="shrink-0 text-right text-xs text-stone-400">
+                  <span className="shrink-0 text-right text-xs text-stone-500">
                     {daysLeft === 0
                       ? "Fee returns today if no response"
                       : `Fee returns in ${daysLeft} day${
@@ -611,7 +611,7 @@ export default async function ProBusinessPage() {
           links), rather than opening a whole new section for them. */}
       <section id="share-reviews" className="space-y-3">
         <h2 className="text-lg font-semibold text-stone-900">
-          Jobs won <span className="text-stone-400">({won.length})</span>
+          Jobs won <span className="text-stone-500">({won.length})</span>
         </h2>
         {won.length === 0 ? (
           <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
@@ -639,7 +639,7 @@ export default async function ProBusinessPage() {
                   {labelFor(JOB_CATEGORIES, l.category)}
                 </span>
                 <span className="flex shrink-0 items-center gap-3">
-                  <span className="text-xs text-stone-400">
+                  <span className="text-xs text-stone-500">
                     {STATUS_LABEL[l.status] ?? l.status} ·{" "}
                     {new Date(l.created_at).toLocaleDateString()}
                   </span>
@@ -663,7 +663,7 @@ export default async function ProBusinessPage() {
             <h3 className="text-sm font-semibold text-stone-900">
               Share your reviews
             </h3>
-            <p className="mt-0.5 text-xs text-stone-400">
+            <p className="mt-0.5 text-xs text-stone-500">
               Turn a great review into a share card and a ready-to-post
               caption.
             </p>

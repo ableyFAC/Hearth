@@ -26,7 +26,10 @@ export async function logIssueFromChat(payload: {
   condition?: number | null;
 }) {
   const property = await getActiveProperty();
-  if (!property) return;
+  if (!property) {
+    setFlash("Add your home first, then I can log this for you.", "error");
+    return;
+  }
   const supabase = createClient();
 
   // Find the matching system first so we can LINK the issue to it. That link is
@@ -80,7 +83,10 @@ export async function setReminderFromChat(payload: {
   due_date?: string;
 }) {
   const property = await getActiveProperty();
-  if (!property || !payload.title) return;
+  if (!property || !payload.title) {
+    setFlash("Add your home first, then I can set this reminder.", "error");
+    return;
+  }
   const supabase = createClient();
 
   await supabase.from("maintenance_tasks").insert({

@@ -27,7 +27,7 @@ export default function SetupChecklist({ items }: { items: SetupItem[] }) {
             ready to go.
           </p>
         </div>
-        <p className="shrink-0 text-xs text-stone-400">
+        <p className="shrink-0 text-xs text-stone-500">
           {done} of {items.length} done
         </p>
       </div>
@@ -47,7 +47,7 @@ export default function SetupChecklist({ items }: { items: SetupItem[] }) {
           >
             <span
               className={`flex items-center gap-2 ${
-                item.done ? "text-stone-400 line-through" : "text-stone-700"
+                item.done ? "text-stone-500 line-through" : "text-stone-700"
               }`}
             >
               <span

@@ -94,7 +94,7 @@ export default function ProjectsCard({
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-medium text-stone-900">{p.title}</p>
-                    <p className="mt-0.5 text-xs text-stone-400">
+                    <p className="mt-0.5 text-xs text-stone-500">
                       {p.category
                         ? `${iconFor(JOB_CATEGORIES, p.category)} ${labelFor(JOB_CATEGORIES, p.category)}`
                         : "No category"}
@@ -169,7 +169,7 @@ export default function ProjectsCard({
       )}
 
       {!member && !atFreeCap && (
-        <p className="text-xs text-stone-400">
+        <p className="text-xs text-stone-500">
           Free accounts can showcase up to {FREE_PROJECT_LIMIT} projects.
           Hearth Pro members get unlimited projects and public Before/After
           badges:{" "}
@@ -218,7 +218,7 @@ function ProjectForm({
           placeholder="e.g. Full kitchen remodel in Maple Grove"
           className="input"
         />
-        <p className="mt-1 text-xs text-stone-400">Up to 80 characters.</p>
+        <p className="mt-1 text-xs text-stone-500">Up to 80 characters.</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -259,7 +259,7 @@ function ProjectForm({
           placeholder="What the job involved and how it turned out."
           className="input h-auto"
         />
-        <p className="mt-1 text-xs text-stone-400">Up to 500 characters.</p>
+        <p className="mt-1 text-xs text-stone-500">Up to 500 characters.</p>
       </div>
 
       <ProjectPhotoManager

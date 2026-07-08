@@ -195,7 +195,7 @@ export default function PublicPageCard({
               placeholder="What you do, how long you've been at it, and what customers can expect."
               className="input h-auto"
             />
-            <p className="mt-1 text-xs text-stone-400">
+            <p className="mt-1 text-xs text-stone-500">
               Up to 1,000 characters.
             </p>
           </div>
@@ -204,7 +204,7 @@ export default function PublicPageCard({
             <h3 className="text-sm font-semibold text-stone-900">
               License &amp; insurance vault
             </h3>
-            <p className="mt-1 text-xs text-stone-400">
+            <p className="mt-1 text-xs text-stone-500">
               Kept private. Your page only shows an &quot;on file&quot; badge,
               worded as provided by you, not verified by Hearth.
             </p>
@@ -214,10 +214,10 @@ export default function PublicPageCard({
                 <label className="label">License number</label>
                 {licenseLocked ? (
                   <>
-                    <div className="input cursor-not-allowed select-none bg-stone-100 text-stone-400">
+                    <div className="input cursor-not-allowed select-none bg-stone-100 text-stone-500">
                       {contractor.license_number}
                     </div>
-                    <p className="mt-1 text-xs text-stone-400">
+                    <p className="mt-1 text-xs text-stone-500">
                       Locked once set. Contact support to update it.
                     </p>
                   </>
@@ -297,7 +297,7 @@ export default function PublicPageCard({
               full Hearth rating and review count
             </li>
           </ul>
-          <p className="text-xs text-stone-400">
+          <p className="text-xs text-stone-500">
             Membership never changes your rating or reviews: those are real
             for everyone.
           </p>

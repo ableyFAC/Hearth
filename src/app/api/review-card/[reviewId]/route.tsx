@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ImageResponse } from "next/og";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
+import { ogFontOption } from "@/lib/ogFont";
 
 export const runtime = "nodejs";
 
@@ -244,6 +245,8 @@ export async function GET(
         />
       </div>
     ),
-    size
+    // Explicit font bytes so @vercel/og never runs its default loader, which
+    // throws ERR_INVALID_URL on Windows and 500s the card. See src/lib/ogFont.
+    { ...size, ...ogFontOption() }
   );
 }

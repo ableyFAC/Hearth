@@ -147,14 +147,14 @@ export default function PlusWelcome() {
           )}
         </div>
         {!last && (
-          <Link href="/dashboard" className="text-sm text-stone-400 hover:underline">
+          <Link href="/dashboard" className="text-sm text-stone-500 hover:underline">
             Skip
           </Link>
         )}
       </div>
 
       {last && (
-        <p className="text-xs text-stone-400">
+        <p className="text-xs text-stone-500">
           If a Plus feature still looks locked, give it a minute to sync, then
           refresh.
         </p>

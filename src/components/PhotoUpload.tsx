@@ -64,7 +64,7 @@ export default function PhotoUpload({ propertyId }: { propertyId: string }) {
         onChange={onPick}
         className="block w-full text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-hearth-100 file:px-3 file:py-1.5 file:text-hearth-800"
       />
-      {busy && <p className="mt-1 text-xs text-stone-400">Uploading…</p>}
+      {busy && <p className="mt-1 text-xs text-stone-500">Uploading…</p>}
       {err && <p className="mt-1 text-xs text-amber-600">{err}</p>}
       <div className="mt-2 flex flex-wrap gap-2">
         {urls.map((u) => (

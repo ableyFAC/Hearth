@@ -66,7 +66,7 @@ export default async function PreviewPage() {
                 📍 {l.area || "Your area"}
               </p>
               {/* Locked contact */}
-              <div className="flex items-center gap-2 rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-400">
+              <div className="flex items-center gap-2 rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-500">
                 🔒 Homeowner contact -{" "}
                 <Link href="/contractor-signup" className="text-hearth-700 hover:underline">
                   sign up to unlock

@@ -98,7 +98,7 @@ export default async function PlusPage({
           )}
           {sub?.stripe_subscription_id && !cancelsAt && (
             <div className="space-y-2 border-t border-stone-100 pt-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-stone-400">
+              <p className="text-xs font-medium uppercase tracking-wide text-stone-500">
                 Change plan
               </p>
               {sub.plan !== "yearly" && (
@@ -110,7 +110,7 @@ export default async function PlusPage({
                       yesLabel="Yes, switch to yearly"
                     />
                   </form>
-                  <p className="text-xs text-stone-400">
+                  <p className="text-xs text-stone-500">
                     Starts today. Unused monthly time is credited toward the
                     yearly charge.
                   </p>
@@ -125,7 +125,7 @@ export default async function PlusPage({
                       yesLabel="Yes, switch at renewal"
                     />
                   </form>
-                  <p className="text-xs text-stone-400">
+                  <p className="text-xs text-stone-500">
                     You keep every Plus benefit through {renewsOn}. Monthly
                     billing starts after that, so you lose nothing you paid for.
                   </p>
@@ -268,7 +268,7 @@ export default async function PlusPage({
           <a href="#pricing" className="btn-primary">
             Start my Plus plan
           </a>
-          <p className="mt-2 text-xs text-stone-400">
+          <p className="mt-2 text-xs text-stone-500">
             Cancel anytime. No commitment.
           </p>
         </div>
@@ -299,9 +299,12 @@ export default async function PlusPage({
         </table>
       </div>
 
-      <PlanToggle />
+      {/* The free month is granted only when there's no existing homeowner
+          subscription row (the same signal startPlusCheckoutAction checks), so
+          a returning subscriber never sees "free month" copy they wouldn't get. */}
+      <PlanToggle trialEligible={!sub} />
 
-      <p className="text-center text-xs text-stone-400">
+      <p className="text-center text-xs text-stone-500">
         Questions?{" "}
         <Link href="/account/help" className="hover:underline">
           Visit help

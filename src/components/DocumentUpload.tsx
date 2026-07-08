@@ -135,7 +135,14 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
         .getPublicUrl(path);
       formData.set("file_url", pub.publicUrl);
 
-      await saveDocumentAction(formData);
+      const result = await saveDocumentAction(formData);
+      if (!result.ok) {
+        // The action already flashed the error and removed the orphan file.
+        // Keep the review form intact so the owner can retry, and never claim
+        // it saved. Surface the reason inline too.
+        setNote(result.error);
+        return;
+      }
       // Reset for the next upload; the saved card appears in the list below.
       if (preview) URL.revokeObjectURL(preview);
       setPhase("idle");
@@ -165,7 +172,7 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
           <span className="text-sm font-medium text-stone-700">
             Add a warranty, manual, receipt, or a photo of a model label
           </span>
-          <span className="text-xs text-stone-400">
+          <span className="text-xs text-stone-500">
             Hearth reads it and fills in your home details for you
           </span>
           <input
@@ -181,7 +188,7 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
       {note && (
         <p
           className={`mt-2 text-xs ${
-            phase === "working" ? "text-stone-400" : "text-stone-500"
+            phase === "working" ? "text-stone-500" : "text-stone-500"
           }`}
         >
           {phase === "working" ? "⏳ " : ""}

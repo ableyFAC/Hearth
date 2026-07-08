@@ -3,6 +3,7 @@ import { ImageResponse } from "next/og";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { JOB_CATEGORIES, labelFor, iconFor } from "@/lib/constants";
+import { ogFontOption } from "@/lib/ogFont";
 
 export const runtime = "nodejs";
 
@@ -307,6 +308,9 @@ export async function GET(
         />
       </div>
     ),
-    size
+    // Pass the font bytes explicitly (ogFontOption) so @vercel/og never runs
+    // its default font auto-loader, which throws ERR_INVALID_URL on Windows and
+    // 500s the whole card. Spreads to just `size` if the font file isn't found.
+    { ...size, ...ogFontOption() }
   );
 }

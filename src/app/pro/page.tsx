@@ -242,10 +242,10 @@ export default async function ProDashboard({
               start winning work.
             </p>
             {apps.length === 0 && (
-              <p className="text-xs text-stone-400">
+              <p className="text-xs text-stone-500">
                 {contractor.license_number
-                  ? "Your first application is guaranteed: if you're not chosen, the fee comes back as credit."
-                  : "Adding your license unlocks the first-application guarantee: if you're not chosen for your first job, the fee comes back as credit."}
+                  ? "Your first application is guaranteed: if you're not chosen, the fee comes back as lead credit you can spend on future leads (it expires, and isn't withdrawable cash)."
+                  : "Adding your license unlocks the first-application guarantee: if you're not chosen for your first job, the fee comes back as lead credit for future leads (it expires, not cash back)."}
               </p>
             )}
           </>
@@ -298,7 +298,7 @@ export default async function ProDashboard({
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
             <h1 className="text-2xl font-semibold text-stone-900">
-              Open jobs <span className="text-stone-400">({open.length})</span>
+              Open jobs <span className="text-stone-500">({open.length})</span>
             </h1>
             <p className="text-sm text-stone-500">
               Jobs homeowners posted in your categories. Apply to one and the
@@ -356,7 +356,8 @@ export default async function ProDashboard({
                   <span aria-hidden>✔️</span>
                   <span>
                     Your first application is guaranteed: if you&apos;re not
-                    chosen, the fee comes back as credit.{" "}
+                    chosen, the fee comes back as lead credit for future leads
+                    (it expires, not withdrawable cash).{" "}
                     <Link
                       href="/pro/billing"
                       className="font-medium text-hearth-700 hover:underline"
@@ -439,7 +440,7 @@ export default async function ProDashboard({
                       <span className="[font-variant-numeric:tabular-nums]">
                         Apply fee{" "}
                         {off > 0 && (
-                          <span className="text-stone-400 line-through">
+                          <span className="text-stone-500 line-through">
                             {baseStr}
                           </span>
                         )}{" "}
@@ -453,7 +454,7 @@ export default async function ProDashboard({
                       {j.issue_description}
                     </p>
                   ) : (
-                    <p className="text-sm italic text-stone-400">
+                    <p className="text-sm italic text-stone-500">
                       No details provided yet
                     </p>
                   )}
@@ -476,7 +477,7 @@ export default async function ProDashboard({
                   )}
                   <div className="flex flex-wrap gap-4 text-xs text-stone-500">
                     {postedAgo(j.created_at) && (
-                      <span className="text-xs text-stone-400">
+                      <span className="text-xs text-stone-500">
                         {postedAgo(j.created_at)}
                       </span>
                     )}
@@ -489,7 +490,7 @@ export default async function ProDashboard({
                   </div>
 
                   {full ? (
-                    <p className="rounded-lg border border-stone-200 bg-stone-100 px-3 py-2 text-center text-sm font-medium text-stone-400">
+                    <p className="rounded-lg border border-stone-200 bg-stone-100 px-3 py-2 text-center text-sm font-medium text-stone-500">
                       Job full
                     </p>
                   ) : (
@@ -517,7 +518,7 @@ export default async function ProDashboard({
       <section className="space-y-3">
         <div>
           <h2 className="text-2xl font-semibold text-stone-900">
-            Your jobs <span className="text-stone-400">({assigned.length})</span>
+            Your jobs <span className="text-stone-500">({assigned.length})</span>
           </h2>
           <p className="text-sm text-stone-500">
             Jobs a homeowner chose you for. Their contact is unlocked and you can
@@ -544,11 +545,12 @@ export default async function ProDashboard({
           <div>
             <h2 className="text-lg font-semibold text-stone-900">
               Pending applications{" "}
-              <span className="text-stone-400">({pendingApps.length})</span>
+              <span className="text-stone-500">({pendingApps.length})</span>
             </h2>
-            <p className="text-xs text-stone-400">
-              Ghost protection: if the homeowner doesn't respond within 7 days,
-              your fee comes back automatically.
+            <p className="text-xs text-stone-500">
+              Ghost protection: if the homeowner never responds and no one is
+              picked, your fee comes back automatically after 7 days. A single
+              reply from them ends it.
             </p>
           </div>
           <ul className="space-y-2">
@@ -589,7 +591,7 @@ export default async function ProDashboard({
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-stone-900">
             Not selected{" "}
-            <span className="text-stone-400">({declinedApps.length})</span>
+            <span className="text-stone-500">({declinedApps.length})</span>
           </h2>
           <ul className="space-y-2">
             {declinedApps.map((a) => (
@@ -641,20 +643,20 @@ function AssignedJobCard({ l }: { l: any }) {
       {l.issue_description ? (
         <p className="text-sm text-stone-600">{l.issue_description}</p>
       ) : (
-        <p className="text-sm italic text-stone-400">No details provided yet</p>
+        <p className="text-sm italic text-stone-500">No details provided yet</p>
       )}
 
       <div className="rounded-lg bg-stone-50 p-3 text-sm text-stone-600">
         <p>
-          <span className="text-stone-400">Homeowner:</span>{" "}
+          <span className="text-stone-500">Homeowner:</span>{" "}
           {l.homeowner_name || "-"}
         </p>
         <p>
-          <span className="text-stone-400">Address:</span>{" "}
+          <span className="text-stone-500">Address:</span>{" "}
           {l.property_address || "-"}
         </p>
         <p>
-          <span className="text-stone-400">Contact:</span>{" "}
+          <span className="text-stone-500">Contact:</span>{" "}
           {l.homeowner_email || "-"}
           {l.homeowner_phone ? ` · ${l.homeowner_phone}` : ""}
         </p>

@@ -44,7 +44,7 @@ export default function ContractorReviews({
 
       {open && (
         <div className="mt-2 space-y-2">
-          {loading && <p className="text-xs text-stone-400">Loading…</p>}
+          {loading && <p className="text-xs text-stone-500">Loading…</p>}
           {reviews?.map((r, i) => (
             <div key={i} className="rounded-lg border border-stone-200 p-2">
               <div className="flex items-center justify-between">
@@ -54,7 +54,7 @@ export default function ContractorReviews({
                     {"★".repeat(5 - r.rating)}
                   </span>
                 </span>
-                <span className="text-[11px] text-stone-400">
+                <span className="text-[11px] text-stone-500">
                   {r.created_at.slice(0, 10)}
                 </span>
               </div>
@@ -64,7 +64,7 @@ export default function ContractorReviews({
             </div>
           ))}
           {reviews && reviews.length === 0 && (
-            <p className="text-xs text-stone-400">No written reviews yet.</p>
+            <p className="text-xs text-stone-500">No written reviews yet.</p>
           )}
         </div>
       )}

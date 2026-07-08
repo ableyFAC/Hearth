@@ -373,7 +373,7 @@ export default function ProToolsClient({
               </p>
 
               {pastJobs.length < 3 && (
-                <p className="mt-2 text-xs text-stone-400">
+                <p className="mt-2 text-xs text-stone-500">
                   {pastJobs.length === 0
                     ? "With none on file yet, this tool prices only from what you type above."
                     : "Upload more jobs of a given type and its suggestions get better for that type."}
@@ -432,7 +432,7 @@ export default function ProToolsClient({
                           type="button"
                           onClick={() => removePastJob(job.id)}
                           disabled={pjRemovingId === job.id}
-                          className="shrink-0 text-xs font-medium text-stone-400 hover:text-red-600"
+                          className="shrink-0 text-xs font-medium text-stone-500 hover:text-red-600"
                         >
                           {pjRemovingId === job.id ? "Removing…" : "Remove"}
                         </button>
@@ -653,7 +653,7 @@ export default function ProToolsClient({
           <p className="whitespace-pre-wrap rounded-lg border border-stone-200 bg-stone-50 px-3 py-3 text-sm text-stone-700">
             {result}
           </p>
-          <p className="text-xs text-stone-400">
+          <p className="text-xs text-stone-500">
             This is a starting point: give it a quick read and tweak
             anything before you send or post it.
           </p>

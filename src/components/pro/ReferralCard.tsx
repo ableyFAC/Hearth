@@ -37,7 +37,7 @@ export default function ReferralCard({ code }: { code: string }) {
           {code}
         </span>
         <span
-          className="min-w-0 truncate text-xs text-stone-400"
+          className="min-w-0 truncate text-xs text-stone-500"
           title={path}
         >
           {path}

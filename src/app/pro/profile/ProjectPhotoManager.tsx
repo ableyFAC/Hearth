@@ -100,11 +100,11 @@ export default function ProjectPhotoManager({
         disabled={photos.length >= MAX_PHOTOS}
         className="block w-full text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-hearth-100 file:px-3 file:py-1.5 file:text-hearth-800"
       />
-      <p className="mt-1 text-xs text-stone-400">
+      <p className="mt-1 text-xs text-stone-500">
         Up to {MAX_PHOTOS} photos. Tag a photo &quot;Before&quot; to build a
         before/after story.
       </p>
-      {busy && <p className="mt-1 text-xs text-stone-400">Uploading…</p>}
+      {busy && <p className="mt-1 text-xs text-stone-500">Uploading…</p>}
       {err && <p className="mt-1 text-xs text-amber-600">{err}</p>}
 
       {photos.length > 0 && (

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { applyToJobAction } from "./actions";
+import { GHOST_PROTECTION_DAYS } from "@/lib/constants";
 
 // Quick-apply starter templates: plain string substitution, no AI and no cost.
 // They prefill the textarea so a pro can tap one, then personalize before
@@ -200,8 +201,10 @@ export default function ApplyJobButton({
         </div>
       )}
       <p className="text-xs text-stone-500">
-        Applying charges the {fee} lead fee from your wallet. This can&apos;t be
-        undone.
+        Applying charges the {fee} lead fee from your wallet. If the homeowner
+        never responds and no one is picked, ghost protection returns it after{" "}
+        {GHOST_PROTECTION_DAYS} days. A licensed pro&apos;s first application
+        also comes back as lead credit if they aren&apos;t chosen.
       </p>
       <div className="flex gap-2">
         <button

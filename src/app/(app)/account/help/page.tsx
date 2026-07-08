@@ -46,7 +46,7 @@ export default async function HelpPage() {
         <div className="mt-3 divide-y divide-stone-100">
           {FAQ.map((f) => (
             <details key={f.q} className="group py-3">
-              <summary className="cursor-pointer text-sm font-medium text-stone-900 marker:text-stone-400">
+              <summary className="cursor-pointer text-sm font-medium text-stone-900 marker:text-stone-500">
                 {f.q}
               </summary>
               <p className="mt-2 text-sm text-stone-600">{f.a}</p>

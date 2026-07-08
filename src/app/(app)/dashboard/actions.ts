@@ -11,17 +11,24 @@ import { ALWAYS_SCHEDULE, SYSTEM_SCHEDULE } from "@/lib/maintenancePlan";
 // Mark a reminder (maintenance task) done. RLS limits it to the caller's tasks.
 export async function completeReminderAction(id: string) {
   const supabase = createClient();
-  await supabase
+  const { error } = await supabase
     .from("maintenance_tasks")
     .update({ status: "done", completed_at: new Date().toISOString() })
     .eq("id", id);
+  if (error)
+    setFlash("Couldn't update that reminder. Please try again.", "error");
   revalidatePath("/dashboard");
 }
 
 // Delete a reminder entirely (offered only after it's checked off).
 export async function deleteReminderAction(id: string) {
   const supabase = createClient();
-  await supabase.from("maintenance_tasks").delete().eq("id", id);
+  const { error } = await supabase
+    .from("maintenance_tasks")
+    .delete()
+    .eq("id", id);
+  if (error)
+    setFlash("Couldn't remove that reminder. Please try again.", "error");
   revalidatePath("/dashboard");
 }
 
@@ -29,23 +36,27 @@ export async function deleteReminderAction(id: string) {
 export async function editReminderAction(formData: FormData) {
   const id = formData.get("id") as string;
   const supabase = createClient();
-  await supabase
+  const { error } = await supabase
     .from("maintenance_tasks")
     .update({
       title: ((formData.get("title") as string) || "").trim() || "Reminder",
       due_date: (formData.get("due_date") as string) || null,
     })
     .eq("id", id);
+  if (error)
+    setFlash("Couldn't save your changes. Please try again.", "error");
   revalidatePath("/dashboard");
 }
 
 // Undo: put a reminder back to open (in case it was checked off by accident).
 export async function uncompleteReminderAction(id: string) {
   const supabase = createClient();
-  await supabase
+  const { error } = await supabase
     .from("maintenance_tasks")
     .update({ status: "open", completed_at: null })
     .eq("id", id);
+  if (error)
+    setFlash("Couldn't update that reminder. Please try again.", "error");
   revalidatePath("/dashboard");
 }
 

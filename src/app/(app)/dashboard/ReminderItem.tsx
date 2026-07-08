@@ -172,7 +172,7 @@ export default function ReminderItem({
           </span>
           <span
             className={`truncate text-sm ${
-              done ? "text-stone-400 line-through" : "text-stone-800"
+              done ? "text-stone-500 line-through" : "text-stone-800"
             }`}
           >
             {title}
@@ -186,16 +186,16 @@ export default function ReminderItem({
               {chip.label}
             </span>
           )}
-          {done && (
-            <button
-              type="button"
-              onClick={remove}
-              disabled={busy}
-              className="text-xs text-stone-400 hover:text-red-600"
-            >
-              Delete
-            </button>
-          )}
+          {/* Rendered whether or not the task is done so an unwanted open
+              reminder can be dismissed without marking it complete. */}
+          <button
+            type="button"
+            onClick={remove}
+            disabled={busy}
+            className="flex min-h-[44px] items-center px-1 text-xs text-stone-500 hover:text-red-600"
+          >
+            Delete
+          </button>
         </div>
       </div>
     </li>

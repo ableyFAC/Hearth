@@ -99,7 +99,7 @@ export default function ClientRow({
                   ? "font-medium text-red-600"
                   : dueToday
                     ? "font-medium text-amber-700"
-                    : "text-stone-400"
+                    : "text-stone-500"
               }
             >
               Follow up {client.follow_up_on}

@@ -51,7 +51,7 @@ export default async function GuidesLayout({
       {children}
 
       <footer className="mx-auto mt-16 max-w-2xl border-t border-stone-200 px-6 py-6 text-center">
-        <p className="text-xs text-stone-400">
+        <p className="text-xs text-stone-500">
           🏡 Hearth · Your home, looked after
         </p>
         <p className="mt-2 text-xs">

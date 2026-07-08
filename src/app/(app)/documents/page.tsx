@@ -133,7 +133,7 @@ export default async function DocumentsPage() {
             <div className="flex justify-center">
               <span className="icon-chip">📄</span>
             </div>
-            <p className="mt-2 text-sm text-stone-400">
+            <p className="mt-2 text-sm text-stone-500">
               No documents yet. Add your first one above.
             </p>
           </div>
@@ -186,7 +186,7 @@ export default async function DocumentsPage() {
                   <p className="mt-1 text-sm text-stone-600">{d.summary}</p>
                 )}
                 {facts.length > 0 && (
-                  <p className="mt-1 text-xs text-stone-400">
+                  <p className="mt-1 text-xs text-stone-500">
                     {facts.join(" · ")}
                   </p>
                 )}
@@ -212,7 +212,7 @@ export default async function DocumentsPage() {
                     <input type="hidden" name="id" value={d.id} />
                     <button
                       type="submit"
-                      className="text-xs text-stone-400 hover:text-red-600"
+                      className="text-xs text-stone-500 hover:text-red-600"
                     >
                       Remove
                     </button>

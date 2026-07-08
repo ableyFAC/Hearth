@@ -215,7 +215,7 @@ export default async function TaxesPage() {
             />
           </div>
 
-          <p className="mt-6 text-xs text-stone-400">
+          <p className="mt-6 text-xs text-stone-500">
             Hearth&apos;s number is an estimate from statewide average price
             trends, not an appraisal, and this page is not tax or legal
             advice. Assessment rules, ratios, and appeal processes vary a lot

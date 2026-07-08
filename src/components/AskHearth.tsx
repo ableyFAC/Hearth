@@ -290,12 +290,14 @@ function MessageActions({
 // messages age out per the retention setting below (default: 24 hours), pruned
 // by each message's own timestamp on load. Keys are namespaced per user id
 // (e.g. "hearth_ask_chat:<uuid>") so chats can't leak between accounts on a
-// shared device; the bare legacy keys are only used while the id loads.
-const STORAGE_KEY = "hearth_ask_chat";
+// shared device; the bare legacy keys are only used while the id loads. The
+// key BASES are props so a separate mount (e.g. the pro copilot) stores its
+// own conversation without colliding with the homeowner chat.
+const DEFAULT_STORAGE_KEY = "hearth_ask_chat";
+const DEFAULT_RETENTION_KEY = "hearth_ask_retention";
 const SYNC_EVENT = "hearth:ask-updated";
 
 type Retention = "24h" | "2w" | "1m" | "never";
-const RETENTION_KEY = "hearth_ask_retention";
 const RETENTION_MS: Record<Retention, number> = {
   "24h": 24 * 60 * 60 * 1000,
   "2w": 14 * 24 * 60 * 60 * 1000,
@@ -328,6 +330,11 @@ function prune(msgs: Msg[], retention: Retention): Msg[] {
 }
 const DEFAULT_GREETING =
   "Hi, I'm Hearth. If you have any questions about your home, feel free to ask.";
+const DEFAULT_HEADING_TITLE = "✨ Ask Hearth";
+const DEFAULT_HEADING_SUBTITLE =
+  "Your home assistant. Answers use your systems, ages, and any issues.";
+const DEFAULT_DISCLAIMER =
+  "Hearth's cost figures are ballpark estimates. Confirm with a local pro before you commit.";
 
 // `fill` = take the full height of its container (the Messages pane); otherwise
 // it renders as a compact card (Home / Learn). `suggestions` are starter
@@ -340,12 +347,30 @@ export default function AskHearth({
   suggestions,
   greeting,
   initialQuestion,
+  endpoint = "/api/ask",
+  storageKeyBase = DEFAULT_STORAGE_KEY,
+  retentionKeyBase = DEFAULT_RETENTION_KEY,
+  headingTitle = DEFAULT_HEADING_TITLE,
+  headingSubtitle = DEFAULT_HEADING_SUBTITLE,
+  disclaimer = DEFAULT_DISCLAIMER,
 }: {
   fill?: boolean;
   suggestions?: string[];
   greeting?: string;
   initialQuestion?: string;
+  // Which API to talk to and where to keep the conversation. Defaults keep the
+  // homeowner "Ask Hearth" behavior identical; the pro copilot overrides them.
+  endpoint?: string;
+  storageKeyBase?: string;
+  retentionKeyBase?: string;
+  headingTitle?: string;
+  headingSubtitle?: string;
+  disclaimer?: string;
 }) {
+  // Local aliases so the per-user namespacing and legacy migration below read
+  // exactly as before, just off the prop bases.
+  const STORAGE_KEY = storageKeyBase;
+  const RETENTION_KEY = retentionKeyBase;
   const GREETING: Msg = {
     role: "assistant",
     content: greeting || DEFAULT_GREETING,
@@ -410,6 +435,7 @@ export default function AskHearth({
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load the conversation on mount (and again once the per-user key resolves),
@@ -514,7 +540,7 @@ export default function AskHearth({
     setPendingImage(null);
     setLoading(true);
     try {
-      const res = await fetch("/api/ask", {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
         // Drop the leading canned greeting before sending history to the model.
@@ -673,13 +699,13 @@ export default function AskHearth({
   // depends on `fill` (see below) - kept as one element so the two views
   // can't drift on wording or options.
   const retentionControl = (
-    <p className="text-[11px] text-stone-400">
+    <p className="text-[11px] text-stone-500">
       {retention === "never" ? "Chats are kept " : "Chats clear after "}
       <select
         value={retention}
         onChange={(e) => changeRetention(e.target.value as Retention)}
         aria-label="How long chats are kept"
-        className="cursor-pointer appearance-none border-0 bg-transparent p-0 text-[11px] text-stone-400 underline decoration-dotted hover:text-stone-600 focus:outline-none"
+        className="cursor-pointer appearance-none border-0 bg-transparent p-0 text-[11px] text-stone-500 underline decoration-dotted hover:text-stone-600 focus:outline-none"
       >
         <option value="24h">24 hours</option>
         <option value="2w">2 weeks</option>
@@ -703,7 +729,7 @@ export default function AskHearth({
           <button
             type="button"
             onClick={() => setPendingImage(null)}
-            className="text-xs text-stone-400 hover:text-red-600"
+            className="text-xs text-stone-500 hover:text-red-600"
           >
             Remove
           </button>
@@ -749,10 +775,7 @@ export default function AskHearth({
           {fill ? "Send" : "Ask"}
         </button>
       </form>
-      <p className="mt-1 text-[11px] text-stone-400">
-        Hearth&apos;s cost figures are ballpark estimates. Confirm with a
-        local pro before you commit.
-      </p>
+      <p className="mt-1 text-[11px] text-stone-500">{disclaimer}</p>
       {/* In the dock (fill), this control moves to the header instead - */}
       {/* down here it sat below the whole conversation, off-screen until */}
       {/* scrolled to. The compact card has no such scroll, so it stays put. */}
@@ -770,17 +793,15 @@ export default function AskHearth({
     const hasConversation = displayed.length > 0;
     return (
       <div className="card border-hearth-200 bg-hearth-50">
-        <p className="text-sm font-semibold text-hearth-900">✨ Ask Hearth</p>
-        <p className="text-xs text-hearth-700">
-          Your home assistant. Answers use your systems, ages, and any issues.
-        </p>
+        <p className="text-sm font-semibold text-hearth-900">{headingTitle}</p>
+        <p className="text-xs text-hearth-700">{headingSubtitle}</p>
 
         {(hasConversation || loading) && (
           <div className="mt-3 max-h-80 space-y-2 overflow-y-auto rounded-lg border border-stone-200 bg-white p-3">
             {displayed.map((m, i) => bubble(m, i, i === displayed.length - 1))}
             {loading && (
               <div className="flex justify-start">
-                <span className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-400">
+                <span className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-500">
                   Thinking…
                 </span>
               </div>
@@ -826,10 +847,8 @@ export default function AskHearth({
     <div className="flex h-full flex-col">
       <div className="flex items-start justify-between gap-2 pb-2">
         <div>
-          <p className="text-sm font-semibold text-hearth-900">✨ Ask Hearth</p>
-          <p className="text-xs text-hearth-700">
-            Your home assistant. Answers use your systems and their ages.
-          </p>
+          <p className="text-sm font-semibold text-hearth-900">{headingTitle}</p>
+          <p className="text-xs text-hearth-700">{headingSubtitle}</p>
         </div>
         {/* Surfaced here (next to Clear) instead of only below the input: */}
         {/* the dock is short and scrollable, and buried at the bottom it */}
@@ -839,7 +858,7 @@ export default function AskHearth({
           <button
             type="button"
             onClick={clearChat}
-            className="text-xs text-stone-400 hover:text-stone-700"
+            className="text-xs text-stone-500 hover:text-stone-700"
           >
             Clear
           </button>
@@ -850,7 +869,7 @@ export default function AskHearth({
         {messages.map((m, i) => bubble(m, i, i === messages.length - 1))}
         {loading && (
           <div className="flex justify-start">
-            <span className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-400">
+            <span className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-500">
               Thinking…
             </span>
           </div>

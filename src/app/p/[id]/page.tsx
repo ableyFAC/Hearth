@@ -316,7 +316,7 @@ export default async function PublicProPage({
                 className="h-16 w-16 rounded-2xl bg-white object-cover shadow-sm ring-2 ring-white"
               />
             ) : (
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-stone-200 bg-stone-50 text-xl font-semibold text-stone-400 shadow-sm ring-2 ring-white">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-stone-200 bg-stone-50 text-xl font-semibold text-stone-500 shadow-sm ring-2 ring-white">
                 {profile.name.slice(0, 1).toUpperCase()}
               </div>
             )}
@@ -329,14 +329,14 @@ export default async function PublicProPage({
               <span className="font-medium text-stone-700">
                 <Stars rating={profile.rating!} />{" "}
                 <span className="tabular-nums">{profile.rating}</span>
-                <span className="font-normal text-stone-400">
+                <span className="font-normal text-stone-500">
                   {" "}
                   · {profile.review_count} review
                   {profile.review_count === 1 ? "" : "s"}
                 </span>
               </span>
             ) : (
-              <span className="text-stone-400">No reviews yet</span>
+              <span className="text-stone-500">No reviews yet</span>
             )}
           </div>
 
@@ -356,7 +356,7 @@ export default async function PublicProPage({
                 </svg>
                 {badgeLabel}
               </span>
-              <p className="mt-1 text-[11px] text-stone-400">
+              <p className="mt-1 text-[11px] text-stone-500">
                 Details provided by the business. Not independently verified by
                 Hearth.
               </p>
@@ -381,7 +381,7 @@ export default async function PublicProPage({
                     </svg>
                     License verified
                   </span>
-                  <p className="mt-1 text-[11px] text-stone-400">
+                  <p className="mt-1 text-[11px] text-stone-500">
                     Checked against the CSLB public database on {licenseVerifiedLabel}.
                   </p>
                 </div>
@@ -402,7 +402,7 @@ export default async function PublicProPage({
                     </svg>
                     Background checked
                   </span>
-                  <p className="mt-1 text-[11px] text-stone-400">
+                  <p className="mt-1 text-[11px] text-stone-500">
                     Background check run by Checkr on {backgroundCheckedLabel}.
                   </p>
                 </div>
@@ -439,7 +439,7 @@ export default async function PublicProPage({
               <h2 className="text-sm font-semibold text-stone-900">
                 Projects
               </h2>
-              <p className="mt-0.5 text-[11px] text-stone-400">
+              <p className="mt-0.5 text-[11px] text-stone-500">
                 Photos provided by the business.
               </p>
               <ul className="mt-2 space-y-4">
@@ -484,7 +484,7 @@ export default async function PublicProPage({
                         {p.title}
                       </p>
                       {(p.category || p.months) && (
-                        <p className="mt-0.5 text-xs text-stone-400">
+                        <p className="mt-0.5 text-xs text-stone-500">
                           {p.category
                             ? `${iconFor(JOB_CATEGORIES, p.category)} ${labelFor(JOB_CATEGORIES, p.category)}`
                             : ""}
@@ -508,13 +508,13 @@ export default async function PublicProPage({
             <h2 className="text-sm font-semibold text-stone-900">
               Reviews
               {profile.review_count > 0 && (
-                <span className="ml-1 font-normal text-stone-400">
+                <span className="ml-1 font-normal text-stone-500">
                   ({profile.review_count})
                 </span>
               )}
             </h2>
             {profile.reviews.length === 0 ? (
-              <p className="mt-1 text-sm text-stone-400">
+              <p className="mt-1 text-sm text-stone-500">
                 No reviews yet. Reviews come from real Hearth jobs only.
               </p>
             ) : (
@@ -525,7 +525,7 @@ export default async function PublicProPage({
                       <span className="text-xs">
                         <Stars rating={r.rating} />
                       </span>
-                      <span className="text-[11px] text-stone-400">
+                      <span className="text-[11px] text-stone-500">
                         {r.created_at.slice(0, 10)}
                       </span>
                     </div>

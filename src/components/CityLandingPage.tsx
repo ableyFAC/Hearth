@@ -124,7 +124,7 @@ export default async function CityLandingPage({
       <main className="mx-auto max-w-2xl px-6 pb-16 pt-10">
         <div className="text-center">
           <h1 className="text-3xl font-bold tracking-tight text-stone-900 sm:text-4xl">
-            Home maintenance and trusted local pros in {city}
+            Home maintenance and local pros in {city}
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-stone-600">
             {housingParagraph}
@@ -188,7 +188,7 @@ export default async function CityLandingPage({
       </main>
 
       <footer className="mx-auto max-w-2xl border-t border-stone-200 px-6 py-6 text-center">
-        <p className="text-xs text-stone-400">
+        <p className="text-xs text-stone-500">
           🏡 Hearth · Your home, looked after
         </p>
         <p className="mt-2 text-xs">
