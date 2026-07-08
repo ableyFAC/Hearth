@@ -23,8 +23,8 @@ export const COLD_START_FREE_ALERTS = true;
 // back to an honest generic line instead of a placeholder like "Jane Doe".
 // =============================================================================
 export const FOUNDER = {
-  name: "",
-  city: "",
+  name: "Landen Chu",
+  city: "Fountain Valley",
   cellPhone: "",
   // Public contact email for prospective pros (shown on /pros). The in-app
   // help page needs an account, so signed-out visitors need SOME reachable
