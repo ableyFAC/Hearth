@@ -23,6 +23,11 @@ const NEVER_APPLIED_DAYS = 14;
 const QUIET_DAYS = 30;
 const MAX_GRANTS = 200; // cap the money a single run hands out
 const MAX_CONTRACTORS = 2000; // sanity cap on the candidate scan
+// PostgREST silently truncates any single response at its max-rows cap
+// (default 1000), so the candidate scan below pages in steps of this size
+// instead of asking for MAX_CONTRACTORS in one .limit() call, which used to
+// mean every contractor past row 1000 was silently never scanned.
+const CONTRACTOR_PAGE = 1000;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -73,19 +78,28 @@ async function runCron(req: NextRequest) {
   const quietCutoff = nowMs - QUIET_DAYS * DAY_MS;
 
   // Rough candidates: every contractor with a login, oldest first so the same
-  // pros aren't perpetually pushed past the cap by newer signups.
-  const { data: rawContractors, error: contractorsError } = await supabase
-    .from("contractors")
-    .select("id, user_id, created_at")
-    .order("created_at", { ascending: true })
-    .limit(MAX_CONTRACTORS);
-  if (contractorsError) {
-    return NextResponse.json(
-      { checked: 0, granted: 0, error: contractorsError.message },
-      { status: 200 }
-    );
+  // pros aren't perpetually pushed past the cap by newer signups. Paged in
+  // CONTRACTOR_PAGE steps (see its comment) up to MAX_CONTRACTORS so the
+  // scan actually reaches every contractor instead of silently stopping at
+  // PostgREST's 1000-row response cap.
+  const rawContractors: { id: string; user_id: string | null; created_at: string }[] = [];
+  for (let start = 0; start < MAX_CONTRACTORS; start += CONTRACTOR_PAGE) {
+    const end = Math.min(start + CONTRACTOR_PAGE, MAX_CONTRACTORS) - 1;
+    const { data: page, error: contractorsError } = await supabase
+      .from("contractors")
+      .select("id, user_id, created_at")
+      .order("created_at", { ascending: true })
+      .range(start, end);
+    if (contractorsError) {
+      return NextResponse.json(
+        { checked: 0, granted: 0, error: contractorsError.message },
+        { status: 200 }
+      );
+    }
+    rawContractors.push(...(page ?? []));
+    if (!page || page.length < end - start + 1) break;
   }
-  const contractors = (rawContractors ?? []).filter(
+  const contractors = rawContractors.filter(
     (c): c is typeof c & { user_id: string } => Boolean(c.user_id)
   );
   if (contractors.length === 0) {

@@ -32,8 +32,8 @@ const VALUE = [
   },
   {
     icon: "🧰",
-    title: "Vetted local pros, no bidding war",
-    body: "Jobs cap at 3 applying pros, so you compare a short list instead of sorting through a pile of quotes.",
+    title: "Local pros, no bidding war",
+    body: "Pros are license-checked against the CSLB when a license is on file, and jobs cap at 3 applying pros, so you compare a short list instead of sorting through a pile of quotes.",
   },
   {
     icon: "🆓",
@@ -100,21 +100,21 @@ export default async function CityLandingPage({
       <header className="mx-auto flex max-w-2xl items-center justify-between px-6 pt-6">
         <a
           href="/"
-          className="flex items-center gap-2 font-semibold text-stone-900"
+          className="flex items-center gap-2 font-semibold text-stone-900 dark:text-stone-100"
         >
           <span aria-hidden>🏡</span> Hearth
         </a>
         {user ? (
           <a
             href="/dashboard"
-            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700"
+            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700 dark:border-stone-600 dark:text-stone-300 dark:hover:text-hearth-300"
           >
             Open your dashboard
           </a>
         ) : (
           <a
             href="/get-started"
-            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700"
+            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700 dark:border-stone-600 dark:text-stone-300 dark:hover:text-hearth-300"
           >
             Get started free
           </a>
@@ -123,10 +123,10 @@ export default async function CityLandingPage({
 
       <main className="mx-auto max-w-2xl px-6 pb-16 pt-10">
         <div className="text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-stone-900 sm:text-4xl">
+          <h1 className="text-3xl font-bold tracking-tight text-stone-900 sm:text-4xl dark:text-stone-100">
             Home maintenance and local pros in {city}
           </h1>
-          <p className="mx-auto mt-4 max-w-xl text-stone-600">
+          <p className="mx-auto mt-4 max-w-xl text-stone-600 dark:text-stone-300">
             {housingParagraph}
           </p>
           {user ? (
@@ -147,7 +147,7 @@ export default async function CityLandingPage({
         </div>
 
         <section className="mt-14">
-          <h2 className="text-center text-xl font-semibold text-stone-900">
+          <h2 className="text-center text-xl font-semibold text-stone-900 dark:text-stone-100">
             What Hearth does
           </h2>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -156,17 +156,17 @@ export default async function CityLandingPage({
                 <div className="icon-chip" aria-hidden>
                   {v.icon}
                 </div>
-                <h3 className="mt-3 font-semibold text-stone-900">
+                <h3 className="mt-3 font-semibold text-stone-900 dark:text-stone-100">
                   {v.title}
                 </h3>
-                <p className="mt-1 text-sm text-stone-600">{v.body}</p>
+                <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">{v.body}</p>
               </div>
             ))}
           </div>
         </section>
 
         <section className="mt-14">
-          <h2 className="text-center text-xl font-semibold text-stone-900">
+          <h2 className="text-center text-xl font-semibold text-stone-900 dark:text-stone-100">
             Guides for {city} homeowners
           </h2>
           <ul className="mt-6 space-y-3">
@@ -176,8 +176,8 @@ export default async function CityLandingPage({
                   href={g.href}
                   className="card block transition hover:border-hearth-400 hover:shadow-md"
                 >
-                  <h3 className="font-semibold text-stone-900">{g.title}</h3>
-                  <p className="mt-1 text-sm text-stone-600">{g.blurb}</p>
+                  <h3 className="font-semibold text-stone-900 dark:text-stone-100">{g.title}</h3>
+                  <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">{g.blurb}</p>
                 </a>
               </li>
             ))}
@@ -187,14 +187,14 @@ export default async function CityLandingPage({
         <GuideCta />
       </main>
 
-      <footer className="mx-auto max-w-2xl border-t border-stone-200 px-6 py-6 text-center">
-        <p className="text-xs text-stone-500">
+      <footer className="mx-auto max-w-2xl border-t border-stone-200 px-6 py-6 text-center dark:border-white/10">
+        <p className="text-xs text-stone-500 dark:text-stone-400">
           🏡 Hearth · Your home, looked after
         </p>
         <p className="mt-2 text-xs">
           <a
             href="/guides"
-            className="text-stone-500 hover:text-hearth-700 hover:underline"
+            className="text-stone-500 hover:text-hearth-700 hover:underline dark:text-stone-400 dark:hover:text-hearth-300"
           >
             All guides
           </a>

@@ -38,21 +38,33 @@ export default function ChatDrawer({
         className="absolute inset-0 bg-black/30"
         onClick={() => setChat(null)}
       />
-      <div className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l border-stone-200 bg-white shadow-2xl">
-        <div className="flex items-center justify-between gap-2 border-b border-stone-100 bg-stone-50 px-4 py-3">
+      <div className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l border-stone-200 bg-white shadow-2xl dark:border-white/10 dark:bg-stone-800">
+        <div className="flex items-center justify-between gap-2 border-b border-stone-100 bg-stone-50 px-4 py-3 dark:border-white/10 dark:bg-stone-900">
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-stone-900">
+            <p className="truncate text-sm font-semibold text-stone-900 dark:text-stone-100">
               {chat.name}
             </p>
-            <p className="text-xs text-stone-500">Messages</p>
+            <p className="text-xs text-stone-500 dark:text-stone-400">Messages</p>
           </div>
           <button
             type="button"
             onClick={() => setChat(null)}
             title="Close"
-            className="text-lg leading-none text-stone-500 hover:text-red-600"
+            aria-label="Close"
+            className="text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
           >
-            ✕
+            <svg
+              viewBox="0 0 24 24"
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
           </button>
         </div>
         <div className="flex-1 overflow-hidden p-3">

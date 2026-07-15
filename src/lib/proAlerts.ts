@@ -66,12 +66,16 @@ export async function alertProsForNewLead(
     // reports 42703, and the old code-42703-or-literal-name pattern here
     // missed that, silently swallowing the whole query (and every alert with
     // it) on a live DB without 0046 instead of falling back cleanly.
-    type ContractorRow = { user_id: string | null; service_state?: string | null };
+    type ContractorRow = {
+      user_id: string | null;
+      contact_phone?: string | null;
+      service_state?: string | null;
+    };
     let contractors: ContractorRow[] = [];
     {
       const res = await (admin as any)
         .from("contractors")
-        .select("user_id, service_state")
+        .select("user_id, contact_phone, service_state")
         .not("user_id", "is", null)
         .or(`categories.is.null,categories.cs.{${lead.category}}`)
         .limit(1000);
@@ -79,7 +83,7 @@ export async function alertProsForNewLead(
         if (!isMissingSchemaError(res.error)) throw res.error;
         const retry = await admin
           .from("contractors")
-          .select("user_id")
+          .select("user_id, contact_phone")
           .not("user_id", "is", null)
           .or(`categories.is.null,categories.cs.{${lead.category}}`)
           .limit(1000);
@@ -87,6 +91,17 @@ export async function alertProsForNewLead(
         contractors = (retry.data ?? []) as ContractorRow[];
       } else {
         contractors = (res.data ?? []) as ContractorRow[];
+      }
+    }
+
+    // SMS goes to the number the pro actually gave us: contractor onboarding
+    // writes contractors.contact_phone and never touches users.phone, so
+    // reading only users.phone below would mean no pro ever gets a text.
+    // users.phone stays as the fallback for anyone who has one.
+    const contactPhoneByUser = new Map<string, string>();
+    for (const c of contractors) {
+      if (c.user_id && c.contact_phone && !contactPhoneByUser.has(c.user_id)) {
+        contactPhoneByUser.set(c.user_id, c.contact_phone);
       }
     }
 
@@ -166,9 +181,10 @@ export async function alertProsForNewLead(
     const description = (lead.issue_description ?? "").trim();
     const snippet =
       description.length > 120 ? `${description.slice(0, 117)}...` : description;
-    // Honest urgency: 78% of homeowners go with the first pro to respond, and
-    // this instant alert is the whole point of racing them there, so the body
-    // says so plainly instead of staying silent about why speed matters.
+    // Honest urgency: homeowners overwhelmingly go with the first pro to
+    // respond, and this instant alert is the whole point of racing them there,
+    // so the body says so plainly instead of staying silent about why speed
+    // matters. (No hard percentage: we don't have a sourced figure.)
     const urgencyLine = "Heads up: the first pro to reply usually wins the job.";
     const body =
       ([
@@ -191,7 +207,7 @@ export async function alertProsForNewLead(
             body,
             url: "/pro",
             email: contact?.email ?? null,
-            phone: contact?.phone ?? null,
+            phone: contactPhoneByUser.get(userId) ?? contact?.phone ?? null,
           });
           if (sent) alerted.add(userId);
         })

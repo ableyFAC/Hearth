@@ -37,16 +37,30 @@ export default async function ForecastPage() {
   const property = (await getActiveProperty())!;
   const supabase = createClient();
 
-  const { data: systems } = await supabase
-    .from("home_systems")
-    .select("*")
-    .eq("property_id", property.id)
-    .order("created_at", { ascending: true });
+  // Same "open issues" query the Home page runs, so a resolved issue drops
+  // out here on the very next load too - no separate flag to keep in sync.
+  const [{ data: systems }, { data: issues }] = await Promise.all([
+    supabase
+      .from("home_systems")
+      .select("*")
+      .eq("property_id", property.id)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("issues")
+      .select("*")
+      .eq("property_id", property.id)
+      .eq("status", "open")
+      .order("created_at", { ascending: false }),
+  ]);
 
   const sys = systems ?? [];
+  const openIssues = issues ?? [];
   const nowDate = new Date(Date.now());
   const currentYear = nowDate.getFullYear();
-  const forecast = sys.length > 0 ? buildForecast(sys, currentYear, property.state) : null;
+  const forecast =
+    sys.length > 0
+      ? buildForecast(sys, currentYear, property.state, 10, openIssues)
+      : null;
   const region = stateName(property.state);
 
   // Running-costs section: the season the owner is heading into (fall points
@@ -95,11 +109,11 @@ export default async function ForecastPage() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
       <header className="mb-1">
-        <h1 className="text-2xl font-semibold text-stone-900">
-          Home cost forecast
+        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
+          Cost forecast
         </h1>
       </header>
-      <p className="mb-5 text-sm text-stone-500">
+      <p className="mb-5 text-sm text-stone-500 dark:text-stone-400">
         Most homeowners get surprised by a big repair sooner or later, and a
         five-figure one hurts. Here is what your home's systems are likely to
         need over the next {forecast?.horizonYears ?? 10} years, and how much
@@ -108,7 +122,7 @@ export default async function ForecastPage() {
 
       {!forecast && (
         <div className="card space-y-3 text-center">
-          <p className="text-sm text-stone-600">
+          <p className="text-sm text-stone-600 dark:text-stone-300">
             Add your home's systems to see a cost forecast and a recommended
             monthly set-aside amount.
           </p>
@@ -121,24 +135,27 @@ export default async function ForecastPage() {
       {forecast && (
         <>
           <div className="card-hero space-y-2 text-center">
-            <p className="text-sm text-hearth-800">
+            <p className="text-sm text-hearth-800 dark:text-hearth-200">
               Over the next {forecast.horizonYears} years, plan for about{" "}
               <span className="font-semibold">
                 {money(forecast.totalMidCost)}
               </span>
             </p>
-            <p className="stat-number text-4xl text-hearth-800">
+            <p className="stat-number text-4xl text-hearth-800 dark:text-hearth-200">
               Set aside about {money(forecast.monthlySetAside)}/month
             </p>
-            <p className="text-xs text-hearth-700">
+            <p className="text-xs text-hearth-700 dark:text-hearth-300">
               So a big repair is a plan, not a panic.
             </p>
-            <p className="text-xs text-hearth-600">
-              Adjusted for {region ? `your area (${region})` : "your area"},
-              and for future prices, not just today's.
+            <p className="text-xs text-hearth-600 dark:text-hearth-400">
+              Ballpark from{" "}
+              {region
+                ? `statewide ${region} price trends`
+                : "statewide price trends"}
+              , adjusted for future prices, not just today&apos;s.
             </p>
             {forecast.estimatedTimingCount > 0 && (
-              <p className="text-xs text-hearth-600">
+              <p className="text-xs text-hearth-600 dark:text-hearth-400">
                 {forecast.estimatedTimingCount === 1
                   ? "1 of your systems has no install year, so its timing here is a rough placement."
                   : `${forecast.estimatedTimingCount} of your systems have no install year, so their timing here is a rough placement.`}{" "}
@@ -157,7 +174,7 @@ export default async function ForecastPage() {
 
           {forecast.startHere.length > 0 && (
             <div className="card mt-6 space-y-3">
-              <h2 className="flex items-center text-sm font-semibold text-stone-900">
+              <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
                 Start here
               </h2>
               <div className="space-y-2">
@@ -166,8 +183,8 @@ export default async function ForecastPage() {
                     key={item.system.id}
                     className={`flex items-start justify-between gap-3 rounded-lg border p-3 ${
                       item.yearsLeft <= 1
-                        ? "border-red-200 bg-red-50"
-                        : "border-stone-200 bg-stone-50"
+                        ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40"
+                        : "border-stone-200 bg-stone-50 dark:border-white/10 dark:bg-stone-700"
                     }`}
                   >
                     <div className="flex items-start gap-2">
@@ -175,10 +192,10 @@ export default async function ForecastPage() {
                         {iconFor(SYSTEM_TYPES, item.system_type)}
                       </span>
                       <div>
-                        <p className="text-sm font-medium text-stone-900">
+                        <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
                           {labelFor(SYSTEM_TYPES, item.system_type)}
                         </p>
-                        <p className="text-xs text-stone-500">{reason}</p>
+                        <p className="text-xs text-stone-500 dark:text-stone-400">{reason}</p>
                       </div>
                     </div>
                     <Link
@@ -194,11 +211,11 @@ export default async function ForecastPage() {
           )}
 
           <div className="card mt-6 space-y-3">
-            <h2 className="flex items-center text-sm font-semibold text-stone-900">
+            <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
               Expected spend by year
             </h2>
             <div className="overflow-x-auto pb-1">
-              <div className="flex items-end gap-2 border-b border-stone-200">
+              <div className="flex items-end gap-2 border-b border-stone-200 dark:border-stone-700">
                 {forecast.yearlySpend.map((y) => {
                   const max = Math.max(...forecast.yearlySpend.map((x) => x.amount), 1);
                   const height =
@@ -209,7 +226,7 @@ export default async function ForecastPage() {
                       title={`${y.year}: ${money(y.amount)}`}
                       className="flex min-w-[2.5rem] flex-col items-center justify-end gap-1 transition hover:opacity-90"
                     >
-                      <span className="text-[10px] font-medium tabular-nums text-stone-500">
+                      <span className="text-[10px] font-medium tabular-nums text-stone-500 dark:text-stone-400">
                         {y.amount > 0 ? moneyShort(y.amount) : ""}
                       </span>
                       <div
@@ -220,7 +237,7 @@ export default async function ForecastPage() {
                                   ? "from-hearth-600 to-hearth-500"
                                   : "from-hearth-500 to-hearth-400"
                               }`
-                            : "bg-stone-100"
+                            : "bg-stone-100 dark:bg-stone-700"
                         }`}
                         style={{ height: `${height}px` }}
                       />
@@ -232,7 +249,7 @@ export default async function ForecastPage() {
                 {forecast.yearlySpend.map((y) => (
                   <span
                     key={y.year}
-                    className="min-w-[2.5rem] text-center text-[10px] text-stone-500"
+                    className="min-w-[2.5rem] text-center text-[10px] text-stone-500 dark:text-stone-400"
                   >
                     {y.year}
                   </span>
@@ -243,24 +260,24 @@ export default async function ForecastPage() {
 
           {energyEstimate && (
             <div className="card mt-6 space-y-3">
-              <h2 className="flex items-center text-sm font-semibold text-stone-900">
+              <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
                 Running costs, not just repairs
               </h2>
-              <p className="text-sm text-stone-500">
+              <p className="text-sm text-stone-500 dark:text-stone-400">
                 Replacements are the big shocks, but your home also costs
                 money to run every month.{" "}
                 {energySeason === "winter"
                   ? "Keeping it warm this winter"
                   : "Keeping it cool this summer"}{" "}
                 will likely run about{" "}
-                <span className="font-semibold text-stone-900">
+                <span className="font-semibold text-stone-900 dark:text-stone-100">
                   {money(energyEstimate.low)} - {money(energyEstimate.high)}
                 </span>
                 .
               </p>
               {upgradeSavings && (
-                <div className="rounded-lg bg-hearth-50 p-3">
-                  <p className="text-sm text-hearth-800">
+                <div className="rounded-lg bg-hearth-50 p-3 dark:bg-hearth-900/30">
+                  <p className="text-sm text-hearth-800 dark:text-hearth-200">
                     Your HVAC is about {upgradeSavings.hvacAge} years old, and
                     older units waste energy. A modern high-efficiency unit
                     could trim roughly{" "}
@@ -273,13 +290,13 @@ export default async function ForecastPage() {
                   </p>
                   <Link
                     href={`/contractors?category=${categoryForSystem("hvac")}`}
-                    className="mt-1 inline-block text-xs font-medium text-hearth-700 hover:underline"
+                    className="mt-1 inline-block text-xs font-medium text-hearth-700 hover:underline dark:text-hearth-300"
                   >
                     Get replacement quotes →
                   </Link>
                 </div>
               )}
-              <p className="text-xs text-stone-500">
+              <p className="text-xs text-stone-500 dark:text-stone-400">
                 Ballpark from typical energy prices and 30-year weather
                 averages for your state, give or take 30%. Your thermostat
                 habits matter more than any formula.
@@ -288,10 +305,10 @@ export default async function ForecastPage() {
           )}
 
           <div className="card mt-6 space-y-3">
-            <h2 className="flex items-center text-sm font-semibold text-stone-900">
+            <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
               {forecast.horizonYears}-year timeline
             </h2>
-            <div className="divide-y divide-stone-100">
+            <div className="divide-y divide-stone-100 dark:divide-white/10">
               {forecast.timeline.map((item) => (
                 <div
                   key={item.system.id}
@@ -302,10 +319,10 @@ export default async function ForecastPage() {
                       {iconFor(SYSTEM_TYPES, item.system_type)}
                     </span>
                     <div>
-                      <p className="text-sm font-medium text-stone-900">
+                      <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
                         {labelFor(SYSTEM_TYPES, item.system_type)}
                       </p>
-                      <p className="text-xs text-stone-500">
+                      <p className="text-xs text-stone-500 dark:text-stone-400">
                         {item.timingEstimated ? (
                           "Timing unknown, add an install year for a real estimate"
                         ) : (
@@ -320,19 +337,19 @@ export default async function ForecastPage() {
                       </p>
                       <Link
                         href={`/contractors?category=${categoryForSystem(item.system_type)}`}
-                        className="text-xs font-medium text-hearth-700 hover:underline"
+                        className="text-xs font-medium text-hearth-700 hover:underline dark:text-hearth-300"
                       >
                         Get quotes →
                       </Link>
                     </div>
                   </div>
-                  <div className="whitespace-nowrap text-right text-sm text-stone-600">
+                  <div className="whitespace-nowrap text-right text-sm text-stone-600 dark:text-stone-300">
                     <p>
                       {money(item.costLow)} - {money(item.costHigh)}
                     </p>
                     {!item.timingEstimated &&
                       item.replacementYear - currentYear > 1 && (
-                        <p className="text-xs text-stone-500">
+                        <p className="text-xs text-stone-500 dark:text-stone-400">
                           closer to ~{money(item.futureCost)} by{" "}
                           {item.replacementYear}
                         </p>
@@ -344,10 +361,10 @@ export default async function ForecastPage() {
           </div>
 
           <div className="card mt-6 space-y-2">
-            <h2 className="flex items-center text-sm font-semibold text-stone-900">
+            <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
               Why this matters
             </h2>
-            <p className="text-sm text-stone-500">
+            <p className="text-sm text-stone-500 dark:text-stone-400">
               Big-ticket systems like roofs and HVAC do not fail on a
               schedule, but they do fail eventually. Setting aside a little
               every month, instead of scrambling for a loan or a credit card

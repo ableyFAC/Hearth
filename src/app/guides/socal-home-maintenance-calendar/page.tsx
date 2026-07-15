@@ -278,15 +278,15 @@ export default function SocalHomeMaintenanceCalendarGuide() {
       />
 
       <p className="text-sm">
-        <a href="/guides" className="text-stone-500 hover:text-hearth-700">
+        <a href="/guides" className="text-stone-500 hover:text-hearth-700 dark:text-stone-400 dark:hover:text-hearth-300">
           ← All guides
         </a>
       </p>
 
-      <h1 className="mt-3 text-2xl font-bold text-stone-900 sm:text-3xl">
+      <h1 className="mt-3 text-2xl font-bold text-stone-900 sm:text-3xl dark:text-stone-100">
         Coastal Southern California home maintenance calendar
       </h1>
-      <p className="mt-3 text-sm text-stone-500">
+      <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
         Month by month, built around the coastal SoCal climate: AC strain in
         late summer, drywood termite swarm season, Santa Ana winds, and the
         first fall rain. Written for coastal Southern California generally,
@@ -298,16 +298,16 @@ export default function SocalHomeMaintenanceCalendarGuide() {
         {CALENDAR.map((m) => (
           <section key={m.month} className="card">
             <div className="flex items-baseline justify-between">
-              <h2 className="font-semibold text-stone-900">{m.month}</h2>
-              <span className="text-xs font-medium text-hearth-700">
+              <h2 className="font-semibold text-stone-900 dark:text-stone-100">{m.month}</h2>
+              <span className="text-xs font-medium text-hearth-700 dark:text-hearth-300">
                 {m.theme}
               </span>
             </div>
             <ul className="mt-3 space-y-2.5">
               {m.tasks.map((t) => (
                 <li key={t.task} className="text-sm">
-                  <p className="font-medium text-stone-800">{t.task}</p>
-                  <p className="mt-0.5 text-stone-500">{t.why}</p>
+                  <p className="font-medium text-stone-800 dark:text-stone-200">{t.task}</p>
+                  <p className="mt-0.5 text-stone-500 dark:text-stone-400">{t.why}</p>
                 </li>
               ))}
             </ul>
@@ -315,16 +315,16 @@ export default function SocalHomeMaintenanceCalendarGuide() {
         ))}
       </div>
 
-      <div className="mt-8 space-y-6 text-stone-700">
+      <div className="mt-8 space-y-6 text-stone-700 dark:text-stone-300">
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Frequently asked questions
           </h2>
           <div className="mt-2 space-y-4">
             {FAQS.map((f) => (
               <div key={f.q}>
-                <h3 className="font-medium text-stone-900">{f.q}</h3>
-                <p className="mt-1 text-sm leading-relaxed text-stone-600">
+                <h3 className="font-medium text-stone-900 dark:text-stone-100">{f.q}</h3>
+                <p className="mt-1 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
                   {f.a}
                 </p>
               </div>

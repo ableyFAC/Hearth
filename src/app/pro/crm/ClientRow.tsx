@@ -8,10 +8,10 @@ const STAGE_LABEL: Record<string, string> = {
 };
 
 const STAGE_STYLE: Record<string, string> = {
-  lead: "border-stone-200 bg-stone-50 text-stone-600",
-  quoted: "border-hearth-200 bg-hearth-50 text-hearth-700",
-  won: "border-green-200 bg-green-50 text-green-700",
-  lost: "border-stone-200 bg-stone-100 text-stone-500",
+  lead: "border-stone-200 bg-stone-50 text-stone-600 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300",
+  quoted: "border-hearth-200 bg-hearth-50 text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300",
+  won: "border-green-200 bg-green-50 text-green-700 dark:border-green-500/30 dark:bg-green-500/15 dark:text-green-300",
+  lost: "border-stone-200 bg-stone-100 text-stone-500 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400",
 };
 
 export type ProClientRow = {
@@ -62,24 +62,24 @@ export default function ClientRow({
     <li className="card flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium text-stone-900">
+          <span className="font-medium text-stone-900 dark:text-stone-100">
             {client.client_name}
           </span>
           <span className={`chip border ${STAGE_STYLE[client.stage] ?? ""}`}>
             {STAGE_LABEL[client.stage] ?? client.stage}
           </span>
           {value && (
-            <span className="stat-number text-sm text-stone-700">
+            <span className="stat-number text-sm text-stone-700 dark:text-stone-300">
               {value}
             </span>
           )}
         </div>
-        {preview && <p className="text-sm text-stone-500">{preview}</p>}
+        {preview && <p className="text-sm text-stone-500 dark:text-stone-400">{preview}</p>}
         <div className="flex flex-wrap items-center gap-3 text-xs">
           {client.phone && (
             <a
               href={`tel:${client.phone}`}
-              className="font-medium text-hearth-700 hover:underline"
+              className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
             >
               {client.phone}
             </a>
@@ -87,7 +87,7 @@ export default function ClientRow({
           {client.email && (
             <a
               href={`mailto:${client.email}`}
-              className="font-medium text-hearth-700 hover:underline"
+              className="break-all font-medium text-hearth-700 hover:underline dark:text-hearth-300"
             >
               {client.email}
             </a>
@@ -96,10 +96,10 @@ export default function ClientRow({
             <span
               className={
                 overdue
-                  ? "font-medium text-red-600"
+                  ? "font-medium text-red-600 dark:text-red-400"
                   : dueToday
-                    ? "font-medium text-amber-700"
-                    : "text-stone-500"
+                    ? "font-medium text-amber-700 dark:text-amber-400"
+                    : "text-stone-500 dark:text-stone-400"
               }
             >
               Follow up {client.follow_up_on}
@@ -109,7 +109,7 @@ export default function ClientRow({
           {client.lead_id && (
             <Link
               href={`/pro/chats?lead=${client.lead_id}`}
-              className="font-medium text-hearth-700 hover:underline"
+              className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
             >
               Open chat
             </Link>

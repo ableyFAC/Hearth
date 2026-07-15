@@ -20,15 +20,15 @@ export default function OnboardingCompanyForm({
   return (
     <form
       action={saveCompanyAction}
-      className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm"
+      className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-white/10 dark:bg-stone-800"
     >
       {/* White header, matching the contractor signup card */}
       <div className="px-6 pt-8 text-center">
         <div className="text-3xl">🛠️</div>
-        <h1 className="mt-2 text-2xl font-semibold text-stone-900">
+        <h1 className="mt-2 text-2xl font-semibold text-stone-900 dark:text-stone-100">
           Set up your company
         </h1>
-        <p className="mt-1 text-sm text-stone-500">
+        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           Tell us what you do so we can match you with the right homeowner leads.
         </p>
       </div>
@@ -38,7 +38,7 @@ export default function OnboardingCompanyForm({
         <div className="grid gap-8 md:grid-cols-2">
           {/* Basic information */}
           <div>
-            <h2 className="mb-4 text-base font-semibold text-stone-900">
+            <h2 className="mb-4 text-base font-semibold text-stone-900 dark:text-stone-100">
               Basic Information
             </h2>
 
@@ -46,7 +46,7 @@ export default function OnboardingCompanyForm({
               <div>
                 <label className="label">
                   Company Name{" "}
-                  <span className="font-normal text-stone-500">
+                  <span className="font-normal text-stone-500 dark:text-stone-400">
                     (as it appears on your license)
                   </span>
                 </label>
@@ -102,7 +102,7 @@ export default function OnboardingCompanyForm({
                     placeholder="e.g. San Francisco Bay Area"
                   />
                 </div>
-                <p className="mt-1 text-xs text-stone-500">
+                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                   Where you are willing to travel for jobs.
                 </p>
               </div>
@@ -129,7 +129,7 @@ export default function OnboardingCompanyForm({
                     ))}
                   </select>
                 </div>
-                <p className="mt-1 text-xs text-stone-500">
+                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                   Your job board only shows homeowner jobs in this state.
                 </p>
               </div>
@@ -146,17 +146,17 @@ export default function OnboardingCompanyForm({
                     placeholder="LIC-000000-XX"
                   />
                 </div>
-                <p className="mt-1 text-xs text-stone-500">
+                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                   We keep this on file, show homeowners a &quot;license on
-                  file&quot; badge, and flag it for verification. It can&apos;t
-                  be changed later.
+                  file&quot; badge, and flag it for verification. Locked once
+                  verified. Typo? You can correct it until then.
                 </p>
               </div>
 
               <div>
                 <label className="label">
                   Referral code{" "}
-                  <span className="font-normal text-stone-500">(optional)</span>
+                  <span className="font-normal text-stone-500 dark:text-stone-400">(optional)</span>
                 </label>
                 <div className="relative">
                   <FieldIcon>
@@ -169,7 +169,7 @@ export default function OnboardingCompanyForm({
                     placeholder="From the pro who invited you"
                   />
                 </div>
-                <p className="mt-1 text-xs text-stone-500">
+                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                   Invited by another Hearth pro? Enter their code: you both get
                   $25 of application credit when you win your first job.
                 </p>
@@ -179,10 +179,10 @@ export default function OnboardingCompanyForm({
 
           {/* Service categories */}
           <div>
-            <h2 className="mb-1 text-base font-semibold text-stone-900">
+            <h2 className="mb-1 text-base font-semibold text-stone-900 dark:text-stone-100">
               Service Categories
             </h2>
-            <p className="mb-4 text-sm text-stone-500">
+            <p className="mb-4 text-sm text-stone-500 dark:text-stone-400">
               Select the main areas of work your company handles. This helps
               homeowners find you.
             </p>
@@ -192,12 +192,9 @@ export default function OnboardingCompanyForm({
         </div>
 
         {/* Footer */}
-        <div className="mt-8 flex justify-end border-t border-stone-100 pt-5">
-          <button
-            type="submit"
-            className="inline-flex items-center gap-2 rounded-lg bg-hearth-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-hearth-700"
-          >
-            Start receiving leads
+        <div className="mt-8 flex justify-end border-t border-stone-100 pt-5 dark:border-white/10">
+          <button type="submit" className="btn-primary px-5 py-2.5">
+            See open jobs
           </button>
         </div>
       </div>

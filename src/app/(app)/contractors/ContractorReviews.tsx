@@ -37,34 +37,34 @@ export default function ContractorReviews({
       <button
         type="button"
         onClick={toggle}
-        className="text-xs font-medium text-hearth-700 hover:underline"
+        className="text-xs font-medium text-hearth-700 hover:underline dark:text-hearth-300"
       >
         {open ? "Hide reviews" : `Read ${count} review${count === 1 ? "" : "s"}`}
       </button>
 
       {open && (
         <div className="mt-2 space-y-2">
-          {loading && <p className="text-xs text-stone-500">Loading…</p>}
+          {loading && <p className="text-xs text-stone-500 dark:text-stone-400">Loading…</p>}
           {reviews?.map((r, i) => (
-            <div key={i} className="rounded-lg border border-stone-200 p-2">
+            <div key={i} className="rounded-lg border border-stone-200 p-2 dark:border-white/10">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-amber-500">
                   {"★".repeat(r.rating)}
-                  <span className="text-stone-300">
+                  <span className="text-stone-300 dark:text-stone-600">
                     {"★".repeat(5 - r.rating)}
                   </span>
                 </span>
-                <span className="text-[11px] text-stone-500">
+                <span className="text-[11px] text-stone-500 dark:text-stone-400">
                   {r.created_at.slice(0, 10)}
                 </span>
               </div>
               {r.comment && (
-                <p className="mt-1 text-xs text-stone-600">{r.comment}</p>
+                <p className="mt-1 text-xs text-stone-600 dark:text-stone-300">{r.comment}</p>
               )}
             </div>
           ))}
           {reviews && reviews.length === 0 && (
-            <p className="text-xs text-stone-500">No written reviews yet.</p>
+            <p className="text-xs text-stone-500 dark:text-stone-400">No written reviews yet.</p>
           )}
         </div>
       )}

@@ -34,18 +34,18 @@ export default function ChatDock({
 
   return (
     <div
-      className={`fixed bottom-4 right-4 z-50 ${width} rounded-xl border border-stone-200 bg-white shadow-2xl`}
+      className={`fixed bottom-4 right-4 z-50 ${width} rounded-xl border border-stone-200 bg-white shadow-pop dark:border-white/10 dark:bg-stone-800`}
     >
-      <div className="flex items-center justify-between gap-2 rounded-t-xl border-b border-stone-100 bg-stone-50 px-3 py-2">
-        <span className="truncate text-sm font-semibold text-stone-900">
+      <div className="flex items-center justify-between gap-2 rounded-t-xl border-b border-stone-100 bg-stone-50 px-3 py-2 dark:border-white/10 dark:bg-stone-900">
+        <span className="truncate text-sm font-semibold text-stone-900 dark:text-stone-100">
           {chat.name}
         </span>
-        <div className="flex items-center gap-2 text-stone-500">
+        <div className="flex items-center gap-2 text-stone-500 dark:text-stone-400">
           <button
             type="button"
             onClick={() => setMinimized((m) => !m)}
             title={minimized ? "Open" : "Minimize"}
-            className="leading-none hover:text-stone-700"
+            className="leading-none hover:text-stone-700 dark:hover:text-stone-200"
           >
             {minimized ? "▢" : "-"}
           </button>
@@ -53,7 +53,7 @@ export default function ChatDock({
             type="button"
             onClick={() => setExpanded((x) => !x)}
             title={expanded ? "Shrink" : "Expand"}
-            className="leading-none hover:text-stone-700"
+            className="leading-none hover:text-stone-700 dark:hover:text-stone-200"
           >
             ⤢
           </button>
@@ -61,7 +61,7 @@ export default function ChatDock({
             type="button"
             onClick={() => setChat(null)}
             title="Close"
-            className="leading-none hover:text-red-600"
+            className="leading-none hover:text-red-600 dark:hover:text-red-400"
           >
             ✕
           </button>

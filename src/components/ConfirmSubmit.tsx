@@ -30,7 +30,7 @@ export default function ConfirmSubmit({
         onClick={() => setArmed(true)}
         className={
           subtle
-            ? "text-xs text-stone-500 underline-offset-2 hover:text-stone-600 hover:underline"
+            ? "text-xs text-stone-500 underline-offset-2 hover:text-stone-600 hover:underline dark:text-stone-400 dark:hover:text-stone-300"
             : "btn-secondary"
         }
       >
@@ -41,7 +41,7 @@ export default function ConfirmSubmit({
 
   return (
     <div className="space-y-2">
-      <p className="text-sm text-stone-600">{note}</p>
+      <p className="text-sm text-stone-600 dark:text-stone-300">{note}</p>
       <div className="flex items-center justify-center gap-2">
         <button type="submit" className="btn-primary">
           {yesLabel}

@@ -57,6 +57,7 @@ export async function reportIssueAction(formData: FormData) {
   setFlash("Issue logged. Let's find you a pro.");
   revalidatePath("/issues");
   revalidatePath("/dashboard");
+  revalidatePath("/forecast");
 
   // Hand the owner straight into the "get a pro" flow for this issue.
   // Encode the category so raw form input can't inject extra query params.
@@ -81,13 +82,18 @@ export async function updateIssueAction(formData: FormData) {
   setFlash("Issue updated");
   revalidatePath("/issues");
   revalidatePath("/dashboard");
+  revalidatePath("/forecast");
 }
 
 // When an issue is resolved, lift the "bad condition" flag it put on its system
-// so the Home page stops flagging that system as red. We only clear a LOW rating
-// (<=2) - the state a problem would have caused - and never touch a healthy one.
-// This makes the most recent action (resolving) override the earlier one
-// (logging the issue, which lowered the condition), so Home and Issues agree.
+// so a chat-logged condition drop doesn't linger after the problem is fixed.
+// We only clear a LOW rating (<=2) - the state a problem would have caused -
+// and never touch a healthy or owner-confirmed one. This is on top of, not
+// instead of, the live open-issues join Home and Cost Forecast both read
+// (dashboard/page.tsx's issueForSystem, forecast.ts's buildForecast): that
+// join is what actually clears the "needs repair" flag the moment status
+// flips to resolved, no mutation required. This function only cleans up the
+// separate condition_rating side effect some issues also cause.
 async function liftSystemConditionForIssue(supabase: any, issueId: string) {
   const { data: issue } = await supabase
     .from("issues")
@@ -120,6 +126,7 @@ export async function resolveIssueAction(formData: FormData) {
   setFlash("Issue resolved");
   revalidatePath("/issues");
   revalidatePath("/dashboard");
+  revalidatePath("/forecast");
 }
 
 // Undo: reopen a resolved issue (accidental check-off).
@@ -132,6 +139,7 @@ export async function reopenIssueAction(id: string) {
   if (error) throw new Error(error.message);
   revalidatePath("/issues");
   revalidatePath("/dashboard");
+  revalidatePath("/forecast");
 }
 
 // Resolve via the checkbox toggle (takes an id, not FormData).
@@ -145,4 +153,5 @@ export async function checkResolveIssueAction(id: string) {
   await liftSystemConditionForIssue(supabase, id);
   revalidatePath("/issues");
   revalidatePath("/dashboard");
+  revalidatePath("/forecast");
 }

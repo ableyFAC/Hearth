@@ -116,8 +116,10 @@ npm run db:types   # supabase gen types typescript --local > src/lib/database.ty
 
 - **Ownership** is self-attested (`ownership_verified = true` on claim). Tighten
   later with a postcard or utility-bill check.
-- **Parcel pre-fill** returns mock data until `REGRID_API_TOKEN` is set — wire
-  the real lookup in `src/lib/parcel.ts` (`fetchFromRegrid`).
+- **Parcel pre-fill** pulls real county-record facts (year built, sqft,
+  beds/baths, lot, type) via RentCast once `RENTCAST_API_KEY` is set (free
+  tier: 50 lookups/month); with no key the homeowner types facts in by hand.
+  See `src/lib/parcel.ts` (`fetchFromRentcast`).
 - **Current-year** is a static constant in `src/lib/health.ts` — bump per
   release (the scaffolding environment disallowed `Date.now()`).
 - Lead **pricing** (`payout_amount`) and the agent-facing side are Phase 3.

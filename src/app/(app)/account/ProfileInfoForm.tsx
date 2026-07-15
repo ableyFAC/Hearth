@@ -6,7 +6,7 @@ import type { UserProfile } from "@/lib/database.types";
 
 function FieldIcon({ children }: { children: React.ReactNode }) {
   return (
-    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-500">
+    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-500 dark:text-stone-400">
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         {children}
       </svg>
@@ -14,9 +14,9 @@ function FieldIcon({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Personal account details (name, phone, email). Password lives on the Account
-// Security tab. Posts to saveAccountAction, which writes the users row + mirrors
-// the name into auth metadata.
+// Identity details only (name, phone). Email and password are security
+// concerns and live at /account/security. Posts to saveAccountAction, which
+// writes the users row + mirrors the name into auth metadata.
 export default function ProfileInfoForm({
   profile,
   name,
@@ -27,9 +27,9 @@ export default function ProfileInfoForm({
   return (
     <form
       action={saveAccountAction}
-      className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm"
+      className="card p-6"
     >
-      <h2 className="mb-4 text-base font-semibold text-stone-900">
+      <h2 className="mb-4 text-base font-semibold text-stone-900 dark:text-stone-100">
         Basic Information
       </h2>
 
@@ -46,6 +46,8 @@ export default function ProfileInfoForm({
               className="input pl-9"
               defaultValue={name}
               placeholder="e.g. Alex Rivera"
+              required
+              minLength={2}
             />
           </div>
         </div>
@@ -64,37 +66,19 @@ export default function ProfileInfoForm({
           </div>
         </div>
 
-        <div>
-          <label className="label">Email Address</label>
-          <div className="relative">
-            <FieldIcon>
-              <path d="M4 4h16v16H4zM4 6l8 6 8-6" />
-            </FieldIcon>
-            <input
-              name="email"
-              type="email"
-              className="input pl-9"
-              defaultValue={profile.email ?? ""}
-              placeholder="you@example.com"
-            />
-          </div>
-          <p className="mt-1 text-xs text-stone-500">
-            Changing this sends a confirmation link to the new address.
-          </p>
-        </div>
       </div>
 
       {/* Footer */}
-      <div className="mt-8 flex items-center justify-end gap-3 border-t border-stone-100 pt-5">
+      <div className="mt-8 flex items-center justify-end gap-3 border-t border-stone-100 pt-5 dark:border-white/10">
         <a
           href="/dashboard"
-          className="rounded-lg px-4 py-2 text-sm font-medium text-stone-500 hover:text-stone-700"
+          className="rounded-lg px-4 py-2 text-sm font-medium text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
         >
           Cancel
         </a>
         <button
           type="submit"
-          className="inline-flex items-center gap-2 rounded-lg bg-hearth-600 px-4 py-2 text-sm font-semibold text-white hover:bg-hearth-700"
+          className="btn-primary"
         >
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />

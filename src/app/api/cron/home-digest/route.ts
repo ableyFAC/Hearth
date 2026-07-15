@@ -4,7 +4,7 @@ import { sendNotification } from "@/lib/notify";
 import { estimateHomeValue, calculateEquity } from "@/lib/homeValue";
 import { assessSystem, scoreBreakdown, scoreBand } from "@/lib/health";
 import { labelFor, SYSTEM_TYPES } from "@/lib/constants";
-import type { HomeSystem, Issue } from "@/lib/database.types";
+import type { HomeSystem, Issue, Property } from "@/lib/database.types";
 
 export const runtime = "nodejs";
 
@@ -21,6 +21,13 @@ export const runtime = "nodejs";
 // while never suppressing next month's legitimate digest.
 
 const MAX_OWNERS = 2000; // cap the work a single run does
+
+// PostgREST caps every response at its max-rows setting (1000 in
+// supabase/config.toml), silently, regardless of a larger .limit(). The
+// property scan therefore pages with .range() in cap-sized steps up to
+// MAX_OWNERS instead of asking for MAX_OWNERS rows in one call, which would
+// return the same oldest 1000 forever and permanently skip everyone after.
+const PROPERTY_PAGE = 1000;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -110,27 +117,37 @@ async function runCron(req: NextRequest) {
   const monthName = MONTH_NAMES[now.getMonth()];
   const digestTitle = `Your ${monthName} home check-in`;
 
-  // Oldest properties first so the recipient set stays stable when a run hits
-  // the cap. purchase_price and mortgage_balance are columns from migration
-  // 0029 that are not in src/lib/database.types.ts, so they are read off the
-  // row with a cast below (same pattern as the /value page) rather than
-  // widening the generated types by hand.
-  const { data: rawProperties, error: propertiesError } = await supabase
-    .from("properties")
-    .select("*")
-    .order("created_at", { ascending: true })
-    .limit(MAX_OWNERS);
-  if (propertiesError) {
-    return NextResponse.json(
-      { checked: 0, notified: 0, error: propertiesError.message },
-      { status: 200 }
-    );
+  // Oldest properties first (with an id tiebreak so pages never skip or
+  // repeat rows) and paged in PROPERTY_PAGE steps to respect the PostgREST
+  // max-rows cap; see the constant's comment. purchase_price and
+  // mortgage_balance are columns from migration 0029 that are not in
+  // src/lib/database.types.ts, so they are read off the row with a cast
+  // below (same pattern as the /value page) rather than widening the
+  // generated types by hand.
+  const rawProperties: Property[] = [];
+  for (let start = 0; start < MAX_OWNERS; start += PROPERTY_PAGE) {
+    const end = Math.min(start + PROPERTY_PAGE, MAX_OWNERS) - 1;
+    const { data: propertyPage, error: propertiesError } = await supabase
+      .from("properties")
+      .select("*")
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(start, end);
+    if (propertiesError) {
+      return NextResponse.json(
+        { checked: 0, notified: 0, error: propertiesError.message },
+        { status: 200 }
+      );
+    }
+    rawProperties.push(...(propertyPage ?? []));
+    // A short page means the table is exhausted.
+    if (!propertyPage || propertyPage.length < end - start + 1) break;
   }
 
   // Simplification: an owner with several properties gets a digest for their
   // FIRST property only (oldest by created_at). One warm monthly note beats
   // a stack of near-identical ones; multi-property digests can come later.
-  type PropertyRow = NonNullable<typeof rawProperties>[number];
+  type PropertyRow = Property;
   const propertyByOwner = new Map<string, PropertyRow>();
   for (const p of rawProperties ?? []) {
     if (!p.user_id || propertyByOwner.has(p.user_id)) continue;

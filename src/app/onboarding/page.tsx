@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getProperties } from "@/lib/property";
 import { isContractor } from "@/lib/contractor";
+import { hasPlus } from "@/lib/subscription";
 import { safeNextPath } from "@/lib/safeNext";
 import OnboardingForm from "./OnboardingForm";
 
@@ -27,15 +28,54 @@ export default async function OnboardingPage({
   const homes = await getProperties();
   const isFirst = homes.length === 0;
 
+  // Free plan covers 1 owned home (shared homes don't count - same tally as
+  // claimPropertyAction in ./actions.ts). Surface the cap HERE, before the
+  // form, instead of letting someone fill it all in only to be bounced to
+  // /plus at the very end.
+  if (!isFirst) {
+    const plus = await hasPlus();
+    const ownedHomes = homes.filter((h) => !h.isShared);
+    if (!plus && ownedHomes.length >= 1) {
+      return (
+        <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center px-6 py-12">
+          <div className="mb-6 text-center">
+            <div className="text-3xl">🏡</div>
+            <h1 className="mt-2 text-2xl font-semibold text-stone-900 dark:text-stone-100">
+              Add another home
+            </h1>
+          </div>
+          <div className="card text-center">
+            <p className="text-sm text-stone-600 dark:text-stone-300">
+              Your first home is free. Adding another home is part of Hearth
+              Plus.
+            </p>
+            <Link
+              href="/plus?reason=home_limit"
+              className="btn-primary mt-4 inline-block"
+            >
+              See Hearth Plus
+            </Link>
+          </div>
+          <Link
+            href="/dashboard"
+            className="mt-4 text-center text-sm text-stone-500 hover:underline dark:text-stone-400"
+          >
+            Back to dashboard
+          </Link>
+        </main>
+      );
+    }
+  }
+
   return (
     <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center px-6 py-12">
       <div className="mb-6 text-center">
         <div className="text-3xl">🏡</div>
-        <h1 className="mt-2 text-2xl font-semibold text-stone-900">
+        <h1 className="mt-2 text-2xl font-semibold text-stone-900 dark:text-stone-100">
           {isFirst ? "Let's set up your home" : "Add another home"}
         </h1>
         {!isFirst && (
-          <p className="mt-1 text-sm text-stone-500">
+          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
             Switch between your homes anytime from the top bar.
           </p>
         )}
@@ -46,7 +86,7 @@ export default async function OnboardingPage({
       {!isFirst && (
         <Link
           href="/dashboard"
-          className="mt-4 text-center text-sm text-stone-500 hover:underline"
+          className="mt-4 text-center text-sm text-stone-500 hover:underline dark:text-stone-400"
         >
           Cancel
         </Link>

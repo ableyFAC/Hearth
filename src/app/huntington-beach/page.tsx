@@ -15,9 +15,10 @@ const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
-  title: "Home maintenance and local pros in Huntington Beach, CA | Hearth",
+  // The root layout's title template appends "| Hearth"; don't repeat it here.
+  title: "Home maintenance and local pros in Huntington Beach, CA",
   description:
-    "A maintenance plan built for your Huntington Beach home, answers about your own systems, and vetted local pros when something breaks. Free to start.",
+    "A maintenance plan built for your Huntington Beach home, answers about your own systems, and license-checked local pros when something breaks. Free to start.",
   alternates: {
     canonical: `${SITE_URL}/huntington-beach`,
   },

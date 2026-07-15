@@ -33,11 +33,11 @@ export default function HireAgainButton({
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-            <h2 className="text-lg font-semibold text-stone-900">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-pop dark:bg-stone-800">
+            <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
               Hire {contractorName} again
             </h2>
-            <p className="mt-1 text-sm text-stone-500">
+            <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
               This is a free repeat lead: no apply fee, since you've already
               worked together. Tell them what you need and we'll open a chat.
             </p>

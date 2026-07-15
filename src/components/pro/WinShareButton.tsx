@@ -27,14 +27,14 @@ export default function WinShareButton({
         href={cardUrl}
         target="_blank"
         rel="noreferrer"
-        className="rounded-lg border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium text-stone-600 shadow-sm hover:bg-stone-50"
+        className="btn-secondary text-xs px-2.5 py-1"
       >
         Share this win
       </a>
       <a
         href={cardUrl}
         download={`hearth-win-${slug}.png`}
-        className="rounded-lg border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium text-stone-600 shadow-sm hover:bg-stone-50"
+        className="btn-secondary text-xs px-2.5 py-1"
       >
         Download
       </a>

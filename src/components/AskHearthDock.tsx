@@ -57,24 +57,41 @@ export default function AskHearthDock({
     setPendingQuestion(null);
   }
 
-  // Ask Hearth stays docked bottom-right on every screen, /emergency included.
-  // The one care there: the pill must not sit on top of a panic button (a
-  // wrong-tap in a real emergency). That's handled on the Emergency page by
-  // giving its content bottom clearance (pb) so the pill floats over empty
-  // space, not a card - see src/app/(app)/emergency/page.tsx. pathname is kept
-  // for potential per-route tweaks and to keep the hook order stable.
-  void pathname;
+  // Ask Hearth stays docked bottom-right on almost every screen, /emergency
+  // included. The one care there: the pill must not sit on top of a panic
+  // button (a wrong-tap in a real emergency). That's handled on the Emergency
+  // page by giving its content bottom clearance (pb) so the pill floats over
+  // empty space, not a card - see src/app/(app)/emergency/page.tsx.
+  //
+  // The exception is the homeowner Messages screen: it already hosts a
+  // full-screen Ask Hearth conversation, so a second entry point there is just
+  // clutter sitting on top of the composer. /pro/chats is NOT hidden: the pro
+  // side has no embedded assistant, and this dock is the only entry point to
+  // the pro copilot.
+  const hiddenHere = pathname === "/chats" || pathname.startsWith("/chats/");
+
+  // Hiding the dock unmounts its AskHearth instance while `open` and
+  // `pendingQuestion` survive in this component. A fresh AskHearth mounted on
+  // the way back would treat the same initialQuestion as new (its one-shot
+  // guard is a ref inside the instance) and submit it again on every round
+  // trip. By the time this route is reached the question was either already
+  // submitted or abandoned, so drop it.
+  useEffect(() => {
+    if (hiddenHere && pendingQuestion) setPendingQuestion(null);
+  }, [hiddenHere, pendingQuestion]);
+
+  if (hiddenHere) return null;
 
   return (
     <div className="fixed bottom-4 right-4 z-40 print:hidden">
       {open ? (
-        <div className="flex h-[60vh] max-h-[560px] w-[22rem] max-w-[calc(100vw-2rem)] flex-col rounded-2xl border border-stone-200 bg-white p-3 shadow-2xl">
-          <div className="mb-1 flex items-center justify-end gap-3 text-stone-500">
+        <div className="flex h-[60vh] max-h-[560px] w-[22rem] max-w-[calc(100vw-2rem)] flex-col rounded-2xl border border-stone-200 bg-white p-3 shadow-pop dark:border-white/10 dark:bg-stone-800">
+          <div className="mb-1 flex items-center justify-end gap-3 text-stone-500 dark:text-stone-400">
             <Link
               href="/chats?lead=ask-hearth"
               onClick={close}
               title="Open full screen in Messages"
-              className="leading-none hover:text-hearth-700"
+              className="leading-none hover:text-hearth-700 dark:hover:text-hearth-300"
             >
               ⤢
             </Link>
@@ -82,7 +99,7 @@ export default function AskHearthDock({
               type="button"
               onClick={close}
               title="Minimize"
-              className="text-lg leading-none hover:text-stone-700"
+              className="text-lg leading-none hover:text-stone-700 dark:hover:text-stone-200"
             >
               −
             </button>
@@ -90,7 +107,7 @@ export default function AskHearthDock({
               type="button"
               onClick={close}
               title="Close"
-              className="leading-none hover:text-red-600"
+              className="leading-none hover:text-red-600 dark:hover:text-red-400"
             >
               ✕
             </button>
@@ -109,12 +126,16 @@ export default function AskHearthDock({
           </div>
         </div>
       ) : (
+        // Compact icon-only FAB on phones; the full labeled pill from sm up.
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex items-center gap-2 rounded-full bg-hearth-600 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:bg-hearth-700"
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-hearth-600 text-lg font-semibold text-white shadow-pop hover:bg-hearth-700 sm:h-auto sm:w-auto sm:px-4 sm:py-3 sm:text-sm"
         >
-          {headingTitle}
+          <span aria-hidden="true" className="sm:hidden">
+            ✨
+          </span>
+          <span className="sr-only sm:not-sr-only">{headingTitle}</span>
         </button>
       )}
     </div>

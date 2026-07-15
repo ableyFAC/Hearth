@@ -1,7 +1,15 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getRole } from "@/lib/contractor";
 import { safeNextPath } from "@/lib/safeNext";
+
+export const metadata: Metadata = {
+  // The root layout's title template appends "| Hearth"; don't repeat it here.
+  title: "Get started",
+  description:
+    "Tell Hearth who you are: homeowners get a home that's looked after, pros get leads with the fee shown up front. Free to start, no card needed.",
+};
 
 // Role chooser for NEW users. After "Get started" they pick homeowner or
 // contractor and we send them to the matching sign-up (which tags the account's
@@ -34,51 +42,54 @@ export default async function GetStarted({
 
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 text-center">
-      <h1 className="text-3xl font-semibold tracking-tight text-stone-900">
+      <h1 className="text-3xl font-semibold tracking-tight text-stone-900 dark:text-stone-100">
         Who are you?
       </h1>
-      <p className="mt-3 text-stone-600">
+      <p className="mt-3 text-stone-600 dark:text-stone-300">
         Choose how you&apos;d like to use Hearth.
+      </p>
+      <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+        Free, about 30 seconds, no card needed.
       </p>
 
       <div className="mt-10 grid w-full grid-cols-1 gap-4 sm:grid-cols-2">
         <a
           href={`/homeowner-signup${nextQuery}`}
-          className="flex flex-col items-center justify-center rounded-2xl border border-stone-200 bg-white px-6 py-12 shadow-sm transition hover:border-hearth-400 hover:shadow-md"
+          className="flex flex-col items-center justify-center rounded-2xl border border-stone-200 bg-white px-6 py-12 shadow-sm transition hover:border-hearth-400 hover:shadow-md dark:border-white/10 dark:bg-stone-800"
         >
           <div className="text-4xl">🏡</div>
-          <div className="mt-4 text-lg font-medium text-stone-900">
+          <div className="mt-4 text-lg font-medium text-stone-900 dark:text-stone-100">
             I&apos;m a homeowner
           </div>
-          <p className="mt-1 text-sm text-stone-500">
+          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
             Track your home and find a pro.
           </p>
         </a>
 
         <a
           href={`/contractor-signup${nextQuery}`}
-          className="flex flex-col items-center justify-center rounded-2xl border border-stone-200 bg-white px-6 py-12 shadow-sm transition hover:border-hearth-400 hover:shadow-md"
+          className="flex flex-col items-center justify-center rounded-2xl border border-stone-200 bg-white px-6 py-12 shadow-sm transition hover:border-hearth-400 hover:shadow-md dark:border-white/10 dark:bg-stone-800"
         >
           <div className="text-4xl">🛠️</div>
-          <div className="mt-4 text-lg font-medium text-stone-900">
+          <div className="mt-4 text-lg font-medium text-stone-900 dark:text-stone-100">
             I&apos;m a contractor
           </div>
-          <p className="mt-1 text-sm text-stone-500">
+          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
             Get matched with homeowner leads.
           </p>
         </a>
       </div>
 
-      <p className="mt-8 text-sm text-stone-500">
+      <p className="mt-8 text-sm text-stone-500 dark:text-stone-400">
         Already have an account?{" "}
         <a
           href={`/signin${nextQuery}`}
-          className="font-medium text-hearth-700 hover:underline"
+          className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
         >
           Sign in
         </a>
       </p>
-      <a href="/" className="mt-3 text-sm text-stone-500 hover:underline">
+      <a href="/" className="mt-3 text-sm text-stone-500 hover:underline dark:text-stone-400">
         ← Back
       </a>
     </main>

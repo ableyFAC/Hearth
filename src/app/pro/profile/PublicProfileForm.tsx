@@ -9,16 +9,23 @@ import type { Contractor } from "@/lib/database.types";
 
 // Redesigned contractor profile editor. Posts to the same saveCompanyAction the
 // onboarding form uses, so field names must stay: name, contact_email,
-// contact_phone, service_area, categories. The license is read-only once set.
+// contact_phone, service_area, categories. The license is read-only once
+// VERIFIED, matching saveCompanyAction: until a real CSLB check passes, the
+// pro can still fix a typo in the number.
 //
 // License verification (0055): license_verified_status (0037) drives the
-// badge and copy below. 'unverified'/'pending' show the same honest "we're
-// checking" copy as before real CSLB verification existed; 'verified' shows
-// a real, dated confirmation; 'failed' shows why (from license_verify_detail)
-// with a way to reverify after fixing it with the state. The "Verify now" /
+// badge and copy below. 'verified' shows a real, dated confirmation; 'failed'
+// shows why (from license_verify_detail) with a way to reverify after fixing
+// it with the state. The pending copy is honest about what actually runs:
+// CSLB is California's registry, so only a CA (or blank, "All states")
+// service_state gets check-in-progress copy and a Verify button; a pro who
+// explicitly serves another state is told checks don't cover them yet
+// instead of being shown a check that can never run. The "Verify now" /
 // "Reverify" button is a formAction on a button inside this SAME form
 // (not a nested form, which HTML disallows) so it can post to
-// verifyLicenseNowAction instead of saveCompanyAction for that one click.
+// verifyLicenseNowAction instead of saveCompanyAction for that one click;
+// the action reads the license number out of this form's data, so a typo
+// fixed in the input gets checked without a separate save.
 function formatVerifiedDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", {
     month: "long",
@@ -32,18 +39,27 @@ export default function PublicProfileForm({
 }: {
   contractor: Contractor;
 }) {
-  const licenseLocked = Boolean(contractor.license_number);
+  const hasLicense = Boolean(contractor.license_number);
   const verifyStatus = contractor.license_verified_status ?? "unverified";
+  // Locked only once VERIFIED (mirrors saveCompanyAction): before that, the
+  // number stays editable so a typo can be corrected and rechecked.
+  const licenseLocked = hasLicense && verifyStatus === "verified";
   const verifiedAt = contractor.license_verified_at ?? null;
   const verifyDetail = contractor.license_verify_detail ?? null;
+  // CSLB eligibility mirrors verifyLicenseNowAction: null/blank service_state
+  // ("All states") can run an explicit check; an explicit non-CA state is
+  // refused, so those pros get honest copy instead of a dead button.
+  const serviceState =
+    (((contractor as any).service_state as string | null) ?? null) || null;
+  const cslbEligible = serviceState === null || serviceState === "CA";
 
   return (
-    <form action={saveCompanyAction} className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
+    <form action={saveCompanyAction} className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-white/10 dark:bg-stone-800">
       {/* Cover banner + avatar */}
-      <div className="relative h-32 bg-gradient-to-br from-stone-100 to-stone-200 sm:h-40">
+      <div className="relative h-32 bg-gradient-to-br from-stone-100 to-stone-200 sm:h-40 dark:from-stone-700 dark:to-stone-800">
         <button
           type="button"
-          className="absolute right-4 top-4 inline-flex items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm font-medium text-stone-600 shadow-sm hover:bg-stone-50"
+          className="absolute right-4 top-4 inline-flex items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm font-medium text-stone-600 shadow-sm hover:bg-stone-50 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
         >
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
@@ -58,12 +74,12 @@ export default function PublicProfileForm({
         <div className="-mt-10 mb-6">
           <button
             type="button"
-            className="relative flex h-20 w-20 items-center justify-center rounded-2xl border border-dashed border-stone-300 bg-stone-50 text-stone-500 shadow-sm hover:bg-stone-100"
+            className="relative flex h-20 w-20 items-center justify-center rounded-2xl border border-dashed border-stone-300 bg-stone-50 text-stone-500 shadow-sm hover:bg-stone-100 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"
           >
             <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 21V5l8-2 8 2v16M9 9h.01M9 13h.01M15 9h.01M15 13h.01M10 21v-4h4v4" />
             </svg>
-            <span className="absolute -bottom-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 shadow-sm">
+            <span className="absolute -bottom-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 shadow-sm dark:border-white/10 dark:bg-stone-800 dark:text-stone-400">
               +
             </span>
           </button>
@@ -72,7 +88,7 @@ export default function PublicProfileForm({
         <div className="grid gap-8 md:grid-cols-2">
           {/* Basic information */}
           <div>
-            <h2 className="mb-4 text-base font-semibold text-stone-900">
+            <h2 className="mb-4 text-base font-semibold text-stone-900 dark:text-stone-100">
               Basic Information
             </h2>
 
@@ -80,7 +96,7 @@ export default function PublicProfileForm({
               <div>
                 <label className="label">
                   Company Name{" "}
-                  <span className="font-normal text-stone-500">
+                  <span className="font-normal text-stone-500 dark:text-stone-400">
                     (as it appears on your license)
                   </span>
                 </label>
@@ -142,7 +158,7 @@ export default function PublicProfileForm({
                     placeholder="e.g. San Francisco Bay Area"
                   />
                 </div>
-                <p className="mt-1 text-xs text-stone-500">
+                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                   Where you are willing to travel for jobs.
                 </p>
               </div>
@@ -166,7 +182,7 @@ export default function PublicProfileForm({
                     ))}
                   </select>
                 </div>
-                <p className="mt-1 text-xs text-stone-500">
+                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                   Jobs from homeowners in this state show first; leave blank to
                   see everything.
                 </p>
@@ -178,22 +194,22 @@ export default function PublicProfileForm({
                   {/* license_verified_status (0037/0055): a real CSLB check now
                       backs 'verified' and 'failed'. Never claim "Verified"
                       beyond what was actually confirmed. */}
-                  {licenseLocked && verifyStatus === "verified" && (
-                    <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                  {hasLicense && verifyStatus === "verified" && (
+                    <span className="inline-flex items-center gap-1 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-700 dark:bg-green-950/40 dark:text-green-200">
                       <svg viewBox="0 0 24 24" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M20 6L9 17l-5-5" />
                       </svg>
                       License verified
                     </span>
                   )}
-                  {licenseLocked && verifyStatus === "failed" && (
-                    <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700">
+                  {hasLicense && verifyStatus === "failed" && (
+                    <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700 dark:bg-red-950/40 dark:text-red-200">
                       Not confirmed
                     </span>
                   )}
-                  {licenseLocked &&
+                  {hasLicense &&
                     (verifyStatus === "pending" || verifyStatus === "unverified") && (
-                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
                         Verification pending
                       </span>
                     )}
@@ -204,60 +220,83 @@ export default function PublicProfileForm({
                       <FieldIcon>
                         <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M9 13h6M9 17h6" />
                       </FieldIcon>
-                      <div className="input cursor-not-allowed select-none bg-stone-100 pl-9 text-stone-500">
+                      <div className="input cursor-not-allowed select-none bg-stone-100 pl-9 text-stone-500 dark:bg-stone-700 dark:text-stone-400">
                         {contractor.license_number}
                       </div>
                     </div>
-                    {verifyStatus === "verified" ? (
-                      <p className="mt-1 text-xs text-emerald-600">
-                        Checked against the CSLB public database
-                        {verifiedAt ? ` on ${formatVerifiedDate(verifiedAt)}` : ""}.
+                    <p className="mt-1 text-xs text-green-600 dark:text-green-400">
+                      Checked against the CSLB public database
+                      {verifiedAt ? ` on ${formatVerifiedDate(verifiedAt)}` : ""}.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div className="relative">
+                      <FieldIcon>
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M9 13h6M9 17h6" />
+                      </FieldIcon>
+                      <input
+                        name="license_number"
+                        className="input pl-9"
+                        placeholder="LIC-000000-XX"
+                        defaultValue={contractor.license_number ?? ""}
+                      />
+                    </div>
+                    {hasLicense && (
+                      <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                        Locked once verified. Typo? You can correct it until
+                        then.
                       </p>
-                    ) : verifyStatus === "failed" ? (
+                    )}
+                    {hasLicense && verifyStatus === "failed" && (
                       <>
-                        <p className="mt-1 text-xs text-red-500">
+                        <p className="mt-1 text-xs text-red-500 dark:text-red-400">
                           {verifyDetail?.statusText
                             ? `CSLB says: ${verifyDetail.statusText}`
                             : "The CSLB public database did not confirm this license."}{" "}
-                          If this is out of date, update it with the state, then
-                          reverify below.
+                          {cslbEligible
+                            ? "If this is out of date, update it with the state, then reverify below."
+                            : "Set State You Serve to California and save to reverify a CSLB license."}
                         </p>
-                        <button
-                          type="submit"
-                          formAction={verifyLicenseNowAction}
-                          className="mt-2 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50"
-                        >
-                          Reverify
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <p className="mt-1 text-xs text-stone-500">
-                          We&apos;re checking your license against the CSLB
-                          public database. You can keep applying to jobs
-                          meanwhile.
-                        </p>
-                        <button
-                          type="submit"
-                          formAction={verifyLicenseNowAction}
-                          className="mt-2 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50"
-                        >
-                          Verify now
-                        </button>
+                        {cslbEligible && (
+                          <button
+                            type="submit"
+                            formAction={verifyLicenseNowAction}
+                            className="mt-2 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-700"
+                          >
+                            Reverify
+                          </button>
+                        )}
                       </>
                     )}
+                    {hasLicense &&
+                      (verifyStatus === "pending" ||
+                        verifyStatus === "unverified") &&
+                      (cslbEligible ? (
+                        <>
+                          <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                            {serviceState === "CA"
+                              ? "We're checking your license against the CSLB public database. You can keep applying to jobs meanwhile."
+                              : "Have a California (CSLB) license? Verify it below against the CSLB public database. Licenses from other states stay on file. You can keep applying to jobs meanwhile."}
+                          </p>
+                          <button
+                            type="submit"
+                            formAction={verifyLicenseNowAction}
+                            className="mt-2 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-700"
+                          >
+                            Verify now
+                          </button>
+                        </>
+                      ) : (
+                        <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                          Automatic license checks currently cover California
+                          (CSLB) licenses only, so yours stays on file as-is.
+                          If it is a CSLB license, set State You Serve to
+                          California and save, then verify. You can keep
+                          applying to jobs meanwhile.
+                        </p>
+                      ))}
                   </>
-                ) : (
-                  <div className="relative">
-                    <FieldIcon>
-                      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M9 13h6M9 17h6" />
-                    </FieldIcon>
-                    <input
-                      name="license_number"
-                      className="input pl-9"
-                      placeholder="LIC-000000-XX"
-                    />
-                  </div>
                 )}
               </div>
             </div>
@@ -265,10 +304,10 @@ export default function PublicProfileForm({
 
           {/* Service categories */}
           <div>
-            <h2 className="mb-1 text-base font-semibold text-stone-900">
+            <h2 className="mb-1 text-base font-semibold text-stone-900 dark:text-stone-100">
               Service Categories
             </h2>
-            <p className="mb-4 text-sm text-stone-500">
+            <p className="mb-4 text-sm text-stone-500 dark:text-stone-400">
               Select the main areas of work your company handles. This helps
               homeowners find you.
             </p>
@@ -278,17 +317,14 @@ export default function PublicProfileForm({
         </div>
 
         {/* Footer */}
-        <div className="mt-8 flex items-center justify-end gap-3 border-t border-stone-100 pt-5">
+        <div className="mt-8 flex items-center justify-end gap-3 border-t border-stone-100 pt-5 dark:border-white/10">
           <a
             href="/pro"
-            className="rounded-lg px-4 py-2 text-sm font-medium text-stone-500 hover:text-stone-700"
+            className="rounded-lg px-4 py-2 text-sm font-medium text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
           >
             Cancel
           </a>
-          <button
-            type="submit"
-            className="inline-flex items-center gap-2 rounded-lg bg-hearth-600 px-4 py-2 text-sm font-semibold text-white hover:bg-hearth-700"
-          >
+          <button type="submit" className="btn-primary">
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
               <path d="M17 21v-8H7v8M7 3v5h8" />

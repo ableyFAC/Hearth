@@ -72,17 +72,17 @@ export default async function ClientDetailPage({
       <div>
         <Link
           href="/pro/crm"
-          className="text-sm font-medium text-hearth-700 hover:underline"
+          className="text-sm font-medium text-hearth-700 hover:underline dark:text-hearth-300"
         >
           Back to clients
         </Link>
-        <h1 className="mt-1 text-2xl font-semibold text-stone-900">
+        <h1 className="mt-1 text-2xl font-semibold text-stone-900 dark:text-stone-100">
           {client.client_name}
         </h1>
       </div>
 
       <section className="card space-y-3">
-        <h2 className="text-lg font-semibold text-stone-900">
+        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
           Contact and details
         </h2>
         <form
@@ -175,10 +175,10 @@ export default async function ClientDetailPage({
 
       {lead && (
         <section className="card space-y-2">
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Linked job
           </h2>
-          <p className="flex items-center gap-2 text-sm text-stone-700">
+          <p className="flex items-center gap-2 text-sm text-stone-700 dark:text-stone-300">
             <span className="icon-chip">
               {iconFor(JOB_CATEGORIES, lead.category)}
             </span>
@@ -186,7 +186,7 @@ export default async function ClientDetailPage({
           </p>
           <Link
             href={`/pro/chats?lead=${lead.id}`}
-            className="text-sm font-medium text-hearth-700 hover:underline"
+            className="text-sm font-medium text-hearth-700 hover:underline dark:text-hearth-300"
           >
             Open chat
           </Link>
@@ -194,7 +194,7 @@ export default async function ClientDetailPage({
       )}
 
       <section className="card space-y-4">
-        <h2 className="text-lg font-semibold text-stone-900">Notes</h2>
+        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Notes</h2>
         <form action={addNoteAction} className="space-y-2">
           <input type="hidden" name="client_id" value={client.id} />
           <textarea
@@ -210,19 +210,19 @@ export default async function ClientDetailPage({
           </button>
         </form>
         {notes.length === 0 ? (
-          <p className="text-sm text-stone-500">No notes yet.</p>
+          <p className="text-sm text-stone-500 dark:text-stone-400">No notes yet.</p>
         ) : (
           <ul className="space-y-2">
             {notes.map((n) => (
               <li
                 key={n.id}
-                className="flex items-start justify-between gap-3 rounded-lg border border-stone-200 bg-stone-50 p-3"
+                className="flex items-start justify-between gap-3 rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-white/10 dark:bg-stone-700"
               >
                 <div className="min-w-0 space-y-1">
-                  <p className="whitespace-pre-wrap text-sm text-stone-700">
+                  <p className="whitespace-pre-wrap text-sm text-stone-700 dark:text-stone-300">
                     {n.body}
                   </p>
-                  <p className="text-xs text-stone-500">
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
                     {new Date(n.created_at).toLocaleString()}
                   </p>
                 </div>
@@ -243,10 +243,10 @@ export default async function ClientDetailPage({
       </section>
 
       <section className="card space-y-3">
-        <h2 className="text-lg font-semibold text-stone-900">
+        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
           Danger zone
         </h2>
-        <p className="text-sm text-stone-500">
+        <p className="text-sm text-stone-500 dark:text-stone-400">
           Removing a client also removes its notes. This can't be undone.
         </p>
         <form action={deleteClientAction}>

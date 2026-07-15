@@ -65,11 +65,11 @@ export default async function ValuePage() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
       <header className="mb-1">
-        <h1 className="text-2xl font-semibold text-stone-900">
+        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
           Home value &amp; equity
         </h1>
       </header>
-      <p className="mb-5 text-sm text-stone-500">
+      <p className="mb-5 text-sm text-stone-500 dark:text-stone-400">
         A running estimate of what your home is worth today and how much of
         it you actually own, based on statewide price trends since you bought
         it.
@@ -78,7 +78,7 @@ export default async function ValuePage() {
       {!hasData && (
         <div className="space-y-4">
           <div className="card space-y-2 text-center">
-            <p className="text-sm text-stone-600">
+            <p className="text-sm text-stone-600 dark:text-stone-300">
               We just need what you paid and the year you bought your home.
               From there we track your home&apos;s estimated value and your
               equity automatically, no appraisal needed.
@@ -98,10 +98,13 @@ export default async function ValuePage() {
         <>
           <div className="card-hero space-y-2 text-center">
             <p className="stat-label">Estimated value today</p>
-            <p className="stat-number text-4xl text-hearth-800">
-              {money(estimatedValue)}
+            <p className="stat-number text-4xl text-hearth-800 dark:text-hearth-200">
+              {money(estimatedValue)}{" "}
+              <span className="align-middle rounded-full border border-hearth-200 bg-hearth-50 px-2 py-0.5 text-xs font-medium text-hearth-700 dark:border-hearth-800/40 dark:bg-hearth-900/30 dark:text-hearth-300">
+                Estimate
+              </span>
             </p>
-            <p className="text-xs text-hearth-700">
+            <p className="text-xs text-hearth-700 dark:text-hearth-300">
               Bought for {money(purchasePrice!)} in {purchaseYear}
               {appreciationGained != null && appreciationGained !== 0 && (
                 <>
@@ -120,9 +123,10 @@ export default async function ValuePage() {
                 </>
               )}
             </p>
-            <p className="text-xs text-hearth-600">
-              Adjusted for {region ? `your area (${region})` : "your area"},
-              based on statewide averages.
+            <p className="text-xs text-hearth-600 dark:text-hearth-400">
+              Ballpark based on{" "}
+              {region ? `statewide ${region} price trends` : "statewide price trends"},
+              not your neighborhood.
             </p>
           </div>
 
@@ -130,12 +134,12 @@ export default async function ValuePage() {
             <p className="stat-label">Home equity</p>
             <p
               className={`stat-number text-2xl ${
-                equity != null && equity < 0 ? "text-red-600" : "text-stone-900"
+                equity != null && equity < 0 ? "text-red-600" : ""
               }`}
             >
               {equity != null ? money(equity) : "-"}
             </p>
-            <p className="text-xs text-stone-500">
+            <p className="text-xs text-stone-500 dark:text-stone-400">
               {equity != null && equity < 0
                 ? "Your mortgage balance is higher than your estimated value right now. This can happen with a recent purchase or a slow local market, and it usually corrects as you pay down the loan and prices rise."
                 : mortgageBalance
@@ -146,11 +150,11 @@ export default async function ValuePage() {
 
           {timeline.length > 1 && (
             <div className="card mt-6 space-y-3">
-              <h2 className="flex items-center text-sm font-semibold text-stone-900">
+              <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
                 Estimated value over time
               </h2>
               <div className="overflow-x-auto pb-1">
-                <div className="flex items-end gap-2 border-b border-stone-200">
+                <div className="flex items-end gap-2 border-b border-stone-200 dark:border-white/10">
                   {timeline.map((p, i) => {
                     const height = Math.max(
                       6,
@@ -162,7 +166,7 @@ export default async function ValuePage() {
                         title={`${p.year}: ${money(p.value)}`}
                         className="flex min-w-[2.75rem] flex-col items-center justify-end gap-1 transition hover:opacity-90"
                       >
-                        <span className="text-[10px] font-medium tabular-nums text-stone-500">
+                        <span className="text-[10px] font-medium tabular-nums text-stone-500 dark:text-stone-400">
                           {timeline.length > 10 && i % 2 !== 0
                             ? ""
                             : moneyShort(p.value)}
@@ -183,7 +187,7 @@ export default async function ValuePage() {
                   {timeline.map((p) => (
                     <span
                       key={p.year}
-                      className="min-w-[2.75rem] text-center text-[10px] text-stone-500"
+                      className="min-w-[2.75rem] text-center text-[10px] text-stone-500 dark:text-stone-400"
                     >
                       {p.year}
                     </span>
@@ -203,7 +207,7 @@ export default async function ValuePage() {
             />
           </div>
 
-          <p className="mt-6 text-xs text-stone-500">
+          <p className="mt-6 text-xs text-stone-500 dark:text-stone-400">
             This is an estimate based on statewide average price trends, not
             an appraisal. Your home&apos;s real value depends on its
             condition, upgrades, and what is actually selling nearby right

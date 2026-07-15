@@ -80,11 +80,11 @@ export default function ReviewButton({
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-            <h2 className="text-lg font-semibold text-stone-900">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-pop dark:bg-stone-800">
+            <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
               How was {contractorName}?
             </h2>
-            <p className="mt-1 text-sm text-stone-500">
+            <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
               Your rating helps other homeowners pick the right pro.
             </p>
 
@@ -109,7 +109,7 @@ export default function ReviewButton({
                     onClick={() => setRating(n)}
                     aria-label={`${n} star${n > 1 ? "s" : ""}`}
                     className={`text-3xl leading-none transition ${
-                      (hover || rating) >= n ? "text-amber-400" : "text-stone-300"
+                      (hover || rating) >= n ? "text-amber-400" : "text-stone-300 dark:text-stone-600"
                     }`}
                   >
                     ★
@@ -148,8 +148,8 @@ export default function ReviewButton({
       )}
 
       {justRatedHigh && (
-        <div className="mt-2 w-full basis-full rounded-lg border border-stone-200 bg-stone-50 p-3">
-          <p className="text-sm text-stone-700">
+        <div className="mt-2 w-full basis-full rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-white/10 dark:bg-stone-700">
+          <p className="text-sm text-stone-700 dark:text-stone-300">
             Know a neighbor who needs a good {categoryLabel.toLowerCase()} pro?
             Share {contractorName}.
           </p>
@@ -170,7 +170,7 @@ export default function ReviewButton({
             </button>
           </div>
           {shareState === "show-link" && (
-            <p className="mt-2 select-all break-all text-xs text-stone-500">
+            <p className="mt-2 select-all break-all text-xs text-stone-500 dark:text-stone-400">
               {typeof window !== "undefined"
                 ? `${window.location.origin}${proProfilePath}`
                 : proProfilePath}

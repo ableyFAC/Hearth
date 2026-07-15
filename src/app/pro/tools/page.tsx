@@ -39,25 +39,25 @@ export default async function ProToolsPage() {
     return (
       <div className="mx-auto max-w-2xl space-y-6">
         <div className="text-center">
-          <h1 className="text-2xl font-semibold text-stone-900">
+          <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
             AI back office
           </h1>
-          <p className="mt-2 text-sm text-stone-500">
+          <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
             The paperwork side of the job, handled in seconds instead of
             evenings.
           </p>
         </div>
 
-        <div className="rounded-xl border border-hearth-200 bg-hearth-50 p-4 text-center ring-1 ring-hearth-200">
+        <div className="rounded-xl border border-hearth-200 bg-hearth-50 p-4 text-center ring-1 ring-hearth-200 dark:border-hearth-800 dark:bg-hearth-900/40 dark:ring-hearth-800">
           <div className="mb-2 flex justify-center">
             <span aria-hidden="true" className="icon-chip">
               🔒
             </span>
           </div>
-          <p className="text-sm font-medium text-hearth-800">
+          <p className="text-sm font-medium text-hearth-800 dark:text-hearth-200">
             Pro membership tool
           </p>
-          <p className="mt-1 text-sm text-hearth-700">
+          <p className="mt-1 text-sm text-hearth-700 dark:text-hearth-300">
             The AI back office is part of the Hearth Pro membership. Join to
             unlock all three tools, along with instant alerts and deposit
             bonuses.
@@ -73,20 +73,20 @@ export default async function ProToolsPage() {
               <div className="flex items-start gap-3">
                 <div className="icon-chip">{t.icon}</div>
                 <div>
-                  <h2 className="font-semibold text-stone-900">
+                  <h2 className="font-semibold text-stone-900 dark:text-stone-100">
                     {t.title}{" "}
-                    <span className="chip ml-1 border border-stone-200 bg-stone-50 text-stone-500">
+                    <span className="chip ml-1 border border-stone-200 bg-stone-50 text-stone-500 dark:border-white/10 dark:bg-stone-800 dark:text-stone-400">
                       🔒 Members
                     </span>
                   </h2>
-                  <p className="mt-1 text-sm text-stone-600">{t.body}</p>
+                  <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">{t.body}</p>
                 </div>
               </div>
             </div>
           ))}
         </section>
 
-        <p className="text-center text-xs text-stone-500">
+        <p className="text-center text-xs text-stone-500 dark:text-stone-400">
           Membership never changes which jobs you can see or apply to. Leads
           stay pay-per-apply for everyone.
         </p>
@@ -105,19 +105,34 @@ export default async function ProToolsPage() {
     .eq("contractor_id", contractor.id)
     .order("created_at", { ascending: false });
 
+  // This pro's own leads, for the "Send to a lead" picker on a generated
+  // draft. Only "lost" (declined) leads are excluded: a "closed" (won) lead
+  // still has a live chat thread, and is exactly where an invoice or an
+  // overdue-payment reminder is most likely to be sent. Most-recent first.
+  const { data: leadRows } = await supabase
+    .from("contractor_leads")
+    .select("id, homeowner_name, category, status, created_at")
+    .eq("contractor_id", contractor.id)
+    .neq("status", "lost")
+    .order("created_at", { ascending: false });
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="text-center">
-        <h1 className="text-2xl font-semibold text-stone-900">
+        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
           AI back office
         </h1>
-        <p className="mt-2 text-sm text-stone-500">
+        <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
           Tell it about the job in plain words. It writes the paperwork, you
           look it over and send it.
         </p>
       </div>
-      <ProToolsClient initialPastJobs={pastJobRows ?? []} />
-      <p className="text-center text-xs text-stone-500">
+      <ProToolsClient
+        initialPastJobs={pastJobRows ?? []}
+        categories={contractor.categories ?? []}
+        leads={leadRows ?? []}
+      />
+      <p className="text-center text-xs text-stone-500 dark:text-stone-400">
         Drafts use only the details you type in. Always give them a quick read
         before sending.
       </p>

@@ -93,6 +93,39 @@ export async function POST() {
     currentYear
   );
 
+  // CALIFORNIA (Prop 13): the /taxes page judges a CA assessment against the
+  // purchase price compounded at the 2%/yr Prop 13 cap, NOT against market
+  // value, because a long-held CA home is supposed to be assessed far below
+  // market. The letter must argue over the same basis: citing Hearth's market
+  // estimate (often a multiple of the assessment) would refute the letter's
+  // own claim. Same formula as the prop13Baseline in
+  // src/app/(app)/taxes/page.tsx; if one changes, change the other.
+  const prop13Baseline =
+    property.state?.toUpperCase() === "CA"
+      ? Math.round(
+          purchasePrice * Math.pow(1.02, Math.max(0, assessedYear - purchaseYear))
+        )
+      : null;
+
+  // The number the letter's over-assessment claim is measured against: the
+  // Prop 13 trajectory in CA, Hearth's market estimate everywhere else
+  // (mirroring the /taxes verdict).
+  const comparisonBasis = prop13Baseline ?? estimatedValue;
+
+  // Never draft a letter whose central claim is false: if the assessment does
+  // not actually exceed the comparison basis (a direct POST can reach here
+  // without the "looks high" verdict the page's CTA requires), decline with
+  // an honest message instead of generating a self-refuting letter.
+  if (comparisonBasis <= 0 || assessedValue <= comparisonBasis) {
+    return NextResponse.json(
+      {
+        error:
+          "Your assessment doesn't exceed the value Hearth compares it against, so an appeal letter arguing it is too high wouldn't be honest. Check the taxes page for the latest comparison.",
+      },
+      { status: 400 }
+    );
+  }
+
   // Only facts Hearth actually has. Anything else the letter needs becomes a
   // bracketed placeholder the owner fills in.
   const facts: string[] = [];
@@ -102,9 +135,18 @@ export async function POST() {
     );
   }
   facts.push(`County assessed value: $${assessedValue.toLocaleString()} (tax year ${assessedYear})`);
-  facts.push(
-    `Hearth's estimated market value: $${estimatedValue.toLocaleString()} (a ballpark from statewide average appreciation applied to the owner's purchase price, not an appraisal)`
-  );
+  if (prop13Baseline != null) {
+    // CA: cite the Prop 13 trajectory and leave the market estimate out
+    // entirely, so the model can't undercut the argument with a market
+    // figure far above the assessment.
+    facts.push(
+      `Proposition 13 factored base year trajectory: about $${prop13Baseline.toLocaleString()} for tax year ${assessedYear} (the ${purchaseYear} purchase price grown at the 2% annual cap Proposition 13 allows; the owner's own calculation, not a county record)`
+    );
+  } else {
+    facts.push(
+      `Hearth's estimated market value: $${estimatedValue.toLocaleString()} (a ballpark from statewide average appreciation applied to the owner's purchase price, not an appraisal)`
+    );
+  }
   facts.push(`Purchased in ${purchaseYear} for $${purchasePrice.toLocaleString()}`);
   if (property.sqft) facts.push(`Square footage: ${property.sqft}`);
   if (property.beds) facts.push(`Bedrooms: ${property.beds}`);
@@ -116,7 +158,9 @@ export async function POST() {
     "Write a respectful, factual, county-generic letter from the homeowner's point of view, addressed to the county assessor's office. " +
     "Use only the facts provided. Where the letter needs information you were not given, insert a clearly bracketed placeholder such as [Parcel number], [Your name], [Property address], [County assessor's office address], or [Date]. " +
     "Never invent comparable sales, appraisals, dates, names, or any other facts. " +
-    "The letter should state the assessed value, note that the homeowner believes it exceeds the property's market value, cite the estimate provided as one indicator while being honest that it is an estimate rather than an appraisal, and politely request a review of the assessment and information about the county's formal appeal process. " +
+    (prop13Baseline != null
+      ? "The letter should state the assessed value, note that the homeowner believes it exceeds the trajectory California's Proposition 13 allows (the factored base year value, roughly the purchase price growing 2% a year), cite the trajectory figure provided while being honest that it is the owner's own calculation from their purchase records rather than a county record, avoid any claim about the property's current market value, and politely request a review of the assessment and information about the county's formal appeal process. "
+      : "The letter should state the assessed value, note that the homeowner believes it exceeds the property's market value, cite the estimate provided as one indicator while being honest that it is an estimate rather than an appraisal, and politely request a review of the assessment and information about the county's formal appeal process. ") +
     "Include a spot ([Attach or list comparable sales here, if you have them]) where the homeowner can add their own supporting evidence. " +
     "Never promise or predict an outcome, never threaten, and never claim professional credentials. " +
     "Keep it under 350 words, in plain complete sentences a homeowner would actually sign. " +

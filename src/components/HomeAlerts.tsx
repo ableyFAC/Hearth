@@ -52,22 +52,20 @@ export default function HomeAlerts() {
             key={i}
             className={`flex items-start gap-2 rounded-lg border p-3 text-sm ${
               a.kind === "recall"
-                ? "border-red-200 bg-red-50"
-                : a.kind === "freeze"
-                  ? "border-sky-200 bg-sky-50"
-                  : "border-amber-200 bg-amber-50"
+                ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40"
+                : "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40"
             }`}
           >
             <span className="shrink-0">{ICON[a.kind]}</span>
             <div>
-              <p className="font-medium text-stone-900">{a.title}</p>
-              <p className="mt-0.5 text-stone-600">{a.detail}</p>
+              <p className="font-medium text-stone-900 dark:text-stone-100">{a.title}</p>
+              <p className="mt-0.5 text-stone-600 dark:text-stone-300">{a.detail}</p>
               {a.url && (
                 <a
                   href={a.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-0.5 inline-block font-medium text-hearth-700 hover:underline"
+                  className="mt-0.5 inline-block font-medium text-hearth-700 hover:underline dark:text-hearth-300"
                 >
                   View the official notice →
                 </a>
@@ -80,7 +78,7 @@ export default function HomeAlerts() {
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="text-xs font-medium text-stone-500 hover:text-stone-700"
+          className="text-xs font-medium text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-300"
         >
           Show {alerts.length - 3} more
         </button>

@@ -26,7 +26,9 @@ function bonusFor(cents: number, tiers: Tier[], boostPts: number) {
   return { pct, bonus: Math.floor((cents * pct) / 100) };
 }
 
-const PRESETS = [100, 200, 400, 800];
+// Start low: /pros promises "deposits from $5", so the presets open at $50
+// with the custom field taking anything from $5 up.
+const PRESETS = [50, 100, 200, 400];
 
 export default function DepositForm({
   tiers,
@@ -39,14 +41,15 @@ export default function DepositForm({
   // Pro membership deposit boost (percentage points); 0 for non-members.
   boostPts?: number;
 }) {
-  // Committed amount (string so the field can be cleared); default $200 so the
-  // first bonus tier is visible out of the gate. When the pro came here short
-  // on a specific job, preselect the smallest option that covers the shortfall
-  // instead (falling back to a custom amount above the largest preset).
+  // Committed amount (string so the field can be cleared); default to the
+  // smallest preset so nobody is nudged into depositing more than they meant
+  // to. When the pro came here short on a specific job, preselect the
+  // smallest option that covers the shortfall instead (falling back to a
+  // custom amount above the largest preset).
   const initialAmount =
     need && need > 0
       ? String(PRESETS.find((p) => p >= need) ?? Math.ceil(need))
-      : "200";
+      : String(PRESETS[0]);
   const [amount, setAmount] = useState(initialAmount);
   // Preview while hovering a preset - reverts to the committed amount on leave.
   const [hover, setHover] = useState<number | null>(null);
@@ -65,6 +68,14 @@ export default function DepositForm({
   return (
     <form action={depositAction} className="card space-y-4">
       <input type="hidden" name="amount" value={num} />
+
+      {/* The terms come BEFORE any amount is picked: a pro should know
+          deposits don't come back before choosing how much to put in. */}
+      <p className="text-xs text-stone-500">
+        Deposits are non-refundable and can only be spent on leads. Bonus credit
+        is promotional, has no cash value, and expires 60 days after it&apos;s
+        added. Lead prices vary by service.
+      </p>
 
       {/* Presets, then Custom. Hover a preset to preview; click to set. */}
       <div className="flex flex-wrap gap-2">
@@ -106,8 +117,8 @@ export default function DepositForm({
           <input
             ref={inputRef}
             type="number"
-            min={0}
-            step={10}
+            min={5}
+            step={1}
             value={shown}
             placeholder="0"
             // Digits only - no letters, symbols, or emojis.
@@ -121,18 +132,13 @@ export default function DepositForm({
           )}
         </div>
         <p className="mt-1 text-[11px] text-stone-500">
+          Any amount from $5.{" "}
           {boostPts > 0
             ? `Every deposit earns +${boostPts}% as a Pro member, tiers stack on top`
             : "$200+ earns bonus credit"}
           {bonus > 0 ? ` · $${totalCredit.toFixed(2)} total credit` : ""}.
         </p>
       </div>
-
-      <p className="text-xs text-stone-500">
-        Deposits are non-refundable and can only be spent on leads. Bonus credit
-        is promotional, has no cash value, and expires 60 days after it&apos;s
-        added. Lead prices vary by service.
-      </p>
 
       <label className="flex items-center gap-2 text-xs text-stone-600">
         <input

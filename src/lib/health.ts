@@ -1,5 +1,10 @@
 import type { HomeSystem, Issue } from "@/lib/database.types";
-import { labelFor, SYSTEM_TYPES, ISSUE_CATEGORIES } from "@/lib/constants";
+import {
+  labelFor,
+  SYSTEM_TYPES,
+  ISSUE_CATEGORIES,
+  categoryForSystem,
+} from "@/lib/constants";
 
 // Fallback lifespans (years) used when system_lifespans isn't loaded or a
 // system has no stored expected_lifespan_years. Mirrors the seed in 0003.
@@ -128,7 +133,12 @@ export interface SystemHealth {
   message: string;
 }
 
-const CURRENT_YEAR = new Date().getFullYear();
+// Computed per call, not cached at module scope: a long-running server that
+// crosses New Year would otherwise age every system a year late and disagree
+// with forecast math evaluated at request time.
+function currentYear(): number {
+  return new Date().getFullYear();
+}
 
 export function assessSystem(system: HomeSystem): SystemHealth {
   const lifespan =
@@ -147,7 +157,7 @@ export function assessSystem(system: HomeSystem): SystemHealth {
     };
   }
 
-  const age = CURRENT_YEAR - system.install_year;
+  const age = currentYear() - system.install_year;
   const remaining = lifespan - age;
   let stage: LifeStage;
   let message: string;
@@ -199,13 +209,68 @@ export function systemPriority(system: HomeSystem): number {
   return r;
 }
 
+// Matches a system to its most relevant open issue: an issue linked directly
+// by system_id wins, falling back to the first open issue in the same
+// category (for issues filed without a specific system picked). This is the
+// single place that decides which open issue "belongs" to a system - Home,
+// Cost Forecast, and anything else that needs the answer should call this
+// instead of re-deriving it, so they never pick different issues for the
+// same system.
+export function openIssueFor(
+  system: Pick<HomeSystem, "id" | "system_type">,
+  openIssues: Pick<
+    Issue,
+    "id" | "system_id" | "category" | "severity" | "description"
+  >[]
+): Pick<
+  Issue,
+  "id" | "system_id" | "category" | "severity" | "description"
+> | null {
+  const bySystemId = openIssues.find((i) => i.system_id === system.id);
+  if (bySystemId) return bySystemId;
+  const cat = categoryForSystem(system.system_type);
+  return openIssues.find((i) => i.category === cat) ?? null;
+}
+
 // A system the owner must deal with: reported failing, or well past its life.
-export function isMustDo(system: HomeSystem): boolean {
-  return system.condition_rating === 1 || assessSystem(system).stage === "due";
+//
+// Day-one honesty (same exemption as SystemRow's "Check soon (estimated)"
+// badge): a "due" verdict resting ONLY on an install year estimated from the
+// home's age at onboarding (confirmed_at null, no owner-entered condition,
+// no open issue) is a guess, not a confirmed problem, so it is NOT a must-do.
+// HomeSystem itself carries no issue linkage; callers that have joined open
+// issues to systems (by category, like the dashboard does) should pass the
+// system's open issue so a reported problem overrides the exemption.
+export function isMustDo(
+  system: HomeSystem,
+  openIssue: { severity?: string | null } | null = null
+): boolean {
+  if (system.condition_rating === 1) return true;
+  if (assessSystem(system).stage !== "due") return false;
+  const pureAgeEstimate =
+    !system.confirmed_at && system.condition_rating == null && !openIssue;
+  return !pureAgeEstimate;
+}
+
+// A system whose details are still the onboarding guess: never confirmed by
+// the owner (confirmed_at null, migration 0056) and no owner-entered
+// condition. Its age-based verdict rests on an estimated install year, so its
+// deductions count at half weight until the owner confirms it.
+function isUnconfirmedEstimate(system: HomeSystem): boolean {
+  return !system.confirmed_at && system.condition_rating == null;
+}
+
+// True when more than half the systems are unconfirmed estimates, so the
+// dashboard can honestly label the number "Estimated score".
+export function scoreIsMostlyEstimated(systems: HomeSystem[]): boolean {
+  if (systems.length === 0) return false;
+  return systems.filter(isUnconfirmedEstimate).length > systems.length / 2;
 }
 
 // 0-100 Home Health Score. Starts at 100, then deducts for aging/overdue
 // systems, open issues (weighted by severity), and missing system data.
+// Unconfirmed onboarding estimates deduct at half weight (see
+// isUnconfirmedEstimate); confirmed systems deduct in full.
 export function homeHealthScore(
   systems: HomeSystem[],
   openIssues: Issue[]
@@ -214,8 +279,9 @@ export function homeHealthScore(
 
   for (const s of systems) {
     const h = assessSystem(s);
-    if (h.stage === "due") score -= 10;
-    else if (h.stage === "aging") score -= 4;
+    const est = isUnconfirmedEstimate(s);
+    if (h.stage === "due") score -= est ? 5 : 10;
+    else if (h.stage === "aging") score -= est ? 2 : 4;
     if (s.condition_rating && s.condition_rating <= 2) score -= 5;
   }
 
@@ -244,8 +310,17 @@ export function scoreBreakdown(
   for (const s of systems) {
     const name = labelFor(SYSTEM_TYPES, s.system_type);
     const h = assessSystem(s);
-    if (h.stage === "due") lines.push({ label: `${name} past/near end of life`, points: -10 });
-    else if (h.stage === "aging") lines.push({ label: `${name} is aging`, points: -4 });
+    // Half-weight deductions for unconfirmed estimates, mirroring
+    // homeHealthScore, with the label saying so plainly.
+    const est = isUnconfirmedEstimate(s);
+    const suffix = est ? " (estimated, confirm it)" : "";
+    if (h.stage === "due")
+      lines.push({
+        label: `${name} past/near end of life${suffix}`,
+        points: est ? -5 : -10,
+      });
+    else if (h.stage === "aging")
+      lines.push({ label: `${name} is aging${suffix}`, points: est ? -2 : -4 });
     if (s.condition_rating && s.condition_rating <= 2)
       lines.push({ label: `${name} in poor condition`, points: -5 });
   }
@@ -262,10 +337,10 @@ export function scoreBreakdown(
 }
 
 export function scoreBand(score: number): { label: string; tone: string } {
-  if (score >= 85) return { label: "Great shape", tone: "text-green-700 bg-green-50 border-green-200" };
-  if (score >= 65) return { label: "Generally healthy", tone: "text-hearth-700 bg-hearth-50 border-hearth-200" };
-  if (score >= 45) return { label: "Needs attention", tone: "text-amber-700 bg-amber-50 border-amber-200" };
-  return { label: "Several items overdue", tone: "text-red-700 bg-red-50 border-red-200" };
+  if (score >= 85) return { label: "Great shape", tone: "text-green-700 bg-green-50 border-green-200 dark:text-green-200 dark:bg-green-950/40 dark:border-green-900" };
+  if (score >= 65) return { label: "Generally healthy", tone: "text-hearth-700 bg-hearth-50 border-hearth-200 dark:text-hearth-200 dark:bg-hearth-900/40 dark:border-hearth-800" };
+  if (score >= 45) return { label: "Needs attention", tone: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-200 dark:bg-amber-950/40 dark:border-amber-900" };
+  return { label: "Several items overdue", tone: "text-red-700 bg-red-50 border-red-200 dark:text-red-200 dark:bg-red-950/40 dark:border-red-900" };
 }
 
 // Derive upcoming maintenance prompts from system ages (read-only, computed -

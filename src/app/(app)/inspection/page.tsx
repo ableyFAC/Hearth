@@ -5,7 +5,7 @@ import InspectionRequest from "./InspectionRequest";
 import InspectionUpload from "./InspectionUpload";
 
 // Home inspection hub: request a professional inspection (posts a job to
-// vetted inspectors, same flow as any other trade), or add a report the
+// local inspectors, same flow as any other trade), or add a report the
 // owner already has so Hearth can read it and propose systems and issues.
 export default async function InspectionPage() {
   const property = await getActiveProperty();
@@ -26,10 +26,10 @@ export default async function InspectionPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-stone-900">
+        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
           Home inspection
         </h1>
-        <p className="mt-1 text-sm text-stone-500">
+        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           Worth getting when you are buying a home, selling or preparing to
           list, setting a maintenance baseline on a home you already own, or
           meeting an insurance requirement.
@@ -38,11 +38,11 @@ export default async function InspectionPage() {
 
       <section className="card space-y-4">
         <div>
-          <h2 className="font-semibold text-stone-900">
+          <h2 className="font-semibold text-stone-900 dark:text-stone-100">
             Get your home inspected
           </h2>
-          <p className="mt-1 text-sm text-stone-500">
-            Post a job and vetted local inspectors will apply. You review them
+          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+            Post a job and local inspectors will apply. You review them
             and pick who you want.
           </p>
         </div>
@@ -55,10 +55,10 @@ export default async function InspectionPage() {
 
       <section className="card space-y-4">
         <div>
-          <h2 className="font-semibold text-stone-900">
+          <h2 className="font-semibold text-stone-900 dark:text-stone-100">
             Already have an inspection report? Add it to your home
           </h2>
-          <p className="mt-1 text-sm text-stone-500">
+          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
             Upload photos of the report or paste its text, and Hearth will
             read it and propose systems and issues for you to confirm before
             anything is saved.

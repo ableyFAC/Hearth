@@ -1,0 +1,977 @@
+/*
+  Inline click-to-play demo, 16:9, staged as a dark screening room around a
+  floating browser device. Inside the device: FULL app pages (nav bar and
+  all) rendered small, with a virtual camera (scale + translate on the
+  camera layer) that punches into whatever the cursor is doing, so a
+  normal-sized cursor still commands the frame. The device screen stays on
+  Hearth's real, always-light product palette because it is a faithful
+  reproduction of the live app.
+*/
+
+/* Neutral wrapper: fullscreen target so the 16:9 box can letterbox inside
+   it instead of being stretched by the UA's fullscreen sizing rules. */
+.shell {
+  width: 100%;
+}
+.shell:fullscreen {
+  background: #000;
+}
+.shell:fullscreen .box {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: min(100vw, calc(100vh * 16 / 9));
+  height: min(100vh, calc(100vw * 9 / 16));
+  border-radius: 0;
+}
+/* Real fullscreen: the device fills the frame like a video should, sized
+   from whatever screen the viewer actually has. */
+.shell:fullscreen .deviceWrap,
+.shell:-webkit-full-screen .deviceWrap,
+.shellMax .deviceWrap {
+  padding: 16px 10px 58px;
+}
+.shell:fullscreen .device,
+.shell:-webkit-full-screen .device,
+.shellMax .device {
+  /* Width-driven, up to a generous desktop ceiling: on a 1920px-wide PC
+     screen this lands at 1800px (94vw would be 1804.8px, so the 1800px
+     cap is what actually governs), not some disconnected small box. */
+  max-width: min(94vw, 1800px);
+}
+.shell:fullscreen .deviceScreen,
+.shell:-webkit-full-screen .deviceScreen,
+.shellMax .deviceScreen {
+  /* Height is derived from the SAME width the device above is capped to
+     (not a separate vw/vh guess), so the screen scales as a clean
+     landscape 16:9-ish surface instead of the old min(50vw, 82vh, ...)
+     formula, whose 50vw/82vh terms were disconnected from the device's
+     actual (much narrower) capped width and silently squashed the screen
+     short on wide desktop monitors.
+     First term: 100vh minus a fixed ~120px for deviceWrap's own vertical
+     padding (16+58=74px) plus the device's chrome bar + padding (~36px),
+     so the screen can never overflow the letterboxed room on ANY monitor
+     aspect ratio (16:9, 16:10, ultrawide) or on the iPhone Safari
+     .shellMax fallback, where 100vh is much smaller.
+     Second term: the device's own capped width times 9/16, i.e. a true
+     16:9 surface at that width.
+     Worked example at 1920x1080 (exactly 16:9, so the outer .box already
+     fills the whole screen with zero letterbox): device width caps at
+     1800px; term 1 = 1080 - 120 = 960px; term 2 = 1800 * 9/16 = 1012.5px;
+     the min is 960px. Screen renders at roughly 1790 x 960, a ~1.87:1
+     landscape surface fully filling the room (vs. the old formula's
+     885.6px tall result, which under-filled the frame) - close to true
+     16:9, with any residual gap absorbed by the intentional letterbox. */
+  height: min(calc(100vh - 120px), calc(min(94vw, 1800px) * 9 / 16));
+}
+.shell:-webkit-full-screen {
+  background: #000;
+}
+.shell:-webkit-full-screen .box {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: min(100vw, calc(100vh * 16 / 9));
+  height: min(100vh, calc(100vw * 9 / 16));
+  border-radius: 0;
+}
+
+/* CSS maximize fallback for iPhone Safari (no element fullscreen): fixed
+   overlay, black surround, box letterboxed and centered via margin auto. */
+.shellMax {
+  position: fixed;
+  inset: 0;
+  z-index: 9990;
+  background: #000;
+}
+.shellMax .box {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: min(100vw, calc(100vh * 16 / 9));
+  height: min(100vh, calc(100vw * 9 / 16));
+  border-radius: 0;
+}
+.maxClose {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 9991;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.6);
+  border: 1px solid rgb(255 255 255 / 0.25);
+  color: #fff;
+  cursor: pointer;
+}
+.maxClose:hover { color: #e0b98a; }
+.maxClose svg { width: 16px; height: 16px; }
+.maxClose:focus-visible {
+  outline: 2px solid #e0b98a;
+  outline-offset: 2px;
+}
+
+.box {
+  --room-bg: #15100c;
+  --room-vignette: radial-gradient(120% 90% at 50% 0%, #241b13 0%, #15100c 60%, #0f0b08 100%);
+  --room-ink: #f3e9dd;
+  --room-ink-dim: #b9a68e;
+  --room-line: #3a2f27;
+  --accent: #c08f60;
+  --accent-strong: #e0b98a;
+
+  --dev-bg: #fbf7f2;
+  --dev-surface: #ffffff;
+  --dev-ink: #292524;
+  --dev-ink-dim: #78716c;
+  --dev-line: #e7e5e4;
+  --dev-accent: #915d32;
+  --dev-accent-ink: #ffffff;
+  --dev-ok-bg: #f0fdf4; --dev-ok-line: #bbf7d0; --dev-ok-ink: #15803d;
+  --dev-warn-bg: #fffbeb; --dev-warn-line: #fde68a; --dev-warn-ink: #b45309;
+  --dev-danger-bg: #fef2f2; --dev-danger-line: #fecaca; --dev-danger-ink: #b91c1c;
+
+  --serif: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+  /* var(--font-inter) is the site's real typeface (loaded by next/font in
+     the root layout), so the demo's app screens render in the same font as
+     the live product. */
+  --sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--room-bg);
+  background-image: var(--room-vignette);
+  box-shadow: 0 30px 60px -24px rgb(0 0 0 / 0.5), 0 0 0 1px var(--room-line);
+  color: var(--room-ink);
+  font-family: var(--sans);
+}
+.box * { box-sizing: border-box; }
+.box :focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.watermark {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--serif);
+  font-size: 0.78rem;
+  color: rgb(243 233 221 / 0.75);
+  pointer-events: none;
+}
+.watermark svg { width: 13px; height: 13px; color: var(--accent-strong); }
+
+/* Step chip: endowed-progress signal, top right. */
+.stepChip {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 3;
+  font-size: 0.64rem;
+  font-weight: 600;
+  color: var(--room-ink-dim);
+  background: rgb(0 0 0 / 0.4);
+  border: 1px solid var(--room-line);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+.stepChip.show { opacity: 1; }
+
+/* Mid-video CTA chip (Wistia mid-roll finding). */
+.midCta {
+  position: absolute;
+  right: 12px;
+  bottom: 58px;
+  z-index: 3;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: #1a130d;
+  background: var(--accent-strong);
+  border-radius: 999px;
+  padding: 4px 10px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 240ms ease, transform 240ms ease;
+  pointer-events: none;
+}
+.midCta.show { opacity: 1; transform: none; }
+
+/* ---------- Device ---------- */
+.deviceWrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Tighter padding inline so the device fills more of the 16:9 room and the
+     small app UI stays legible without needing fullscreen. */
+  padding: 16px 10px 52px;
+}
+.device {
+  position: relative;
+  width: 100%;
+  max-width: 600px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #241b13, #1a130d);
+  padding: 5px;
+  box-shadow: 0 24px 64px rgb(0 0 0 / 0.45);
+}
+.deviceChrome { display: flex; align-items: center; gap: 5px; padding: 5px 8px; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: #4a3b2c; }
+.addr {
+  margin-left: 6px;
+  font-size: 0.6rem;
+  color: #8a7862;
+  background: #120d09;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.deviceScreen {
+  position: relative;
+  height: clamp(200px, 46vw, 340px);
+  background: var(--dev-bg);
+  border-radius: 8px;
+  overflow: hidden;
+  color: var(--dev-ink);
+}
+
+/* Camera layer: the whole page world transforms as one unit so zooms and
+   pans read as a camera, not elements moving. Cursor lives INSIDE so it
+   scales with the UI like a real zoomed screen recording. */
+.camera {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+  /* No will-change: it pins the layer's raster at scale 1, which turns
+     every zoom into a blurry upscale. Without it the browser re-rasterizes
+     at the live scale, and since pages render at 200% (scale 0.5 base),
+     text stays sharp at any zoom on any display density. No CSS
+     transition either: the transform is driven per-frame by the follow-cam
+     rig in cursorLoop. */
+}
+.box.reduced .camera { transform: none !important; }
+
+/* ---------- Full app pages ----------
+   Each page is laid out at 200% size with the site's REAL classes (so text
+   is 14px, buttons are real buttons), then scaled to 0.5 to fit the device.
+   Every pixel is drawn by the same stylesheet as the live product. */
+.page {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 200%;
+  height: 200%;
+  transform-origin: 0 0;
+  background: var(--dev-bg);
+  /* Matches the live site: Inter (the site previously fell back to serif
+     because of a font-variable bug in the root layout, since fixed). */
+  font-family: var(--sans);
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.5) translateX(2%);
+  transition: opacity 150ms ease-out, transform 150ms ease-out;
+}
+.page.active { opacity: 1; visibility: visible; transform: scale(0.5); }
+.page.exitLeft { opacity: 0; transform: scale(0.5) translateX(-2%); }
+
+/* Shared app chrome: nav bar like the real site. */
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  background: rgb(255 255 255 / 0.92);
+  border-bottom: 1px solid var(--dev-line);
+}
+.navBrand {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--dev-ink);
+}
+.navBrand svg { width: 10px; height: 10px; color: var(--dev-accent); }
+.navTabs { display: flex; gap: 2px; margin-left: 4px; }
+.navTab {
+  font-size: 6.5px;
+  color: var(--dev-ink-dim);
+  padding: 2px 5px;
+  border-radius: 999px;
+}
+.navTab.activeTab { background: #f3e9dd; color: var(--dev-accent); font-weight: 600; }
+.navSpacer { flex: 1; }
+.navAvatar {
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  background: #f3e9dd;
+  color: var(--dev-accent);
+  font-size: 6px;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.pageBody { padding: 8px 10px; }
+.pageGrid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 6px; }
+
+.h1 { margin: 0 0 5px; font-size: 10px; font-weight: 700; color: var(--dev-ink); }
+.sub { margin: 0 0 6px; font-size: 6.5px; color: var(--dev-ink-dim); }
+
+.card {
+  background: var(--dev-surface);
+  border: 1px solid var(--dev-line);
+  border-radius: 6px;
+  padding: 7px 8px;
+  box-shadow: 0 1px 2px 0 rgb(94 60 40 / 0.05);
+}
+.cardHero {
+  background: linear-gradient(160deg, #ffffff, var(--dev-bg));
+  border-color: #e6d1ba;
+}
+.cardLabel {
+  margin: 0;
+  font-size: 5.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dev-ink-dim);
+}
+.bigNum {
+  margin: 1px 0 0;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--dev-ink);
+  font-variant-numeric: tabular-nums;
+  display: inline-block;
+}
+.bandLine { margin: 2px 0 0; font-size: 6.5px; color: var(--dev-accent); }
+
+.chip {
+  font-size: 5.5px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 1px 5px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.chipOk { background: var(--dev-ok-bg); border-color: var(--dev-ok-line); color: var(--dev-ok-ink); }
+.chipWarn { background: var(--dev-warn-bg); border-color: var(--dev-warn-line); color: var(--dev-warn-ink); }
+.chipDanger { background: var(--dev-danger-bg); border-color: var(--dev-danger-line); color: var(--dev-danger-ink); }
+
+.row { display: flex; align-items: center; justify-content: space-between; gap: 4px; font-size: 7px; padding: 3px 0; }
+.rowList { display: flex; flex-direction: column; }
+.rowList .row + .row { border-top: 1px solid var(--dev-line); }
+
+.alertCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  background: var(--dev-warn-bg);
+  border: 1px solid var(--dev-warn-line);
+  border-radius: 6px;
+  padding: 5px 7px;
+  font-size: 6.5px;
+  color: var(--dev-warn-ink);
+  margin-bottom: 6px;
+}
+
+.checkCircle {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid #d6d3d1;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: transparent;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+.checkCircle.done { background: #22c55e; border-color: #22c55e; color: #fff; animation: checkPop 220ms ease-out; }
+.box.reduced .checkCircle.done { animation: none; }
+@keyframes checkPop {
+  0% { transform: scale(0.8); }
+  60% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+.strike { transition: color 180ms ease; }
+.strike.done { color: var(--dev-ink-dim); text-decoration: line-through; }
+
+.input {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--dev-line);
+  border-radius: 5px;
+  padding: 5px 7px;
+  font-size: 8px;
+  color: var(--dev-ink);
+  background: #fff;
+  min-height: 1.4em;
+}
+.input.focus { border-color: var(--dev-accent); box-shadow: 0 0 0 1px var(--dev-accent); }
+.caret {
+  display: inline-block;
+  width: 1px;
+  margin-left: 1px;
+  color: var(--dev-accent);
+  animation: caretBlink 1.06s step-end infinite;
+}
+@keyframes caretBlink { 50% { opacity: 0; } }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 5px;
+  cursor: default;
+  font-size: 7px;
+  font-weight: 700;
+  padding: 4px 9px;
+  background: var(--dev-accent);
+  color: var(--dev-accent-ink);
+  transition: transform 90ms ease;
+}
+.btn.pressed { transform: scale(0.93); }
+.btnGhost { background: #fff; color: var(--dev-ink); border: 1px solid var(--dev-line); }
+
+/* Category/timing chips, matching the real form's pill style. */
+.pill {
+  font-size: 14px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid #d6d3d1;
+  background: #fff;
+  color: #44403c;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 90ms ease;
+  white-space: nowrap;
+}
+.pill.on { background: #f3e9dd; border-color: #e6d1ba; color: #73482b; font-weight: 600; }
+.pill.pressed { transform: scale(0.95); }
+
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: 20px;
+  transform: translate(-50%, 10px);
+  background: #1c1917;
+  color: #fff;
+  font-size: 13px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  opacity: 0;
+  transition: opacity 200ms ease, transform 200ms ease;
+  white-space: nowrap;
+  z-index: 2;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+.jobCard { display: flex; flex-direction: column; gap: 2px; }
+.jobTop { display: flex; justify-content: space-between; align-items: baseline; font-size: 7.5px; font-weight: 700; }
+.fee { color: var(--dev-accent); }
+.jobSub { font-size: 6px; color: var(--dev-ink-dim); margin: 0 0 3px; }
+/* Fade-in reveal; size and color come from the Tailwind classes at the
+   call site so the reveal matches the real page's typography. */
+.applied {
+  display: inline-flex;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+/* Intro card: centered logo + wordmark that fades in over the loading
+   site and fades away to reveal the dashboard. Replaces the old corner
+   zoom-out, which read as jarring. */
+.introCard {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--dev-bg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 650ms ease;
+}
+.introCard.show { opacity: 1; }
+.introWord {
+  font-family: var(--sans);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #292524;
+}
+.introTag {
+  font-family: var(--sans);
+  font-size: 12px;
+  color: #78716c;
+}
+
+/* Notification card: slides in like a real in-app notification. */
+.notif {
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 240ms ease, transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+  z-index: 3;
+}
+.notif.show { opacity: 1; transform: none; }
+.applied.show { opacity: 1; transform: none; }
+
+.thread { display: flex; flex-direction: column; gap: 8px; }
+.bubble {
+  max-width: 85%;
+  font-size: 14px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+.bubble.show { opacity: 1; transform: none; }
+.bubble.them { align-self: flex-start; background: #f5f5f4; color: var(--dev-ink); border-bottom-left-radius: 4px; }
+.bubble.me { align-self: flex-end; background: var(--dev-accent); color: #fff; border-bottom-right-radius: 4px; }
+.wonBadge {
+  align-self: center;
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  background: var(--dev-ok-bg);
+  color: var(--dev-ok-ink);
+  border: 1px solid var(--dev-ok-line);
+  border-radius: 999px;
+  padding: 5px 14px;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 200ms ease, transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.wonBadge.show { opacity: 1; transform: scale(1); }
+
+/* End card page: brand lockup in the product's real Inter type, hierarchy
+   reading logo -> wordmark -> tagline -> score -> primary button. */
+.endCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  height: 100%;
+  gap: 2px;
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+.endCard svg { width: 22px; height: 22px; color: var(--dev-accent); margin-bottom: 1px; }
+.endWordmark {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--dev-ink);
+}
+.endTagline {
+  margin: 0;
+  font-size: 7px;
+  font-weight: 400;
+  color: var(--dev-ink-dim);
+}
+.endScoreRow {
+  margin: 3px 0 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: 6px;
+  color: var(--dev-ink-dim);
+}
+.endScore { font-size: 10px; font-weight: 700; color: var(--dev-ok-ink); font-variant-numeric: tabular-nums; display: inline-block; }
+/* Mirrors the live .btn-primary: rounded-lg, hearth brown, white text,
+   soft card shadow, scaled to the device's tiny coordinate system. */
+.endBtn {
+  margin-top: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7px;
+  font-weight: 500;
+  background: #915d32;
+  color: #fff;
+  border-radius: 3px;
+  padding: 3.5px 10px;
+  box-shadow: 0 1px 2px 0 rgb(94 60 40 / 0.12), 0 1px 3px 0 rgb(94 60 40 / 0.08);
+}
+
+/* ---------- Cursor + click feedback (inside the camera layer) ---------- */
+.cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 6;
+  width: 15px;
+  height: 15px;
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.45));
+  /* Squash pivots on the arrow TIP (top-left of the glyph), not the box
+     center: center-origin scaling made the tip dart sideways on click. */
+  transform-origin: 4px 2px;
+}
+.cursor.squash { animation: cursorSquash 110ms ease-out; }
+@keyframes cursorSquash {
+  0% { scale: 1; }
+  45% { scale: 0.82; }
+  100% { scale: 1; }
+}
+.box.reduced .cursor { display: none; }
+
+.ripple {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 5;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--dev-accent);
+  background: radial-gradient(circle, rgb(192 143 96 / 0.4), rgb(192 143 96 / 0) 70%);
+  opacity: 0;
+  pointer-events: none;
+}
+.rippleActive { animation: rippleAnim 350ms ease-out; }
+@keyframes rippleAnim {
+  from { opacity: 0.8; transform: scale(0.5); }
+  to { opacity: 0; transform: scale(3); }
+}
+
+/* ---------- Impact FX ---------- */
+.shake { animation: shake 260ms linear; }
+@keyframes shake {
+  10% { transform: translate(2px, -2px); }
+  30% { transform: translate(-3px, 2px); }
+  50% { transform: translate(3px, 1px); }
+  70% { transform: translate(-2px, -1px); }
+  90% { transform: translate(1px, 1px); }
+}
+.flash {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+}
+.flashActive { animation: flashAnim 120ms ease-out; }
+@keyframes flashAnim {
+  from { opacity: 0.45; }
+  to { opacity: 0; }
+}
+.box.reduced .shake,
+.box.reduced .flashActive { animation: none; }
+
+/* Paused freeze: hold every keyframe animation (device shake, flash,
+   ripple, caret blink, check-pop) mid-frame instead of letting it keep
+   looping under a frozen picture. CSS transitions are deliberately left
+   alone here (see togglePause's comment): only true keyframe loops need a
+   pause hook. */
+.box.isPaused .device,
+.box.isPaused .device *,
+.box.isPaused .captionLayer,
+.box.isPaused .captionLayer * {
+  animation-play-state: paused !important;
+}
+
+.fx { position: absolute; inset: 0; pointer-events: none; z-index: 8; }
+
+/* ---------- Kinetic captions (outside the camera; carry the message for
+   the 70-85% watching muted) ---------- */
+.captionLayer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 42px;
+  z-index: 9;
+  display: flex;
+  justify-content: center;
+  gap: 0.3em;
+  flex-wrap: wrap;
+  padding: 0 14px;
+  pointer-events: none;
+  /* Subtitles for the narration: the site's own typeface, sentence case,
+     quiet enough that eyes stay on the cursor. */
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: clamp(11px, 2.2vw, 15px);
+  letter-spacing: 0.01em;
+  color: rgb(255 255 255 / 0.95);
+  text-shadow:
+    -1px -1px 0 #0f0b08, 1px -1px 0 #0f0b08, -1px 1px 0 #0f0b08, 1px 1px 0 #0f0b08;
+}
+.capWord {
+  display: inline-block;
+  opacity: 0;
+  transform: scale(0.8);
+}
+.capWord.pop {
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 130ms cubic-bezier(0.175, 0.885, 0.32, 1.275), transform 130ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+/* Highlight keyword: the site's light brand brown (hearth-400) so it stays
+   legible on the dark room while matching the website's palette. */
+.capHi { color: #c08f60; }
+.box.reduced .capWord { transition: opacity 120ms linear; transform: none; }
+
+/* Dead-center hero word (JOB WON etc). */
+.heroWord {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: clamp(20px, 5vw, 32px);
+  letter-spacing: 0.04em;
+  color: #fff;
+  text-shadow:
+    -1px -1px 0 #0f0b08, 1px -1px 0 #0f0b08, -1px 1px 0 #0f0b08, 1px 1px 0 #0f0b08,
+    0 4px 14px rgb(0 0 0 / 0.4);
+  opacity: 0;
+}
+.heroWord.pop { animation: heroPop 640ms cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+@keyframes heroPop {
+  0% { opacity: 0; transform: scale(1.6); }
+  18% { opacity: 1; transform: scale(1); }
+  80% { opacity: 1; transform: scale(1.02); }
+  100% { opacity: 0; transform: scale(1.04); }
+}
+.box.reduced .heroWord.pop { animation: heroPopReduced 640ms linear; }
+@keyframes heroPopReduced {
+  0% { opacity: 0; }
+  18% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ---------- Bottom control bar ---------- */
+.bottomGradient {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 11;
+  background: linear-gradient(0deg, rgb(10 7 5 / 0.85) 0%, rgb(10 7 5 / 0.5) 60%, rgb(10 7 5 / 0) 100%);
+  padding: 16px 12px 8px;
+}
+.controlBar { display: flex; align-items: center; gap: 10px; }
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: var(--room-ink);
+  cursor: pointer;
+}
+.iconBtn:hover { color: var(--accent-strong); }
+.iconBtn svg { width: 15px; height: 15px; }
+/* Scrubbable progress bar: the visible track+fill sit under an invisible-
+   track range input whose thumb is the draggable dot, YouTube-style. */
+.seekWrap {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  height: 18px;
+}
+.track { position: absolute; left: 0; right: 0; top: 50%; margin-top: -1.5px; height: 3px; background: rgb(255 255 255 / 0.25); border-radius: 2px; overflow: hidden; }
+.fill { height: 100%; width: 0%; background: var(--accent-strong); }
+.seekInput {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+.seekInput::-webkit-slider-runnable-track { background: transparent; height: 18px; }
+.seekInput::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--accent-strong);
+  margin-top: 3.5px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
+}
+.seekInput::-moz-range-track { background: transparent; height: 18px; }
+.seekInput::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent-strong);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
+}
+.counter { font-size: 0.64rem; color: var(--room-ink-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Volume slider: thin dark track, accent thumb, YouTube-compact. */
+.volume {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: none;
+  width: 64px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 0.25);
+  cursor: pointer;
+}
+.volume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent-strong);
+}
+.volume::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent-strong);
+}
+.volume::-moz-range-track {
+  height: 3px;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 0.25);
+}
+@media (max-width: 420px) {
+  .volume { width: 44px; }
+}
+
+/* Playback speed cycler. */
+.rateBtn {
+  flex: none;
+  min-width: 34px;
+  padding: 2px 4px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--room-ink);
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.rateBtn:hover { color: var(--accent-strong); }
+
+/* ---------- Poster and end overlays ---------- */
+.posterOverlay, .endOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: linear-gradient(180deg, rgb(21 16 12 / 0.35), rgb(15 11 8 / 0.72));
+  cursor: pointer;
+  border: none;
+  width: 100%;
+  padding: 0;
+  transition: opacity 240ms ease;
+}
+.posterOverlay:hover .playCircle, .endOverlay:hover .playCircle { transform: scale(1.06); }
+.posterBg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--room-bg);
+  background-image: var(--room-vignette);
+}
+.playCircle {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: rgb(251 247 242 / 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px -6px rgb(0 0 0 / 0.5);
+  transition: transform 160ms ease;
+}
+.playCircle svg { width: 20px; height: 20px; color: var(--dev-accent); margin-left: 2px; }
+/* Centered end-of-video replay button: same dark/subtle circle as the
+   poster's play button, but warms to the accent color on hover/focus so
+   it reads as the primary next action once the demo has finished. */
+.endOverlay .playCircle { transition: transform 160ms ease, background 160ms ease; }
+.endOverlay .playCircle svg { transition: color 160ms ease; margin-left: 0; }
+.endOverlay:hover .playCircle,
+.endOverlay:focus-visible .playCircle {
+  background: var(--accent-strong);
+}
+.endOverlay:hover .playCircle svg,
+.endOverlay:focus-visible .playCircle svg {
+  color: #1a130d;
+}
+.posterLabel {
+  font-family: var(--serif);
+  font-size: 0.95rem;
+  color: var(--room-ink);
+  text-align: center;
+  max-width: 280px;
+}
+.posterSub {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 0.78rem;
+  color: var(--room-ink-dim);
+}
+.durationBadge {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  background: rgb(0 0 0 / 0.7);
+  color: #fff;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.replayLabel {
+  font-family: var(--serif);
+  font-size: 0.85rem;
+  color: var(--room-ink);
+}

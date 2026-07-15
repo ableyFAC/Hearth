@@ -25,7 +25,7 @@ export default function JobStatusSelect({
   return (
     <form ref={formRef} action={updateLeadStatusAction}>
       <input type="hidden" name="id" value={id} />
-      <label className="flex items-center gap-2 text-sm text-stone-500">
+      <label className="flex items-center gap-2 text-sm text-stone-500 dark:text-stone-400">
         Status
         <select
           key={current}

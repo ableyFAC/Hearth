@@ -20,7 +20,7 @@ function renderInline(text: string, keyBase: string): React.ReactNode[] {
       nodes.push(
         <code
           key={key}
-          className="rounded bg-stone-100 px-1 text-[0.85em] text-stone-800"
+          className="rounded bg-stone-100 px-1 text-[0.85em] text-stone-800 dark:bg-stone-600 dark:text-stone-200"
         >
           {part.slice(1, -1)}
         </code>
@@ -84,7 +84,7 @@ export default function Markdown({ text }: { text: string }) {
     } else if (heading) {
       flushList();
       blocks.push(
-        <p key={key++} className="font-semibold text-stone-900">
+        <p key={key++} className="font-semibold text-stone-900 dark:text-stone-100">
           {renderInline(heading[1], `h-${key}`)}
         </p>
       );

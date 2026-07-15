@@ -38,7 +38,11 @@ export default async function AppLayout({
   return (
     <div className="min-h-screen">
       <Nav homes={homes} activeId={active.id} name={name} hasPlus={plus} />
-      <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
+      {/* Extra bottom padding on phones keeps content clear of the fixed
+          Ask Hearth dock. */}
+      <main className="mx-auto max-w-5xl px-6 pb-24 pt-8 sm:pb-8">
+        {children}
+      </main>
       <AskHearthDock greeting={greeting} />
       <NewMessageNotifier role="homeowner" />
     </div>

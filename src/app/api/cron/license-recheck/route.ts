@@ -68,6 +68,16 @@ async function runCron(req: NextRequest) {
 
   // Oldest-checked first, so a run that hits the cap still makes forward
   // progress across weeks rather than starving the same contractors.
+  //
+  // No service_state filter, on purpose: 'verified' can ONLY ever have come
+  // from a CSLB lookup (saveCompanyAction / verifyLicenseNowAction / this
+  // cron), so every row selected here is by construction a CSLB-checkable
+  // license, whatever its service_state says today (null, or a pro who later
+  // switched states). Filtering on service_state would freeze those pros'
+  // public "License verified" badges at an ever-aging date, exactly the
+  // staleness this cron exists to prevent. Non-CSLB licenses can't be
+  // wrongly downgraded by this query, because they can never be 'verified'
+  // in the first place.
   const { data: rows, error } = await (supabase.from("contractors") as any)
     .select("id, license_number, license_verified_at")
     .eq("license_verified_status", "verified")

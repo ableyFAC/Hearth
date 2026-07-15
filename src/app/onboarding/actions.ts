@@ -10,6 +10,7 @@ import { DEFAULT_LIFESPANS } from "@/lib/health";
 import { hasPlus } from "@/lib/subscription";
 import { setFlash } from "@/lib/flash";
 import { safeNextPath } from "@/lib/safeNext";
+import { isMissingSchemaError } from "@/lib/dbErrors";
 
 // Systems virtually every home has, auto-added so the owner doesn't start from
 // a blank inventory. Install years are ESTIMATED from the build year; real
@@ -25,11 +26,26 @@ const STARTER_SYSTEMS = [
 ];
 const CURRENT_YEAR = new Date().getFullYear();
 
+// A trimmed length floor for "this is actually an address." An <input
+// required> is not enough on its own: browsers treat a single space as a
+// non-empty value, so a hasty Enter press (or a stray keystroke) could
+// otherwise carry a blank/junk address all the way into a claimed home. This
+// is the authoritative check - the matching one in OnboardingForm.tsx is
+// only there for faster client-side feedback.
+const MIN_ADDRESS_LENGTH = 5;
+
 // Step 1: pull baseline facts from the parcel layer for the entered address.
 export async function lookupParcelAction(
-  address: string
+  street: string,
+  zip: string
 ): Promise<ParcelFacts> {
-  return lookupParcel(address);
+  if (street.trim().length < MIN_ADDRESS_LENGTH) {
+    throw new Error("Enter your home's street address to continue.");
+  }
+  if (!/^\d{5}(-\d{4})?$/.test(zip.trim())) {
+    throw new Error("Enter a valid 5-digit ZIP code.");
+  }
+  return lookupParcel(street.trim(), zip.trim());
 }
 
 // Step 2: create the property (self-attested ownership for MVP).
@@ -54,31 +70,113 @@ export async function claimPropertyAction(formData: FormData) {
     redirect("/dashboard");
   }
 
+  // The authoritative address check: an <input required> alone is not enough
+  // (a browser treats a single space as a non-empty value), so without this a
+  // hasty Enter press or a stray keystroke could carry a blank/junk address
+  // all the way into a claimed home. The matching check in OnboardingForm.tsx
+  // is only there for faster client-side feedback - this one is what actually
+  // guards the insert below.
+  const addressLine1 = ((formData.get("address_line1") as string) ?? "").trim();
+  if (addressLine1.length < MIN_ADDRESS_LENGTH) {
+    throw new Error("Enter your home's address before claiming it.");
+  }
+
   const num = (key: string) => {
     const v = formData.get(key);
     return v ? Number(v) : null;
   };
+  // Empty string (an unset hidden input) must normalize to null, same as
+  // num() does for the numeric fields - a "" purchase_date would otherwise
+  // fail the `date` column type rather than just staying unset.
+  const str = (key: string) => {
+    const v = formData.get(key);
+    return v ? (v as string) : null;
+  };
 
-  const { data: created, error } = await supabase
-    .from("properties")
-    .insert({
-      user_id: user.id,
-      parcel_id: (formData.get("parcel_id") as string) || null,
-      address_line1: formData.get("address_line1") as string,
-      city: (formData.get("city") as string) || null,
-      state: (formData.get("state") as string) || null,
-      zip: (formData.get("zip") as string) || null,
-      year_built: num("year_built"),
-      sqft: num("sqft"),
-      beds: num("beds"),
-      baths: num("baths"),
-      lot_size_sqft: num("lot_size_sqft"),
-      property_type: (formData.get("property_type") as string) || null,
-      // Self-attestation for MVP. Tighten later (postcard / utility-bill check).
-      ownership_verified: true,
-    })
+  // The RentCast enrichment carried in as hidden JSON fields (see
+  // OnboardingForm.tsx's confirm step): parsed defensively since it's still
+  // client-controlled form input, not a trusted server value. A parse
+  // failure degrades to "nothing extra to store" rather than failing the
+  // whole claim.
+  let propertyTaxHistory: { year: number; amount: number }[] | null = null;
+  try {
+    const raw = formData.get("property_tax_history") as string | null;
+    propertyTaxHistory = raw ? JSON.parse(raw) : null;
+  } catch {
+    propertyTaxHistory = null;
+  }
+  let systemFacts: Record<string, string> | null = null;
+  try {
+    const raw = formData.get("system_facts") as string | null;
+    systemFacts = raw ? JSON.parse(raw) : {};
+  } catch {
+    systemFacts = {};
+  }
+
+  // baseRow: the columns this insert has always written, guaranteed to exist
+  // on every deployed DB regardless of whether migration 0066 has run yet.
+  // purchase_date/purchase_price/assessed_value/assessed_year belong here too
+  // (not in the 0066-only delta below): they're pre-existing columns from
+  // 0001/0029/0039, unrelated to 0066, so a DB missing only 0066 can still
+  // take them - dropping them into the fallback would lose data for no
+  // reason.
+  const baseRow = {
+    user_id: user.id,
+    parcel_id: (formData.get("parcel_id") as string) || null,
+    address_line1: addressLine1,
+    city: (formData.get("city") as string) || null,
+    state: (formData.get("state") as string) || null,
+    zip: (formData.get("zip") as string) || null,
+    year_built: num("year_built"),
+    sqft: num("sqft"),
+    beds: num("beds"),
+    baths: num("baths"),
+    lot_size_sqft: num("lot_size_sqft"),
+    property_type: (formData.get("property_type") as string) || null,
+    // Self-attestation for MVP. Tighten later (postcard / utility-bill check).
+    ownership_verified: true,
+    purchase_date: str("purchase_date"),
+    purchase_price: num("purchase_price"),
+    assessed_value: num("assessed_value"),
+    assessed_year: num("assessed_year"),
+  };
+  // extendedRow: baseRow plus the columns migration 0066 actually adds.
+  // Attempted first, with baseRow as the fallback below if the live DB
+  // hasn't run 0066 yet.
+  const extendedRow = {
+    ...baseRow,
+    latitude: num("latitude"),
+    longitude: num("longitude"),
+    hoa_fee: num("hoa_fee"),
+    county: str("county"),
+    property_tax_history: propertyTaxHistory,
+    market_value: num("market_value"),
+    market_value_low: num("market_value_low"),
+    market_value_high: num("market_value_high"),
+  };
+
+  // extendedRow's enrichment fields (everything migration 0066 adds) aren't
+  // in src/lib/database.types.ts yet, so this call is cast to any - same
+  // pattern as saveHomeValueAction (value/actions.ts) and
+  // saveTaxAssessmentAction (taxes/actions.ts) for their own not-yet-typed
+  // columns, rather than widening the generated types by hand.
+  let { data: created, error } = await (supabase.from("properties") as any)
+    .insert(extendedRow)
     .select("id")
     .single();
+
+  if (error && isMissingSchemaError(error)) {
+    // Live DB hasn't run migration 0066 yet (one of the enrichment columns
+    // is missing): fall back to the columns that have always existed so
+    // onboarding still succeeds, same graceful-degradation convention as
+    // confirmSystemAction (walkthrough/actions.ts). Cast to any for the same
+    // reason as the extendedRow insert above: purchase_price/assessed_value/
+    // assessed_year (0029/0039) aren't in database.types.ts either.
+    ({ data: created, error } = await (supabase.from("properties") as any)
+      .insert(baseRow)
+      .select("id")
+      .single());
+  }
 
   if (error || !created) {
     throw new Error(`Could not claim property: ${error?.message ?? "unknown"}`);
@@ -94,7 +192,12 @@ export async function claimPropertyAction(formData: FormData) {
 
   // Surface research: pre-build a starter inventory so the owner doesn't add
   // every system manually. Year is estimated from the build year (assuming each
-  // system was replaced around the end of its typical life).
+  // system was replaced around the end of its typical life). Every row is
+  // created UNCONFIRMED: confirmed_at stays at its null default (migration
+  // 0056: null = still an estimate), which is what lets the UI treat these
+  // years as guesses rather than owner-verified facts. Don't set the column
+  // explicitly here - the live DB may not have run 0056 yet (see the fallback
+  // in walkthrough/actions.ts), and the default is already correct.
   const yearBuilt = num("year_built");
   const starterRows = STARTER_SYSTEMS.map((system_type) => {
     const lifespan = DEFAULT_LIFESPANS[system_type] ?? 20;
@@ -118,9 +221,14 @@ export async function claimPropertyAction(formData: FormData) {
       system_type,
       install_year,
       expected_lifespan_years: lifespan,
-      // No per-system note: the "auto-estimated" notice lives at the top of
-      // the Home Profile page instead.
+      // No per-system note: confirmed_at null already marks the row as an
+      // estimate, and the "auto-estimated" notice lives at the top of the
+      // Home Profile page instead.
       notes: null as string | null,
+      // Real material read off the RentCast property record when available
+      // (roof/foundation/hvac - see deriveSystemFacts in src/lib/parcel.ts),
+      // otherwise left null same as before.
+      material_or_model: systemFacts?.[system_type] ?? null,
     };
   });
   await supabase.from("home_systems").insert(starterRows);

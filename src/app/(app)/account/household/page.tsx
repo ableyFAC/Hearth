@@ -70,14 +70,14 @@ export default async function HouseholdPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-stone-900">Household</h1>
-        <p className="mt-1 text-sm text-stone-500">
+        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Household</h1>
+        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           Share day to day access to a home with the rest of your household.
         </p>
       </div>
 
-      <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
-        <p className="text-sm text-stone-600">
+      <div className="card p-6">
+        <p className="text-sm text-stone-600 dark:text-stone-300">
           A household member can see and manage the day to day of a shared
           home: systems, maintenance tasks, issues, photos, documents, job
           posts, and contractor messages. A member cannot edit the home's
@@ -92,12 +92,12 @@ export default async function HouseholdPage() {
           {invitesToMe.map((invite) => (
             <div
               key={invite.id}
-              className="rounded-2xl border border-hearth-200 bg-hearth-50 p-5"
+              className="rounded-2xl border border-hearth-200 bg-hearth-50 p-5 dark:border-hearth-800/40 dark:bg-hearth-900/30"
             >
-              <p className="text-sm font-medium text-stone-900">
+              <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
                 You have been invited to join a home on Hearth.
               </p>
-              <p className="mt-1 text-xs text-stone-500">
+              <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                 Invited on {new Date(invite.created_at).toLocaleDateString()}.
               </p>
               <div className="mt-3 flex items-center gap-2">
@@ -126,25 +126,25 @@ export default async function HouseholdPage() {
         return (
           <div
             key={home.id}
-            className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm"
+            className="card p-6"
           >
-            <h2 className="text-base font-semibold text-stone-900">
+            <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">
               {home.address_line1}
             </h2>
-            <p className="mt-1 text-xs text-stone-500">
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
               Up to {MAX_MEMBERS_PER_HOME} members per home.
             </p>
 
             {(active.length > 0 || pending.length > 0) && (
-              <ul className="mt-4 divide-y divide-stone-100">
+              <ul className="mt-4 divide-y divide-stone-100 dark:divide-white/10">
                 {active.map((m) => (
                   <li
                     key={m.id}
                     className="flex items-center justify-between gap-3 py-2.5"
                   >
                     <div>
-                      <p className="text-sm text-stone-900">{m.invited_email}</p>
-                      <p className="text-xs text-stone-500">Member</p>
+                      <p className="text-sm text-stone-900 dark:text-stone-100">{m.invited_email}</p>
+                      <p className="text-xs text-stone-500 dark:text-stone-400">Member</p>
                     </div>
                     <form action={removeMemberAction}>
                       <input type="hidden" name="id" value={m.id} />
@@ -163,8 +163,8 @@ export default async function HouseholdPage() {
                     className="flex items-center justify-between gap-3 py-2.5"
                   >
                     <div>
-                      <p className="text-sm text-stone-900">{m.invited_email}</p>
-                      <p className="text-xs text-stone-500">
+                      <p className="text-sm text-stone-900 dark:text-stone-100">{m.invited_email}</p>
+                      <p className="text-xs text-stone-500 dark:text-stone-400">
                         Invited. Waiting for them to sign up or sign in with
                         this email.
                       </p>
@@ -184,7 +184,7 @@ export default async function HouseholdPage() {
             )}
 
             {atCap ? (
-              <p className="mt-4 text-sm text-stone-500">
+              <p className="mt-4 text-sm text-stone-500 dark:text-stone-400">
                 This home has the maximum of {MAX_MEMBERS_PER_HOME} members.
                 Remove someone to invite another person.
               </p>
@@ -210,14 +210,14 @@ export default async function HouseholdPage() {
         return (
           <div
             key={home.id}
-            className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm"
+            className="card p-6"
           >
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-base font-semibold text-stone-900">
+                <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">
                   {home.address_line1}
                 </h2>
-                <p className="mt-1 text-xs text-stone-500">Shared with you.</p>
+                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">Shared with you.</p>
               </div>
               {membership && (
                 <form action={leaveHomeAction}>

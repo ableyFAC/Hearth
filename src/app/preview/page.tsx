@@ -3,9 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { labelFor, iconFor, JOB_CATEGORIES } from "@/lib/constants";
 
 const SEVERITY_STYLE: Record<string, string> = {
-  low: "border-stone-200 bg-stone-50 text-stone-600",
-  medium: "border-amber-200 bg-amber-50 text-amber-700",
-  urgent: "border-red-200 bg-red-50 text-red-700",
+  low: "border-stone-200 bg-stone-50 text-stone-600 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300",
+  medium: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200",
+  urgent: "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200",
 };
 
 // Public - no account needed. Shows that demand exists; contact is locked.
@@ -23,10 +23,10 @@ export default async function PreviewPage() {
     <main className="mx-auto max-w-3xl px-6 py-10">
       <div className="text-center">
         <div className="text-3xl">🛠️</div>
-        <h1 className="mt-2 text-2xl font-semibold text-stone-900">
+        <h1 className="mt-2 text-2xl font-semibold text-stone-900 dark:text-stone-100">
           Available leads near you
         </h1>
-        <p className="mt-1 text-sm text-stone-500">
+        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           {leads.length} open {leads.length === 1 ? "job" : "jobs"} homeowners
           want quotes on. Create a free account to see contact details and claim
           them.
@@ -37,7 +37,7 @@ export default async function PreviewPage() {
       </div>
 
       {leads.length === 0 ? (
-        <p className="mt-8 rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
+        <p className="mt-8 rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500 dark:border-stone-600 dark:text-stone-400">
           No open leads right now. Check back soon.
         </p>
       ) : (
@@ -45,7 +45,7 @@ export default async function PreviewPage() {
           {leads.map((l) => (
             <div key={l.id} className="card space-y-2">
               <div className="flex items-center gap-2">
-                <span className="font-medium text-stone-900">
+                <span className="font-medium text-stone-900 dark:text-stone-100">
                   {iconFor(JOB_CATEGORIES, l.category)}{" "}
                   {labelFor(JOB_CATEGORIES, l.category)}
                 </span>
@@ -57,18 +57,18 @@ export default async function PreviewPage() {
                   </span>
                 )}
                 {l.lead_fee != null && (
-                  <span className="ml-auto text-sm font-semibold text-stone-700">
+                  <span className="ml-auto text-sm font-semibold text-stone-700 dark:text-stone-300">
                     ${Number(l.lead_fee).toFixed(0)}
                   </span>
                 )}
               </div>
-              <p className="text-sm text-stone-600">
+              <p className="text-sm text-stone-600 dark:text-stone-400">
                 📍 {l.area || "Your area"}
               </p>
               {/* Locked contact */}
-              <div className="flex items-center gap-2 rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-500">
+              <div className="flex items-center gap-2 rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-500 dark:bg-stone-800 dark:text-stone-400">
                 🔒 Homeowner contact -{" "}
-                <Link href="/contractor-signup" className="text-hearth-700 hover:underline">
+                <Link href="/contractor-signup" className="text-hearth-700 hover:underline dark:text-hearth-300">
                   sign up to unlock
                 </Link>
               </div>

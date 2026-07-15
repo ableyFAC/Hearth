@@ -17,10 +17,10 @@ const STAGE_LABEL: Record<string, string> = {
   unknown: "Add details",
 };
 const STAGE_STYLE: Record<string, string> = {
-  healthy: "border-green-200 bg-green-50 text-green-700",
-  aging: "border-amber-200 bg-amber-50 text-amber-700",
-  due: "border-red-200 bg-red-50 text-red-700",
-  unknown: "border-stone-200 bg-stone-50 text-stone-500",
+  healthy: "border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200",
+  aging: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200",
+  due: "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200",
+  unknown: "border-stone-200 bg-stone-50 text-stone-500 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400",
 };
 
 // Short, concise maintenance bullets per system. Kept here since it's only used
@@ -258,7 +258,7 @@ export default async function LearnPage() {
           ? STAGE_LABEL[h.stage]
           : undefined,
       statusStyle: estimatedDue
-        ? "border-amber-200 bg-amber-50 text-amber-700"
+        ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
         : h
           ? STAGE_STYLE[h.stage]
           : undefined,
@@ -273,8 +273,8 @@ export default async function LearnPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-stone-900">Learn</h1>
-        <p className="mt-1 text-sm text-stone-500">
+        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Learn</h1>
+        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           Ask anything about your home and get an answer based on your actual
           systems. Or search, filter, and browse the basics below.
         </p>
@@ -283,7 +283,7 @@ export default async function LearnPage() {
       <AskHearth suggestions={suggestions} />
 
       <div>
-        <h2 className="text-sm font-semibold text-stone-700">
+        <h2 className="text-sm font-semibold text-stone-700 dark:text-stone-300">
           Maintenance basics
         </h2>
         <div className="mt-2">

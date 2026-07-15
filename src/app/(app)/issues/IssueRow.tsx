@@ -15,9 +15,9 @@ import {
 } from "./actions";
 
 const SEVERITY_STYLE: Record<string, string> = {
-  low: "border-stone-200 bg-stone-50 text-stone-600",
-  medium: "border-amber-200 bg-amber-50 text-amber-700",
-  urgent: "border-red-200 bg-red-50 text-red-700",
+  low: "border-stone-200 bg-stone-50 text-stone-600 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300",
+  medium: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200",
+  urgent: "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200",
 };
 
 export default function IssueRow({
@@ -131,19 +131,25 @@ export default function IssueRow({
             disabled={busy}
             onClick={toggleResolved}
             title={resolved ? "Reopen" : "Mark resolved"}
-            className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
-              resolved
-                ? "border-green-500 bg-green-500 text-white"
-                : "border-stone-300 text-transparent hover:border-green-500"
-            }`}
+            // Padding + matching negative margin: a finger-sized tap target
+            // on the phone without moving the 16px box visually.
+            className="-m-2.5 flex shrink-0 p-2.5"
           >
-            ✓
+            <span
+              className={`mt-0.5 flex h-4 w-4 items-center justify-center rounded border text-[10px] ${
+                resolved
+                  ? "border-green-500 bg-green-500 text-white"
+                  : "border-stone-300 text-transparent hover:border-green-500 dark:border-stone-600"
+              }`}
+            >
+              ✓
+            </span>
           </button>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span
                 className={`font-medium ${
-                  resolved ? "text-stone-500 line-through" : "text-stone-900"
+                  resolved ? "text-stone-500 line-through dark:text-stone-400" : "text-stone-900 dark:text-stone-100"
                 }`}
               >
                 {iconFor(ISSUE_CATEGORIES, issue.category)}{" "}
@@ -155,7 +161,7 @@ export default function IssueRow({
                 {labelFor(SEVERITIES, issue.severity)}
               </span>
               {issue.converted_to_lead && (
-                <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs text-green-700">
+                <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200">
                   pro requested
                 </span>
               )}
@@ -163,7 +169,7 @@ export default function IssueRow({
             {issue.description && (
               <p
                 className={`mt-1 text-sm ${
-                  resolved ? "text-stone-500 line-through" : "text-stone-600"
+                  resolved ? "text-stone-500 line-through dark:text-stone-400" : "text-stone-600 dark:text-stone-300"
                 }`}
               >
                 {issue.description}
@@ -177,7 +183,7 @@ export default function IssueRow({
               type="button"
               disabled={busy}
               onClick={toggleResolved}
-              className="text-xs font-medium text-hearth-700 hover:underline disabled:opacity-50"
+              className="text-xs font-medium text-hearth-700 hover:underline disabled:opacity-50 dark:text-hearth-300"
             >
               {busy ? "…" : "Undo"}
             </button>
@@ -185,7 +191,7 @@ export default function IssueRow({
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="text-xs font-medium text-hearth-700 hover:underline"
+              className="text-xs font-medium text-hearth-700 hover:underline dark:text-hearth-300"
             >
               Edit
             </button>
@@ -195,9 +201,9 @@ export default function IssueRow({
       {!issue.converted_to_lead && !resolved && (
         <Link
           href={`/contractors?issue=${issue.id}&category=${issue.category}`}
-          className="inline-block text-sm font-medium text-hearth-700 hover:underline"
+          className="inline-block text-sm font-medium text-hearth-700 hover:underline dark:text-hearth-300"
         >
-          Connect me with a vetted pro →
+          Connect me with a local pro →
         </Link>
       )}
     </li>

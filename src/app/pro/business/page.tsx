@@ -162,26 +162,26 @@ export default async function ProBusinessPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-stone-900">My Business</h1>
-        <p className="mt-1 text-sm text-stone-500">
+        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">My Business</h1>
+        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           Your numbers, your wallet, and everything in flight.
         </p>
-        <p className="mt-1 text-xs text-stone-500">
-          78% of homeowners go with the first pro to respond. Fast replies win
-          jobs.
+        <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+          Homeowners overwhelmingly go with the first pro to respond. Fast
+          replies win jobs.
         </p>
         {(replySpeedText || showReplyNudge) && (
-          <div className="mt-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2">
+          <div className="mt-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 dark:border-white/10 dark:bg-stone-800">
             {replySpeedText && (
-              <p className="text-sm font-medium text-stone-900">
+              <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
                 {replySpeedText}
               </p>
             )}
-            <p className="text-xs text-stone-500">
+            <p className="text-xs text-stone-500 dark:text-stone-400">
               Jobs go to the first responder far more often than not.
             </p>
             {showReplyNudge && (
-              <p className="mt-1 text-xs text-amber-700">
+              <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                 {COLD_START_FREE_ALERTS || isPro ? (
                   "You already get instant alerts the moment a matching job posts, open Hearth as soon as one comes in to keep that edge."
                 ) : (
@@ -206,10 +206,10 @@ export default async function ProBusinessPage() {
       <section className="grid gap-4 sm:grid-cols-3">
         <div className="card">
           <p className="stat-label">Win rate</p>
-          <p className="stat-number mt-1 text-2xl text-stone-900">
+          <p className="stat-number mt-1 text-2xl">
             {winRate !== null ? `${winRate}%` : "-"}
           </p>
-          <p className="mt-1 text-xs text-stone-500">
+          <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
             {winRate !== null
               ? `${wonCount} won of ${appliedCount} applications`
               : "Shows after 3 applications"}
@@ -217,19 +217,19 @@ export default async function ProBusinessPage() {
         </div>
         <div className="card">
           <p className="stat-label">Spent on applications</p>
-          <p className="stat-number mt-1 text-2xl text-stone-900">
+          <p className="stat-number mt-1 text-2xl">
             {dollars(spentCents)}
           </p>
-          <p className="mt-1 text-xs text-stone-500">
+          <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
             Ghost-protection refunds already added back
           </p>
         </div>
         <div className="card">
           <p className="stat-label">Cost per job won</p>
-          <p className="stat-number mt-1 text-2xl text-stone-900">
+          <p className="stat-number mt-1 text-2xl">
             {costPerWin !== null ? dollars(costPerWin) : "-"}
           </p>
-          <p className="mt-1 text-xs text-stone-500">
+          <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
             {costPerWin !== null
               ? "Total spend divided by wins"
               : "Shows after your first win"}
@@ -241,10 +241,10 @@ export default async function ProBusinessPage() {
       <section className="card-hero flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="stat-label">Wallet</p>
-          <p className="stat-number mt-1 text-4xl text-stone-900">
+          <p className="stat-number mt-1 text-4xl">
             {dollars(cash + bonus)}
           </p>
-          <p className="text-xs text-stone-500 [font-variant-numeric:tabular-nums]">
+          <p className="text-xs text-stone-500 dark:text-stone-400 [font-variant-numeric:tabular-nums]">
             {dollars(cash)} cash · {dollars(bonus)} bonus credit
           </p>
         </div>
@@ -279,13 +279,13 @@ export default async function ProBusinessPage() {
           with masked tiles and one real number as a teaser. */}
       <section className="space-y-3">
         <div>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Insights{" "}
-            <span className="chip ml-1 bg-hearth-100 align-middle text-hearth-800">
+            <span className="chip ml-1 bg-hearth-100 align-middle text-hearth-800 dark:bg-hearth-900 dark:text-hearth-200">
               Pro
             </span>
           </h2>
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-stone-500 dark:text-stone-400">
             Where your application budget is actually earning its keep.
           </p>
         </div>
@@ -297,12 +297,12 @@ export default async function ProBusinessPage() {
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="card">
                 <p className="stat-label">All-time win rate</p>
-                <p className="stat-number mt-1 text-2xl text-stone-900">
+                <p className="stat-number mt-1 text-2xl">
                   {stats.winRatePercent !== null
                     ? `${stats.winRatePercent}%`
                     : "-"}
                 </p>
-                <p className="mt-1 text-xs text-stone-500">
+                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                   {stats.winRatePercent !== null
                     ? `${stats.wins} won of ${stats.liveApplications} paid applications`
                     : "Apply to a job to start tracking"}
@@ -310,10 +310,10 @@ export default async function ProBusinessPage() {
               </div>
               <div className="card">
                 <p className="stat-label">Jobs won</p>
-                <p className="stat-number mt-1 text-2xl text-stone-900">
+                <p className="stat-number mt-1 text-2xl">
                   {stats.wins}
                 </p>
-                <p className="mt-1 text-xs text-stone-500">
+                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                   {stats.wins > 0
                     ? `out of ${stats.liveApplications} paid applications`
                     : "No wins yet"}
@@ -321,16 +321,16 @@ export default async function ProBusinessPage() {
               </div>
               <div className="card">
                 <p className="stat-label">Fees spent</p>
-                <p className="stat-number mt-1 text-2xl text-stone-900">
+                <p className="stat-number mt-1 text-2xl">
                   {dollars(stats.feesSpentCents)}
                 </p>
-                <p className="mt-1 text-xs text-stone-500">
+                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                   On leads, net of ghost refunds
                 </p>
               </div>
             </div>
 
-            <p className="text-xs text-stone-500">
+            <p className="text-xs text-stone-500 dark:text-stone-400">
               {stats.daysSinceLastApplication !== null
                 ? `Last application ${
                     stats.daysSinceLastApplication === 0
@@ -355,12 +355,12 @@ export default async function ProBusinessPage() {
             {/* Where the wins come from, category by category. */}
             {stats.categories.length > 0 && (
               <div className="card overflow-x-auto">
-                <p className="mb-2 text-sm font-medium text-stone-500">
+                <p className="mb-2 text-sm font-medium text-stone-500 dark:text-stone-400">
                   By category
                 </p>
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-left text-xs text-stone-500">
+                    <tr className="text-left text-xs text-stone-500 dark:text-stone-400">
                       <th className="pb-2 pr-3 font-medium">Category</th>
                       <th className="pb-2 pr-3 text-right font-medium">
                         Apps
@@ -374,25 +374,25 @@ export default async function ProBusinessPage() {
                       <th className="pb-2 text-right font-medium">Avg fee</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-stone-100">
+                  <tbody className="divide-y divide-stone-100 dark:divide-white/10">
                     {stats.categories.map((c) => (
                       <tr key={c.category}>
-                        <td className="py-2 pr-3 font-medium text-stone-900">
+                        <td className="py-2 pr-3 font-medium text-stone-900 dark:text-stone-100">
                           {iconFor(JOB_CATEGORIES, c.category)}{" "}
                           {labelFor(JOB_CATEGORIES, c.category)}
                         </td>
-                        <td className="py-2 pr-3 text-right text-stone-600">
+                        <td className="py-2 pr-3 text-right text-stone-600 dark:text-stone-300">
                           {c.applications}
                         </td>
-                        <td className="py-2 pr-3 text-right text-stone-600">
+                        <td className="py-2 pr-3 text-right text-stone-600 dark:text-stone-300">
                           {c.wins}
                         </td>
-                        <td className="py-2 pr-3 text-right text-stone-600">
+                        <td className="py-2 pr-3 text-right text-stone-600 dark:text-stone-300">
                           {c.winRatePercent !== null
                             ? `${c.winRatePercent}%`
                             : "-"}
                         </td>
-                        <td className="py-2 text-right text-stone-600">
+                        <td className="py-2 text-right text-stone-600 dark:text-stone-300">
                           {c.avgFeeCents !== null
                             ? dollars(c.avgFeeCents)
                             : "-"}
@@ -407,10 +407,10 @@ export default async function ProBusinessPage() {
             {/* Six-month rhythm: applications in, wins out. */}
             <div className="card space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-medium text-stone-500">
+                <p className="text-sm font-medium text-stone-500 dark:text-stone-400">
                   Last 6 months
                 </p>
-                <p className="flex items-center gap-3 text-[10px] text-stone-500">
+                <p className="flex items-center gap-3 text-[10px] text-stone-500 dark:text-stone-400">
                   <span className="flex items-center gap-1">
                     <span className="inline-block h-2 w-2 rounded-sm bg-gradient-to-t from-hearth-500 to-hearth-400" />
                     Applications
@@ -422,7 +422,7 @@ export default async function ProBusinessPage() {
                 </p>
               </div>
               <div className="overflow-x-auto pb-1">
-                <div className="flex items-end gap-2 border-b border-stone-200">
+                <div className="flex items-end gap-2 border-b border-stone-200 dark:border-white/10">
                   {stats.trend.map((m, i) => {
                     const appHeight =
                       m.applications > 0
@@ -444,7 +444,7 @@ export default async function ProBusinessPage() {
                         }, ${m.wins} won`}
                         className="flex min-w-[2.5rem] flex-col items-center gap-1 transition hover:opacity-90"
                       >
-                        <span className="text-[10px] text-stone-500">
+                        <span className="text-[10px] text-stone-500 dark:text-stone-400">
                           {m.applications > 0 ? m.applications : ""}
                         </span>
                         <div className="flex items-end gap-0.5">
@@ -454,13 +454,13 @@ export default async function ProBusinessPage() {
                                 ? isCurrent
                                   ? "bg-gradient-to-t from-hearth-600 to-hearth-500"
                                   : "bg-gradient-to-t from-hearth-500 to-hearth-400"
-                                : "bg-stone-100"
+                                : "bg-stone-100 dark:bg-stone-700"
                             }`}
                             style={{ height: `${appHeight}px` }}
                           />
                           <div
                             className={`w-3 rounded-t-md ${
-                              m.wins > 0 ? "bg-stone-300" : "bg-stone-100"
+                              m.wins > 0 ? "bg-stone-300" : "bg-stone-100 dark:bg-stone-700"
                             }`}
                             style={{ height: `${winHeight}px` }}
                           />
@@ -473,7 +473,7 @@ export default async function ProBusinessPage() {
                   {stats.trend.map((m) => (
                     <span
                       key={m.key}
-                      className="min-w-[2.5rem] text-center text-[10px] text-stone-500"
+                      className="min-w-[2.5rem] text-center text-[10px] text-stone-500 dark:text-stone-400"
                     >
                       {m.label}
                     </span>
@@ -489,37 +489,37 @@ export default async function ProBusinessPage() {
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="card">
                 <p className="stat-label">Total applications</p>
-                <p className="stat-number mt-1 text-2xl text-stone-900">
+                <p className="stat-number mt-1 text-2xl">
                   {appliedCount}
                 </p>
-                <p className="mt-1 text-xs text-stone-500">
+                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                   All-time, refunds included
                 </p>
               </div>
-              <div className="card ring-1 ring-hearth-200">
+              <div className="card ring-1 ring-hearth-200 dark:ring-hearth-800">
                 <p className="stat-label">All-time win rate</p>
                 <p
                   aria-hidden="true"
-                  className="stat-number mt-1 select-none text-2xl text-stone-300 blur-[3px]"
+                  className="stat-number mt-1 select-none text-2xl text-stone-300 blur-[3px] dark:text-stone-600"
                 >
                   --%
                 </p>
-                <p className="mt-1 flex items-center justify-center gap-1.5 text-xs text-stone-500">
+                <p className="mt-1 flex items-center justify-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
                   <span aria-hidden="true" className="icon-chip">
                     🔒
                   </span>
                   Included with Hearth Pro
                 </p>
               </div>
-              <div className="card ring-1 ring-hearth-200">
+              <div className="card ring-1 ring-hearth-200 dark:ring-hearth-800">
                 <p className="stat-label">Fees spent</p>
                 <p
                   aria-hidden="true"
-                  className="stat-number mt-1 select-none text-2xl text-stone-300 blur-[3px]"
+                  className="stat-number mt-1 select-none text-2xl text-stone-300 blur-[3px] dark:text-stone-600"
                 >
                   $-,---
                 </p>
-                <p className="mt-1 flex items-center justify-center gap-1.5 text-xs text-stone-500">
+                <p className="mt-1 flex items-center justify-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
                   <span aria-hidden="true" className="icon-chip">
                     🔒
                   </span>
@@ -527,12 +527,12 @@ export default async function ProBusinessPage() {
                 </p>
               </div>
             </div>
-            <p className="text-sm text-stone-500">
+            <p className="text-sm text-stone-500 dark:text-stone-400">
               Your win rate, return on fees, and best-performing categories
               decide where your next application dollar goes.{" "}
               <Link
                 href="/pro/plus"
-                className="font-medium text-hearth-700 hover:underline"
+                className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
               >
                 Unlock Insights with Hearth Pro
               </Link>
@@ -545,21 +545,21 @@ export default async function ProBusinessPage() {
       {/* In flight: applications waiting on a homeowner, with the refund clock. */}
       <section className="space-y-3">
         <div>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Pending applications{" "}
-            <span className="text-stone-500">({pendingApps.length})</span>
+            <span className="text-stone-500 dark:text-stone-400">({pendingApps.length})</span>
           </h2>
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-stone-500 dark:text-stone-400">
             Ghost protection: a fee comes back automatically if the homeowner
             never responds.
           </p>
         </div>
         {pendingApps.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
+          <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400">
             Nothing in flight.{" "}
             <Link
               href="/pro"
-              className="font-medium text-hearth-700 hover:underline"
+              className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
             >
               Browse open jobs
             </Link>{" "}
@@ -575,19 +575,19 @@ export default async function ProBusinessPage() {
                   className="card flex items-center justify-between gap-3"
                 >
                   <div>
-                    <span className="flex items-center gap-2 font-medium text-stone-900">
+                    <span className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
                       <span className="icon-chip">
                         {iconFor(JOB_CATEGORIES, a.category)}
                       </span>{" "}
                       {labelFor(JOB_CATEGORIES, a.category)}
                     </span>
                     {a.issue_description && (
-                      <p className="text-sm text-stone-500">
+                      <p className="text-sm text-stone-500 dark:text-stone-400">
                         {a.issue_description}
                       </p>
                     )}
                   </div>
-                  <span className="shrink-0 text-right text-xs text-stone-500">
+                  <span className="shrink-0 text-right text-xs text-stone-500 dark:text-stone-400">
                     {daysLeft === 0
                       ? "Fee returns today if no response"
                       : `Fee returns in ${daysLeft} day${
@@ -605,16 +605,16 @@ export default async function ProBusinessPage() {
           too (id="share-reviews" is where the new-review notification
           links), rather than opening a whole new section for them. */}
       <section id="share-reviews" className="space-y-3">
-        <h2 className="text-lg font-semibold text-stone-900">
-          Jobs won <span className="text-stone-500">({won.length})</span>
+        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+          Jobs won <span className="text-stone-500 dark:text-stone-400">({won.length})</span>
         </h2>
         {won.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
+          <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400">
             No wins yet. Specific, fast replies are what turn applications into
             jobs: the{" "}
             <Link
               href="/pro/playbook"
-              className="font-medium text-hearth-700 hover:underline"
+              className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
             >
               Playbook
             </Link>{" "}
@@ -627,14 +627,14 @@ export default async function ProBusinessPage() {
                 key={l.id}
                 className="card flex items-center justify-between gap-3"
               >
-                <span className="flex items-center gap-2 font-medium text-stone-900">
+                <span className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
                   <span className="icon-chip">
                     {iconFor(JOB_CATEGORIES, l.category)}
                   </span>{" "}
                   {labelFor(JOB_CATEGORIES, l.category)}
                 </span>
                 <span className="flex shrink-0 items-center gap-3">
-                  <span className="text-xs text-stone-500">
+                  <span className="text-xs text-stone-500 dark:text-stone-400">
                     {STATUS_LABEL[l.status] ?? l.status} ·{" "}
                     {new Date(l.created_at).toLocaleDateString()}
                   </span>
@@ -654,11 +654,11 @@ export default async function ProBusinessPage() {
             card + caption. Same >= 4 star floor as review-card's own 404
             check, so nothing offered here can 404 when clicked. */}
         {shareableReviews.length > 0 && (
-          <div className="border-t border-stone-100 pt-4">
-            <h3 className="text-sm font-semibold text-stone-900">
+          <div className="border-t border-stone-100 pt-4 dark:border-white/10">
+            <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
               Share your reviews
             </h3>
-            <p className="mt-0.5 text-xs text-stone-500">
+            <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
               Turn a great review into a share card and a ready-to-post
               caption.
             </p>

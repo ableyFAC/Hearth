@@ -20,13 +20,13 @@ export default function PlaybookGuide({ guide }: { guide: PlaybookGuideData }) {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls={panelId}
-        className="flex w-full items-center justify-between gap-2 text-left font-medium text-stone-900"
+        className="flex w-full items-center justify-between gap-2 text-left font-medium text-stone-900 dark:text-stone-100"
       >
         <span>
           {guide.icon} {guide.title}
         </span>
         <span
-          className={`shrink-0 text-lg text-stone-500 transition-transform duration-200 ${
+          className={`shrink-0 text-lg text-stone-500 transition-transform duration-200 dark:text-stone-400 ${
             open ? "rotate-180" : ""
           }`}
           aria-hidden="true"
@@ -35,7 +35,7 @@ export default function PlaybookGuide({ guide }: { guide: PlaybookGuideData }) {
         </span>
       </button>
 
-      <p className="mt-1 text-sm text-stone-500">{guide.summary}</p>
+      <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">{guide.summary}</p>
 
       <div
         id={panelId}
@@ -46,7 +46,7 @@ export default function PlaybookGuide({ guide }: { guide: PlaybookGuideData }) {
         }`}
       >
         <div className="overflow-hidden">
-          <ul className="divide-y divide-stone-100">
+          <ul className="divide-y divide-stone-100 dark:divide-white/10">
             {guide.sections.map((s, i) => {
               const active = openSection === i;
               return (
@@ -56,11 +56,11 @@ export default function PlaybookGuide({ guide }: { guide: PlaybookGuideData }) {
                     onClick={() => setOpenSection(active ? -1 : i)}
                     tabIndex={open ? 0 : -1}
                     aria-expanded={active}
-                    className="flex w-full items-center justify-between gap-2 py-2 text-left text-sm font-medium text-stone-700 hover:text-hearth-700"
+                    className="flex w-full items-center justify-between gap-2 py-2 text-left text-sm font-medium text-stone-700 hover:text-hearth-700 dark:text-stone-300 dark:hover:text-hearth-300"
                   >
                     {s.title}
                     <span
-                      className={`shrink-0 text-stone-500 transition-transform duration-200 ${
+                      className={`shrink-0 text-stone-500 transition-transform duration-200 dark:text-stone-400 ${
                         active ? "rotate-180" : ""
                       }`}
                       aria-hidden="true"
@@ -69,12 +69,12 @@ export default function PlaybookGuide({ guide }: { guide: PlaybookGuideData }) {
                     </span>
                   </button>
                   {active && (
-                    <div className="space-y-2 pb-3 text-sm text-stone-600">
+                    <div className="space-y-2 pb-3 text-sm text-stone-600 dark:text-stone-300">
                       {s.body.map((p, j) =>
                         s.quote && j === s.quote ? (
                           <p
                             key={j}
-                            className="rounded-lg border border-stone-200 bg-stone-50 p-3 italic text-stone-600"
+                            className="rounded-lg border border-stone-200 bg-stone-50 p-3 italic text-stone-600 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300"
                           >
                             {p}
                           </p>

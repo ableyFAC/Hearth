@@ -18,7 +18,7 @@ export default function RemoveHomeButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="ml-1 flex min-h-[44px] items-center px-2 text-xs font-medium text-stone-500 hover:text-red-600"
+        className="ml-1 flex min-h-[44px] items-center px-2 text-xs font-medium text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
         title="Delete this home"
       >
         Delete
@@ -30,13 +30,13 @@ export default function RemoveHomeButton({
           onClick={() => setOpen(false)}
         >
           <div
-            className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl"
+            className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl dark:border dark:border-white/10 dark:bg-stone-700"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-lg font-semibold text-stone-900">
+            <h3 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
               Delete this home?
             </h3>
-            <p className="mt-2 text-sm text-stone-600">
+            <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">
               <span className="font-medium">{label}</span> and all of its
               systems, issues, photos, and contractor leads will be permanently
               removed. This can&apos;t be undone.

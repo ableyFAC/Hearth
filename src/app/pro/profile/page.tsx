@@ -48,6 +48,11 @@ export default async function ProProfilePage() {
   // gates the whole card, not just the button inside it.
   const checkrEnabled = isCheckrConfigured();
 
+  // The auth email the pro signs in with, for the security tab's email card.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   return (
     <div className="mx-auto max-w-4xl">
       <ProfileTabs
@@ -55,6 +60,7 @@ export default async function ProProfilePage() {
         member={member}
         projects={projects}
         checkrEnabled={checkrEnabled}
+        email={user?.email ?? null}
       />
     </div>
   );

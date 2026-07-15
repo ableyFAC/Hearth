@@ -39,32 +39,39 @@ export default function HomeSwitcher({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="-my-2.5 flex items-center gap-1 py-2.5 text-sm font-medium text-stone-600 hover:text-stone-800"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={
+          active
+            ? `Switch home, current: ${active.address_line1}`
+            : "Switch home"
+        }
+        className="-my-2.5 flex items-center gap-1 py-2.5 text-sm font-medium text-stone-600 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200"
       >
         <span className="max-w-[12rem] truncate">{active?.address_line1}</span>
         <span
-          className={`text-stone-500 transition ${open ? "rotate-180" : ""}`}
+          className={`text-stone-500 transition dark:text-stone-400 ${open ? "rotate-180" : ""}`}
         >
           ▾
         </span>
       </button>
 
       {open && (
-        <div className="absolute left-0 z-20 mt-2 w-72 rounded-xl border border-stone-200 bg-white p-2 shadow-lg">
-          <p className="px-2 py-1 text-xs font-medium uppercase tracking-wide text-stone-500">
+        <div className="absolute left-0 z-20 mt-2 w-72 rounded-xl border border-stone-200 bg-white p-2 shadow-pop dark:border-white/10 dark:bg-stone-700">
+          <p className="px-2 py-1 text-xs font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
             Your homes
           </p>
 
           {homes.map((h) => (
             <div
               key={h.id}
-              className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-hearth-50"
+              className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-hearth-50 dark:hover:bg-stone-600"
             >
               {h.id === active?.id ? (
-                <span className="flex-1 truncate text-sm font-medium text-stone-900">
+                <span className="flex-1 truncate text-sm font-medium text-stone-900 dark:text-stone-100">
                   ✓ {h.address_line1}
                   {h.isShared && (
-                    <span className="ml-1 text-xs font-normal text-stone-500">
+                    <span className="ml-1 text-xs font-normal text-stone-500 dark:text-stone-400">
                       Shared
                     </span>
                   )}
@@ -72,10 +79,10 @@ export default function HomeSwitcher({
               ) : (
                 <form action={setActiveHomeAction} className="min-w-0 flex-1">
                   <input type="hidden" name="id" value={h.id} />
-                  <button className="w-full truncate text-left text-sm text-stone-700 hover:text-hearth-700">
+                  <button className="w-full truncate text-left text-sm text-stone-700 hover:text-hearth-700 dark:text-stone-300 dark:hover:text-hearth-300">
                     {h.address_line1}
                     {h.isShared && (
-                      <span className="ml-1 text-xs font-normal text-stone-500">
+                      <span className="ml-1 text-xs font-normal text-stone-500 dark:text-stone-400">
                         Shared
                       </span>
                     )}
@@ -89,12 +96,12 @@ export default function HomeSwitcher({
 
           <a
             href="/onboarding"
-            className="mt-1 block rounded-md px-2 py-1.5 text-sm font-medium text-hearth-700 hover:bg-hearth-50"
+            className="mt-1 block rounded-md px-2 py-1.5 text-sm font-medium text-hearth-700 hover:bg-hearth-50 dark:text-hearth-300 dark:hover:bg-stone-600"
           >
             + Add a home
           </a>
           {homes.length >= 1 && (
-            <p className="px-2 pb-1 text-xs text-stone-500">
+            <p className="px-2 pb-1 text-xs text-stone-500 dark:text-stone-400">
               Free includes 1 home. Hearth Plus unlocks up to 5.
             </p>
           )}

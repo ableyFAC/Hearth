@@ -4,8 +4,15 @@ import { useState } from "react";
 import PublicProfileForm from "./PublicProfileForm";
 import PublicPageCard from "./PublicPageCard";
 import ProjectsCard, { type ProProject } from "./ProjectsCard";
-import AccountSecurity from "./AccountSecurity";
+import AccountSecurityPanel from "@/components/AccountSecurityPanel";
 import BackgroundCheckCard from "./BackgroundCheckCard";
+import {
+  updateEmailAction,
+  updatePasswordAction,
+  signOutOthersAction,
+  deleteAccountAction,
+} from "./actions";
+import { FOUNDER } from "@/lib/constants";
 import type { Contractor } from "@/lib/database.types";
 
 const TABS = [
@@ -31,7 +38,7 @@ const TABS = [
     key: "security" as const,
     label: "Account Security",
     title: "Account Security",
-    subtitle: "Update your password and secure your account.",
+    subtitle: "Your sign-in email, password, sessions, and account deletion.",
   },
 ];
 
@@ -40,10 +47,13 @@ export default function ProfileTabs({
   member,
   projects,
   checkrEnabled,
+  email,
 }: {
   contractor: Contractor;
   member: boolean;
   projects: ProProject[];
+  // The auth email the pro signs in with, for the security tab's email card.
+  email: string | null;
   // Checkr background checks (0057): only passed true when CHECKR_API_KEY is
   // set server-side (isCheckrConfigured() in page.tsx). Fully dormant
   // otherwise - BackgroundCheckCard never renders.
@@ -57,14 +67,14 @@ export default function ProfileTabs({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-stone-900">{meta.title}</h1>
-        <p className="mt-1 text-sm text-stone-500">{meta.subtitle}</p>
+        <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">{meta.title}</h1>
+        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">{meta.subtitle}</p>
       </div>
 
       {/* Segmented tab switcher */}
       <div
         role="tablist"
-        className="inline-flex rounded-xl border border-stone-200 bg-stone-100 p-1"
+        className="inline-flex rounded-xl border border-stone-200 bg-stone-100 p-1 dark:border-white/10 dark:bg-stone-800"
       >
         {TABS.map((t) => (
           <button
@@ -74,8 +84,8 @@ export default function ProfileTabs({
             onClick={() => setTab(t.key)}
             className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
               tab === t.key
-                ? "bg-white text-stone-900 shadow-sm"
-                : "text-stone-500 hover:text-stone-700"
+                ? "bg-white text-stone-900 shadow-sm dark:bg-stone-700 dark:text-stone-100"
+                : "text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
             }`}
           >
             {t.label}
@@ -97,7 +107,14 @@ export default function ProfileTabs({
           projects={projects}
         />
       ) : (
-        <AccountSecurity />
+        <AccountSecurityPanel
+          email={email}
+          updateEmailAction={updateEmailAction}
+          updatePasswordAction={updatePasswordAction}
+          signOutOthersAction={signOutOthersAction}
+          deleteAccountAction={deleteAccountAction}
+          founderEmail={FOUNDER.email}
+        />
       )}
     </div>
   );

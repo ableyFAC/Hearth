@@ -23,59 +23,51 @@ function formatDue(d: string): string {
   return month ? `${month} ${Number(m[3])}` : d;
 }
 
-// Whole days between today and a YYYY-MM-DD due date (negative = overdue).
-// Built from local date parts on both sides so it lines up with formatDue and
-// never drifts a day off from time-of-day or timezone.
-function daysUntil(d: string): number {
-  const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!m) return NaN;
-  const due = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  return Math.round((due.getTime() - today.getTime()) / 86_400_000);
-}
-
 // A friendly due-date chip: overdue (red), due soon (amber), or a plain date
-// further out. Purely presentational, computed from data already on hand.
+// further out. Purely presentational. `days` comes from the server (the same
+// daysUntil the page uses to group rows under Overdue / Due soon) so the chip
+// and its group heading can never disagree, which they did when this file
+// recomputed days from the browser's clock while the page grouped by the
+// server's.
 function dueChip(
   due: string | null,
-  done: boolean
+  done: boolean,
+  days: number | null
 ): { label: string; className: string } | null {
   if (done) {
     return {
       label: "Done",
-      className: "border-green-200 bg-green-50 text-green-700",
+      className: "border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200",
     };
   }
   if (!due) return null;
-  const days = daysUntil(due);
-  if (Number.isNaN(days)) {
+  if (days === null || Number.isNaN(days)) {
     return {
       label: formatDue(due),
-      className: "border-stone-200 bg-stone-50 text-stone-500",
+      className: "border-stone-200 bg-stone-50 text-stone-500 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400",
     };
   }
   if (days < 0) {
     return {
       label: days === -1 ? "Overdue by 1 day" : `Overdue by ${-days} days`,
-      className: "border-red-200 bg-red-50 text-red-700",
+      className: "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200",
     };
   }
   if (days === 0) {
     return {
       label: "Due today",
-      className: "border-amber-200 bg-amber-50 text-amber-700",
+      className: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200",
     };
   }
   if (days <= 7) {
     return {
       label: `Due in ${days} day${days === 1 ? "" : "s"}`,
-      className: "border-amber-200 bg-amber-50 text-amber-700",
+      className: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200",
     };
   }
   return {
     label: formatDue(due),
-    className: "border-stone-200 bg-stone-50 text-stone-500",
+    className: "border-stone-200 bg-stone-50 text-stone-500 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400",
   };
 }
 
@@ -98,16 +90,23 @@ export default function ReminderItem({
   id,
   title,
   due,
+  daysLeft = null,
   initialDone = false,
 }: {
   id: string;
   title: string;
   due: string | null;
+  // Whole days until due, computed by the server page with the same clock it
+  // used to group rows, so chip and group heading always agree.
+  daysLeft?: number | null;
   initialDone?: boolean;
 }) {
   const [done, setDone] = useState(initialDone);
   const [busy, setBusy] = useState(false);
   const [removed, setRemoved] = useState(false);
+  // True only right after the toggle turns a reminder on, so the check-pop
+  // animation plays for that action and not for items already done on load.
+  const [justCompleted, setJustCompleted] = useState(false);
   const checklist = useChecklist();
 
   useEffect(() => {
@@ -135,6 +134,7 @@ export default function ReminderItem({
       if (next) await completeReminderAction(id);
       else await uncompleteReminderAction(id);
       setDone(next);
+      setJustCompleted(next);
       checklist?.report(id, next);
     } catch {
       /* ignore */
@@ -143,27 +143,32 @@ export default function ReminderItem({
     }
   }
 
-  const chip = dueChip(due, done);
+  const chip = dueChip(due, done, daysLeft);
 
   return (
     <li className="list-none">
       <div
         className={`flex items-center justify-between gap-3 rounded-lg px-2 py-2.5 transition-colors ${
-          done ? "bg-stone-50/60" : "hover:bg-stone-50"
+          done ? "bg-stone-50/60 dark:bg-stone-700/40" : "hover:bg-stone-50 dark:hover:bg-stone-700/40"
         }`}
       >
         <button
           type="button"
           disabled={busy}
           onClick={toggle}
+          // The done state is otherwise only conveyed visually (fill +
+          // strikethrough), so expose it as a checkbox to assistive tech.
+          role="checkbox"
+          aria-checked={done}
+          aria-label={due ? `${title}, due ${formatDue(due)}` : title}
           className="flex min-w-0 flex-1 items-center gap-3 text-left"
         >
           <span
             className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] ${
               done
                 ? "border-green-500 bg-green-500 text-white"
-                : "border-stone-300 text-transparent"
-            }`}
+                : "border-stone-300 text-transparent dark:border-stone-600"
+            } ${justCompleted ? "motion-safe:animate-check-pop" : ""}`}
           >
             ✓
           </span>
@@ -172,7 +177,7 @@ export default function ReminderItem({
           </span>
           <span
             className={`truncate text-sm ${
-              done ? "text-stone-500 line-through" : "text-stone-800"
+              done ? "text-stone-500 line-through dark:text-stone-400" : "text-stone-800 dark:text-stone-200"
             }`}
           >
             {title}
@@ -192,7 +197,7 @@ export default function ReminderItem({
             type="button"
             onClick={remove}
             disabled={busy}
-            className="flex min-h-[44px] items-center px-1 text-xs text-stone-500 hover:text-red-600"
+            className="flex min-h-[44px] items-center px-1 text-xs text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
           >
             Delete
           </button>

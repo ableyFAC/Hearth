@@ -41,7 +41,13 @@ export default function NotificationBell() {
   // a separate page (there isn't one yet, so this is the smaller change).
   const [limit, setLimit] = useState(20);
   const [hasMore, setHasMore] = useState(false);
+  // Plays the exit animation instead of an instant unmount: on the open ->
+  // closed transition the panel stays mounted for one more tick with
+  // fade-scale-out, then drops.
+  const [closing, setClosing] = useState(false);
+  const wasOpen = useRef(false);
   const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
 
   async function loadCount() {
     if (typeof document !== "undefined" && document.hidden) return;
@@ -142,14 +148,30 @@ export default function NotificationBell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Close on outside click or Escape - matches ProfileMenu.
+  useEffect(() => {
+    if (!open && wasOpen.current) {
+      setClosing(true);
+      const t = setTimeout(() => setClosing(false), 120);
+      wasOpen.current = open;
+      return () => clearTimeout(t);
+    }
+    wasOpen.current = open;
+  }, [open]);
+  const shouldRender = open || closing;
+
+  // Close on outside click or Escape - matches ProfileMenu. Escape hands
+  // focus back to the trigger so keyboard users aren't dropped at the top of
+  // the page.
   useEffect(() => {
     if (!open) return;
     function onClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+        btnRef.current?.focus();
+      }
     }
     document.addEventListener("mousedown", onClick);
     document.addEventListener("keydown", onKey);
@@ -171,12 +193,14 @@ export default function NotificationBell() {
   return (
     <div ref={ref} className="relative">
       <button
+        ref={btnRef}
         type="button"
         onClick={togglePanel}
-        aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="Notifications"
-        className="relative flex h-9 w-9 items-center justify-center rounded-full text-stone-500 hover:bg-hearth-50 hover:text-hearth-700"
+        aria-label={
+          unread > 0 ? `Notifications, ${unread} unread` : "Notifications"
+        }
+        className="relative flex h-9 w-9 items-center justify-center rounded-full text-stone-500 hover:bg-hearth-50 hover:text-hearth-700 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-hearth-300"
       >
         <svg
           viewBox="0 0 24 24"
@@ -194,20 +218,24 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {open && (
+      {/* Plain disclosure panel, not an ARIA menu: we don't implement the
+          menu keyboard contract (arrow keys, focus trapping), so we don't
+          claim the role either. The notifications themselves are a list. */}
+      {shouldRender && (
         <div
-          role="menu"
-          className="absolute right-0 z-20 mt-1 w-80 overflow-hidden rounded-xl border border-stone-200 bg-white shadow-lg"
+          className={`absolute right-0 z-20 mt-1 w-80 overflow-hidden rounded-xl border border-stone-200 bg-white shadow-menu dark:border-white/10 dark:bg-stone-700 ${
+            open ? "motion-safe:animate-fade-scale" : "motion-safe:animate-fade-scale-out"
+          }`}
         >
-          <div className="flex items-center justify-between border-b border-stone-100 px-4 py-2">
-            <span className="text-sm font-semibold text-stone-900">
+          <div className="flex items-center justify-between border-b border-stone-100 px-4 py-2 dark:border-white/10">
+            <span className="text-sm font-semibold text-stone-900 dark:text-stone-100">
               Notifications
             </span>
             {items.length > 0 && (
               <button
                 type="button"
                 onClick={markAllRead}
-                className="text-xs font-medium text-hearth-700 hover:underline"
+                className="text-xs font-medium text-hearth-700 hover:underline dark:text-hearth-300"
               >
                 Mark all read
               </button>
@@ -215,51 +243,56 @@ export default function NotificationBell() {
           </div>
           <div className="max-h-80 overflow-y-auto">
             {items.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-stone-500">
+              <p className="px-4 py-6 text-center text-sm text-stone-500 dark:text-stone-400">
                 Nothing new right now.
               </p>
             ) : (
-              items.map((n) => {
-                const content = (
-                  <>
-                    <p className="text-sm font-medium text-stone-900">{n.title}</p>
-                    {n.body && (
-                      <p className="mt-0.5 line-clamp-2 text-xs text-stone-500">
-                        {n.body}
+              // role="list" restores list semantics that Tailwind's list-none
+              // reset strips in some screen readers.
+              <ul role="list">
+                {items.map((n) => {
+                  const content = (
+                    <>
+                      <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
+                        {n.title}
                       </p>
-                    )}
-                    <p className="mt-1 text-[11px] text-stone-500">
-                      {timeAgo(n.created_at)}
-                    </p>
-                  </>
-                );
-                return n.url ? (
-                  <Link
-                    key={n.id}
-                    href={n.url}
-                    role="menuitem"
-                    onClick={() => setOpen(false)}
-                    className="block border-b border-stone-50 px-4 py-3 last:border-b-0 hover:bg-hearth-50"
-                  >
-                    {content}
-                  </Link>
-                ) : (
-                  <div
-                    key={n.id}
-                    role="menuitem"
-                    className="block border-b border-stone-50 px-4 py-3 last:border-b-0"
-                  >
-                    {content}
-                  </div>
-                );
-              })
+                      {n.body && (
+                        <p className="mt-0.5 line-clamp-2 text-xs text-stone-500 dark:text-stone-400">
+                          {n.body}
+                        </p>
+                      )}
+                      <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
+                        {timeAgo(n.created_at)}
+                      </p>
+                    </>
+                  );
+                  return (
+                    <li
+                      key={n.id}
+                      className="border-b border-stone-50 last:border-b-0 dark:border-white/5"
+                    >
+                      {n.url ? (
+                        <Link
+                          href={n.url}
+                          onClick={() => setOpen(false)}
+                          className="block px-4 py-3 hover:bg-hearth-50 dark:hover:bg-stone-600"
+                        >
+                          {content}
+                        </Link>
+                      ) : (
+                        <div className="px-4 py-3">{content}</div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </div>
           {hasMore && (
             <button
               type="button"
               onClick={showMore}
-              className="block w-full border-t border-stone-100 px-4 py-2 text-center text-xs font-medium text-hearth-700 hover:bg-hearth-50 hover:underline"
+              className="block w-full border-t border-stone-100 px-4 py-2 text-center text-xs font-medium text-hearth-700 hover:bg-hearth-50 hover:underline dark:border-white/10 dark:text-hearth-300 dark:hover:bg-stone-600"
             >
               Show more
             </button>

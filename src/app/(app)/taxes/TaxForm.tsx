@@ -38,11 +38,11 @@ export default function TaxForm({
       }}
       className="card space-y-4"
     >
-      <h3 className="font-semibold text-stone-900">
+      <h3 className="font-semibold text-stone-900 dark:text-stone-100">
         {hasData ? "Update your assessment" : "Enter your assessment"}
       </h3>
       {!hasData && (
-        <p className="text-sm text-stone-500">
+        <p className="text-sm text-stone-500 dark:text-stone-400">
           Look for a line called &quot;assessed value&quot; or &quot;total
           assessed value&quot; on your county&apos;s assessment notice or
           property tax bill, along with the tax year it applies to. Two

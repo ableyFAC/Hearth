@@ -119,20 +119,20 @@ export default function HomeMaintenanceScheduleGuide() {
       />
 
       <p className="text-sm">
-        <a href="/guides" className="text-stone-500 hover:text-hearth-700">
+        <a href="/guides" className="text-stone-500 hover:text-hearth-700 dark:text-stone-400 dark:hover:text-hearth-300">
           ← All guides
         </a>
       </p>
 
-      <h1 className="mt-3 text-2xl font-bold text-stone-900 sm:text-3xl">
+      <h1 className="mt-3 text-2xl font-bold text-stone-900 sm:text-3xl dark:text-stone-100">
         Home maintenance schedule: how often to do everything
       </h1>
-      <p className="mt-3 text-sm text-stone-500">
+      <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
         General guidance that fits most homes. Your own systems and their
         ages can shift the right timing.
       </p>
 
-      <div className="mt-8 space-y-6 text-stone-700">
+      <div className="mt-8 space-y-6 text-stone-700 dark:text-stone-300">
         <section>
           <p className="leading-relaxed">
             Most home maintenance isn't complicated, it's just easy to lose
@@ -142,28 +142,28 @@ export default function HomeMaintenanceScheduleGuide() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             The schedule
           </h2>
-          <div className="mt-3 overflow-hidden rounded-xl border border-stone-200">
+          <div className="mt-3 overflow-hidden rounded-xl border border-stone-200 dark:border-white/10">
             <table className="w-full border-collapse text-sm">
               <thead>
-                <tr className="bg-stone-50 text-left">
-                  <th className="px-4 py-2.5 font-semibold text-stone-700">
+                <tr className="bg-stone-50 text-left dark:bg-stone-800">
+                  <th className="px-4 py-2.5 font-semibold text-stone-700 dark:text-stone-300">
                     Task
                   </th>
-                  <th className="px-4 py-2.5 font-semibold text-stone-700">
+                  <th className="px-4 py-2.5 font-semibold text-stone-700 dark:text-stone-300">
                     How often
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-100">
+              <tbody className="divide-y divide-stone-100 dark:divide-white/10">
                 {SCHEDULE.map((row) => (
                   <tr key={row.task}>
-                    <td className="px-4 py-2.5 align-top font-medium text-stone-900">
+                    <td className="px-4 py-2.5 align-top font-medium text-stone-900 dark:text-stone-100">
                       {row.task}
                     </td>
-                    <td className="px-4 py-2.5 align-top text-stone-600">
+                    <td className="px-4 py-2.5 align-top text-stone-600 dark:text-stone-400">
                       {row.cadence}
                     </td>
                   </tr>
@@ -174,7 +174,7 @@ export default function HomeMaintenanceScheduleGuide() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             The four that matter most
           </h2>
           <p className="mt-2 leading-relaxed">
@@ -195,14 +195,14 @@ export default function HomeMaintenanceScheduleGuide() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Frequently asked questions
           </h2>
           <div className="mt-2 space-y-4">
             {FAQS.map((f) => (
               <div key={f.q}>
-                <h3 className="font-medium text-stone-900">{f.q}</h3>
-                <p className="mt-1 text-sm leading-relaxed text-stone-600">
+                <h3 className="font-medium text-stone-900 dark:text-stone-100">{f.q}</h3>
+                <p className="mt-1 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
                   {f.a}
                 </p>
               </div>

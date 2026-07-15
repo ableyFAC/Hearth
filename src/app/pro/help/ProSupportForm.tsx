@@ -9,18 +9,18 @@ export default function ProSupportForm({ member }: { member: boolean }) {
   return (
     <form
       action={sendProSupportMessageAction}
-      className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm"
+      className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-stone-800"
     >
-      <h2 className="text-base font-semibold text-stone-900">
+      <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">
         Contact support
       </h2>
-      <p className="mt-1 text-sm text-stone-600">
+      <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
         Send us a message and we will get back to you. We reply using the
         contact details on your company profile.
       </p>
 
       {member && (
-        <p className="mt-3 inline-block rounded-full border border-hearth-200 bg-hearth-50 px-3 py-1 text-xs font-medium text-hearth-800">
+        <p className="mt-3 inline-block rounded-full border border-hearth-200 bg-hearth-50 px-3 py-1 text-xs font-medium text-hearth-800 dark:border-hearth-800 dark:bg-hearth-900/40 dark:text-hearth-200">
           Priority support: Pro members go to the front of the line.
         </p>
       )}

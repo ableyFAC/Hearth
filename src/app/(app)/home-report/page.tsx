@@ -2,9 +2,18 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { hasPlus } from "@/lib/subscription";
-import { labelFor, iconFor, SYSTEM_TYPES, ISSUE_CATEGORIES } from "@/lib/constants";
+import {
+  labelFor,
+  iconFor,
+  SYSTEM_TYPES,
+  ISSUE_CATEGORIES,
+  categoryForSystem,
+} from "@/lib/constants";
 import { assessSystem } from "@/lib/health";
 import PrintButton from "@/components/PrintButton";
+import SystemRow from "../profile/SystemRow";
+import SystemForm from "../profile/SystemForm";
+import MaintenanceHistoryForm from "./MaintenanceHistoryForm";
 
 const MONTHS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -65,7 +74,11 @@ export default async function HomeReportPage() {
     { data: documents },
     { data: tasks },
     { data: issues },
+    { data: pics },
   ] = await Promise.all([
+    // Reads the exact same home_systems rows the home page reads and writes
+    // (no snapshot copy), so an edit made here or there shows up everywhere:
+    // dashboard tiles, forecast, maintenance plan.
     supabase
       .from("home_systems")
       .select("*")
@@ -76,9 +89,12 @@ export default async function HomeReportPage() {
       .select("id, title, doc_type, brand, model, install_year, warranty_expires, uploaded_at")
       .eq("property_id", property.id)
       .order("uploaded_at", { ascending: false }),
+    // select("*") rather than a fixed column list, so optional history columns
+    // added by a later migration (cost_cents, performed_by - see 0061) show up
+    // automatically once that migration runs, with no code change here.
     supabase
       .from("maintenance_tasks")
-      .select("id, title, due_date, status, completed_at, created_at")
+      .select("*")
       .eq("property_id", property.id)
       .order("due_date", { ascending: false }),
     supabase
@@ -86,12 +102,34 @@ export default async function HomeReportPage() {
       .select("id, category, severity, description, status, created_at")
       .eq("property_id", property.id)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("photos")
+      .select("related_id, url")
+      .eq("property_id", property.id)
+      .eq("related_type", "system"),
   ]);
 
   const sys = systems ?? [];
   const docs = documents ?? [];
   const allTasks = tasks ?? [];
   const allIssues = issues ?? [];
+
+  // Group system photos by system id, and map each system to its open issue
+  // by category - the same shape SystemRow expects, matching the dashboard
+  // (../dashboard/page.tsx) so the same edit UI behaves identically here.
+  const photosBySystem = new Map<string, string[]>();
+  for (const p of pics ?? []) {
+    const list = photosBySystem.get(p.related_id) ?? [];
+    list.push(p.url);
+    photosBySystem.set(p.related_id, list);
+  }
+  const openIssueByCat = new Map<string, (typeof allIssues)[number]>();
+  for (const i of allIssues) {
+    if (i.status !== "open") continue;
+    if (!openIssueByCat.has(i.category)) openIssueByCat.set(i.category, i);
+  }
+  const issueForSystem = (s: (typeof sys)[number]) =>
+    openIssueByCat.get(categoryForSystem(s.system_type)) ?? null;
 
   // Collapse the issue log to one entry per category, showing only that
   // category's most recent row. This mirrors the dashboard, which dedupes
@@ -113,13 +151,30 @@ export default async function HomeReportPage() {
 
   // Completed tasks: most recently finished first. Upcoming tasks: soonest
   // due first, since that's the order that actually matters to a reader.
-  const completedTasks = allTasks
+  const completedTasksRaw = allTasks
     .filter((t) => t.status === "done")
     .sort(
       (a, b) =>
         new Date(b.completed_at ?? b.created_at).getTime() -
         new Date(a.completed_at ?? a.created_at).getTime()
     );
+
+  // The history list must never show the same real-world event twice. A
+  // migration (0061) adds a DB-level unique index for new inserts, but that
+  // only guards inserts made after it runs, and the data can still contain
+  // older duplicates (e.g. a re-run maintenance plan). Dedupe defensively at
+  // render on the same key the DB index uses: same title (case/space-
+  // insensitive), same completed day. First occurrence wins, which is the
+  // most recent one given the sort above.
+  const seenHistoryKeys = new Set<string>();
+  const completedTasks = completedTasksRaw.filter((t) => {
+    const day = (t.completed_at ?? t.created_at).slice(0, 10);
+    const key = `${t.title.trim().toLowerCase()}|${day}`;
+    if (seenHistoryKeys.has(key)) return false;
+    seenHistoryKeys.add(key);
+    return true;
+  });
+
   const upcomingTasks = allTasks
     .filter((t) => t.status !== "done")
     .sort((a, b) => {
@@ -127,6 +182,22 @@ export default async function HomeReportPage() {
       if (!b.due_date) return -1;
       return a.due_date.localeCompare(b.due_date);
     });
+
+  // cost_cents is a migration 0061 column, not yet in the generated types
+  // (hence the cast) - undefined/null until that migration runs, which is
+  // fine, the line just omits the cost. Whole-dollar entries show no
+  // decimals; anything with real cents (e.g. $49.99) keeps them rather than
+  // rounding to a misleading whole dollar.
+  const money = (cents: number) => {
+    const dollars = cents / 100;
+    return (
+      "$" +
+      dollars.toLocaleString("en-US", {
+        minimumFractionDigits: Number.isInteger(dollars) ? 0 : 2,
+        maximumFractionDigits: 2,
+      })
+    );
+  };
 
   const reportDate = new Date(Date.now()).toLocaleDateString("en-US", {
     year: "numeric",
@@ -143,14 +214,14 @@ export default async function HomeReportPage() {
       </div>
 
       {/* Header */}
-      <header className="mb-8 border-b border-stone-200 pb-6 print:border-black">
-        <h1 className="text-3xl font-semibold text-stone-900">Home Report</h1>
-        <p className="mt-2 text-lg text-stone-700">
+      <header className="mb-8 border-b border-stone-200 pb-6 print:border-black dark:border-stone-700">
+        <h1 className="text-3xl font-semibold text-stone-900 dark:text-stone-100">Home report</h1>
+        <p className="mt-2 text-lg text-stone-700 dark:text-stone-300">
           {property.address_line1}
           {addressLine ? `, ${addressLine}` : ""}
           {property.zip ? ` ${property.zip}` : ""}
         </p>
-        <p className="mt-1 text-sm text-stone-500">
+        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           Built {property.year_built ?? "year unknown"} · Report generated{" "}
           {reportDate}
         </p>
@@ -158,71 +229,101 @@ export default async function HomeReportPage() {
 
       {/* Systems */}
       <section className="mb-8">
-        <h2 className="mb-3 text-xl font-semibold text-stone-900">
+        <h2 className="mb-3 text-xl font-semibold text-stone-900 dark:text-stone-100">
           Home systems
         </h2>
+
+        {/* Printed report: a compact read-only table. Hidden on screen, since
+            the editable cards below cover that case with more detail. */}
         {sys.length === 0 ? (
-          <p className="text-sm text-stone-500">None recorded yet.</p>
+          <p className="hidden text-sm text-stone-500 print:block">
+            None recorded yet.
+          </p>
         ) : (
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-stone-300 text-left text-stone-500">
-                <th className="py-2 pr-3 font-medium">System</th>
-                <th className="py-2 pr-3 font-medium">Brand / model</th>
-                <th className="py-2 pr-3 font-medium">Install year</th>
-                <th className="py-2 pr-3 font-medium">Age</th>
-                <th className="py-2 font-medium">Condition</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sys.map((s) => {
-                const health = assessSystem(s);
-                return (
-                  <tr key={s.id} className="border-b border-stone-100">
-                    <td className="py-2 pr-3 text-stone-800">
-                      {iconFor(SYSTEM_TYPES, s.system_type)}{" "}
-                      {labelFor(SYSTEM_TYPES, s.system_type)}
-                    </td>
-                    <td className="py-2 pr-3 text-stone-600">
-                      {s.material_or_model || "-"}
-                    </td>
-                    <td className="py-2 pr-3 text-stone-600">
-                      {s.install_year ?? "-"}
-                    </td>
-                    <td className="py-2 pr-3 text-stone-600">
-                      {health.age != null ? `${health.age} yrs` : "-"}
-                    </td>
-                    <td className="py-2 text-stone-600">
-                      {s.condition_rating
-                        ? CONDITION_LABEL[s.condition_rating] ?? "-"
-                        : "-"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="hidden print:block">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-stone-300 text-left text-stone-500">
+                  <th className="py-2 pr-3 font-medium">System</th>
+                  <th className="py-2 pr-3 font-medium">Brand / model</th>
+                  <th className="py-2 pr-3 font-medium">Install year</th>
+                  <th className="py-2 pr-3 font-medium">Age</th>
+                  <th className="py-2 font-medium">Condition</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sys.map((s) => {
+                  const health = assessSystem(s);
+                  return (
+                    <tr key={s.id} className="border-b border-stone-100">
+                      <td className="py-2 pr-3 text-stone-800">
+                        {iconFor(SYSTEM_TYPES, s.system_type)}{" "}
+                        {labelFor(SYSTEM_TYPES, s.system_type)}
+                      </td>
+                      <td className="py-2 pr-3 text-stone-600">
+                        {s.material_or_model || "-"}
+                      </td>
+                      <td className="py-2 pr-3 text-stone-600">
+                        {s.install_year ?? "-"}
+                      </td>
+                      <td className="py-2 pr-3 text-stone-600">
+                        {health.age != null ? `${health.age} yrs` : "-"}
+                      </td>
+                      <td className="py-2 text-stone-600">
+                        {s.condition_rating
+                          ? CONDITION_LABEL[s.condition_rating] ?? "-"
+                          : "-"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
+
+        {/* On-screen: the same editable system cards the home page uses (same
+            component, same actions, same home_systems rows - not a snapshot),
+            so an edit made here shows up on the home page and vice versa. */}
+        <div className="print:hidden">
+          {sys.length === 0 ? (
+            <p className="text-sm text-stone-500 dark:text-stone-400">None recorded yet.</p>
+          ) : (
+            <ul className="space-y-3">
+              {sys.map((s) => (
+                <SystemRow
+                  key={s.id}
+                  system={s}
+                  openIssue={issueForSystem(s)}
+                  photos={photosBySystem.get(s.id) ?? []}
+                />
+              ))}
+            </ul>
+          )}
+          <div className="mt-3">
+            <SystemForm propertyId={property.id} />
+          </div>
+        </div>
       </section>
 
       {/* Documents */}
       <section className="mb-8">
-        <h2 className="mb-3 text-xl font-semibold text-stone-900">
+        <h2 className="mb-3 text-xl font-semibold text-stone-900 dark:text-stone-100">
           Documents on file
         </h2>
         {docs.length === 0 ? (
-          <p className="text-sm text-stone-500">None recorded yet.</p>
+          <p className="text-sm text-stone-500 dark:text-stone-400">None recorded yet.</p>
         ) : (
-          <ul className="divide-y divide-stone-100">
+          <ul className="divide-y divide-stone-100 dark:divide-white/10">
             {docs.map((d) => (
               <li key={d.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2 text-sm">
-                <span className="text-stone-800">
+                <span className="text-stone-800 dark:text-stone-200">
                   {d.title || "Home document"}
-                  <span className="ml-2 text-xs text-stone-500">
+                  <span className="ml-2 text-xs text-stone-500 dark:text-stone-400">
                     {DOC_TYPE_LABEL[d.doc_type ?? "other"] ?? "Document"}
                   </span>
                 </span>
-                <span className="text-xs text-stone-500">
+                <span className="text-xs text-stone-500 dark:text-stone-400">
                   {d.warranty_expires
                     ? `Warranty to ${fmtDate(d.warranty_expires)} · `
                     : ""}
@@ -236,39 +337,64 @@ export default async function HomeReportPage() {
 
       {/* Maintenance history */}
       <section className="mb-8">
-        <h2 className="mb-3 text-xl font-semibold text-stone-900">
+        <h2 className="mb-3 text-xl font-semibold text-stone-900 dark:text-stone-100">
           Maintenance history
         </h2>
 
-        <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-500">
+        <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
           Completed
         </h3>
+        {/* Every row below is a real maintenance_tasks row the owner logged or
+            checked off - this section never fabricates or infers entries. */}
         {completedTasks.length === 0 ? (
-          <p className="mb-4 text-sm text-stone-500">None recorded yet.</p>
+          <p className="mb-4 text-sm text-stone-500 dark:text-stone-400">
+            No maintenance recorded yet.
+          </p>
         ) : (
-          <ul className="mb-4 divide-y divide-stone-100">
-            {completedTasks.map((t) => (
-              <li key={t.id} className="flex justify-between gap-2 py-2 text-sm">
-                <span className="text-stone-800">{t.title}</span>
-                <span className="text-xs text-stone-500">
-                  {fmtTimestamp(t.completed_at ?? t.created_at)}
-                </span>
-              </li>
-            ))}
+          <ul className="mb-4 divide-y divide-stone-100 dark:divide-white/10">
+            {completedTasks.map((t) => {
+              // cost_cents / performed_by are migration 0061 columns, not yet
+              // in the generated types (hence the cast); absent until that
+              // migration runs, which is fine - the line just omits them.
+              const costCents = (t as any).cost_cents as number | null;
+              const performedBy = (t as any).performed_by as string | null;
+              const meta = [
+                performedBy,
+                costCents ? money(costCents) : null,
+              ].filter(Boolean);
+              return (
+                <li key={t.id} className="flex justify-between gap-2 py-2 text-sm">
+                  <span className="text-stone-800 dark:text-stone-200">
+                    {t.title}
+                    {meta.length > 0 && (
+                      <span className="ml-2 text-xs text-stone-500 dark:text-stone-400">
+                        {meta.join(" · ")}
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-xs text-stone-500 dark:text-stone-400">
+                    {fmtTimestamp(t.completed_at ?? t.created_at)}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         )}
+        <div className="mb-4">
+          <MaintenanceHistoryForm />
+        </div>
 
-        <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-500">
+        <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
           Upcoming
         </h3>
         {upcomingTasks.length === 0 ? (
-          <p className="text-sm text-stone-500">None recorded yet.</p>
+          <p className="text-sm text-stone-500 dark:text-stone-400">None recorded yet.</p>
         ) : (
-          <ul className="divide-y divide-stone-100">
+          <ul className="divide-y divide-stone-100 dark:divide-white/10">
             {upcomingTasks.map((t) => (
               <li key={t.id} className="flex justify-between gap-2 py-2 text-sm">
-                <span className="text-stone-800">{t.title}</span>
-                <span className="text-xs text-stone-500">
+                <span className="text-stone-800 dark:text-stone-200">{t.title}</span>
+                <span className="text-xs text-stone-500 dark:text-stone-400">
                   {t.due_date ? fmtDate(t.due_date) : "No due date"}
                 </span>
               </li>
@@ -279,40 +405,40 @@ export default async function HomeReportPage() {
 
       {/* Repairs / issues log */}
       <section className="mb-8">
-        <h2 className="mb-3 text-xl font-semibold text-stone-900">
+        <h2 className="mb-3 text-xl font-semibold text-stone-900 dark:text-stone-100">
           Repairs &amp; issue log
         </h2>
         {issueLog.length === 0 ? (
-          <p className="text-sm text-stone-500">None recorded yet.</p>
+          <p className="text-sm text-stone-500 dark:text-stone-400">None recorded yet.</p>
         ) : (
-          <ul className="divide-y divide-stone-100">
+          <ul className="divide-y divide-stone-100 dark:divide-white/10">
             {issueLog.map((i) => (
               <li key={i.id} className="py-2 text-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-stone-800">
+                  <span className="text-stone-800 dark:text-stone-200">
                     {labelFor(ISSUE_CATEGORIES, i.category)}
                     {i.status === "resolved" ? (
                       // Resolved reads as a single, unambiguous state. Severity
                       // only describes an active problem, so we drop it here to
                       // avoid a "Low ... Resolved" contradiction.
-                      <span className="ml-2 rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500 print:border print:border-stone-300 print:bg-white">
+                      <span className="ml-2 rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500 print:border print:border-stone-300 print:bg-white dark:bg-stone-700 dark:text-stone-300">
                         Resolved
                       </span>
                     ) : (
                       <>
-                        <span className="ml-2 rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500 print:border print:border-stone-300 print:bg-white">
+                        <span className="ml-2 rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500 print:border print:border-stone-300 print:bg-white dark:bg-stone-700 dark:text-stone-300">
                           {SEVERITY_LABEL[i.severity] ?? i.severity}
                         </span>
-                        <span className="ml-2 text-xs text-stone-500">Open</span>
+                        <span className="ml-2 text-xs text-stone-500 dark:text-stone-400">Open</span>
                       </>
                     )}
                   </span>
-                  <span className="text-xs text-stone-500">
+                  <span className="text-xs text-stone-500 dark:text-stone-400">
                     {fmtTimestamp(i.created_at)}
                   </span>
                 </div>
                 {i.description && (
-                  <p className="mt-1 text-stone-600">{i.description}</p>
+                  <p className="mt-1 text-stone-600 dark:text-stone-300">{i.description}</p>
                 )}
               </li>
             ))}
@@ -320,7 +446,7 @@ export default async function HomeReportPage() {
         )}
       </section>
 
-      <footer className="mt-10 border-t border-stone-200 pt-4 text-xs text-stone-500 print:border-black">
+      <footer className="mt-10 border-t border-stone-200 pt-4 text-xs text-stone-500 print:border-black dark:border-stone-700 dark:text-stone-400">
         Generated by Hearth. Share with buyers or your insurer.
       </footer>
     </div>

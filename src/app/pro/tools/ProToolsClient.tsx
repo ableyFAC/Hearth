@@ -1,9 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { JOB_CATEGORIES } from "@/lib/constants";
+import { JOB_CATEGORIES, labelFor } from "@/lib/constants";
 import type { ProPastJob } from "@/lib/database.types";
-import { deletePastJobAction } from "./actions";
+import {
+  deletePastJobAction,
+  recordToolEditAction,
+  sendDraftToLeadAction,
+} from "./actions";
 
 // The member-side AI back office: five tabs (estimate, invoice, follow-up,
 // review response, overdue invoice reminder), each a small form that posts
@@ -49,12 +53,34 @@ function toBase64(file: File): Promise<string> {
 
 const MAX_PAST_JOB_BYTES = 15 * 1024 * 1024; // 15MB, same cap as DocumentUpload
 
+// One of this contractor's own leads, for the "Send to a lead" picker. A
+// trimmed-down slice of ContractorLead (see src/lib/database.types.ts):
+// just enough to label and sort each option.
+type ToolsLead = {
+  id: string;
+  homeowner_name: string | null;
+  category: string;
+  status: string;
+  created_at: string;
+};
+
 export default function ProToolsClient({
   initialPastJobs,
+  categories,
+  leads,
 }: {
   initialPastJobs: ProPastJob[];
+  categories: string[];
+  leads: ToolsLead[];
 }) {
   const [tool, setTool] = useState<Tool>("estimate");
+
+  // Show only the trades this pro actually lists on their profile, so the
+  // dropdown isn't a wall of every category on Hearth. If they haven't
+  // picked any yet, fall back to the full list so the tool still works.
+  const cats = categories.length
+    ? JOB_CATEGORIES.filter((c) => categories.includes(c.value))
+    : JOB_CATEGORIES;
 
   // Estimate fields
   const [estDescription, setEstDescription] = useState("");
@@ -84,7 +110,18 @@ export default function ProToolsClient({
   const [odContext, setOdContext] = useState("");
 
   // Per-tool results, so switching tabs doesn't wipe a draft you just made.
+  // `results` is the AI's original text for that tool, kept untouched so we
+  // can tell whether the pro changed anything; `drafts` is the editable copy
+  // shown in the textarea, seeded from `results` on every fresh generate()
+  // and free to diverge from it as the pro types.
   const [results, setResults] = useState<Record<Tool, string | null>>({
+    estimate: null,
+    invoice: null,
+    followup: null,
+    review_response: null,
+    overdue: null,
+  });
+  const [drafts, setDrafts] = useState<Record<Tool, string | null>>({
     estimate: null,
     invoice: null,
     followup: null,
@@ -94,6 +131,15 @@ export default function ProToolsClient({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // "Send to a lead" picker on a finished draft. Transient UI state tied to
+  // whatever draft is currently on screen, so it resets on tab switch and on
+  // every fresh generate(), same as `copied` above.
+  const [sendPickerOpen, setSendPickerOpen] = useState(false);
+  const [selectedLeadId, setSelectedLeadId] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [sentTo, setSentTo] = useState<string | null>(null);
 
   // Your past jobs: upload state, saved rows, and the pending remove.
   const [pastJobs, setPastJobs] = useState<ProPastJob[]>(initialPastJobs);
@@ -137,11 +183,9 @@ export default function ProToolsClient({
       if (data?.job) {
         setPastJobs((jobs) => [data.job, ...jobs]);
       } else if (data?.reason === "rate_limited") {
-        setPjError(
-          "You've hit today's AI limit. It resets at midnight, so try again then."
-        );
+        setPjError("You've hit today's drafting limit. It resets at midnight.");
       } else if (data?.reason === "no_key") {
-        setPjError("The AI back office isn't set up yet.");
+        setPjError("Drafting is temporarily unavailable.");
       } else {
         setPjError(
           "Couldn't read that document. Try a clearer photo, a PDF, or a different file."
@@ -169,6 +213,9 @@ export default function ProToolsClient({
     setTool(next);
     setError(null);
     setCopied(false);
+    setSendPickerOpen(false);
+    setSendError(null);
+    setSentTo(null);
   }
 
   async function generate() {
@@ -239,7 +286,11 @@ export default function ProToolsClient({
     setLoading(true);
     setError(null);
     setCopied(false);
+    setSendPickerOpen(false);
+    setSendError(null);
+    setSentTo(null);
     setResults((r) => ({ ...r, [tool]: null }));
+    setDrafts((d) => ({ ...d, [tool]: null }));
 
     try {
       const resp = await fetch("/api/pro-tools", {
@@ -260,12 +311,11 @@ export default function ProToolsClient({
       const data = await resp.json().catch(() => ({}));
       if (typeof data?.result === "string" && data.result) {
         setResults((r) => ({ ...r, [tool]: data.result }));
+        setDrafts((d) => ({ ...d, [tool]: data.result }));
       } else if (data?.reason === "rate_limited") {
-        setError(
-          "You've hit today's AI limit. It resets at midnight, so try again then."
-        );
+        setError("You've hit today's drafting limit. It resets at midnight.");
       } else if (data?.reason === "no_key") {
-        setError("The AI back office isn't set up yet.");
+        setError("Drafting is temporarily unavailable.");
       } else {
         setError(data?.error || "Couldn't write that draft. Please try again.");
       }
@@ -276,16 +326,72 @@ export default function ProToolsClient({
     }
   }
 
-  const result = results[tool];
+  const result = results[tool]; // the AI's original text, untouched
+  const draft = drafts[tool]; // the editable text on screen: what gets copied and sent
+
+  // The "remember my edits" write path (see recordToolEditAction and
+  // migration 0063 pro_tool_edits). Fires after a successful copy or send,
+  // and only when the text that went out is actually different from what the
+  // AI first wrote: an unedited draft teaches the model nothing, so nothing
+  // is stored for it. Fire-and-forget: this is background learning, never
+  // something a pro needs to wait on or gets an error toast for.
+  function rememberEditIfAny() {
+    if (!result || !draft) return;
+    if (draft === result) return;
+    const fd = new FormData();
+    fd.set("tool", tool);
+    fd.set("original_text", result);
+    fd.set("edited_text", draft);
+    recordToolEditAction(fd).catch(() => {
+      /* best effort: the pro's edit was already sent/copied either way */
+    });
+  }
 
   async function copyResult() {
-    if (!result) return;
+    if (!draft) return;
     try {
-      await navigator.clipboard.writeText(result);
+      await navigator.clipboard.writeText(draft);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      rememberEditIfAny();
     } catch {
       /* clipboard unavailable */
+    }
+  }
+
+  // Opens the picker and, the first time, defaults the selection to the most
+  // recent lead (leads arrives sorted newest-first from the server).
+  function openSendPicker() {
+    setSentTo(null);
+    setSendError(null);
+    if (!selectedLeadId && leads.length) setSelectedLeadId(leads[0].id);
+    setSendPickerOpen(true);
+  }
+
+  // Posts the current draft's plain text into the picked lead's thread via
+  // sendDraftToLeadAction. Unlike sendQuoteAction/createInvoiceAction, this
+  // action returns a real { ok, error } result, so success or failure here is
+  // never guessed: "Sent to [name]" only shows once the server confirms it.
+  async function confirmSend() {
+    if (!draft || !selectedLeadId) return;
+    setSending(true);
+    setSendError(null);
+    const fd = new FormData();
+    fd.set("lead_id", selectedLeadId);
+    fd.set("body", draft);
+    try {
+      const res = await sendDraftToLeadAction(fd);
+      if (res.ok) {
+        setSentTo(res.homeownerName ?? "the homeowner");
+        setSendPickerOpen(false);
+        rememberEditIfAny();
+      } else {
+        setSendError(res.error || "Couldn't send it. Please try again.");
+      }
+    } catch {
+      setSendError("Something went wrong. Please try again.");
+    } finally {
+      setSending(false);
     }
   }
 
@@ -309,7 +415,7 @@ export default function ProToolsClient({
       <div className="card-hero space-y-4">
         {tool === "estimate" && (
           <>
-            <p className="text-sm text-stone-600">
+            <p className="text-sm text-stone-600 dark:text-stone-300">
               Describe the job the way you&apos;d explain it over the phone. You
               get back a written estimate with a scope, line items, and terms.
             </p>
@@ -332,7 +438,7 @@ export default function ProToolsClient({
                   className="input"
                 >
                   <option value="">- pick one -</option>
-                  {JOB_CATEGORIES.map((c) => (
+                  {cats.map((c) => (
                     <option key={c.value} value={c.value}>
                       {c.icon} {c.label}
                     </option>
@@ -361,11 +467,11 @@ export default function ProToolsClient({
               />
             </div>
 
-            <div className="rounded-xl border border-stone-200 bg-stone-50 p-4">
-              <h3 className="text-sm font-medium text-stone-900">
+            <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 dark:border-white/10 dark:bg-stone-800">
+              <h3 className="text-sm font-medium text-stone-900 dark:text-stone-100">
                 Your past jobs
               </h3>
-              <p className="mt-1 text-xs text-stone-500">
+              <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                 We read the line items off your old invoices and quotes to
                 help ballpark future jobs like them. Customer names and
                 contact details are never saved. Nothing is sent to anyone
@@ -373,15 +479,15 @@ export default function ProToolsClient({
               </p>
 
               {pastJobs.length < 3 && (
-                <p className="mt-2 text-xs text-stone-500">
+                <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
                   {pastJobs.length === 0
                     ? "With none on file yet, this tool prices only from what you type above."
                     : "Upload more jobs of a given type and its suggestions get better for that type."}
                 </p>
               )}
 
-              <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-stone-200 px-4 py-3 text-center hover:border-hearth-300 hover:bg-hearth-100">
-                <span className="text-sm font-medium text-stone-700">
+              <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-stone-200 px-4 py-3 text-center hover:border-hearth-300 hover:bg-hearth-100 dark:border-stone-700 dark:hover:border-hearth-400 dark:hover:bg-hearth-900/40">
+                <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
                   {pjBusy
                     ? "Reading your document…"
                     : "Upload a past invoice or quote"}
@@ -396,7 +502,7 @@ export default function ProToolsClient({
               </label>
 
               {pjError && (
-                <p className="mt-2 text-xs text-red-600">{pjError}</p>
+                <p className="mt-2 text-xs text-red-600 dark:text-red-400">{pjError}</p>
               )}
 
               {pastJobs.length > 0 && (
@@ -416,14 +522,14 @@ export default function ProToolsClient({
                     return (
                       <li
                         key={job.id}
-                        className="flex items-start justify-between gap-3 rounded-lg border border-stone-200 bg-white px-3 py-2"
+                        className="flex items-start justify-between gap-3 rounded-lg border border-stone-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-stone-800"
                       >
                         <div>
-                          <p className="text-sm font-medium text-stone-800">
+                          <p className="text-sm font-medium text-stone-800 dark:text-stone-200">
                             {parts.join(" · ")}
                           </p>
                           {job.job_summary && (
-                            <p className="mt-0.5 text-xs text-stone-500">
+                            <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
                               {job.job_summary}
                             </p>
                           )}
@@ -432,7 +538,7 @@ export default function ProToolsClient({
                           type="button"
                           onClick={() => removePastJob(job.id)}
                           disabled={pjRemovingId === job.id}
-                          className="shrink-0 text-xs font-medium text-stone-500 hover:text-red-600"
+                          className="shrink-0 text-xs font-medium text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
                         >
                           {pjRemovingId === job.id ? "Removing…" : "Remove"}
                         </button>
@@ -447,7 +553,7 @@ export default function ProToolsClient({
 
         {tool === "invoice" && (
           <>
-            <p className="text-sm text-stone-600">
+            <p className="text-sm text-stone-600 dark:text-stone-300">
               A couple of lines about the finished job and the amount due. You
               get back clean invoice text with a work summary and payment note.
             </p>
@@ -486,7 +592,7 @@ export default function ProToolsClient({
 
         {tool === "followup" && (
           <>
-            <p className="text-sm text-stone-600">
+            <p className="text-sm text-stone-600 dark:text-stone-300">
               Pick the situation and add any details worth mentioning. You get
               back a short message ready to send as a text or email.
             </p>
@@ -519,7 +625,7 @@ export default function ProToolsClient({
 
         {tool === "review_response" && (
           <>
-            <p className="text-sm text-stone-600">
+            <p className="text-sm text-stone-600 dark:text-stone-300">
               Paste the review and add a rating or context if you have them.
               You get back a professional response you can copy and post.
             </p>
@@ -563,7 +669,7 @@ export default function ProToolsClient({
 
         {tool === "overdue" && (
           <>
-            <p className="text-sm text-stone-600">
+            <p className="text-sm text-stone-600 dark:text-stone-300">
               Pick the stage and fill in the details. You get back a short
               reminder message ready to send.
             </p>
@@ -626,7 +732,7 @@ export default function ProToolsClient({
           </>
         )}
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
         <button
           type="button"
@@ -640,23 +746,100 @@ export default function ProToolsClient({
 
       {result && (
         <div className="card space-y-2">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium text-stone-900">Your draft</h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-medium text-stone-900 dark:text-stone-100">Your draft</h2>
             <button
               type="button"
               onClick={copyResult}
-              className="text-xs font-medium text-hearth-700 hover:text-hearth-800"
+              className="shrink-0 text-xs font-medium text-hearth-700 hover:text-hearth-800 dark:text-hearth-300 dark:hover:text-hearth-200"
             >
               {copied ? "Copied" : "Copy"}
             </button>
           </div>
-          <p className="whitespace-pre-wrap rounded-lg border border-stone-200 bg-stone-50 px-3 py-3 text-sm text-stone-700">
-            {result}
+          {/* Editable, seeded from the AI's text: read it, tweak the wording
+              if you want, and Copy/Send both act on what's in this box. */}
+          <textarea
+            value={draft ?? ""}
+            onChange={(e) =>
+              setDrafts((d) => ({ ...d, [tool]: e.target.value }))
+            }
+            rows={10}
+            className="w-full whitespace-pre-wrap rounded-lg border border-stone-200 bg-stone-50 px-3 py-3 text-sm text-stone-700 focus:border-hearth-500 focus:outline-none focus:ring-1 focus:ring-hearth-500 dark:border-white/10 dark:bg-stone-900 dark:text-stone-100 dark:focus:border-hearth-400 dark:focus:ring-hearth-400"
+          />
+          <p className="text-xs text-stone-500 dark:text-stone-400">
+            This is a starting point: read it over and edit anything before
+            you send or post it.
           </p>
-          <p className="text-xs text-stone-500">
-            This is a starting point: give it a quick read and tweak
-            anything before you send or post it.
-          </p>
+
+          {/* "Send to a lead" lives at the bottom of the draft, after the
+              text and the Copy button, so the flow reads top to bottom: read
+              the draft, edit it if you want, then send. Green marks it as
+              the one button here that actually delivers something to a real
+              customer, distinct from the brown Copy/Write buttons above. */}
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={
+                sendPickerOpen ? () => setSendPickerOpen(false) : openSendPicker
+              }
+              className="btn bg-green-600 text-white shadow-card hover:bg-green-700 hover:shadow-lift focus-visible:ring-green-500 dark:bg-green-700 dark:hover:bg-green-600 dark:focus-visible:ring-green-400"
+            >
+              Send to a lead
+            </button>
+          </div>
+
+          {sendPickerOpen && (
+            <div className="space-y-2 rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-white/10 dark:bg-stone-800">
+              {leads.length === 0 ? (
+                <p className="text-xs text-stone-500 dark:text-stone-400">
+                  No active leads yet. Once a homeowner picks you for a job,
+                  you&apos;ll be able to send drafts straight into that chat.
+                </p>
+              ) : (
+                <>
+                  <label className="label">Send to</label>
+                  <select
+                    value={selectedLeadId}
+                    onChange={(e) => setSelectedLeadId(e.target.value)}
+                    className="input"
+                  >
+                    {leads.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.homeowner_name || "Homeowner"} ·{" "}
+                        {labelFor(JOB_CATEGORIES, l.category)}
+                      </option>
+                    ))}
+                  </select>
+                  {sendError && (
+                    <p className="text-xs text-red-600 dark:text-red-400">{sendError}</p>
+                  )}
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSendPickerOpen(false)}
+                      className="btn-secondary text-sm"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={confirmSend}
+                      disabled={sending || !selectedLeadId}
+                      className="btn bg-green-600 text-white shadow-card hover:bg-green-700 hover:shadow-lift focus-visible:ring-green-500 text-sm disabled:opacity-50 dark:bg-green-700 dark:hover:bg-green-600 dark:focus-visible:ring-green-400"
+                    >
+                      {sending ? "Sending…" : "Send"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {sentTo && (
+            <p className="rounded-md bg-green-50 px-3 py-1.5 text-xs text-green-700 dark:bg-green-500/15 dark:text-green-300">
+              Sent to {sentTo}.
+            </p>
+          )}
         </div>
       )}
     </div>

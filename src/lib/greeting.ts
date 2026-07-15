@@ -52,7 +52,7 @@ export const getProactiveGreeting = cache(
         (issues ?? []).find((i) => i.severity === "urgent") ?? (issues ?? [])[0];
       if (issue) {
         const name = labelFor(ISSUE_CATEGORIES, issue.category).toLowerCase();
-        return `${hi} I see an open ${name} issue on your home. Want me to help you sort it, or line up a vetted pro? [[OPTIONS]]{"options":["Help me sort it","Find a pro"]}[[/OPTIONS]]`;
+        return `${hi} I see an open ${name} issue on your home. Want me to help you sort it, or line up a local pro? [[OPTIONS]]{"options":["Help me sort it","Find a pro"]}[[/OPTIONS]]`;
       }
 
       // Next, a system at or near the end of its typical life.

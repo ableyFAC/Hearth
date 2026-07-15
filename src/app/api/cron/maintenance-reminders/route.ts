@@ -15,9 +15,11 @@ export const runtime = "nodejs";
 //   reminded_upcoming_at / reminded_overdue_at markers (migration 0026) that
 //   are stamped after a successful send, so re-runs are safe.
 //
-// Respects the "reminders" toggle on /account/notifications. Delivery goes
-// through sendNotification, so email / SMS light up automatically once the
-// provider keys exist (see src/lib/notify.ts).
+// Respects the "reminders" toggle on /account/notifications: opted-out
+// owners' tasks are skipped AND stamped, so they can never pile up at the
+// front of the candidate window. Delivery goes through sendNotification, so
+// email / SMS light up automatically once the provider keys exist (see
+// src/lib/notify.ts).
 
 const UPCOMING_DAYS = 3;
 const MAX_TASKS = 500; // cap the work a single run does
@@ -82,41 +84,51 @@ async function runCron(req: NextRequest) {
   }
 
   const supabase = createAdminClient();
+  const todayStr = new Date(utcTodayMs()).toISOString().slice(0, 10);
   const horizon = new Date(utcTodayMs() + UPCOMING_DAYS * DAY_MS)
     .toISOString()
     .slice(0, 10);
 
-  // Only rows still missing a marker, soonest due first, so already-reminded
-  // tasks can never crowd new ones out of the MAX_TASKS window.
-  const { data: tasks, error } = await supabase
-    .from("maintenance_tasks")
-    .select(
-      "id, property_id, title, due_date, reminded_upcoming_at, reminded_overdue_at"
-    )
-    .eq("status", "open")
-    .not("due_date", "is", null)
-    .lte("due_date", horizon)
-    .or("reminded_upcoming_at.is.null,reminded_overdue_at.is.null")
-    .order("due_date", { ascending: true })
-    .limit(MAX_TASKS);
+  // One precise query per threshold, each filtering on ITS OWN marker, so a
+  // row only ever occupies a window it can still be sent from. (A single
+  // scan .or()-ing both markers would let permanently-dead rows, e.g. a task
+  // created already overdue whose reminded_overdue_at is stamped but whose
+  // reminded_upcoming_at can never be, re-match forever and starve new
+  // reminders out of the MAX_TASKS window.) Soonest due first in each.
+  const [upcomingRes, overdueRes] = await Promise.all([
+    supabase
+      .from("maintenance_tasks")
+      .select("id, property_id, title, due_date")
+      .eq("status", "open")
+      .not("due_date", "is", null)
+      .gte("due_date", todayStr)
+      .lte("due_date", horizon)
+      .is("reminded_upcoming_at", null)
+      .order("due_date", { ascending: true })
+      .limit(MAX_TASKS),
+    supabase
+      .from("maintenance_tasks")
+      .select("id, property_id, title, due_date")
+      .eq("status", "open")
+      .not("due_date", "is", null)
+      .lt("due_date", todayStr)
+      .is("reminded_overdue_at", null)
+      .order("due_date", { ascending: true })
+      .limit(MAX_TASKS),
+  ]);
 
-  if (error || !tasks) {
+  if (upcomingRes.error || overdueRes.error) {
     return NextResponse.json(
-      { created: 0, error: error?.message ?? "no tasks" },
+      {
+        created: 0,
+        error: upcomingRes.error?.message ?? overdueRes.error?.message,
+      },
       { status: 200 }
     );
   }
 
-  // Split into the two thresholds, dropping anything already reminded.
-  const upcoming: Task[] = [];
-  const overdue: Task[] = [];
-  for (const t of tasks) {
-    if (!t.due_date) continue;
-    const diff = daysFromToday(t.due_date);
-    const task = t as Task;
-    if (diff < 0 && !t.reminded_overdue_at) overdue.push(task);
-    else if (diff >= 0 && !t.reminded_upcoming_at) upcoming.push(task);
-  }
+  const upcoming: Task[] = (upcomingRes.data ?? []) as Task[];
+  const overdue: Task[] = (overdueRes.data ?? []) as Task[];
 
   if (upcoming.length === 0 && overdue.length === 0) {
     return NextResponse.json({ created: 0 });
@@ -168,7 +180,37 @@ async function runCron(req: NextRequest) {
     const user = userById.get(userId);
     if (!user) continue;
     // An unset preference reads as enabled, matching NotificationPrefsForm.
-    if (user.notification_prefs?.reminders === false) continue;
+    if (user.notification_prefs?.reminders === false) {
+      // Stamp the skipped tasks' markers anyway: an opt-out is a deliberate
+      // "do not send", not a transient failure, and unstamped rows would
+      // re-match the candidate queries every run until they starved the
+      // MAX_TASKS window for everyone else. Re-enabling reminders applies to
+      // future tasks; these deliberately-suppressed ones stay quiet.
+      try {
+        if (b.upcoming.length > 0) {
+          await supabase
+            .from("maintenance_tasks")
+            .update({ reminded_upcoming_at: nowIso })
+            .in(
+              "id",
+              b.upcoming.map((t) => t.id)
+            );
+        }
+        if (b.overdue.length > 0) {
+          await supabase
+            .from("maintenance_tasks")
+            .update({ reminded_overdue_at: nowIso })
+            .in(
+              "id",
+              b.overdue.map((t) => t.id)
+            );
+        }
+      } catch {
+        // A failed stamp just means the rows are re-fetched (and re-skipped)
+        // next run; nothing is ever sent to an opted-out user either way.
+      }
+      continue;
+    }
 
     try {
       if (b.upcoming.length > 0) {

@@ -22,26 +22,26 @@ function fmt(date: string): string {
 function StatusPill({ status }: { status: ComplianceStatus }) {
   if (status === "expired") {
     return (
-      <span className="chip border border-red-200 bg-red-50 text-red-700">
+      <span className="chip border border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
         Expired
       </span>
     );
   }
   if (status === "expiring") {
     return (
-      <span className="chip border border-amber-200 bg-amber-50 text-amber-700">
+      <span className="chip border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
         Expiring soon
       </span>
     );
   }
   if (status === "ok") {
     return (
-      <span className="chip border border-emerald-200 bg-emerald-50 text-emerald-700">
+      <span className="chip border border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200">
         On file
       </span>
     );
   }
-  return <span className="chip bg-stone-100 text-stone-500">Nothing on file</span>;
+  return <span className="chip bg-stone-100 text-stone-500 dark:bg-stone-700 dark:text-stone-400">Nothing on file</span>;
 }
 
 // "License and insurance" compliance calendar: upload a document once, and
@@ -61,10 +61,10 @@ export default function ComplianceCard({
   return (
     <section className="card space-y-5">
       <div>
-        <h2 className="text-lg font-semibold text-stone-900">
+        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
           License and insurance
         </h2>
-        <p className="mt-1 text-xs text-stone-500">
+        <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
           Hearth stores your document and reminds you before it expires. It
           does not verify the license or the insurance policy.
         </p>
@@ -77,7 +77,7 @@ export default function ComplianceCard({
         onChange={setLicenseState}
       />
 
-      <div className="border-t border-stone-100 pt-5">
+      <div className="border-t border-stone-100 pt-5 dark:border-white/10">
         <ComplianceRow
           kind="insurance"
           label="Insurance"
@@ -164,8 +164,8 @@ function ComplianceRow({
     <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-sm font-medium text-stone-900">{label}</p>
-          <p className="text-xs text-stone-500">
+          <p className="text-sm font-medium text-stone-900 dark:text-stone-100">{label}</p>
+          <p className="text-xs text-stone-500 dark:text-stone-400">
             {state.expires
               ? `On file, expires ${fmt(state.expires)}`
               : "Nothing on file yet"}
@@ -180,14 +180,14 @@ function ComplianceRow({
           accept="image/*,.pdf"
           onChange={onPick}
           disabled={busy}
-          className="block text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-hearth-100 file:px-3 file:py-1.5 file:text-hearth-800"
+          className="block text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-hearth-100 file:px-3 file:py-1.5 file:text-hearth-800 dark:text-stone-300"
         />
         {state.docPath && (
           <a
             href={`/api/pro-compliance?path=${encodeURIComponent(state.docPath)}`}
             target="_blank"
             rel="noreferrer"
-            className="text-sm font-medium text-hearth-700 hover:underline"
+            className="text-sm font-medium text-hearth-700 hover:underline dark:text-hearth-300"
           >
             View document
           </a>
@@ -196,7 +196,7 @@ function ComplianceRow({
 
       {showDateField && (
         <div className="flex flex-wrap items-center gap-2">
-          <label className="text-xs text-stone-500">
+          <label className="text-xs text-stone-500 dark:text-stone-400">
             {needsManual
               ? "Hearth couldn't read a date off that document. Enter it:"
               : "Expiration date"}
@@ -218,8 +218,8 @@ function ComplianceRow({
         </div>
       )}
 
-      {busy && <p className="text-xs text-stone-500">Uploading, one moment.</p>}
-      {err && <p className="text-xs text-red-600">{err}</p>}
+      {busy && <p className="text-xs text-stone-500 dark:text-stone-400">Uploading, one moment.</p>}
+      {err && <p className="text-xs text-red-600 dark:text-red-400">{err}</p>}
     </div>
   );
 }

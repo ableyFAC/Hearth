@@ -5,8 +5,8 @@ import type { Database } from "@/lib/database.types";
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
 // Refreshes the auth session on every request and guards app routes.
-// Public routes: "/", "/get-started", "/signin", the sign-up pages,
-// "/preview", "/auth/*". Everything else requires a session.
+// Public routes: "/", "/get-started", "/signin", "/reset-password", the
+// sign-up pages, "/preview", "/auth/*". Everything else requires a session.
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
@@ -34,13 +34,33 @@ export async function updateSession(request: NextRequest) {
   // IMPORTANT: do not run code between createServerClient and getUser().
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
+
+  // A network failure reaching Supabase is NOT proof the user is signed out:
+  // getUser() resolves with user null + a retryable fetch error when the
+  // auth server is unreachable (wifi blip, outage). If the request carries
+  // auth cookies, fail open instead of bouncing a signed-in user to /signin:
+  // RLS still guards every read downstream, and the segment error boundaries
+  // show a retry screen if data loads fail too.
+  const authUnreachable =
+    authError != null &&
+    (authError.name === "AuthRetryableFetchError" || authError.status === 0);
+  const hasAuthCookies = request.cookies
+    .getAll()
+    .some((c) => c.name.startsWith("sb-") && c.name.includes("-auth-token"));
+  if (authUnreachable && hasAuthCookies) {
+    return response;
+  }
 
   const path = request.nextUrl.pathname;
   const isPublic =
     path === "/" ||
     path.startsWith("/get-started") ||
     path.startsWith("/signin") ||
+    // Password reset request page: a signed-out user is exactly who needs it,
+    // so it must not bounce to /signin.
+    path.startsWith("/reset-password") ||
     path.startsWith("/homeowner-signup") ||
     path.startsWith("/contractor-signup") ||
     path.startsWith("/preview") ||
@@ -75,6 +95,10 @@ export async function updateSession(request: NextRequest) {
     // session, and a 307 to /signin here would hide the whole site from them.
     path === "/sitemap.xml" ||
     path === "/robots.txt" ||
+    // Landing-page demo voiceover audio (public/demo-vo/*.mp3): fetched by
+    // the anonymous landing page's demo player; a 307 to /signin here makes
+    // the narration silently fail.
+    path.startsWith("/demo-vo/") ||
     // Cron routes authenticate via CRON_SECRET (Bearer/header/query), not a
     // user session. Vercel Cron sends no session cookie, so WITHOUT this
     // entry every scheduled job would 307 to /signin (an HTML 200!) before

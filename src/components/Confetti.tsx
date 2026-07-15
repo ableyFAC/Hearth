@@ -8,6 +8,11 @@ export default function Confetti() {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
+    // Respect the OS-level reduced-motion setting: skip the burst entirely
+    // rather than rendering it motionless, since there's no useful static
+    // fallback for a particle animation.
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
     const canvas = ref.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;

@@ -21,6 +21,11 @@ export const runtime = "nodejs";
 
 const MAX_MEMBERS = 500; // cap the work a single run does
 const MAX_JOBS = 1000; // sanity cap on the candidate job scan
+// Sanity cap on the live-subscription scan, paged in SUBSCRIPTION_PAGE steps
+// (see its comment) since PostgREST silently truncates any single response
+// at its max-rows cap (default 1000).
+const MAX_SUBSCRIPTIONS = 2000;
+const SUBSCRIPTION_PAGE = 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Dup-guard lookback. Shorter than 24h so a scheduler that fires a few
@@ -131,25 +136,31 @@ async function runCron(req: NextRequest) {
   // past a known period end. The like() is only a coarse server-side
   // prefilter (in SQL LIKE the underscore is a single-character wildcard), so
   // the real startsWith check and the date check happen in code below.
-  const { data: subs, error: subsError } = await (supabase as any)
-    .from("subscriptions")
-    .select("user_id, plan, status, current_period_end")
-    .in("status", ["active", "trialing"])
-    .like("plan", "pro_%")
-    .limit(2000);
-  if (subsError) {
-    return NextResponse.json(
-      { checked: 0, notified: 0, error: subsError.message },
-      { status: 200 }
-    );
-  }
-
-  const memberIds: string[] = [];
-  for (const sub of (subs ?? []) as {
+  const subs: {
     user_id: string;
     plan: string | null;
     current_period_end: string | null;
-  }[]) {
+  }[] = [];
+  for (let start = 0; start < MAX_SUBSCRIPTIONS; start += SUBSCRIPTION_PAGE) {
+    const end = Math.min(start + SUBSCRIPTION_PAGE, MAX_SUBSCRIPTIONS) - 1;
+    const { data: page, error: subsError } = await (supabase as any)
+      .from("subscriptions")
+      .select("user_id, plan, status, current_period_end")
+      .in("status", ["active", "trialing"])
+      .like("plan", "pro_%")
+      .range(start, end);
+    if (subsError) {
+      return NextResponse.json(
+        { checked: 0, notified: 0, error: subsError.message },
+        { status: 200 }
+      );
+    }
+    subs.push(...(page ?? []));
+    if (!page || page.length < end - start + 1) break;
+  }
+
+  const memberIds: string[] = [];
+  for (const sub of subs) {
     if (!sub.plan?.startsWith("pro_")) continue;
     if (
       sub.current_period_end &&

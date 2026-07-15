@@ -172,7 +172,7 @@ function ActionButton({
   const [failed, setFailed] = useState(false);
   if (done)
     return (
-      <span className="inline-block text-xs font-medium text-green-600">
+      <span className="inline-block text-xs font-medium text-green-600 dark:text-green-400">
         {doneLabel}
       </span>
     );
@@ -192,12 +192,12 @@ function ActionButton({
             setBusy(false);
           }
         }}
-        className="inline-block rounded-lg bg-hearth-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-hearth-700 disabled:opacity-50"
+        className="btn-primary px-3 py-1.5 text-xs"
       >
         {busy ? "…" : failed ? "Try again" : label}
       </button>
       {failed && (
-        <span className="text-xs text-red-600">Didn&apos;t save</span>
+        <span className="text-xs text-red-600 dark:text-red-400">Didn&apos;t save</span>
       )}
     </span>
   );
@@ -225,7 +225,7 @@ function LogAndPostButton({ job, issue }: { job: Job; issue: any }) {
         track("post_job_from_chat", { category: job.category });
         router.push(jobHref(job));
       }}
-      className="inline-block rounded-lg bg-hearth-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-hearth-700 disabled:opacity-50"
+      className="btn-primary px-3 py-1.5 text-xs"
     >
       {busy ? "…" : "📋 Log & post this job"}
     </button>
@@ -262,7 +262,7 @@ function MessageActions({
                 Get 3 free quotes
               </span>
               <span className="text-[11px] font-normal text-hearth-100">
-                Vetted local pros compete for your job
+                License-checked local pros compete for your job
               </span>
             </Link>
           )}
@@ -640,7 +640,7 @@ export default function AskHearth({
           <img
             src={`data:${m.mime ?? "image/jpeg"};base64,${m.image}`}
             alt="attached"
-            className="mb-1 max-h-48 rounded-lg border border-stone-200 object-cover"
+            className="mb-1 max-h-48 rounded-lg border border-stone-200 object-cover dark:border-white/10"
           />
         )}
         {parsed.text && (
@@ -648,7 +648,7 @@ export default function AskHearth({
             className={`block max-w-[85%] break-words rounded-lg px-3 py-1.5 text-sm ${
               m.role === "user"
                 ? "whitespace-pre-wrap bg-hearth-600 text-white"
-                : "border border-stone-200 bg-white text-stone-700"
+                : "border border-stone-200 bg-white text-stone-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-200"
             }`}
           >
             {m.role === "assistant" ? (
@@ -676,7 +676,7 @@ export default function AskHearth({
                   type="button"
                   onClick={() => submit(opt)}
                   disabled={loading}
-                  className="rounded-full border border-hearth-300 bg-white px-3 py-1 text-xs font-medium text-hearth-800 hover:bg-hearth-50 disabled:opacity-50"
+                  className="rounded-full border border-hearth-300 bg-white px-3 py-1 text-xs font-medium text-hearth-800 hover:bg-hearth-50 disabled:opacity-50 dark:border-hearth-800 dark:bg-stone-800 dark:text-hearth-200 dark:hover:bg-stone-700"
                 >
                   {opt}
                 </button>
@@ -685,7 +685,7 @@ export default function AskHearth({
             <button
               type="button"
               onClick={() => inputRef.current?.focus()}
-              className="rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-medium text-stone-500 hover:bg-stone-50"
+              className="rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-medium text-stone-500 hover:bg-stone-50 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400 dark:hover:bg-stone-600"
             >
               Other (type)
             </button>
@@ -699,13 +699,13 @@ export default function AskHearth({
   // depends on `fill` (see below) - kept as one element so the two views
   // can't drift on wording or options.
   const retentionControl = (
-    <p className="text-[11px] text-stone-500">
+    <p className="text-[11px] text-stone-500 dark:text-stone-400">
       {retention === "never" ? "Chats are kept " : "Chats clear after "}
       <select
         value={retention}
         onChange={(e) => changeRetention(e.target.value as Retention)}
         aria-label="How long chats are kept"
-        className="cursor-pointer appearance-none border-0 bg-transparent p-0 text-[11px] text-stone-500 underline decoration-dotted hover:text-stone-600 focus:outline-none"
+        className="cursor-pointer appearance-none border-0 bg-transparent p-0 text-[11px] text-stone-500 underline decoration-dotted hover:text-stone-600 focus:outline-none dark:text-stone-400 dark:hover:text-stone-300"
       >
         <option value="24h">24 hours</option>
         <option value="2w">2 weeks</option>
@@ -729,23 +729,37 @@ export default function AskHearth({
           <button
             type="button"
             onClick={() => setPendingImage(null)}
-            className="text-xs text-stone-500 hover:text-red-600"
+            className="text-xs text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
           >
             Remove
           </button>
         </div>
       )}
       {imageError && (
-        <p className="mb-2 text-xs text-red-600">
+        <p className="mb-2 text-xs text-red-600 dark:text-red-400">
           Couldn&apos;t attach that image. Try a different photo.
         </p>
       )}
       <form onSubmit={send} className="flex gap-2">
         <label
           title="Attach a photo"
-          className="flex cursor-pointer items-center rounded-lg border border-stone-200 px-2 text-lg text-stone-500 hover:border-hearth-400 hover:text-hearth-700"
+          className="flex cursor-pointer items-center rounded-lg border border-stone-200 px-2 text-stone-500 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-hearth-300"
         >
-          🖼
+          <svg
+            viewBox="0 0 24 24"
+            className="h-5 w-5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <path d="M21 15l-5-5L5 21" />
+          </svg>
+          <span className="sr-only">Attach a photo</span>
           <input
             type="file"
             accept="image/*"
@@ -775,7 +789,7 @@ export default function AskHearth({
           {fill ? "Send" : "Ask"}
         </button>
       </form>
-      <p className="mt-1 text-[11px] text-stone-500">{disclaimer}</p>
+      <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">{disclaimer}</p>
       {/* In the dock (fill), this control moves to the header instead - */}
       {/* down here it sat below the whole conversation, off-screen until */}
       {/* scrolled to. The compact card has no such scroll, so it stays put. */}
@@ -792,16 +806,16 @@ export default function AskHearth({
     );
     const hasConversation = displayed.length > 0;
     return (
-      <div className="card border-hearth-200 bg-hearth-50">
-        <p className="text-sm font-semibold text-hearth-900">{headingTitle}</p>
-        <p className="text-xs text-hearth-700">{headingSubtitle}</p>
+      <div className="card border-hearth-200 bg-hearth-50 dark:border-hearth-900 dark:bg-hearth-900/20">
+        <p className="text-sm font-semibold text-hearth-900 dark:text-hearth-200">{headingTitle}</p>
+        <p className="text-xs text-hearth-700 dark:text-hearth-300">{headingSubtitle}</p>
 
         {(hasConversation || loading) && (
-          <div className="mt-3 max-h-80 space-y-2 overflow-y-auto rounded-lg border border-stone-200 bg-white p-3">
+          <div className="mt-3 max-h-80 space-y-2 overflow-y-auto rounded-lg border border-stone-200 bg-white p-3 dark:border-white/10 dark:bg-stone-800">
             {displayed.map((m, i) => bubble(m, i, i === displayed.length - 1))}
             {loading && (
               <div className="flex justify-start">
-                <span className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-500">
+                <span className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-500 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400">
                   Thinking…
                 </span>
               </div>
@@ -818,7 +832,7 @@ export default function AskHearth({
                 type="button"
                 onClick={() => submit(q)}
                 disabled={loading}
-                className="rounded-full border border-hearth-200 bg-white px-3 py-1 text-xs text-hearth-800 hover:border-hearth-400 disabled:opacity-50"
+                className="rounded-full border border-hearth-200 bg-white px-3 py-1 text-xs text-hearth-800 hover:border-hearth-400 disabled:opacity-50 dark:border-hearth-800 dark:bg-stone-800 dark:text-hearth-200"
               >
                 {q}
               </button>
@@ -833,7 +847,7 @@ export default function AskHearth({
             <button
               type="button"
               onClick={clearChat}
-              className="text-sm font-medium text-stone-500 hover:text-red-600"
+              className="text-sm font-medium text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
             >
               Clear conversation
             </button>
@@ -847,8 +861,8 @@ export default function AskHearth({
     <div className="flex h-full flex-col">
       <div className="flex items-start justify-between gap-2 pb-2">
         <div>
-          <p className="text-sm font-semibold text-hearth-900">{headingTitle}</p>
-          <p className="text-xs text-hearth-700">{headingSubtitle}</p>
+          <p className="text-sm font-semibold text-hearth-900 dark:text-hearth-200">{headingTitle}</p>
+          <p className="text-xs text-hearth-700 dark:text-hearth-300">{headingSubtitle}</p>
         </div>
         {/* Surfaced here (next to Clear) instead of only below the input: */}
         {/* the dock is short and scrollable, and buried at the bottom it */}
@@ -858,7 +872,7 @@ export default function AskHearth({
           <button
             type="button"
             onClick={clearChat}
-            className="text-xs text-stone-500 hover:text-stone-700"
+            className="text-xs text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-300"
           >
             Clear
           </button>
@@ -869,7 +883,7 @@ export default function AskHearth({
         {messages.map((m, i) => bubble(m, i, i === messages.length - 1))}
         {loading && (
           <div className="flex justify-start">
-            <span className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-500">
+            <span className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-500 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400">
               Thinking…
             </span>
           </div>

@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { censor } from "@/lib/censor";
 import { extractQuote, formatUSD, dollarsToCents, formatUSDCents } from "@/lib/quotes";
 import { imgSrc } from "@/lib/storage";
-import type { QuoteLineItem } from "@/lib/database.types";
+import type { QuoteLineItem, InvoiceLineItem } from "@/lib/database.types";
 
 type Msg = {
   id: string;
@@ -26,15 +26,35 @@ type Quote = {
   created_at: string;
 };
 
-// A quote or a message, merged into one feed and shown in created_at order.
+// An invoice a contractor sent in this thread (invoices).
+type Invoice = {
+  id: string;
+  contractor_id: string;
+  line_items: InvoiceLineItem[];
+  subtotal_cents: number;
+  total_cents: number;
+  status: "sent" | "signed" | "void";
+  signed_at: string | null;
+  signed_by: string | null;
+  signature_method: "in_app" | "in_person" | null;
+  created_at: string;
+};
+
+// A quote, an invoice, or a message, merged into one feed and shown in
+// created_at order.
 type FeedItem =
   | { kind: "message"; created_at: string; data: Msg }
-  | { kind: "quote"; created_at: string; data: Quote };
+  | { kind: "quote"; created_at: string; data: Quote }
+  | { kind: "invoice"; created_at: string; data: Invoice };
 
 // The companion plain message a sent quote posts alongside itself (see
 // sendQuoteAction). Its own rich card renders right next to it, so the old
 // regex "Quoted $X" badge would just be noise here and is skipped for it.
 const isQuoteCompanionBody = (body: string) => body.startsWith("Sent a quote:");
+
+// Same idea as isQuoteCompanionBody, for the companion message a sent
+// invoice posts alongside itself (see createInvoiceAction).
+const isInvoiceCompanionBody = (body: string) => body.startsWith("Sent an invoice:");
 
 // System-message markers used to open/close a thread. They're stored as normal
 // rows (sender_role = "system") so both sides see them with no schema change.
@@ -78,30 +98,41 @@ export default function LeadChat({
   embedded = false,
   title,
   subtitle,
+  jobTitle,
   contractorName,
   sendQuoteAction,
   withdrawQuoteAction,
   acceptQuoteAction,
   declineQuoteAction,
+  createInvoiceAction,
+  voidInvoiceAction,
+  signInvoiceAction,
 }: {
   leadId: string;
   role: "homeowner" | "contractor";
   embedded?: boolean;
   title?: string;
   subtitle?: string;
-  // The pro's company name, used on every quote card ("Quote from {company}")
-  // regardless of which side is viewing.
+  // Short job label (e.g. "Plumbing"), used to prefill the first invoice line
+  // item when a contractor opens the invoice composer.
+  jobTitle?: string;
+  // The pro's company name, used on every quote/invoice card ("Quote from
+  // {company}") regardless of which side is viewing.
   contractorName?: string;
   sendQuoteAction?: (formData: FormData) => Promise<void>;
   withdrawQuoteAction?: (formData: FormData) => Promise<void>;
   acceptQuoteAction?: (formData: FormData) => Promise<void>;
   declineQuoteAction?: (formData: FormData) => Promise<void>;
+  createInvoiceAction?: (formData: FormData) => Promise<void>;
+  voidInvoiceAction?: (formData: FormData) => Promise<void>;
+  signInvoiceAction?: (formData: FormData) => Promise<void>;
 }) {
   const supabase = createClient();
   const router = useRouter();
   const [open, setOpen] = useState(embedded);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const [showQuoteForm, setShowQuoteForm] = useState(false);
@@ -113,6 +144,12 @@ export default function LeadChat({
   const [confirmWithdrawId, setConfirmWithdrawId] = useState<string | null>(
     null
   );
+  const [showInvoiceForm, setShowInvoiceForm] = useState(false);
+  const [invoiceRows, setInvoiceRows] = useState<
+    { description: string; amount: string }[]
+  >([{ description: "", amount: "" }]);
+  const [invoiceBusy, setInvoiceBusy] = useState(false);
+  const [confirmVoidId, setConfirmVoidId] = useState<string | null>(null);
   const [filtered, setFiltered] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [reportReason, setReportReason] = useState("");
@@ -123,6 +160,9 @@ export default function LeadChat({
   >({});
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmUnsendId, setConfirmUnsendId] = useState<string | null>(null);
+  // Message whose action bar was opened by tap. Touch screens have no hover,
+  // so on small screens a "…" button toggles the bar instead.
+  const [menuFor, setMenuFor] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<{ id: string; body: string } | null>(
     null
   );
@@ -149,6 +189,17 @@ export default function LeadChat({
       .order("created_at", { ascending: true });
     if (!quoteErr) setQuotes((quoteData ?? []) as unknown as Quote[]);
 
+    // Invoices sent in this thread. Same "keep optimistic state if the table
+    // isn't set up yet" behavior as the quotes fetch above.
+    const { data: invoiceData, error: invoiceErr } = await supabase
+      .from("invoices")
+      .select(
+        "id, contractor_id, line_items, subtotal_cents, total_cents, status, signed_at, signed_by, signature_method, created_at"
+      )
+      .eq("lead_id", leadId)
+      .order("created_at", { ascending: true });
+    if (!invoiceErr) setInvoices((invoiceData ?? []) as unknown as Invoice[]);
+
     // Reactions. If the table isn't set up yet, keep whatever's on screen
     // (optimistic) instead of wiping it.
     const { data: reacts, error: reactErr } = await supabase
@@ -165,10 +216,16 @@ export default function LeadChat({
 
     // Read receipts: mark myself as having read this thread, then look up the
     // other side's last-read time. No-op if the lead_reads table isn't set up.
-    await supabase.from("lead_reads").upsert(
-      { lead_id: leadId, role, read_at: new Date().toISOString() },
-      { onConflict: "lead_id,role" }
-    );
+    // Skipped while the tab is hidden: this poll also runs from a background
+    // tab, and advancing the receipt there shows the other side "Seen" for
+    // messages nobody has looked at. The visibilitychange listener below
+    // re-runs load() on return, so coming back marks the thread read promptly.
+    if (typeof document === "undefined" || !document.hidden) {
+      await supabase.from("lead_reads").upsert(
+        { lead_id: leadId, role, read_at: new Date().toISOString() },
+        { onConflict: "lead_id,role" }
+      );
+    }
     const { data: reads } = await supabase
       .from("lead_reads")
       .select("role, read_at")
@@ -208,12 +265,29 @@ export default function LeadChat({
         },
         () => load()
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "invoices",
+          filter: `lead_id=eq.${leadId}`,
+        },
+        () => load()
+      )
       .subscribe();
 
     const t = setInterval(load, 15000);
+    // Coming back to the tab marks the thread read right away (load() skips
+    // the read-receipt write while the document is hidden).
+    const onVisible = () => {
+      if (!document.hidden) load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       supabase.removeChannel(channel);
       clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, leadId]);
@@ -221,6 +295,17 @@ export default function LeadChat({
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "nearest" });
   }, [messages]);
+
+  // Close the tap-opened action bar on any tap outside it (or its "…" toggle).
+  useEffect(() => {
+    if (!menuFor) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Element | null;
+      if (!target?.closest("[data-msg-actions]")) setMenuFor(null);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [menuFor]);
 
   // Closed if the most recent system marker is a "close" (not a "reopen").
   const closed = useMemo(() => {
@@ -249,8 +334,8 @@ export default function LeadChat({
     return null;
   }, [messages, role]);
 
-  // Messages and quotes merged into a single feed, oldest first, so a quote
-  // card shows up right where it was sent relative to the surrounding chat.
+  // Messages, quotes, and invoices merged into a single feed, oldest first, so
+  // a card shows up right where it was sent relative to the surrounding chat.
   const feed = useMemo<FeedItem[]>(() => {
     const items: FeedItem[] = [
       ...messages.map((m) => ({
@@ -263,10 +348,39 @@ export default function LeadChat({
         created_at: q.created_at,
         data: q,
       })),
+      ...invoices.map((i) => ({
+        kind: "invoice" as const,
+        created_at: i.created_at,
+        data: i,
+      })),
     ];
     items.sort((a, b) => a.created_at.localeCompare(b.created_at));
     return items;
-  }, [messages, quotes]);
+  }, [messages, quotes, invoices]);
+
+  // A price the conversation has already agreed on, used to prefill the
+  // invoice composer so the pro isn't retyping something already settled.
+  // An accepted structured quote (a real agreement) wins over a regex guess
+  // off plain chat text, and the most recent one of either wins over older
+  // ones. Companion messages are skipped, same as the inline "Quoted $X"
+  // label below.
+  const detectedInvoiceAmountCents = useMemo(() => {
+    const accepted = quotes.filter((q) => q.status === "accepted");
+    if (accepted.length) return accepted[accepted.length - 1].total_cents;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (
+        m.sender_role === "contractor" &&
+        !isImageBody(m.body) &&
+        !isQuoteCompanionBody(m.body) &&
+        !isInvoiceCompanionBody(m.body)
+      ) {
+        const q = extractQuote(m.body);
+        if (q != null) return q * 100;
+      }
+    }
+    return null;
+  }, [quotes, messages]);
 
   async function ensureUid() {
     if (!uidRef.current) {
@@ -464,6 +578,7 @@ export default function LeadChat({
   }
 
   function startReply(m: Msg) {
+    setMenuFor(null);
     setReplyingTo({ id: m.id, body: m.body });
     inputRef.current?.focus();
   }
@@ -523,20 +638,31 @@ export default function LeadChat({
     );
   }
 
+  // Rows that will actually send: submitQuote and the server (sendQuoteAction)
+  // both drop rows with a blank label or a non-positive amount, so the preview
+  // must count exactly this set too.
+  const validQuoteRows = quoteRows.filter(
+    (r) => r.label.trim() !== "" && (dollarsToCents(r.amount) ?? 0) > 0
+  );
+
   // Live preview only: the number actually saved is computed once, server
-  // side, in sendQuoteAction. Uses the same dollarsToCents helper so the two
-  // can never disagree.
-  const quotePreviewCents = quoteRows.reduce(
+  // side, in sendQuoteAction. Uses the same dollarsToCents helper AND the same
+  // row filter as submitQuote, so the two can never disagree.
+  const quotePreviewCents = validQuoteRows.reduce(
     (sum, r) => sum + (dollarsToCents(r.amount) ?? 0),
     0
+  );
+
+  // A row with money but no label would be silently dropped on send. Block the
+  // send and say so, instead of quietly quoting less than what is on screen.
+  const hasUnlabeledAmount = quoteRows.some(
+    (r) => r.label.trim() === "" && (dollarsToCents(r.amount) ?? 0) > 0
   );
 
   async function submitQuote(e: React.FormEvent) {
     e.preventDefault();
     if (!sendQuoteAction) return;
-    const clean = quoteRows.filter(
-      (r) => r.label.trim() && (dollarsToCents(r.amount) ?? 0) > 0
-    );
+    const clean = validQuoteRows;
     if (clean.length === 0) return;
     setQuoteBusy(true);
     const fd = new FormData();
@@ -546,11 +672,34 @@ export default function LeadChat({
       fd.append("label", r.label.trim());
       fd.append("amount", r.amount);
     }
-    await sendQuoteAction(fd);
-    setQuoteBusy(false);
-    setShowQuoteForm(false);
-    setQuoteRows([{ label: "", amount: "" }]);
-    setQuoteNote("");
+    // sendQuoteAction returns void on success AND on every failure path
+    // (expired session, ownership check, insert error), so confirm the send by
+    // looking for a quote row we did not already know about. Only a confirmed
+    // send may close the composer and wipe what the pro typed.
+    const knownIds = new Set(quotes.map((q) => q.id));
+    let sent = false;
+    try {
+      await sendQuoteAction(fd);
+      const { data: after } = await supabase
+        .from("lead_quotes")
+        .select("id")
+        .eq("lead_id", leadId);
+      sent = (after ?? []).some((q) => !knownIds.has(q.id));
+    } catch {
+      // Network blip or server-side throw: treated the same as a silent no-op.
+      sent = false;
+    } finally {
+      setQuoteBusy(false);
+    }
+    if (sent) {
+      setShowQuoteForm(false);
+      setQuoteRows([{ label: "", amount: "" }]);
+      setQuoteNote("");
+    } else {
+      // Keep the composer open with everything the pro typed intact.
+      setNotice("The quote could not be sent. Please try again.");
+      setTimeout(() => setNotice(null), 5000);
+    }
     load();
   }
 
@@ -560,8 +709,16 @@ export default function LeadChat({
     setBusy(true);
     const fd = new FormData();
     fd.set("quote_id", quoteId);
-    await withdrawQuoteAction(fd);
-    setBusy(false);
+    try {
+      await withdrawQuoteAction(fd);
+    } catch {
+      setNotice("Could not withdraw the quote. Please try again.");
+      setTimeout(() => setNotice(null), 5000);
+    } finally {
+      // A rejected server action must not leave `busy` stuck true: it gates
+      // Send, Accept/Decline, Finish conversation, and more.
+      setBusy(false);
+    }
     load();
   }
 
@@ -573,8 +730,149 @@ export default function LeadChat({
     setBusy(true);
     const fd = new FormData();
     fd.set("quote_id", quoteId);
-    await action(fd);
-    setBusy(false);
+    try {
+      await action(fd);
+    } catch {
+      setNotice("Could not send. Please try again.");
+      setTimeout(() => setNotice(null), 5000);
+    } finally {
+      setBusy(false);
+    }
+    load();
+  }
+
+  // ---- Invoice composer (contractor side) ----------------------------------
+
+  function addInvoiceRow() {
+    setInvoiceRows((rows) => [...rows, { description: "", amount: "" }]);
+  }
+
+  function removeInvoiceRow(idx: number) {
+    setInvoiceRows((rows) => rows.filter((_, i) => i !== idx));
+  }
+
+  function updateInvoiceRow(
+    idx: number,
+    field: "description" | "amount",
+    value: string
+  ) {
+    setInvoiceRows((rows) =>
+      rows.map((r, i) => (i === idx ? { ...r, [field]: value } : r))
+    );
+  }
+
+  // Opens the composer prefilled from whatever the conversation has already
+  // surfaced (see detectedInvoiceAmountCents), so the pro is adjusting a
+  // starting point rather than typing from scratch. Only prefills the first
+  // time it's opened in this session: reopening after Cancel keeps whatever
+  // the pro was mid-editing.
+  function openInvoiceForm() {
+    if (!showInvoiceForm) {
+      setInvoiceRows([
+        {
+          description: jobTitle || "Work performed",
+          amount:
+            detectedInvoiceAmountCents != null
+              ? String(detectedInvoiceAmountCents / 100)
+              : "",
+        },
+      ]);
+    }
+    setShowQuoteForm(false);
+    setShowInvoiceForm(true);
+  }
+
+  // Rows that will actually send: submitInvoice and the server
+  // (createInvoiceAction) both drop rows with a blank description or a
+  // non-positive amount, so the preview must count exactly this set too.
+  const validInvoiceRows = invoiceRows.filter(
+    (r) => r.description.trim() !== "" && (dollarsToCents(r.amount) ?? 0) > 0
+  );
+
+  const invoicePreviewCents = validInvoiceRows.reduce(
+    (sum, r) => sum + (dollarsToCents(r.amount) ?? 0),
+    0
+  );
+
+  const hasUnlabeledInvoiceAmount = invoiceRows.some(
+    (r) => r.description.trim() === "" && (dollarsToCents(r.amount) ?? 0) > 0
+  );
+
+  async function submitInvoice(e: React.FormEvent) {
+    e.preventDefault();
+    if (!createInvoiceAction) return;
+    const clean = validInvoiceRows;
+    if (clean.length === 0) return;
+    setInvoiceBusy(true);
+    const fd = new FormData();
+    fd.set("lead_id", leadId);
+    for (const r of clean) {
+      fd.append("description", r.description.trim());
+      fd.append("amount", r.amount);
+    }
+    // createInvoiceAction returns void on success AND on every failure path,
+    // so confirm the send by looking for an invoice row we did not already
+    // know about, same trick submitQuote uses above.
+    const knownIds = new Set(invoices.map((i) => i.id));
+    let sent = false;
+    try {
+      await createInvoiceAction(fd);
+      const { data: after } = await supabase
+        .from("invoices")
+        .select("id")
+        .eq("lead_id", leadId);
+      sent = (after ?? []).some((i) => !knownIds.has(i.id));
+    } catch {
+      sent = false;
+    } finally {
+      setInvoiceBusy(false);
+    }
+    if (sent) {
+      setShowInvoiceForm(false);
+      setInvoiceRows([{ description: "", amount: "" }]);
+    } else {
+      setNotice("The invoice could not be sent. Please try again.");
+      setTimeout(() => setNotice(null), 5000);
+    }
+    load();
+  }
+
+  async function voidInvoice(invoiceId: string) {
+    if (!voidInvoiceAction) return;
+    setConfirmVoidId(null);
+    setBusy(true);
+    const fd = new FormData();
+    fd.set("invoice_id", invoiceId);
+    try {
+      await voidInvoiceAction(fd);
+    } catch {
+      setNotice("Could not void the invoice. Please try again.");
+      setTimeout(() => setNotice(null), 5000);
+    } finally {
+      setBusy(false);
+    }
+    load();
+  }
+
+  async function signInvoice(
+    invoiceId: string,
+    method: "in_app" | "in_person",
+    typedName?: string
+  ) {
+    if (!signInvoiceAction) return;
+    setBusy(true);
+    const fd = new FormData();
+    fd.set("invoice_id", invoiceId);
+    fd.set("signature_method", method);
+    if (method === "in_app") fd.set("signed_by", typedName ?? "");
+    try {
+      await signInvoiceAction(fd);
+    } catch {
+      setNotice("Could not sign the invoice. Please try again.");
+      setTimeout(() => setNotice(null), 5000);
+    } finally {
+      setBusy(false);
+    }
     load();
   }
 
@@ -595,18 +893,18 @@ export default function LeadChat({
       className={
         embedded
           ? "flex h-full flex-col"
-          : "mt-2 rounded-lg border border-stone-200 bg-stone-50 p-3"
+          : "mt-2 rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-white/10 dark:bg-stone-800"
       }
     >
       {!embedded && (
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs font-medium uppercase tracking-wide text-stone-500">
+          <span className="text-xs font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
             Messages
           </span>
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="text-xs text-stone-500 hover:text-stone-600"
+            className="text-xs text-stone-500 hover:text-stone-600 dark:text-stone-400 dark:hover:text-stone-300"
           >
             Close
           </button>
@@ -615,13 +913,13 @@ export default function LeadChat({
 
       {/* Conversation header: name on the left, end/reopen on the same line. */}
       {embedded && (
-        <div className="mb-2 flex items-center justify-between gap-2 border-b border-stone-100 pb-2">
+        <div className="mb-2 flex items-center justify-between gap-2 border-b border-stone-100 pb-2 dark:border-white/10">
           <div className="min-w-0">
             {title && (
-              <p className="truncate font-semibold text-stone-900">{title}</p>
+              <p className="truncate font-semibold text-stone-900 dark:text-stone-100">{title}</p>
             )}
             {subtitle && (
-              <p className="truncate text-xs text-stone-500">{subtitle}</p>
+              <p className="truncate text-xs text-stone-500 dark:text-stone-400">{subtitle}</p>
             )}
           </div>
           <div className="shrink-0">
@@ -638,7 +936,7 @@ export default function LeadChat({
               ) : null
             ) : confirmingClose ? (
               <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-stone-700">End?</span>
+                <span className="text-xs font-medium text-stone-700 dark:text-stone-300">End?</span>
                 <button
                   type="button"
                   onClick={confirmClose}
@@ -650,7 +948,7 @@ export default function LeadChat({
                 <button
                   type="button"
                   onClick={() => setConfirmingClose(false)}
-                  className="text-xs font-medium text-stone-900 hover:text-stone-600"
+                  className="text-xs font-medium text-stone-900 hover:text-stone-600 dark:text-stone-100 dark:hover:text-stone-300"
                 >
                   No
                 </button>
@@ -677,7 +975,7 @@ export default function LeadChat({
         }
       >
         {feed.length === 0 ? (
-          <p className="text-xs text-stone-500">No messages yet. Say hello.</p>
+          <p className="text-xs text-stone-500 dark:text-stone-400">No messages yet. Say hello.</p>
         ) : (
           feed.map((item) => {
             if (item.kind === "quote") {
@@ -705,11 +1003,36 @@ export default function LeadChat({
                 />
               );
             }
+            if (item.kind === "invoice") {
+              return (
+                <InvoiceCard
+                  key={`i-${item.data.id}`}
+                  invoice={item.data}
+                  role={role}
+                  contractorName={contractorName}
+                  busy={busy}
+                  confirmVoid={confirmVoidId === item.data.id}
+                  onAskVoid={() => setConfirmVoidId(item.data.id)}
+                  onCancelVoid={() => setConfirmVoidId(null)}
+                  onVoid={() => voidInvoice(item.data.id)}
+                  onSignInApp={
+                    signInvoiceAction
+                      ? (name) => signInvoice(item.data.id, "in_app", name)
+                      : undefined
+                  }
+                  onSignInPerson={
+                    signInvoiceAction
+                      ? () => signInvoice(item.data.id, "in_person")
+                      : undefined
+                  }
+                />
+              );
+            }
             const m = item.data;
             if (m.sender_role === "system") {
               return (
                 <div key={m.id} className="flex justify-center">
-                  <span className="rounded-full bg-stone-100 px-3 py-1 text-xs text-stone-500">
+                  <span className="rounded-full bg-stone-100 px-3 py-1 text-xs text-stone-500 dark:bg-stone-700 dark:text-stone-300">
                     {m.body}
                   </span>
                 </div>
@@ -722,7 +1045,8 @@ export default function LeadChat({
             const quote =
               m.sender_role === "contractor" &&
               !isImageBody(m.body) &&
-              !isQuoteCompanionBody(m.body)
+              !isQuoteCompanionBody(m.body) &&
+              !isInvoiceCompanionBody(m.body)
                 ? extractQuote(m.body)
                 : null;
             // You can unsend your own messages for up to an hour.
@@ -750,13 +1074,19 @@ export default function LeadChat({
                   onMouseLeave={() => setConfirmUnsendId(null)}
                 >
                   {/* Outer div is a transparent buffer (extra padding) so a
-                      shaky cursor stays in the hover zone; inner pill is the UI. */}
+                      shaky cursor stays in the hover zone; inner pill is the UI.
+                      On small screens hover doesn't exist, so the bar is
+                      toggled by the "…" button instead and sits below the
+                      bubble (wrapping if it needs to) rather than beside it. */}
                   <div
-                    className={`absolute top-1/2 z-20 hidden -translate-y-1/2 px-2 py-3 group-hover:block ${
-                      mine ? "right-full" : "left-full"
+                    data-msg-actions
+                    className={`absolute top-full z-20 min-w-[15rem] pt-1 md:top-1/2 md:min-w-0 md:-translate-y-1/2 md:px-2 md:py-3 ${
+                      menuFor === m.id ? "block" : "hidden"
+                    } md:hidden md:group-hover:block ${
+                      mine ? "right-0 md:right-full" : "left-0 md:left-full"
                     }`}
                   >
-                    <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-stone-200 bg-white px-3 py-1.5 shadow-md">
+                    <div className="flex flex-wrap items-center gap-2 whitespace-nowrap rounded-2xl border border-stone-200 bg-white px-3 py-1.5 shadow-md md:flex-nowrap md:rounded-full dark:border-white/10 dark:bg-stone-700">
                       {EMOJIS.map((e) => (
                         <button
                           key={e}
@@ -767,18 +1097,18 @@ export default function LeadChat({
                           {e}
                         </button>
                       ))}
-                      <span className="mx-0.5 h-3 w-px bg-stone-200" />
+                      <span className="mx-0.5 h-3 w-px bg-stone-200 dark:bg-white/10" />
                       <button
                         type="button"
                         onClick={() => startReply(m)}
-                        className="px-1 text-xs text-stone-500 hover:text-hearth-700"
+                        className="px-1 text-xs text-stone-500 hover:text-hearth-700 dark:text-stone-400 dark:hover:text-hearth-300"
                       >
                         Reply
                       </button>
                       <button
                         type="button"
                         onClick={() => copyText(m.body)}
-                        className="px-1 text-xs text-stone-500 hover:text-hearth-700"
+                        className="px-1 text-xs text-stone-500 hover:text-hearth-700 dark:text-stone-400 dark:hover:text-hearth-300"
                       >
                         Copy
                       </button>
@@ -791,7 +1121,7 @@ export default function LeadChat({
                               : setConfirmUnsendId(m.id)
                           }
                           disabled={busy}
-                          className="px-1 text-xs font-semibold text-red-500 hover:text-red-700 disabled:opacity-50"
+                          className="px-1 text-xs font-semibold text-red-500 hover:text-red-700 disabled:opacity-50 dark:text-red-400 dark:hover:text-red-300"
                         >
                           {confirmUnsendId === m.id ? "Confirm?" : "Unsend"}
                         </button>
@@ -801,7 +1131,7 @@ export default function LeadChat({
                           type="button"
                           onClick={() => reportMessage(m)}
                           disabled={busy}
-                          className="px-1 text-xs text-stone-500 hover:text-red-600 disabled:opacity-50"
+                          className="px-1 text-xs text-stone-500 hover:text-red-600 disabled:opacity-50 dark:text-stone-400 dark:hover:text-red-400"
                         >
                           Report
                         </button>
@@ -809,8 +1139,26 @@ export default function LeadChat({
                     </div>
                   </div>
 
+                  {/* Touch affordance: a small always-visible "…" beside the
+                      bubble opens the action bar on screens with no hover.
+                      Hidden on md+ where hovering the bubble does the job. */}
+                  <button
+                    type="button"
+                    data-msg-actions
+                    aria-label="Message actions"
+                    aria-expanded={menuFor === m.id}
+                    onClick={() =>
+                      setMenuFor((cur) => (cur === m.id ? null : m.id))
+                    }
+                    className={`absolute top-1/2 -translate-y-1/2 rounded-full border border-stone-200 bg-white px-1.5 py-1 text-xs leading-none text-stone-500 shadow-sm dark:border-white/10 dark:bg-stone-700 dark:text-stone-400 md:hidden ${
+                      mine ? "right-full mr-1.5" : "left-full ml-1.5"
+                    }`}
+                  >
+                    …
+                  </button>
+
                   {quote != null && (
-                    <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-hearth-50 px-2 py-0.5 text-[10px] font-semibold text-hearth-700">
+                    <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-hearth-50 px-2 py-0.5 text-[10px] font-semibold text-hearth-700 dark:bg-hearth-900/40 dark:text-hearth-300">
                       💵 Quoted {formatUSD(quote)}
                     </span>
                   )}
@@ -826,7 +1174,7 @@ export default function LeadChat({
                       <img
                         src={imgSrc(imageUrl(m.body)) ?? undefined}
                         alt="shared photo"
-                        className="max-h-60 w-auto rounded-lg border border-stone-200 object-cover"
+                        className="max-h-60 w-auto rounded-lg border border-stone-200 object-cover dark:border-white/10"
                       />
                     </a>
                   ) : (
@@ -834,7 +1182,7 @@ export default function LeadChat({
                       className={`block whitespace-pre-wrap break-words rounded-lg px-3 py-1.5 text-sm ${
                         mine
                           ? "bg-hearth-600 text-white"
-                          : "border border-stone-200 bg-white text-stone-700"
+                          : "border border-stone-200 bg-white text-stone-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-200"
                       }`}
                     >
                       {m.body}
@@ -847,7 +1195,7 @@ export default function LeadChat({
                     {chips.map(([emoji, count]) => (
                       <span
                         key={emoji}
-                        className="rounded-full border border-stone-200 bg-white px-1.5 text-xs"
+                        className="rounded-full border border-stone-200 bg-white px-1.5 text-xs dark:border-white/10 dark:bg-stone-700"
                       >
                         {emoji} {count}
                       </span>
@@ -856,7 +1204,7 @@ export default function LeadChat({
                 )}
 
                 {mine && m.id === lastMineId && (
-                  <span className="mt-0.5 text-[10px] text-stone-500">
+                  <span className="mt-0.5 text-[10px] text-stone-500 dark:text-stone-400">
                     {otherReadAt && otherReadAt >= m.created_at
                       ? "Seen"
                       : "Delivered"}
@@ -870,23 +1218,23 @@ export default function LeadChat({
         {/* Messages that failed to send. */}
         {failed.map((f) => (
           <div key={f.tempId} className="flex flex-col items-end">
-            <span className="block max-w-[80%] whitespace-pre-wrap break-words rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm text-red-700">
+            <span className="block max-w-[80%] whitespace-pre-wrap break-words rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
               {f.body}
             </span>
             <div className="mt-0.5 flex items-center gap-2 text-[10px]">
-              <span className="text-red-500">Not delivered</span>
+              <span className="text-red-500 dark:text-red-400">Not delivered</span>
               <button
                 type="button"
                 onClick={() => retryFailed(f.tempId, f.body)}
                 disabled={busy}
-                className="font-medium text-hearth-700 hover:underline disabled:opacity-50"
+                className="font-medium text-hearth-700 hover:underline disabled:opacity-50 dark:text-hearth-300"
               >
                 Retry
               </button>
               <button
                 type="button"
                 onClick={() => deleteFailed(f.tempId)}
-                className="font-medium text-stone-500 hover:text-red-600"
+                className="font-medium text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
               >
                 Delete
               </button>
@@ -897,19 +1245,19 @@ export default function LeadChat({
       </div>
 
       {notice && (
-        <p className="mt-2 rounded-md bg-green-50 px-3 py-1.5 text-center text-xs text-green-700">
+        <p className="mt-2 rounded-md bg-green-50 px-3 py-1.5 text-center text-xs text-green-700 dark:bg-green-950/40 dark:text-green-200">
           {notice}
         </p>
       )}
 
-      {!closed && role === "contractor" && sendQuoteAction && (
+      {!closed && role === "contractor" && (sendQuoteAction || createInvoiceAction) && (
         <div className="mt-2">
           {showQuoteForm ? (
             <form
               onSubmit={submitQuote}
-              className="space-y-2 rounded-lg border border-stone-200 bg-stone-50 p-3"
+              className="space-y-2 rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-white/10 dark:bg-stone-800"
             >
-              <p className="text-xs font-medium uppercase tracking-wide text-stone-500">
+              <p className="text-xs font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
                 Send a quote
               </p>
               {quoteRows.map((row, idx) => (
@@ -931,7 +1279,7 @@ export default function LeadChat({
                     <button
                       type="button"
                       onClick={() => removeQuoteRow(idx)}
-                      className="text-stone-500 hover:text-red-600"
+                      className="text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
                       aria-label="Remove line item"
                     >
                       ✕
@@ -954,8 +1302,14 @@ export default function LeadChat({
                 placeholder="Note to the homeowner (optional)"
                 className="input w-full text-sm"
               />
+              {hasUnlabeledAmount && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  ⚠️ Every line item with an amount needs a label, or it will
+                  not be part of the quote.
+                </p>
+              )}
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-stone-900">
+                <span className="text-sm font-semibold text-stone-900 dark:text-stone-100">
                   Total: {formatUSDCents(quotePreviewCents)}
                 </span>
                 <div className="flex gap-2">
@@ -968,7 +1322,9 @@ export default function LeadChat({
                   </button>
                   <button
                     type="submit"
-                    disabled={quoteBusy || quotePreviewCents <= 0}
+                    disabled={
+                      quoteBusy || quotePreviewCents <= 0 || hasUnlabeledAmount
+                    }
                     className="btn-primary text-sm disabled:opacity-50"
                   >
                     Send quote
@@ -976,20 +1332,111 @@ export default function LeadChat({
                 </div>
               </div>
             </form>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowQuoteForm(true)}
-              className="text-sm font-medium text-hearth-700 hover:underline"
+          ) : showInvoiceForm ? (
+            <form
+              onSubmit={submitInvoice}
+              className="space-y-2 rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-white/10 dark:bg-stone-800"
             >
-              💵 Send a quote
-            </button>
+              <p className="text-xs font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                Create invoice from this chat
+              </p>
+              {invoiceRows.map((row, idx) => (
+                <div key={idx} className="flex gap-2">
+                  <input
+                    className="input flex-1"
+                    placeholder="Line item, e.g. Labor"
+                    value={row.description}
+                    onChange={(e) =>
+                      updateInvoiceRow(idx, "description", e.target.value)
+                    }
+                  />
+                  <input
+                    className="input w-28"
+                    placeholder="$0"
+                    inputMode="decimal"
+                    value={row.amount}
+                    onChange={(e) =>
+                      updateInvoiceRow(idx, "amount", e.target.value)
+                    }
+                  />
+                  {invoiceRows.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeInvoiceRow(idx)}
+                      className="text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
+                      aria-label="Remove line item"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={addInvoiceRow}
+                className="text-xs font-medium text-hearth-700 hover:underline"
+              >
+                + Add line item
+              </button>
+              {hasUnlabeledInvoiceAmount && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  ⚠️ Every line item with an amount needs a description, or it
+                  will not be part of the invoice.
+                </p>
+              )}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+                  Total: {formatUSDCents(invoicePreviewCents)}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowInvoiceForm(false)}
+                    className="btn-secondary text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={
+                      invoiceBusy ||
+                      invoicePreviewCents <= 0 ||
+                      hasUnlabeledInvoiceAmount
+                    }
+                    className="btn-primary text-sm disabled:opacity-50"
+                  >
+                    Send invoice
+                  </button>
+                </div>
+              </div>
+            </form>
+          ) : (
+            <div className="flex flex-wrap gap-3">
+              {sendQuoteAction && (
+                <button
+                  type="button"
+                  onClick={() => setShowQuoteForm(true)}
+                  className="text-sm font-medium text-hearth-700 hover:underline"
+                >
+                  💵 Send a quote
+                </button>
+              )}
+              {createInvoiceAction && (
+                <button
+                  type="button"
+                  onClick={openInvoiceForm}
+                  className="text-sm font-medium text-hearth-700 hover:underline"
+                >
+                  🧾 Create invoice from this chat
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}
 
       {closed ? (
-        <p className="mt-2 rounded-lg bg-stone-100 px-3 py-2 text-center text-xs text-stone-500">
+        <p className="mt-2 rounded-lg bg-stone-100 px-3 py-2 text-center text-xs text-stone-500 dark:bg-stone-800 dark:text-stone-400">
           This conversation is finished.
           {canReopen
             ? " Reopen it above to send more messages."
@@ -998,14 +1445,14 @@ export default function LeadChat({
       ) : (
         <div className="mt-2 space-y-2">
           {replyingTo && (
-            <div className="flex items-center justify-between rounded-lg border-l-2 border-hearth-400 bg-stone-50 px-2 py-1 text-xs text-stone-500">
+            <div className="flex items-center justify-between rounded-lg border-l-2 border-hearth-400 bg-stone-50 px-2 py-1 text-xs text-stone-500 dark:bg-stone-800 dark:text-stone-400">
               <span className="truncate">
                 ↩︎ {replyingTo.body.replace(/\n/g, " ").slice(0, 50)}
               </span>
               <button
                 type="button"
                 onClick={() => setReplyingTo(null)}
-                className="ml-2 text-stone-500 hover:text-stone-700"
+                className="ml-2 text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-300"
               >
                 ✕
               </button>
@@ -1014,7 +1461,7 @@ export default function LeadChat({
           <form onSubmit={send} className="flex gap-2">
             <label
               title="Send a photo"
-              className="flex cursor-pointer items-center rounded-lg border border-stone-200 px-3 text-lg text-stone-500 hover:border-hearth-400 hover:text-hearth-700"
+              className="flex cursor-pointer items-center rounded-lg border border-stone-200 px-3 text-lg text-stone-500 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-hearth-300"
             >
               🖼
               <input
@@ -1044,16 +1491,16 @@ export default function LeadChat({
             </button>
           </form>
           {filtered && (
-            <p className="text-xs text-amber-600">
+            <p className="text-xs text-amber-600 dark:text-amber-400">
               ⚠️ Your message was filtered to keep the chat respectful.
             </p>
           )}
         </div>
       )}
 
-      <div className="mt-2 border-t border-stone-100 pt-2">
+      <div className="mt-2 border-t border-stone-100 pt-2 dark:border-white/10">
         {reported ? (
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-stone-500 dark:text-stone-400">
             ✓ Reported. Our team will review this conversation.
           </p>
         ) : reporting ? (
@@ -1077,7 +1524,7 @@ export default function LeadChat({
               <button
                 type="button"
                 onClick={() => setReporting(false)}
-                className="text-xs text-stone-500 hover:text-stone-600"
+                className="text-xs text-stone-500 hover:text-stone-600 dark:text-stone-400 dark:hover:text-stone-300"
               >
                 Cancel
               </button>
@@ -1087,7 +1534,7 @@ export default function LeadChat({
           <button
             type="button"
             onClick={() => setReporting(true)}
-            className="text-xs text-stone-500 hover:text-red-600"
+            className="text-xs text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
           >
             ⚠ Report chat
           </button>
@@ -1105,10 +1552,10 @@ const STATUS_LABEL: Record<Quote["status"], string> = {
 };
 
 const STATUS_PILL_CLASS: Record<Quote["status"], string> = {
-  sent: "bg-hearth-50 text-hearth-700",
-  accepted: "bg-green-100 text-green-700",
-  declined: "bg-stone-200 text-stone-600",
-  withdrawn: "bg-stone-200 text-stone-500",
+  sent: "bg-hearth-50 text-hearth-700 dark:bg-hearth-900/40 dark:text-hearth-300",
+  accepted: "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-200",
+  declined: "bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300",
+  withdrawn: "bg-stone-200 text-stone-500 dark:bg-stone-700 dark:text-stone-400",
 };
 
 // A structured quote, rendered inline in the thread wherever it falls by
@@ -1141,9 +1588,9 @@ function QuoteCard({
   const mine = role === "contractor";
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-      <div className="w-full max-w-[85%] rounded-lg border border-stone-200 bg-white p-3 shadow-sm">
+      <div className="w-full max-w-[85%] rounded-lg border border-stone-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-stone-800">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-semibold text-stone-900">
+          <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
             Quote from {contractorName || "your pro"}
           </p>
           <span
@@ -1157,7 +1604,7 @@ function QuoteCard({
           {quote.line_items.map((li, idx) => (
             <li
               key={idx}
-              className="flex items-center justify-between text-sm text-stone-600"
+              className="flex items-center justify-between text-sm text-stone-600 dark:text-stone-300"
             >
               <span className="truncate pr-2">{li.label}</span>
               <span className="shrink-0">{formatUSDCents(li.amount_cents)}</span>
@@ -1165,15 +1612,15 @@ function QuoteCard({
           ))}
         </ul>
 
-        <div className="mt-2 flex items-center justify-between border-t border-stone-100 pt-2">
-          <span className="text-sm font-semibold text-stone-900">Total</span>
-          <span className="text-sm font-semibold text-stone-900">
+        <div className="mt-2 flex items-center justify-between border-t border-stone-100 pt-2 dark:border-white/10">
+          <span className="text-sm font-semibold text-stone-900 dark:text-stone-100">Total</span>
+          <span className="text-sm font-semibold text-stone-900 dark:text-stone-100">
             {formatUSDCents(quote.total_cents)}
           </span>
         </div>
 
         {quote.note && (
-          <p className="mt-2 whitespace-pre-wrap text-xs text-stone-500">
+          <p className="mt-2 whitespace-pre-wrap text-xs text-stone-500 dark:text-stone-400">
             {quote.note}
           </p>
         )}
@@ -1200,7 +1647,7 @@ function QuoteCard({
         )}
 
         {role === "homeowner" && quote.status === "accepted" && (
-          <p className="mt-3 rounded-md bg-green-50 px-2 py-1.5 text-xs text-green-700">
+          <p className="mt-3 rounded-md bg-green-50 px-2 py-1.5 text-xs text-green-700 dark:bg-green-950/40 dark:text-green-200">
             Quote accepted. Head to your{" "}
             <a href="/contractors" className="font-medium underline">
               Contractors page
@@ -1213,19 +1660,19 @@ function QuoteCard({
           <div className="mt-3 flex justify-end">
             {confirmWithdraw ? (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-stone-500">Withdraw this quote?</span>
+                <span className="text-xs text-stone-500 dark:text-stone-400">Withdraw this quote?</span>
                 <button
                   type="button"
                   onClick={onWithdraw}
                   disabled={busy}
-                  className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-50"
+                  className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-50 dark:text-red-400 dark:hover:text-red-300"
                 >
                   Confirm
                 </button>
                 <button
                   type="button"
                   onClick={onCancelWithdraw}
-                  className="text-xs text-stone-500 hover:text-stone-600"
+                  className="text-xs text-stone-500 hover:text-stone-600 dark:text-stone-400 dark:hover:text-stone-300"
                 >
                   Cancel
                 </button>
@@ -1235,9 +1682,229 @@ function QuoteCard({
                 type="button"
                 onClick={onAskWithdraw}
                 disabled={busy}
-                className="text-xs font-medium text-stone-500 hover:text-red-600 disabled:opacity-50"
+                className="text-xs font-medium text-stone-500 hover:text-red-600 disabled:opacity-50 dark:text-stone-400 dark:hover:text-red-400"
               >
                 Withdraw
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const INVOICE_STATUS_LABEL: Record<Invoice["status"], string> = {
+  sent: "Sent",
+  signed: "Signed",
+  void: "Void",
+};
+
+const INVOICE_STATUS_PILL_CLASS: Record<Invoice["status"], string> = {
+  sent: "bg-hearth-50 text-hearth-700 dark:bg-hearth-900/40 dark:text-hearth-300",
+  signed: "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-200",
+  void: "bg-stone-200 text-stone-500 dark:bg-stone-700 dark:text-stone-400",
+};
+
+// An invoice, rendered inline in the thread wherever it falls by created_at.
+// Homeowner gets "Sign invoice" on a 'sent' invoice (in-app typed acceptance
+// or a plain "mark as signed in person"), the pro who sent it gets Void.
+// Signing only ever flips this row's status and records who/when/how: it
+// never touches money/payout logic.
+function InvoiceCard({
+  invoice,
+  role,
+  contractorName,
+  busy,
+  confirmVoid,
+  onAskVoid,
+  onCancelVoid,
+  onVoid,
+  onSignInApp,
+  onSignInPerson,
+}: {
+  invoice: Invoice;
+  role: "homeowner" | "contractor";
+  contractorName?: string;
+  busy: boolean;
+  confirmVoid: boolean;
+  onAskVoid: () => void;
+  onCancelVoid: () => void;
+  onVoid: () => void;
+  onSignInApp?: (typedName: string) => void;
+  onSignInPerson?: () => void;
+}) {
+  const mine = role === "contractor";
+  // Local, per-card UI state: which sign step (if any) is showing, and the
+  // name the homeowner has typed so far. Doesn't need to live in the parent
+  // thread state since nothing else on the page depends on it.
+  const [signStep, setSignStep] = useState<
+    "closed" | "in_app" | "in_person"
+  >("closed");
+  const [typedName, setTypedName] = useState("");
+
+  return (
+    <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+      <div className="w-full max-w-[85%] rounded-lg border border-stone-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-stone-800">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+            Invoice from {contractorName || "your pro"}
+          </p>
+          <span
+            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${INVOICE_STATUS_PILL_CLASS[invoice.status]}`}
+          >
+            {INVOICE_STATUS_LABEL[invoice.status]}
+          </span>
+        </div>
+
+        <ul className="mt-2 space-y-1">
+          {invoice.line_items.map((li, idx) => (
+            <li
+              key={idx}
+              className="flex items-center justify-between text-sm text-stone-600 dark:text-stone-300"
+            >
+              <span className="truncate pr-2">{li.description}</span>
+              <span className="shrink-0">{formatUSDCents(li.amount_cents)}</span>
+            </li>
+          ))}
+        </ul>
+
+        <div className="mt-2 flex items-center justify-between border-t border-stone-100 pt-2 dark:border-white/10">
+          <span className="text-sm font-semibold text-stone-900 dark:text-stone-100">Total</span>
+          <span className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+            {formatUSDCents(invoice.total_cents)}
+          </span>
+        </div>
+
+        {role === "homeowner" &&
+          invoice.status === "sent" &&
+          (onSignInApp || onSignInPerson) && (
+            <div className="mt-3">
+              {signStep === "in_app" ? (
+                <div className="space-y-2 rounded-md bg-stone-50 p-2 dark:bg-stone-700">
+                  <label className="block text-xs text-stone-500 dark:text-stone-400">
+                    Type your full name to sign
+                  </label>
+                  <input
+                    className="input w-full text-sm"
+                    value={typedName}
+                    onChange={(e) => setTypedName(e.target.value)}
+                    placeholder="Full name"
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSignStep("closed");
+                        setTypedName("");
+                      }}
+                      className="btn-secondary flex-1 text-sm"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onSignInApp?.(typedName.trim())}
+                      disabled={busy || typedName.trim() === ""}
+                      className="btn-primary flex-1 text-sm disabled:opacity-50"
+                    >
+                      Confirm signature
+                    </button>
+                  </div>
+                </div>
+              ) : signStep === "in_person" ? (
+                <div className="flex items-center gap-2 rounded-md bg-stone-50 p-2 dark:bg-stone-700">
+                  <span className="text-xs text-stone-600 dark:text-stone-300">
+                    Mark this invoice as signed in person?
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onSignInPerson?.()}
+                    disabled={busy}
+                    className="text-xs font-semibold text-hearth-700 hover:text-hearth-800 disabled:opacity-50 dark:text-hearth-300 dark:hover:text-hearth-200"
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSignStep("closed")}
+                    className="text-xs text-stone-500 hover:text-stone-600 dark:text-stone-400 dark:hover:text-stone-300"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  {onSignInApp && (
+                    <button
+                      type="button"
+                      onClick={() => setSignStep("in_app")}
+                      disabled={busy}
+                      className="btn-primary flex-1 text-sm disabled:opacity-50"
+                    >
+                      Sign invoice
+                    </button>
+                  )}
+                  {onSignInPerson && (
+                    <button
+                      type="button"
+                      onClick={() => setSignStep("in_person")}
+                      disabled={busy}
+                      className="btn-secondary flex-1 text-sm disabled:opacity-50"
+                    >
+                      Mark as signed in person
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+        {invoice.status === "signed" && (
+          <p className="mt-3 rounded-md bg-green-50 px-2 py-1.5 text-xs text-green-700 dark:bg-green-950/40 dark:text-green-200">
+            Signed by {invoice.signed_by}
+            {invoice.signed_at &&
+              ` on ${new Date(invoice.signed_at).toLocaleDateString()}`}{" "}
+            ({invoice.signature_method === "in_person" ? "in person" : "in app"})
+          </p>
+        )}
+
+        {invoice.status === "void" && (
+          <p className="mt-3 rounded-md bg-stone-100 px-2 py-1.5 text-xs text-stone-500 dark:bg-stone-700 dark:text-stone-400">
+            This invoice was voided.
+          </p>
+        )}
+
+        {role === "contractor" && invoice.status === "sent" && (
+          <div className="mt-3 flex justify-end">
+            {confirmVoid ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-stone-500 dark:text-stone-400">Void this invoice?</span>
+                <button
+                  type="button"
+                  onClick={onVoid}
+                  disabled={busy}
+                  className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-50 dark:text-red-400 dark:hover:text-red-300"
+                >
+                  Confirm
+                </button>
+                <button
+                  type="button"
+                  onClick={onCancelVoid}
+                  className="text-xs text-stone-500 hover:text-stone-600 dark:text-stone-400 dark:hover:text-stone-300"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={onAskVoid}
+                disabled={busy}
+                className="text-xs font-medium text-stone-500 hover:text-red-600 disabled:opacity-50 dark:text-stone-400 dark:hover:text-red-400"
+              >
+                Void
               </button>
             )}
           </div>

@@ -65,8 +65,8 @@ export default function ProjectsCard({
       <section className="card space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="font-semibold text-stone-900">Your projects</h2>
-            <p className="mt-1 text-sm text-stone-500">
+            <h2 className="font-semibold text-stone-900 dark:text-stone-100">Your projects</h2>
+            <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
               Photo albums of completed work, shown on your public page.
               Homeowners hire pros they can see examples from.
             </p>
@@ -83,18 +83,18 @@ export default function ProjectsCard({
         </div>
 
         {projects.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-stone-300 bg-stone-50 px-4 py-6 text-center text-sm text-stone-500">
+          <p className="rounded-xl border border-dashed border-stone-300 bg-stone-50 px-4 py-6 text-center text-sm text-stone-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-400">
             No projects yet. Add your first one: a few photos and a title are
             all it takes.
           </p>
         ) : (
-          <ul className="divide-y divide-stone-100">
+          <ul className="divide-y divide-stone-100 dark:divide-white/10">
             {projects.map((p) => (
               <li key={p.id} className="py-4 first:pt-0 last:pb-0">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-medium text-stone-900">{p.title}</p>
-                    <p className="mt-0.5 text-xs text-stone-500">
+                    <p className="font-medium text-stone-900 dark:text-stone-100">{p.title}</p>
+                    <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
                       {p.category
                         ? `${iconFor(JOB_CATEGORIES, p.category)} ${labelFor(JOB_CATEGORIES, p.category)}`
                         : "No category"}
@@ -107,7 +107,7 @@ export default function ProjectsCard({
                     <button
                       type="button"
                       onClick={() => setEditing(p.id)}
-                      className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-600 shadow-sm hover:bg-stone-50"
+                      className="btn-secondary text-xs px-3 py-1.5"
                     >
                       Edit
                     </button>
@@ -126,7 +126,7 @@ export default function ProjectsCard({
                       <input type="hidden" name="project_id" value={p.id} />
                       <button
                         type="submit"
-                        className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 shadow-sm hover:bg-red-50"
+                        className="btn-secondary text-xs px-3 py-1.5 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
                       >
                         Delete
                       </button>
@@ -141,7 +141,7 @@ export default function ProjectsCard({
                         key={ph.id}
                         src={ph.url}
                         alt={`${p.title} photo`}
-                        className="h-16 w-16 flex-none rounded-lg border border-stone-200 object-cover"
+                        className="h-16 w-16 flex-none rounded-lg border border-stone-200 object-cover dark:border-white/10"
                       />
                     ))}
                   </div>
@@ -154,10 +154,10 @@ export default function ProjectsCard({
 
       {atFreeCap && (
         <section className="card space-y-2">
-          <h2 className="font-semibold text-stone-900">
+          <h2 className="font-semibold text-stone-900 dark:text-stone-100">
             Want more than {FREE_PROJECT_LIMIT} projects?
           </h2>
-          <p className="text-sm text-stone-500">
+          <p className="text-sm text-stone-500 dark:text-stone-400">
             Every pro can showcase up to {FREE_PROJECT_LIMIT} projects for
             free. Hearth Pro members get unlimited projects, plus
             Before/After badges on their public photos.
@@ -169,11 +169,11 @@ export default function ProjectsCard({
       )}
 
       {!member && !atFreeCap && (
-        <p className="text-xs text-stone-500">
+        <p className="text-xs text-stone-500 dark:text-stone-400">
           Free accounts can showcase up to {FREE_PROJECT_LIMIT} projects.
           Hearth Pro members get unlimited projects and public Before/After
           badges:{" "}
-          <Link href="/pro/plus" className="text-hearth-700 hover:underline">
+          <Link href="/pro/plus" className="text-hearth-700 hover:underline dark:text-hearth-300">
             see Hearth Pro
           </Link>
           .
@@ -195,10 +195,10 @@ function ProjectForm({
   return (
     <form action={saveProjectAction} className="card space-y-5">
       <div>
-        <h2 className="font-semibold text-stone-900">
+        <h2 className="font-semibold text-stone-900 dark:text-stone-100">
           {project ? "Edit project" : "Add a project"}
         </h2>
-        <p className="mt-1 text-sm text-stone-500">
+        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           It appears on your public page in its own Projects section, clearly
           separate from your reviews.
         </p>
@@ -218,7 +218,7 @@ function ProjectForm({
           placeholder="e.g. Full kitchen remodel in Maple Grove"
           className="input"
         />
-        <p className="mt-1 text-xs text-stone-500">Up to 80 characters.</p>
+        <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">Up to 80 characters.</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -259,7 +259,7 @@ function ProjectForm({
           placeholder="What the job involved and how it turned out."
           className="input h-auto"
         />
-        <p className="mt-1 text-xs text-stone-500">Up to 500 characters.</p>
+        <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">Up to 500 characters.</p>
       </div>
 
       <ProjectPhotoManager
@@ -270,12 +270,8 @@ function ProjectForm({
         }))}
       />
 
-      <div className="flex justify-end gap-2 border-t border-stone-100 pt-4">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-stone-600 shadow-sm hover:bg-stone-50"
-        >
+      <div className="flex justify-end gap-2 border-t border-stone-100 pt-4 dark:border-white/10">
+        <button type="button" onClick={onCancel} className="btn-secondary">
           Cancel
         </button>
         <button type="submit" className="btn-primary">

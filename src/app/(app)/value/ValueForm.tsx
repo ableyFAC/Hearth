@@ -40,11 +40,11 @@ export default function ValueForm({
       }}
       className="card space-y-4"
     >
-      <h3 className="font-semibold text-stone-900">
+      <h3 className="font-semibold text-stone-900 dark:text-stone-100">
         {hasData ? "Update your numbers" : "Tell us about your purchase"}
       </h3>
       {!hasData && (
-        <p className="text-sm text-stone-500">
+        <p className="text-sm text-stone-500 dark:text-stone-400">
           Just two numbers to get started. We will estimate the rest.
         </p>
       )}

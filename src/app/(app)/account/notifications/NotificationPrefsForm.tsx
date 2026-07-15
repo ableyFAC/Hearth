@@ -16,19 +16,19 @@ export default function NotificationPrefsForm({
   return (
     <form
       action={saveNotificationPrefsAction}
-      className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm"
+      className="card p-6"
     >
-      <div className="divide-y divide-stone-100">
+      <div className="divide-y divide-stone-100 dark:divide-white/10">
         {NOTIFICATION_CHANNELS.map((c) => (
           <label
             key={c.key}
             className="flex cursor-pointer items-start justify-between gap-4 py-4 first:pt-0"
           >
             <span>
-              <span className="block text-sm font-medium text-stone-900">
+              <span className="block text-sm font-medium text-stone-900 dark:text-stone-100">
                 {c.label}
               </span>
-              <span className="block text-sm text-stone-500">{c.desc}</span>
+              <span className="block text-sm text-stone-500 dark:text-stone-400">{c.desc}</span>
             </span>
             <input
               type="checkbox"

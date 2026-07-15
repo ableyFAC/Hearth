@@ -15,12 +15,15 @@ function format(input: string): string {
 
 export default function PhoneInput({
   name,
+  id,
   defaultValue = "",
   placeholder = "(555) 123-4567",
   className = "input",
   required = false,
 }: {
   name: string;
+  // Lets a surrounding <label htmlFor> point at this input.
+  id?: string;
   defaultValue?: string;
   placeholder?: string;
   className?: string;
@@ -30,6 +33,7 @@ export default function PhoneInput({
   return (
     <input
       name={name}
+      id={id}
       type="tel"
       inputMode="tel"
       autoComplete="tel"

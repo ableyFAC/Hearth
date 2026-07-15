@@ -26,8 +26,8 @@ export default function LeadTabs({
             href={href}
             className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition ${
               isActive
-                ? "bg-stone-900 text-white"
-                : "text-stone-500 hover:bg-stone-100 hover:text-stone-800"
+                ? "bg-stone-900 text-white dark:bg-stone-700"
+                : "text-stone-500 hover:bg-stone-100 hover:text-stone-800 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
             }`}
           >
             {t.label}
@@ -35,7 +35,7 @@ export default function LeadTabs({
               className={`rounded-full px-1.5 text-xs ${
                 isActive
                   ? "bg-white/20 text-white"
-                  : "bg-stone-100 text-stone-500"
+                  : "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400"
               }`}
             >
               {t.count}

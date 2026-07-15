@@ -19,20 +19,26 @@ export type PropertyWithShared = Property & { isShared: boolean };
 // has run, the "properties member select" RLS policy lets this same query
 // also return homes shared with the caller, alongside the ones they own.
 // Before that migration runs, the member select policy simply does not
-// exist yet, so RLS still only returns owned rows, which is fine. If the
-// query itself errors for any reason, fall back to an empty list rather
-// than throwing.
+// exist yet, so RLS still only returns owned rows, which is fine.
 export const getProperties = cache(async (): Promise<PropertyWithShared[]> => {
   const user = await getUser();
   if (!user) return [];
 
   const supabase = createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("properties")
     .select("*")
     .order("created_at", { ascending: true });
 
-  const rows = data ?? [];
+  // A failed query (network blip, Supabase outage) must NOT read as "this
+  // user has no homes": that is what bounced onboarded users back to
+  // /onboarding whenever wifi dropped. Throw instead, so the segment error
+  // boundary renders its retry screen.
+  if (error) {
+    throw new Error(`Could not load your homes: ${error.message}`);
+  }
+
+  const rows = data;
   const withShared = rows.map((row) => ({
     ...row,
     isShared: row.user_id !== user.id,

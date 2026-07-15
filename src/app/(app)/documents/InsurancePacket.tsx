@@ -19,10 +19,10 @@ export default function InsurancePacket({ isPlus }: { isPlus: boolean }) {
   if (!isPlus) {
     return (
       <div className="card space-y-3">
-        <h3 className="text-sm font-semibold text-stone-900">
+        <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
           Want a head start on requoting?
         </h3>
-        <p className="text-sm text-stone-600">
+        <p className="text-sm text-stone-600 dark:text-stone-300">
           Hearth Plus can build a requote packet from your home&apos;s facts:
           the details agents always ask for, your recent maintenance and
           upgrades, and the questions worth asking beyond price. You stay in
@@ -80,10 +80,10 @@ export default function InsurancePacket({ isPlus }: { isPlus: boolean }) {
 
   return (
     <div className="card space-y-3">
-      <h3 className="text-sm font-semibold text-stone-900">
+      <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
         Build my requote packet
       </h3>
-      <p className="text-sm text-stone-600">
+      <p className="text-sm text-stone-600 dark:text-stone-300">
         Hearth will put your home&apos;s facts and recent upkeep into one
         plain-language summary you can hand to insurance agents when you shop
         for quotes, plus the coverage questions worth asking. Review it and
@@ -118,7 +118,7 @@ export default function InsurancePacket({ isPlus }: { isPlus: boolean }) {
               {loading ? "Building..." : "Build again"}
             </button>
           </div>
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-stone-500 dark:text-stone-400">
             This is a starting point, not insurance advice, and requoting is
             never guaranteed to save money. Read it closely, correct anything
             that doesn&apos;t match your home, and add the details only you

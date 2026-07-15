@@ -105,9 +105,9 @@ export default async function DocumentsPage() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
       <header className="mb-1">
-        <h1 className="text-2xl font-semibold text-stone-900">Documents</h1>
+        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Documents</h1>
       </header>
-      <p className="mb-5 text-sm text-stone-500">
+      <p className="mb-5 text-sm text-stone-500 dark:text-stone-400">
         Your home's paperwork in one place. Warranties, manuals, receipts, and
         model labels all live here. Hearth reads each one and can drop the
         details straight into your home profile, so you never dig for a manual
@@ -122,18 +122,18 @@ export default async function DocumentsPage() {
             read as "your files are gone" when they're actually just not
             loaded right now. */}
         {docsError && (
-          <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
             We couldn&apos;t load your documents right now. They&apos;re safe,
             try again shortly.
           </div>
         )}
 
         {!docsError && list.length === 0 && (
-          <div className="rounded-xl border border-dashed border-stone-300 px-4 py-8 text-center">
+          <div className="rounded-xl border border-dashed border-stone-300 px-4 py-8 text-center dark:border-stone-700">
             <div className="flex justify-center">
               <span className="icon-chip">📄</span>
             </div>
-            <p className="mt-2 text-sm text-stone-500">
+            <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
               No documents yet. Add your first one above.
             </p>
           </div>
@@ -156,7 +156,7 @@ export default async function DocumentsPage() {
           return (
             <div
               key={d.id}
-              className="flex gap-3 rounded-xl border border-stone-200 bg-white p-4"
+              className="flex gap-3 rounded-xl border border-stone-200 bg-white p-4 dark:border-white/10 dark:bg-stone-800"
             >
               <div className="icon-chip">
                 {d.system_type ? iconFor(SYSTEM_TYPES, d.system_type) : "📄"}
@@ -168,25 +168,25 @@ export default async function DocumentsPage() {
                     href={imgSrc(d.file_url) ?? undefined}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="truncate font-medium text-stone-900 hover:text-hearth-700 hover:underline"
+                    className="truncate font-medium text-stone-900 hover:text-hearth-700 hover:underline dark:text-stone-100"
                   >
                     {d.title || "Home document"}
                   </a>
-                  <span className="chip bg-stone-100 text-stone-500">
+                  <span className="chip bg-stone-100 text-stone-500 dark:bg-stone-700 dark:text-stone-400">
                     {DOC_TYPE_LABEL[d.doc_type ?? "other"] ?? "Document"}
                   </span>
                   {d.system_type && (
-                    <span className="chip bg-hearth-50 text-hearth-700">
+                    <span className="chip bg-hearth-50 text-hearth-700 dark:bg-hearth-900/40 dark:text-hearth-300">
                       {labelFor(SYSTEM_TYPES, d.system_type)}
                     </span>
                   )}
                 </div>
 
                 {d.summary && (
-                  <p className="mt-1 text-sm text-stone-600">{d.summary}</p>
+                  <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">{d.summary}</p>
                 )}
                 {facts.length > 0 && (
-                  <p className="mt-1 text-xs text-stone-500">
+                  <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                     {facts.join(" · ")}
                   </p>
                 )}
@@ -197,7 +197,7 @@ export default async function DocumentsPage() {
                       <input type="hidden" name="id" value={d.id} />
                       <button
                         type="submit"
-                        className="rounded-md bg-hearth-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-hearth-700"
+                        className="btn-primary px-2.5 py-1 text-xs"
                       >
                         + Add to my home
                       </button>
@@ -212,7 +212,7 @@ export default async function DocumentsPage() {
                     <input type="hidden" name="id" value={d.id} />
                     <button
                       type="submit"
-                      className="text-xs text-stone-500 hover:text-red-600"
+                      className="text-xs text-stone-500 hover:text-red-600 dark:text-stone-400"
                     >
                       Remove
                     </button>
@@ -226,10 +226,10 @@ export default async function DocumentsPage() {
 
       {/* Home insurance renewal checkup (migration 0040) */}
       <section className="mt-10">
-        <h2 className="mb-1 flex items-center text-lg font-semibold text-stone-900">
+        <h2 className="mb-1 flex items-center text-lg font-semibold text-stone-900 dark:text-stone-100">
           Home insurance
         </h2>
-        <p className="mb-4 text-sm text-stone-500">
+        <p className="mb-4 text-sm text-stone-500 dark:text-stone-400">
           Add your renewal date and annual premium from your policy and Hearth
           will nudge you about 45 days before renewal, while there&apos;s
           still time to shop around.
@@ -272,14 +272,14 @@ export default async function DocumentsPage() {
               </div>
 
               {daysToRenewal! < 0 && (
-                <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
                   That renewal date has passed. When your new policy starts,
                   update the date and premium below so next year&apos;s
                   reminder lands on time.
                 </p>
               )}
 
-              <p className="text-sm text-stone-600">
+              <p className="text-sm text-stone-600 dark:text-stone-300">
                 For context, the average premium{" "}
                 {insRegion ? `in ${insRegion}` : "nationally"} is roughly{" "}
                 {money(insRate.avgPremium)} a year, and premiums there rose

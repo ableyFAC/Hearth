@@ -38,11 +38,11 @@ export default function InsuranceForm({
       }}
       className="card space-y-4"
     >
-      <h3 className="font-semibold text-stone-900">
+      <h3 className="font-semibold text-stone-900 dark:text-stone-100">
         {hasData ? "Update your policy details" : "Add your policy details"}
       </h3>
       {!hasData && (
-        <p className="text-sm text-stone-500">
+        <p className="text-sm text-stone-500 dark:text-stone-400">
           Both numbers are on your policy&apos;s declarations page (or the
           renewal letter your insurer mails you). Two numbers and you&apos;re
           done.

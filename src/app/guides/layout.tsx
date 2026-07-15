@@ -27,21 +27,21 @@ export default async function GuidesLayout({
       <header className="mx-auto flex max-w-2xl items-center justify-between px-6 pt-6">
         <a
           href="/"
-          className="flex items-center gap-2 font-semibold text-stone-900"
+          className="flex items-center gap-2 font-semibold text-stone-900 dark:text-stone-100"
         >
           <span aria-hidden>🏡</span> Hearth
         </a>
         {user ? (
           <a
             href="/dashboard"
-            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700"
+            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700 dark:border-stone-600 dark:text-stone-300 dark:hover:text-hearth-300"
           >
             Open your dashboard
           </a>
         ) : (
           <a
             href="/get-started"
-            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700"
+            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700 dark:border-stone-600 dark:text-stone-300 dark:hover:text-hearth-300"
           >
             Get started free
           </a>
@@ -50,28 +50,28 @@ export default async function GuidesLayout({
 
       {children}
 
-      <footer className="mx-auto mt-16 max-w-2xl border-t border-stone-200 px-6 py-6 text-center">
-        <p className="text-xs text-stone-500">
+      <footer className="mx-auto mt-16 max-w-2xl border-t border-stone-200 px-6 py-6 text-center dark:border-white/10">
+        <p className="text-xs text-stone-500 dark:text-stone-400">
           🏡 Hearth · Your home, looked after
         </p>
         <p className="mt-2 text-xs">
           <a
             href="/guides"
-            className="text-stone-500 hover:text-hearth-700 hover:underline"
+            className="text-stone-500 hover:text-hearth-700 hover:underline dark:text-stone-400 dark:hover:text-hearth-300"
           >
             All guides
           </a>{" "}
           ·{" "}
           <a
             href="/privacy"
-            className="text-stone-500 hover:text-hearth-700 hover:underline"
+            className="text-stone-500 hover:text-hearth-700 hover:underline dark:text-stone-400 dark:hover:text-hearth-300"
           >
             Privacy
           </a>{" "}
           ·{" "}
           <a
             href="/terms"
-            className="text-stone-500 hover:text-hearth-700 hover:underline"
+            className="text-stone-500 hover:text-hearth-700 hover:underline dark:text-stone-400 dark:hover:text-hearth-300"
           >
             Terms
           </a>

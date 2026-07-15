@@ -17,10 +17,10 @@ export default function AppealLetter({ isPlus }: { isPlus: boolean }) {
   if (!isPlus) {
     return (
       <div className="card space-y-3">
-        <h2 className="text-sm font-semibold text-stone-900">
+        <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
           Want a head start on an appeal?
         </h2>
-        <p className="text-sm text-stone-600">
+        <p className="text-sm text-stone-600 dark:text-stone-300">
           Hearth Plus can draft a respectful appeal letter using your
           home&apos;s facts, ready for you to review, fill in your parcel
           number, and file with your county. You stay in control: Hearth
@@ -71,10 +71,10 @@ export default function AppealLetter({ isPlus }: { isPlus: boolean }) {
 
   return (
     <div className="card space-y-3">
-      <h2 className="text-sm font-semibold text-stone-900">
+      <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
         Draft an appeal letter
       </h2>
-      <p className="text-sm text-stone-600">
+      <p className="text-sm text-stone-600 dark:text-stone-300">
         Hearth will draft a respectful, factual letter from your home&apos;s
         details. Review it, fill in the placeholders like your parcel number,
         and file it with your county yourself. Every county has its own form,
@@ -114,7 +114,7 @@ export default function AppealLetter({ isPlus }: { isPlus: boolean }) {
               {loading ? "Drafting..." : "Draft again"}
             </button>
           </div>
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-stone-500 dark:text-stone-400">
             This is a starting point, not legal or tax advice. Read it
             closely, correct anything that doesn&apos;t match your situation,
             and add the details only you have before you send it. Appeals are

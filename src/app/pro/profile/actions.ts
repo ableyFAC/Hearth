@@ -57,6 +57,56 @@ export async function updatePasswordAction(formData: FormData) {
   redirect("/pro/profile");
 }
 
+// Change the signed-in pro's email. Supabase sends a confirmation link to the
+// new address; nothing changes until it's clicked, so this is safe to offer
+// without a current-password gate (the link itself is the proof).
+export async function updateEmailAction(formData: FormData) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/signin");
+
+  const email = (formData.get("email") as string)?.trim() || "";
+  if (!email || !email.includes("@")) {
+    setFlash("That email address doesn't look right.", "error");
+    redirect("/pro/profile");
+  }
+  if (email === user.email) {
+    setFlash("That's already your sign-in email.", "error");
+    redirect("/pro/profile");
+  }
+
+  const { error } = await supabase.auth.updateUser({ email });
+  if (error) {
+    setFlash(error.message, "error");
+    redirect("/pro/profile");
+  }
+
+  setFlash("Check your new email to confirm the change.");
+  redirect("/pro/profile");
+}
+
+// End every session except this one by revoking the other refresh tokens.
+// Supabase doesn't expose a per-device session list to us, so this is the
+// whole feature: one honest button instead of a fake device list.
+export async function signOutOthersAction() {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/signin");
+
+  const { error } = await supabase.auth.signOut({ scope: "others" });
+  if (error) {
+    setFlash(error.message, "error");
+    redirect("/pro/profile");
+  }
+
+  setFlash("Signed out everywhere else. This device stays signed in.");
+  redirect("/pro/profile");
+}
+
 // Save the Pro-member extras for the public page (/p/<id>): logo, about, and
 // the private license/insurance vault that powers the "on file" badge. The
 // vault details never appear publicly; public_pro_profile (0033) reduces them
@@ -147,13 +197,36 @@ export async function savePublicPageAction(formData: FormData) {
 
 // Permanently delete the signed-in user's account. Uses the service role to
 // remove the auth user (cascading to their public.users row and anything keyed
-// to it), then clears the session.
-export async function deleteAccountAction() {
+// to it), then clears the session. Requires re-entering the current password
+// first (same bar as updatePasswordAction) so a hijacked / shared session - or
+// a stray click - can't destroy the account with no proof of identity.
+export async function deleteAccountAction(formData: FormData) {
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/signin");
+  if (!user?.email) redirect("/signin");
+
+  const current = (formData.get("current_password") as string) || "";
+  if (!current) {
+    setFlash("Current password is incorrect.", "error");
+    redirect("/pro/profile");
+  }
+
+  // Verify the current password without disturbing the active session.
+  const verifier = createJsClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { persistSession: false } }
+  );
+  const { error: verifyError } = await verifier.auth.signInWithPassword({
+    email: user.email,
+    password: current,
+  });
+  if (verifyError) {
+    setFlash("Current password is incorrect.", "error");
+    redirect("/pro/profile");
+  }
 
   const admin = createAdminClient();
   // Remove the public company listing first so it can't linger as an orphaned

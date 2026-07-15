@@ -3,11 +3,19 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { imgSrc } from "@/lib/storage";
+import TakePhotoButton from "@/components/TakePhotoButton";
 
 // Uploads images to the `home-photos` bucket under <propertyId>/ and renders a
 // hidden input per uploaded URL (name="photo_urls") so the parent <form>'s
 // server action receives them. Degrades gracefully if the bucket isn't set up.
-export default function PhotoUpload({ propertyId }: { propertyId: string }) {
+export default function PhotoUpload({
+  propertyId,
+  id,
+}: {
+  propertyId: string;
+  // Ties the internal label to the file input for assistive tech.
+  id?: string;
+}) {
   const supabase = createClient();
   const [urls, setUrls] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -56,16 +64,24 @@ export default function PhotoUpload({ propertyId }: { propertyId: string }) {
 
   return (
     <div>
-      <label className="label">Photos (optional)</label>
+      <label className="label" htmlFor={id}>
+        Photos (optional)
+      </label>
       <input
+        id={id}
         type="file"
         accept="image/*"
         multiple
         onChange={onPick}
-        className="block w-full text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-hearth-100 file:px-3 file:py-1.5 file:text-hearth-800"
+        className="block w-full text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-hearth-100 file:px-3 file:py-1.5 file:text-hearth-800 dark:text-stone-300 dark:file:bg-hearth-900 dark:file:text-hearth-300"
       />
-      {busy && <p className="mt-1 text-xs text-stone-500">Uploading…</p>}
-      {err && <p className="mt-1 text-xs text-amber-600">{err}</p>}
+      {/* Phones get a direct-to-camera shortcut too. Snap, then tap again for
+          the next one; each shot joins the same batch. Camera returns one
+          photo per tap, so the running previews below double as the "you can
+          keep adding" cue. */}
+      <TakePhotoButton onPick={onPick} disabled={busy} className="mt-2" />
+      {busy && <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">Uploading…</p>}
+      {err && <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">{err}</p>}
       <div className="mt-2 flex flex-wrap gap-2">
         {urls.map((u) => (
           // eslint-disable-next-line @next/next/no-img-element

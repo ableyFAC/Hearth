@@ -91,6 +91,29 @@ export async function applyDocumentToTwinAction(formData: FormData) {
   const id = s(formData, "id");
   if (!id) throw new Error("No document");
 
+  // Idempotency gate, FIRST: atomically claim the document by stamping
+  // applied_at only where it is still null. A double-click or replayed POST
+  // finds zero rows here and bails, so the twin push and the warranty
+  // reminder insert below can never run twice for one document. Trade-off:
+  // if a write below fails after the claim, the doc reads as applied with
+  // partial effects, which beats the old order (stamp last) that let repeat
+  // submits duplicate reminders.
+  const { data: claimed } = await supabase
+    .from("documents")
+    .update({ applied_at: new Date().toISOString() })
+    .eq("id", id)
+    .is("applied_at", null)
+    .select("id")
+    .maybeSingle();
+  if (!claimed) {
+    // Already applied (possibly by a concurrent submit a moment ago): the
+    // work is done, so report success rather than an error.
+    setFlash("Already added to your home.", "success");
+    revalidatePath("/documents");
+    revalidatePath("/dashboard");
+    return;
+  }
+
   const { data: doc } = await supabase
     .from("documents")
     .select(
@@ -145,10 +168,7 @@ export async function applyDocumentToTwinAction(formData: FormData) {
     });
   }
 
-  await supabase
-    .from("documents")
-    .update({ applied_at: new Date().toISOString() })
-    .eq("id", id);
+  // applied_at was already stamped by the claim at the top of this action.
 
   const sysLabel = doc.system_type
     ? labelFor(SYSTEM_TYPES, doc.system_type)

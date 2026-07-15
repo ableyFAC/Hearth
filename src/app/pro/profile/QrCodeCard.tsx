@@ -49,7 +49,7 @@ export default function QrCodeCard({
       .replace(/^-+|-+$/g, "") || "page";
 
   return (
-    <div className="flex items-center gap-4 border-t border-stone-100 pt-4">
+    <div className="flex items-center gap-4 border-t border-stone-100 pt-4 dark:border-white/10">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={dataUrl}
@@ -57,15 +57,15 @@ export default function QrCodeCard({
         className="h-24 w-24 rounded-lg border border-stone-200 bg-white"
       />
       <div className="min-w-0">
-        <p className="text-sm font-medium text-stone-900">Your QR code</p>
-        <p className="mt-0.5 text-xs text-stone-500">
+        <p className="text-sm font-medium text-stone-900 dark:text-stone-100">Your QR code</p>
+        <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
           Put it on your truck, invoices, and business cards. Scanning it opens
           your page.
         </p>
         <a
           href={dataUrl}
           download={`hearth-qr-${slug}.png`}
-          className="mt-2 inline-block rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-600 shadow-sm hover:bg-stone-50"
+          className="btn-secondary mt-2 text-xs px-3 py-1.5"
         >
           Download QR (PNG)
         </a>

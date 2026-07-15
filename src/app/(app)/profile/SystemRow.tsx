@@ -25,10 +25,10 @@ import MonthYearInput from "@/components/MonthYearInput";
 import MaterialSelect from "@/components/MaterialSelect";
 
 const STAGE_STYLE: Record<string, string> = {
-  healthy: "bg-green-50 text-green-700 border-green-200",
-  aging: "bg-amber-50 text-amber-700 border-amber-200",
-  due: "bg-red-50 text-red-700 border-red-200",
-  unknown: "bg-stone-50 text-stone-500 border-stone-200",
+  healthy: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-200 dark:border-green-900",
+  aging: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-900",
+  due: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-200 dark:border-red-900",
+  unknown: "bg-stone-50 text-stone-500 border-stone-200 dark:bg-stone-700 dark:text-stone-400 dark:border-white/10",
 };
 
 // Plain-language label for each life stage, shown right next to the system so an
@@ -155,7 +155,7 @@ export default function SystemRow({
         {/* Header + Remove sit OUTSIDE the update form (a separate delete form
             can't be nested inside another form). */}
         <div className="flex items-center justify-between gap-2">
-          <p className="font-medium text-stone-900">
+          <p className="font-medium text-stone-900 dark:text-stone-100">
             {iconFor(SYSTEM_TYPES, s.system_type)}{" "}
             {labelFor(SYSTEM_TYPES, s.system_type)}
           </p>
@@ -166,7 +166,7 @@ export default function SystemRow({
                 <button
                   type="button"
                   onClick={() => setConfirmRemove(false)}
-                  className="text-xs text-stone-500 hover:text-stone-700"
+                  className="text-xs text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
                 >
                   Cancel
                 </button>
@@ -181,7 +181,7 @@ export default function SystemRow({
               <button
                 type="button"
                 onClick={() => setConfirmRemove(true)}
-                className="text-xs text-stone-500 hover:text-red-600"
+                className="text-xs text-stone-500 hover:text-red-600 dark:text-stone-400"
               >
                 Remove
               </button>
@@ -313,7 +313,7 @@ export default function SystemRow({
     >
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium text-stone-900">
+          <span className="font-medium text-stone-900 dark:text-stone-100">
             {iconFor(SYSTEM_TYPES, s.system_type)}{" "}
             {labelFor(SYSTEM_TYPES, s.system_type)}
           </span>
@@ -322,9 +322,9 @@ export default function SystemRow({
           <span
             className={`rounded-full border px-2 py-0.5 text-xs ${
               mustDo
-                ? "border-red-300 bg-red-100 font-semibold text-red-700"
+                ? "border-red-300 bg-red-100 font-semibold text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
                 : estimatedDue
-                  ? "border-amber-300 bg-amber-100 text-amber-700"
+                  ? "border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
                   : STAGE_STYLE[h.stage]
             }`}
           >
@@ -348,58 +348,58 @@ export default function SystemRow({
         {expanded && (
           <dl
             onClick={(e) => e.stopPropagation()}
-            className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg bg-stone-50 p-3 text-xs"
+            className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg bg-stone-50 p-3 text-xs dark:bg-stone-900"
           >
-            <div className="col-span-2 mb-2 border-b border-stone-200 pb-3">
-              <dt className="font-medium text-stone-800">Why this status</dt>
-              <dd className="mt-1 text-stone-500">{whyText}</dd>
+            <div className="col-span-2 mb-2 border-b border-stone-200 pb-3 dark:border-white/10">
+              <dt className="font-medium text-stone-800 dark:text-stone-200">Why this status</dt>
+              <dd className="mt-1 text-stone-500 dark:text-stone-400">{whyText}</dd>
             </div>
             <div>
-              <dt className="font-medium text-stone-800">How old it is</dt>
-              <dd className="text-stone-500">{ageText}</dd>
+              <dt className="font-medium text-stone-800 dark:text-stone-200">How old it is</dt>
+              <dd className="text-stone-500 dark:text-stone-400">{ageText}</dd>
             </div>
             <div>
-              <dt className="font-medium text-stone-800">Typical replacement</dt>
-              <dd className="text-stone-500">
+              <dt className="font-medium text-stone-800 dark:text-stone-200">Typical replacement</dt>
+              <dd className="text-stone-500 dark:text-stone-400">
                 every {h.lifespan} years
               </dd>
             </div>
             <div>
-              <dt className="font-medium text-stone-800">Life left</dt>
-              <dd className="text-stone-500">{lifeLeftText}</dd>
+              <dt className="font-medium text-stone-800 dark:text-stone-200">Life left</dt>
+              <dd className="text-stone-500 dark:text-stone-400">{lifeLeftText}</dd>
             </div>
             <div>
-              <dt className="font-medium text-stone-800">Last serviced</dt>
-              <dd className="text-stone-500">{lastServicedText}</dd>
+              <dt className="font-medium text-stone-800 dark:text-stone-200">Last serviced</dt>
+              <dd className="text-stone-500 dark:text-stone-400">{lastServicedText}</dd>
             </div>
             <div>
-              <dt className="font-medium text-stone-800">Condition</dt>
-              <dd className="text-stone-500">{conditionText}</dd>
+              <dt className="font-medium text-stone-800 dark:text-stone-200">Condition</dt>
+              <dd className="text-stone-500 dark:text-stone-400">{conditionText}</dd>
             </div>
             {s.material_or_model && (
               <div className="col-span-2">
-                <dt className="font-medium text-stone-800">{materialLabel(s.system_type)}</dt>
-                <dd className="text-stone-500">
+                <dt className="font-medium text-stone-800 dark:text-stone-200">{materialLabel(s.system_type)}</dt>
+                <dd className="text-stone-500 dark:text-stone-400">
                   {s.material_or_model}
                 </dd>
               </div>
             )}
             {s.notes && s.notes !== STARTER_SYSTEM_NOTE && (
               <div className="col-span-2">
-                <dt className="font-medium text-stone-800">Notes</dt>
-                <dd className="text-stone-500">{s.notes}</dd>
+                <dt className="font-medium text-stone-800 dark:text-stone-200">Notes</dt>
+                <dd className="text-stone-500 dark:text-stone-400">{s.notes}</dd>
               </div>
             )}
             <div className="col-span-2">
-              <dt className="font-medium text-stone-800">Maintenance tip</dt>
-              <dd className="text-stone-500">{tipForSystem(s.system_type)}</dd>
+              <dt className="font-medium text-stone-800 dark:text-stone-200">Maintenance tip</dt>
+              <dd className="text-stone-500 dark:text-stone-400">{tipForSystem(s.system_type)}</dd>
             </div>
             {cost && (
-              <div className="col-span-2 mt-1 border-t border-stone-200 pt-2 text-right">
-                <dt className="font-medium text-stone-800">
+              <div className="col-span-2 mt-1 border-t border-stone-200 pt-2 text-right dark:border-white/10">
+                <dt className="font-medium text-stone-800 dark:text-stone-200">
                   Estimated replacement cost
                 </dt>
-                <dd className="text-stone-500">
+                <dd className="text-stone-500 dark:text-stone-400">
                   {money(cost.low)} to {money(cost.high)}
                   {yearsAway === 0
                     ? " · due now"
@@ -408,7 +408,7 @@ export default function SystemRow({
                           yearsAway === 1 ? "" : "s"
                         }`
                       : ""}
-                  <span className="block text-[10px] text-stone-500">
+                  <span className="block text-[10px] text-stone-500 dark:text-stone-400">
                     Based on this system&apos;s age and condition
                   </span>
                 </dd>
@@ -423,7 +423,7 @@ export default function SystemRow({
                 ? "text-red-600"
                 : issueSeverity === "medium"
                   ? "text-amber-600"
-                  : "text-stone-500"
+                  : "text-stone-500 dark:text-stone-400"
             }`}
           >
             ⚠ You reported a{" "}
@@ -452,7 +452,7 @@ export default function SystemRow({
       >
         <Link
           href={findProHref}
-          className="rounded-md bg-hearth-600 px-2 py-1 text-xs font-medium text-white hover:bg-hearth-700"
+          className="btn-primary px-2 py-1 text-xs"
         >
           Find a pro
         </Link>

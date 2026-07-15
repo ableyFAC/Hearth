@@ -6,7 +6,10 @@ import { safeNextPath } from "@/lib/safeNext";
 
 // Real per-user sign-up. Creates a Supabase Auth account from the user's email
 // + password. If email confirmation is OFF in Supabase, the user is signed in
-// immediately and sent to claim their home; if it's ON, we tell them to verify.
+// immediately and sent to claim their home; if it's ON, we show a
+// check-your-inbox panel, and the confirmation link lands on /auth/callback
+// with next=/onboarding so verifying drops them straight into onboarding
+// instead of back at sign-in.
 //
 // ?next=: carried in from /get-started (originally from /signin, ultimately
 // from the middleware bouncing a signed-out visitor off a gated page). Read
@@ -28,15 +31,30 @@ export default function HomeownerSignUpPage({
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  // Set when the account exists but email confirmation is still pending;
+  // swaps the form for the check-your-inbox panel below.
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Where the confirmation email's link should land: the auth callback
+  // exchanges the code for a session, then follows next= to onboarding
+  // (with the original ?next= still riding along, double-encoded so it
+  // survives the callback's own redirect).
+  function confirmRedirectUrl(): string {
+    return `${window.location.origin}/auth/callback?next=${encodeURIComponent(
+      `/onboarding${nextQuery}`
+    )}`;
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setStatus(null);
+    setError(null);
+    setNotice(null);
 
     if (password.length < 6) {
-      setStatus("Password must be at least 6 characters.");
+      setError("Password must be at least 6 characters.");
       return;
     }
 
@@ -45,12 +63,15 @@ export default function HomeownerSignUpPage({
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: { data: { role: "homeowner", full_name: fullName.trim() } },
+      options: {
+        data: { role: "homeowner", full_name: fullName.trim() },
+        emailRedirectTo: confirmRedirectUrl(),
+      },
     });
 
     if (error) {
       setBusy(false);
-      setStatus(
+      setError(
         /registered|exists/i.test(error.message)
           ? "An account with this email already exists. Try signing in instead."
           : error.message
@@ -64,10 +85,101 @@ export default function HomeownerSignUpPage({
       return;
     }
 
-    // Confirmation ON → no session yet; the user must verify their email first.
+    // With confirmations ON, signUp for an already-confirmed email does NOT
+    // error (enumeration protection): it returns success with an obfuscated
+    // user whose identities array is empty, and sends no email. Don't promise
+    // an inbox message that will never arrive; point them at sign-in instead.
+    if (data.user && data.user.identities && data.user.identities.length === 0) {
+      setBusy(false);
+      setError("An account with this email already exists. Try signing in instead.");
+      return;
+    }
+
+    // Confirmation ON → no session yet; show the check-your-inbox panel.
     setBusy(false);
-    setStatus(
-      "Account created! Check your email to confirm it, then come back and sign in."
+    setPendingEmail(email.trim());
+  }
+
+  async function onResend() {
+    if (!pendingEmail) return;
+    setError(null);
+    setNotice(null);
+    setBusy(true);
+
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: pendingEmail,
+      options: { emailRedirectTo: confirmRedirectUrl() },
+    });
+
+    setBusy(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setNotice("Confirmation email resent. Give it a minute or two.");
+  }
+
+  // Account created, email confirmation pending: check-your-inbox panel.
+  if (pendingEmail) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
+        <div className="card">
+          <div className="mb-6 text-center">
+            <div className="text-3xl">📬</div>
+            <h1 className="mt-2 text-2xl font-semibold text-stone-900 dark:text-stone-100">
+              Check your inbox
+            </h1>
+            <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+              We sent a confirmation link to{" "}
+              <span className="break-all font-medium text-stone-700 dark:text-stone-300">{pendingEmail}</span>
+              . Click it and you'll land right in onboarding.
+            </p>
+          </div>
+
+          <p className="text-center text-xs text-stone-500 dark:text-stone-400">
+            Nothing after a couple of minutes? Check your spam folder, or
+            resend it.
+          </p>
+          <button
+            type="button"
+            onClick={onResend}
+            className="btn-secondary mt-4 w-full"
+            disabled={busy}
+          >
+            {busy ? "Resending…" : "Resend email"}
+          </button>
+
+          {error && (
+            <p
+              role="alert"
+              className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-center text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
+            >
+              {error}
+            </p>
+          )}
+          {notice && (
+            <p
+              aria-live="polite"
+              className="mt-4 rounded-lg bg-hearth-50 p-3 text-center text-sm text-hearth-800 dark:bg-hearth-900/40 dark:text-hearth-200"
+            >
+              {notice}
+            </p>
+          )}
+
+          <p className="mt-6 border-t border-stone-100 pt-4 text-center text-xs text-stone-500 dark:border-white/10 dark:text-stone-400">
+            Already confirmed, or used the wrong email?{" "}
+            <a href={`/signin${nextQuery}`} className="text-hearth-700 hover:underline dark:text-hearth-300">
+              Sign in
+            </a>{" "}
+            or{" "}
+            <a href="/reset-password" className="text-hearth-700 hover:underline dark:text-hearth-300">
+              reset your password
+            </a>
+            .
+          </p>
+        </div>
+      </main>
     );
   }
 
@@ -76,10 +188,10 @@ export default function HomeownerSignUpPage({
       <div className="card">
         <div className="mb-6 text-center">
           <div className="text-3xl">🏡</div>
-          <h1 className="mt-2 text-2xl font-semibold text-stone-900">
+          <h1 className="mt-2 text-2xl font-semibold text-stone-900 dark:text-stone-100">
             Create your account
           </h1>
-          <p className="mt-1 text-sm text-stone-500">
+          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
             Start tracking your home with Hearth.
           </p>
         </div>
@@ -134,27 +246,38 @@ export default function HomeownerSignUpPage({
           <button className="btn-primary w-full" disabled={busy}>
             {busy ? "Creating account…" : "Sign up"}
           </button>
-          <p className="text-center text-xs text-stone-500">
+          <p className="text-center text-xs text-stone-500 dark:text-stone-400">
             By creating an account you agree to the{" "}
-            <a href="/terms" className="text-hearth-700 hover:underline">
+            <a href="/terms" className="text-hearth-700 hover:underline dark:text-hearth-300">
               Terms
             </a>{" "}
             and{" "}
-            <a href="/privacy" className="text-hearth-700 hover:underline">
+            <a href="/privacy" className="text-hearth-700 hover:underline dark:text-hearth-300">
               Privacy Policy
             </a>
             .
           </p>
         </form>
 
-        {status && (
-          <p className="mt-4 rounded-lg bg-hearth-50 p-3 text-center text-sm text-hearth-800">
-            {status}
+        {error && (
+          <p
+            role="alert"
+            className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-center text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
+          >
+            {error}
+          </p>
+        )}
+        {notice && (
+          <p
+            aria-live="polite"
+            className="mt-4 rounded-lg bg-hearth-50 p-3 text-center text-sm text-hearth-800 dark:bg-hearth-900/40 dark:text-hearth-200"
+          >
+            {notice}
           </p>
         )}
 
-        <div className="mt-6 border-t border-stone-100 pt-4 text-center">
-          <p className="text-sm text-stone-500">Already have an account?</p>
+        <div className="mt-6 border-t border-stone-100 pt-4 text-center dark:border-white/10">
+          <p className="text-sm text-stone-500 dark:text-stone-400">Already have an account?</p>
           <a
             href={`/signin${nextQuery}`}
             className="btn-secondary mt-2 inline-block w-full"
@@ -164,11 +287,11 @@ export default function HomeownerSignUpPage({
         </div>
       </div>
 
-      <p className="mt-6 text-center text-xs text-stone-500">
+      <p className="mt-6 text-center text-xs text-stone-500 dark:text-stone-400">
         Are you a contractor?{" "}
         <a
           href={`/contractor-signup${nextQuery}`}
-          className="text-hearth-700 hover:underline"
+          className="text-hearth-700 hover:underline dark:text-hearth-300"
         >
           Sign up for Hearth for Pros
         </a>

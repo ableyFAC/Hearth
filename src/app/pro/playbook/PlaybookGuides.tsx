@@ -48,7 +48,7 @@ export default function PlaybookGuides({
           ))}
         </ul>
       ) : (
-        <p className="card text-sm text-stone-500">
+        <p className="card text-sm text-stone-500 dark:text-stone-400">
           No guides match &ldquo;{query.trim()}&rdquo;. Try a different word.
         </p>
       )}

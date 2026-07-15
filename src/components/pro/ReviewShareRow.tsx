@@ -36,13 +36,13 @@ export default function ReviewShareRow({
   }
 
   return (
-    <li className="rounded-lg border border-stone-200 p-3">
+    <li className="rounded-lg border border-stone-200 p-3 dark:border-white/10">
       <span className="text-sm text-amber-500">
         {"★".repeat(rating)}
-        <span className="text-stone-300">{"★".repeat(5 - rating)}</span>
+        <span className="text-stone-300 dark:text-stone-600">{"★".repeat(5 - rating)}</span>
       </span>
       {comment && (
-        <p className="mt-1 break-words text-sm text-stone-600">
+        <p className="mt-1 break-words text-sm text-stone-600 dark:text-stone-300">
           {Array.from(comment).length > 160
             ? `${Array.from(comment).slice(0, 160).join("").trimEnd()}…`
             : comment}
@@ -53,14 +53,14 @@ export default function ReviewShareRow({
           href={cardUrl}
           target="_blank"
           rel="noreferrer"
-          className="rounded-lg border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium text-stone-600 shadow-sm hover:bg-stone-50"
+          className="btn-secondary text-xs px-2.5 py-1"
         >
           Download share card
         </a>
         <button
           type="button"
           onClick={copyCaption}
-          className="rounded-lg border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium text-stone-600 shadow-sm hover:bg-stone-50"
+          className="btn-secondary text-xs px-2.5 py-1"
         >
           {copied ? "Copied!" : "Copy caption"}
         </button>

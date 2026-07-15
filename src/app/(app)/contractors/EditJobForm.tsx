@@ -17,7 +17,7 @@ export default function EditJobForm({ job }: { job: any }) {
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="text-xs font-medium text-hearth-700 hover:underline"
+          className="text-xs font-medium text-hearth-700 hover:underline dark:text-hearth-300"
         >
           Edit job
         </button>
@@ -31,7 +31,7 @@ export default function EditJobForm({ job }: { job: any }) {
         await updateJobAction(fd);
         setEditing(false);
       }}
-      className="space-y-3 rounded-lg border border-stone-200 bg-stone-50 p-3"
+      className="space-y-3 rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-white/10 dark:bg-stone-700"
     >
       <input type="hidden" name="lead_id" value={job.id} />
       <div className="grid gap-3 sm:grid-cols-2">
@@ -88,7 +88,7 @@ export default function EditJobForm({ job }: { job: any }) {
             name="homeowner_phone"
             defaultValue={job.homeowner_phone ?? ""}
           />
-          <p className="mt-1 text-xs text-stone-500">
+          <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
             So pros can reach you faster (optional).
           </p>
         </div>

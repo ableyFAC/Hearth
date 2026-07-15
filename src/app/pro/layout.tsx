@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentContractor, getRole } from "@/lib/contractor";
 import { createClient } from "@/lib/supabase/server";
+import Logo from "@/components/Logo";
 import ProNav from "@/components/ProNav";
 import NewMessageNotifier from "@/components/NewMessageNotifier";
 import AskHearthDock from "@/components/AskHearthDock";
@@ -25,10 +26,14 @@ export default async function ProLayout({
   if (!contractor) {
     return (
       <div className="min-h-screen">
-        <header className="border-b border-stone-200 bg-white">
+        <header className="border-b border-stone-200 bg-white dark:border-white/10 dark:bg-stone-900">
           <div className="mx-auto flex max-w-5xl items-center px-6 py-3">
-            <span className="text-lg font-semibold text-stone-900">
-              🛠️ Hearth for Pros
+            <span className="flex items-center gap-2 text-lg font-semibold text-stone-900 dark:text-stone-100">
+              <Logo className="h-6 w-6 text-hearth-700 dark:text-hearth-400" />
+              <span>
+                Hearth{" "}
+                <span className="font-normal text-stone-500 dark:text-stone-400">for Pros</span>
+              </span>
             </span>
           </div>
         </header>
@@ -59,10 +64,14 @@ export default async function ProLayout({
   return (
     <div className="min-h-screen">
       <ProNav company={contractor.name} />
-      <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
-      <footer className="mx-auto max-w-5xl px-6 pb-8 text-center text-xs text-stone-500">
+      {/* Extra bottom padding on phones keeps content clear of the fixed
+          Ask Hearth dock. */}
+      <main className="mx-auto max-w-5xl px-6 pb-24 pt-8 sm:pb-8">
+        {children}
+      </main>
+      <footer className="mx-auto max-w-5xl px-6 pb-8 text-center text-xs text-stone-500 dark:text-stone-400">
         Need a hand?{" "}
-        <Link href="/pro/help" className="underline hover:text-stone-600">
+        <Link href="/pro/help" className="underline hover:text-stone-600 dark:hover:text-stone-300">
           Help
         </Link>
       </footer>

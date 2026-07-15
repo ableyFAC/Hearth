@@ -10,13 +10,21 @@ import { SERVICE_CATEGORIES, REMODEL_PROJECTS } from "@/lib/constants";
 // link (e.g. a project chip on Home). When "Other" is chosen we nudge the owner
 // to describe the service, since that free text is what matches them to a pro's
 // custom services.
-export default function CategoryFilter({ category }: { category: string }) {
+export default function CategoryFilter({
+  category,
+  id,
+}: {
+  category: string;
+  // Lets a surrounding <label htmlFor> point at this select.
+  id?: string;
+}) {
   const [value, setValue] = useState(category);
 
   return (
     <>
       <select
         name="category"
+        id={id}
         className="select"
         value={value}
         onChange={(e) => setValue(e.target.value)}
@@ -42,7 +50,7 @@ export default function CategoryFilter({ category }: { category: string }) {
         <option value="other">🔧 Other (describe it)</option>
       </select>
       {value === "other" && (
-        <p className="mt-1 text-xs text-stone-500">
+        <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
           Describe the service in “Details” below so we can match you to a pro who
           offers it.
         </p>

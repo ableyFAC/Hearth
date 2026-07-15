@@ -64,21 +64,21 @@ export default function WaterHeaterReplacementCostGuide() {
       />
 
       <p className="text-sm">
-        <a href="/guides" className="text-stone-500 hover:text-hearth-700">
+        <a href="/guides" className="text-stone-500 hover:text-hearth-700 dark:text-stone-400 dark:hover:text-hearth-300">
           ← All guides
         </a>
       </p>
 
-      <h1 className="mt-3 text-2xl font-bold text-stone-900 sm:text-3xl">
+      <h1 className="mt-3 text-2xl font-bold text-stone-900 sm:text-3xl dark:text-stone-100">
         Water heater replacement cost: typical range and what changes it
       </h1>
-      <p className="mt-3 text-sm text-stone-500">
+      <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
         A general, national planning guide. It is not a quote for your home.
       </p>
 
-      <div className="mt-8 space-y-6 text-stone-700">
+      <div className="mt-8 space-y-6 text-stone-700 dark:text-stone-300">
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             The typical range
           </h2>
           <p className="mt-2 leading-relaxed">
@@ -92,22 +92,35 @@ export default function WaterHeaterReplacementCostGuide() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             What actually drives the price
           </h2>
+          <p className="mt-2 leading-relaxed">The biggest factors:</p>
+          <ul className="mt-2 list-disc space-y-1.5 pl-5 leading-relaxed">
+            <li>
+              <strong>Tank vs. tankless.</strong> Tankless costs more upfront.
+            </li>
+            <li>
+              <strong>Fuel type.</strong> Gas vs. electric.
+            </li>
+            <li>
+              <strong>Capacity.</strong> The tank&apos;s size.
+            </li>
+            <li>
+              <strong>Venting or plumbing changes.</strong> Anything needed
+              to fit the new unit in.
+            </li>
+          </ul>
           <p className="mt-2 leading-relaxed">
-            The biggest factors are whether you're going tank or tankless
-            (tankless costs more upfront), gas vs. electric, the tank&apos;s
-            capacity, and whether venting or plumbing changes are needed to
-            fit the new unit. A straightforward swap, same fuel type and
-            similar size, in the same spot, is the cheapest version of this
-            job. Anything that touches the vent, gas line, or electrical
-            circuit adds labor and often a permit.
+            A straightforward swap, same fuel type and similar size, in the
+            same spot, is the cheapest version of this job. Anything that
+            touches the vent, gas line, or electrical circuit adds labor and
+            often a permit.
           </p>
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Tank vs. tankless
           </h2>
           <p className="mt-2 leading-relaxed">
@@ -123,7 +136,7 @@ export default function WaterHeaterReplacementCostGuide() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             When repair beats replacement
           </h2>
           <p className="mt-2 leading-relaxed">
@@ -139,7 +152,7 @@ export default function WaterHeaterReplacementCostGuide() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             An Orange County note
           </h2>
           <p className="mt-2 leading-relaxed">
@@ -151,7 +164,7 @@ export default function WaterHeaterReplacementCostGuide() {
             the tank on a regular schedule (see our{" "}
             <a
               href="/guides/home-maintenance-schedule"
-              className="text-hearth-700 hover:underline"
+              className="text-hearth-700 hover:underline dark:text-hearth-300"
             >
               home maintenance schedule guide
             </a>
@@ -160,14 +173,14 @@ export default function WaterHeaterReplacementCostGuide() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Frequently asked questions
           </h2>
           <div className="mt-2 space-y-4">
             {FAQS.map((f) => (
               <div key={f.q}>
-                <h3 className="font-medium text-stone-900">{f.q}</h3>
-                <p className="mt-1 text-sm leading-relaxed text-stone-600">
+                <h3 className="font-medium text-stone-900 dark:text-stone-100">{f.q}</h3>
+                <p className="mt-1 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
                   {f.a}
                 </p>
               </div>

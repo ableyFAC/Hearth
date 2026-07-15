@@ -32,8 +32,8 @@ export default function NavLinks({
             aria-current={active ? "page" : undefined}
             className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ${
               active
-                ? "bg-hearth-100 text-hearth-800"
-                : "text-stone-600 hover:bg-hearth-50 hover:text-hearth-700"
+                ? "bg-hearth-100 text-hearth-800 dark:bg-hearth-900 dark:text-hearth-200"
+                : "text-stone-600 hover:bg-hearth-50 hover:text-hearth-700 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-hearth-300"
             }`}
           >
             {l.label}

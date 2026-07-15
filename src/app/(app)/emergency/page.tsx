@@ -8,7 +8,7 @@ import { FLOWS, PREP_ITEMS } from "./content";
 type PrepValue = { photo_path: string | null; note: string | null };
 type PrepMap = Partial<Record<PrepKey, PrepValue>>;
 
-// The five panic flows are static content and must render even if migration
+// The panic flows are static content and must render even if migration
 // 0031 hasn't run against the live DB yet, so we read emergency_prep
 // defensively (it just won't exist as a property yet on an old row) rather
 // than gating the whole page on it.
@@ -29,8 +29,8 @@ export default async function EmergencyPage() {
     // tap zone even when scrolled to the bottom.
     <div className="space-y-8 pb-28">
       <div>
-        <h1 className="text-2xl font-semibold text-stone-900">Emergency</h1>
-        <p className="mt-1 text-stone-500">
+        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Emergency</h1>
+        <p className="mt-1 text-stone-500 dark:text-stone-400">
           Something wrong right now? Pick what's happening below. The steps are
           short, do them in order.
         </p>
@@ -49,8 +49,8 @@ export default async function EmergencyPage() {
 
       <section className="card space-y-4">
         <div>
-          <h2 className="flex items-center font-semibold text-stone-900">Be ready before it happens</h2>
-          <p className="mt-1 text-sm text-stone-500">
+          <h2 className="flex items-center font-semibold text-stone-900 dark:text-stone-100">Be ready before it happens</h2>
+          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
             Take a photo of each shutoff now, on a calm day. Next time there's an
             emergency, we'll show it to you right where you need it.
           </p>

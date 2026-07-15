@@ -39,10 +39,10 @@ export default function WalkthroughNudge({ count }: { count: number }) {
   }
 
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-hearth-200 bg-hearth-50 p-4">
+    <div className="flex items-start gap-3 rounded-xl border border-hearth-200 bg-hearth-50 p-4 dark:border-hearth-800/40 dark:bg-hearth-900/30">
       <span className="icon-chip text-xl shrink-0">🚶</span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm text-stone-800">
+        <p className="text-sm text-stone-800 dark:text-stone-200">
           Confirm your home&apos;s details, each one makes your answers and
           score more accurate.
         </p>
@@ -57,7 +57,7 @@ export default function WalkthroughNudge({ count }: { count: number }) {
         type="button"
         onClick={dismiss}
         aria-label="Dismiss"
-        className="shrink-0 text-hearth-400 hover:text-hearth-700"
+        className="shrink-0 text-hearth-400 hover:text-hearth-700 dark:text-hearth-500 dark:hover:text-hearth-300"
       >
         ✕
       </button>

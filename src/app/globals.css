@@ -6,61 +6,122 @@
   color-scheme: light;
 }
 
+/* Dark theme: the .dark class lands on <html> before first paint (see the
+   inline script in app/layout.tsx), so native controls, scrollbars, and our
+   dark: variants all flip together with no flash. */
+.dark {
+  color-scheme: dark;
+}
+
 body {
-  @apply bg-hearth-50 text-stone-800 antialiased;
+  @apply bg-hearth-50 text-stone-800 antialiased dark:bg-stone-900 dark:text-stone-200;
 }
 
 /* Shared form primitives so screens stay consistent without a component lib. */
 @layer components {
   .label {
-    @apply block text-sm font-medium text-stone-700 mb-1;
+    @apply block text-sm font-medium text-stone-700 mb-1 dark:text-stone-300;
   }
   .input,
   .select,
   .textarea {
     /* text-base (16px) on small screens stops iOS Safari from zooming the page
-       on focus; sm:text-sm keeps the compact 14px look on desktop. */
+       on focus; sm:text-sm keeps the compact 14px look on desktop. Dark:
+       fields sit one step BELOW .card's stone-800 (inset into stone-900, the
+       same tone as the page) so they read as a recessed field, not a card
+       twin; the focus ring moves to hearth-400, the lighter/desaturated end
+       of the accent ramp, so it doesn't turn muddy on a dark surface. */
     @apply w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-base
            sm:text-sm shadow-sm focus:border-hearth-500 focus:outline-none
-           focus:ring-1 focus:ring-hearth-500;
+           focus:ring-1 focus:ring-hearth-500 dark:border-white/10
+           dark:bg-stone-900 dark:text-stone-100 dark:placeholder:text-stone-500
+           dark:focus:border-hearth-400 dark:focus:ring-hearth-400;
   }
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2
            text-sm font-medium transition focus-visible:outline-none
            focus-visible:ring-2 focus-visible:ring-hearth-500
            focus-visible:ring-offset-1 active:scale-[0.98]
-           disabled:opacity-50 disabled:cursor-not-allowed;
+           disabled:opacity-50 disabled:cursor-not-allowed
+           dark:focus-visible:ring-hearth-400 dark:focus-visible:ring-offset-stone-900;
   }
   .btn-primary {
-    @apply btn bg-hearth-600 text-white shadow-sm hover:bg-hearth-700 hover:shadow;
+    @apply btn bg-hearth-600 text-white shadow-card hover:bg-hearth-700 hover:shadow-lift;
   }
   .btn-secondary {
-    @apply btn border border-stone-300 bg-white text-stone-700 hover:bg-stone-50;
+    /* Elevated tier (stone-700, one step lighter than .card's stone-800) so
+       a secondary button doesn't fade into the card it sits on; hover steps
+       up again to stone-600. */
+    @apply btn border border-stone-300 bg-white text-stone-700 hover:bg-stone-50
+           dark:border-white/10 dark:bg-stone-700 dark:text-stone-200
+           dark:hover:bg-stone-600;
   }
   .card {
-    @apply rounded-xl border border-stone-200 bg-white p-5 shadow-sm;
+    /* Surface tier: one clear step above the app background (stone-900).
+       Border is translucent white so its own contrast scales correctly
+       whether it's drawn over .card, .card-hero, or an elevated menu,
+       instead of a fixed hex that's only tuned for one surface. */
+    @apply rounded-xl border border-stone-200 bg-white p-5 shadow-card
+           dark:border-white/10 dark:bg-stone-800;
   }
-  /* Hero variant of .card: one warm, elevated surface per screen. */
+  /* Clickable card: gentle lift on hover, calm again for reduced motion. */
+  .card-link {
+    @apply card block transition-all duration-150 hover:-translate-y-0.5
+           hover:border-hearth-300 hover:shadow-lift motion-reduce:transform-none
+           motion-reduce:transition-none dark:hover:border-hearth-400;
+  }
+  /* Hero variant of .card: one warm, elevated surface per screen. Dark: flat
+     stone-700 (the elevated tier, lighter than .card's stone-800) instead of
+     a gradient that used to fade back down into the page background, plus a
+     warm translucent hearth border so it still reads as the one brand-tinted
+     card on the screen. */
   .card-hero {
     @apply rounded-xl border border-hearth-200 bg-gradient-to-br from-white
-           to-hearth-50 p-5 shadow-md;
+           to-hearth-50 p-5 shadow-lift dark:border-hearth-600/40
+           dark:from-stone-700 dark:to-stone-700;
   }
   /* Round container for emoji-as-icon so glyphs sit in a consistent chip. */
   .icon-chip {
     @apply inline-flex h-10 w-10 shrink-0 items-center justify-center
-           rounded-full bg-hearth-100 text-lg;
+           rounded-full bg-hearth-100 text-lg dark:bg-hearth-900;
   }
   /* Stat pairs: quiet caption over a tight number (size set per use). */
   .stat-label {
-    @apply text-xs font-medium uppercase tracking-wide text-stone-500;
+    @apply text-xs font-medium uppercase tracking-wide text-stone-500
+           dark:text-stone-400;
   }
   .stat-number {
-    @apply font-semibold tracking-tight text-stone-900;
+    @apply font-semibold tracking-tight text-stone-900 dark:text-stone-100;
     font-variant-numeric: tabular-nums;
   }
   /* Small status pill; color via semantic classes at call sites. */
   .chip {
     @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs
            font-medium;
+  }
+  /* Status tones for .chip: single source of truth for ok/warn/danger/muted.
+     Dark: deep translucent tint (color/15 bg over the warm surface) + light
+     ink, not a solid near-black blob, so the chip reads as "this surface,
+     tinted for status" instead of a colored sticker dropped on top. */
+  .chip-ok {
+    @apply chip border border-green-200 bg-green-50 text-green-700
+           dark:border-green-500/30 dark:bg-green-500/15 dark:text-green-300;
+  }
+  .chip-warn {
+    @apply chip border border-amber-200 bg-amber-50 text-amber-700
+           dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300;
+  }
+  .chip-danger {
+    @apply chip border border-red-100 bg-red-50 text-red-700
+           dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-300;
+  }
+  .chip-muted {
+    @apply chip bg-stone-100 text-stone-600 dark:bg-stone-700 dark:text-stone-400;
+  }
+  /* Shared focus recipe for non-button interactives; same ring as .btn. */
+  .focus-ring {
+    @apply rounded focus-visible:outline-none focus-visible:ring-2
+           focus-visible:ring-hearth-500 focus-visible:ring-offset-1
+           dark:focus-visible:ring-hearth-400 dark:focus-visible:ring-offset-stone-900;
   }
 }

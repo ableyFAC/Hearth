@@ -40,9 +40,9 @@ const SEVERITY_LABEL: Record<string, string> = {
 };
 
 const SEVERITY_STYLE: Record<string, string> = {
-  low: "border-stone-200 bg-stone-50 text-stone-600",
-  medium: "border-amber-200 bg-amber-50 text-amber-700",
-  urgent: "border-red-200 bg-red-50 text-red-700",
+  low: "border-stone-200 bg-stone-50 text-stone-600 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300",
+  medium: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200",
+  urgent: "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200",
 };
 
 // Downscale a report page to a JPEG that keeps text legible but stays small
@@ -201,7 +201,7 @@ export default function InspectionUpload() {
   if (phase === "done") {
     return (
       <div className="space-y-3">
-        <p className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+        <p className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200">
           Added to your home. Check your systems and issues to see what's new.
         </p>
         <button type="button" className="btn-secondary" onClick={startOver}>
@@ -225,21 +225,21 @@ export default function InspectionUpload() {
         <input type="hidden" name="issues_json" value={confirmedIssues} />
 
         {result.summary && (
-          <p className="rounded-lg bg-stone-50 p-3 text-sm text-stone-600">
+          <p className="rounded-lg bg-stone-50 p-3 text-sm text-stone-600 dark:bg-stone-900 dark:text-stone-300">
             {result.summary}
           </p>
         )}
 
         {result.systems.length > 0 && (
           <div>
-            <h3 className="mb-2 text-sm font-medium text-stone-900">
+            <h3 className="mb-2 text-sm font-medium text-stone-900 dark:text-stone-100">
               Systems found
             </h3>
             <ul className="space-y-2">
               {result.systems.map((s, i) => (
                 <li
                   key={i}
-                  className="flex items-start gap-3 rounded-lg border border-stone-200 p-3"
+                  className="flex items-start gap-3 rounded-lg border border-stone-200 p-3 dark:border-white/10"
                 >
                   <input
                     type="checkbox"
@@ -254,23 +254,23 @@ export default function InspectionUpload() {
                     className="mt-1"
                   />
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-stone-800">
+                    <p className="text-sm font-medium text-stone-800 dark:text-stone-200">
                       {iconFor(SYSTEM_TYPES, s.system_type)}{" "}
                       {labelFor(SYSTEM_TYPES, s.system_type)}
                       {s.condition_rating ? (
-                        <span className="ml-2 text-xs font-normal text-stone-500">
+                        <span className="ml-2 text-xs font-normal text-stone-500 dark:text-stone-400">
                           {CONDITION_LABEL[s.condition_rating] ?? ""} (
                           {s.condition_rating}/5)
                         </span>
                       ) : null}
                       {s.install_year ? (
-                        <span className="ml-2 text-xs font-normal text-stone-500">
+                        <span className="ml-2 text-xs font-normal text-stone-500 dark:text-stone-400">
                           Installed {s.install_year}
                         </span>
                       ) : null}
                     </p>
                     {s.notes && (
-                      <p className="text-xs text-stone-500">{s.notes}</p>
+                      <p className="text-xs text-stone-500 dark:text-stone-400">{s.notes}</p>
                     )}
                   </div>
                 </li>
@@ -281,14 +281,14 @@ export default function InspectionUpload() {
 
         {result.issues.length > 0 && (
           <div>
-            <h3 className="mb-2 text-sm font-medium text-stone-900">
+            <h3 className="mb-2 text-sm font-medium text-stone-900 dark:text-stone-100">
               Issues found
             </h3>
             <ul className="space-y-2">
               {result.issues.map((iss, i) => (
                 <li
                   key={i}
-                  className="flex items-start gap-3 rounded-lg border border-stone-200 p-3"
+                  className="flex items-start gap-3 rounded-lg border border-stone-200 p-3 dark:border-white/10"
                 >
                   <input
                     type="checkbox"
@@ -303,7 +303,7 @@ export default function InspectionUpload() {
                     className="mt-1"
                   />
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-stone-800">
+                    <p className="text-sm font-medium text-stone-800 dark:text-stone-200">
                       {iconFor(ISSUE_CATEGORIES, iss.category)}{" "}
                       {labelFor(ISSUE_CATEGORIES, iss.category)}
                       <span
@@ -315,7 +315,7 @@ export default function InspectionUpload() {
                       </span>
                     </p>
                     {iss.description && (
-                      <p className="text-xs text-stone-500">{iss.description}</p>
+                      <p className="text-xs text-stone-500 dark:text-stone-400">{iss.description}</p>
                     )}
                   </div>
                 </li>
@@ -325,7 +325,7 @@ export default function InspectionUpload() {
         )}
 
         {result.systems.length === 0 && result.issues.length === 0 && (
-          <p className="text-sm text-stone-500">
+          <p className="text-sm text-stone-500 dark:text-stone-400">
             Hearth couldn't find any specific systems or issues in that
             report.
           </p>
@@ -372,12 +372,12 @@ export default function InspectionUpload() {
 
       {mode === "photo" ? (
         <div>
-          <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-stone-200 px-4 py-8 text-center hover:border-hearth-300 hover:bg-hearth-50">
+          <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-stone-200 px-4 py-8 text-center hover:border-hearth-300 hover:bg-hearth-50 dark:border-stone-700 dark:hover:bg-hearth-900/30">
             <span className="text-2xl">🔍</span>
-            <span className="text-sm font-medium text-stone-700">
+            <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
               {previews.length ? "Add more pages" : "Upload photos of the inspection report"}
             </span>
-            <span className="text-xs text-stone-500">
+            <span className="text-xs text-stone-500 dark:text-stone-400">
               You can add every page as its own photo
             </span>
             <input
@@ -397,7 +397,7 @@ export default function InspectionUpload() {
                   <img
                     src={src}
                     alt={`Report page ${i + 1}`}
-                    className="h-20 w-20 rounded-lg border border-stone-200 object-cover"
+                    className="h-20 w-20 rounded-lg border border-stone-200 object-cover dark:border-white/10"
                   />
                   <button
                     type="button"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 // A compact search box for the top nav. It routes to the /search page, which
@@ -19,7 +19,23 @@ export default function GlobalSearch() {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [focused, setFocused] = useState(false);
+  // Plays the exit animation instead of an instant unmount: on the focused
+  // -> blurred transition the panel stays mounted for one more tick with
+  // fade-scale-out, then drops.
+  const [closing, setClosing] = useState(false);
+  const wasFocused = useRef(false);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!focused && wasFocused.current) {
+      setClosing(true);
+      const t = setTimeout(() => setClosing(false), 120);
+      wasFocused.current = focused;
+      return () => clearTimeout(t);
+    }
+    wasFocused.current = focused;
+  }, [focused]);
+  const shouldRender = focused || closing;
 
   function go(query: string) {
     const s = query.trim();
@@ -46,7 +62,7 @@ export default function GlobalSearch() {
         className="relative"
         role="search"
       >
-        <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-500">
+        <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-500 dark:text-stone-400">
           <svg
             viewBox="0 0 24 24"
             className="h-4 w-4"
@@ -67,13 +83,17 @@ export default function GlobalSearch() {
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search"
           aria-label="Search"
-          className="w-32 rounded-full border border-stone-200 bg-white py-1.5 pl-8 pr-3 text-sm text-stone-700 transition-all placeholder:text-stone-500 focus:w-48 focus:border-hearth-400 focus:outline-none"
+          className="w-32 rounded-full border border-stone-200 bg-white py-1.5 pl-8 pr-3 text-sm text-stone-700 transition-all placeholder:text-stone-500 focus:w-48 focus:border-hearth-400 focus:outline-none dark:border-white/10 dark:bg-stone-900 dark:text-stone-200 dark:focus:border-hearth-400"
         />
       </form>
 
-      {focused && (
-        <div className="absolute right-0 z-30 mt-1 w-56 rounded-xl border border-stone-200 bg-white p-2 shadow-lg">
-          <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+      {shouldRender && (
+        <div
+          className={`absolute right-0 z-30 mt-1 w-56 rounded-xl border border-stone-200 bg-white p-2 shadow-menu dark:border-white/10 dark:bg-stone-700 ${
+            focused ? "motion-safe:animate-fade-scale" : "motion-safe:animate-fade-scale-out"
+          }`}
+        >
+          <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
             Try searching
           </p>
           {EXAMPLES.map((ex) => (
@@ -84,7 +104,7 @@ export default function GlobalSearch() {
               // this panel.
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => go(ex)}
-              className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-stone-700 hover:bg-hearth-50"
+              className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-stone-700 hover:bg-hearth-50 dark:text-stone-300 dark:hover:bg-stone-600"
             >
               {ex}
             </button>

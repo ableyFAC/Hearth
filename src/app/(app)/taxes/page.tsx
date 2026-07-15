@@ -10,11 +10,12 @@ function money(n: number): string {
   return `$${Math.round(Math.abs(n)).toLocaleString()}`;
 }
 
-// How far the assessment sits from Hearth's estimate before the page calls
-// it out. Above the estimate by more than this fraction reads "looks high";
-// below it by more than this reads "looks favorable"; anything in between is
-// "looks in line". 10% is deliberately conservative: Hearth's estimate is a
-// statewide-model ballpark, so a smaller gap is just noise.
+// How far the assessment sits from its comparison basis (Hearth's estimate,
+// or the Prop 13 trajectory in CA) before the page calls it out. Above by
+// more than this fraction reads "looks high"; below it by more than this
+// reads "looks favorable"; anything in between is "looks in line". 10% is
+// deliberately conservative: Hearth's estimate is a statewide-model
+// ballpark, so a smaller gap is just noise.
 const HIGH_THRESHOLD = 0.1;
 const LOW_THRESHOLD = -0.1;
 
@@ -51,11 +52,30 @@ export default async function TaxesPage() {
     ? estimateHomeValue(purchasePrice!, purchaseYear!, property.state, currentYear)
     : null;
 
+  // CALIFORNIA (Prop 13): assessed values are capped at roughly 2% growth a
+  // year from the purchase price, so market value is the wrong yardstick
+  // there. A long-held CA home is supposed to be assessed far below market,
+  // and comparing against Hearth's market estimate would call nearly every
+  // one "favorable" while missing a genuinely high assessment. For CA the
+  // baseline is the purchase price compounded at 2%/yr to the assessed year,
+  // and "looks high" means the county is above even that capped trajectory.
+  const prop13Baseline =
+    property.state?.toUpperCase() === "CA" && hasAssessment && hasPurchaseData
+      ? Math.round(
+          purchasePrice! *
+            Math.pow(1.02, Math.max(0, assessedYear! - purchaseYear!))
+        )
+      : null;
+
+  // What the assessment is judged against: the Prop 13 trajectory in CA,
+  // Hearth's market estimate everywhere else.
+  const comparisonBasis = prop13Baseline ?? estimatedValue;
+
   // How far the assessment sits above (positive) or below (negative) the
-  // estimate, as a fraction of the estimate.
+  // comparison basis, as a fraction of it.
   const diffPct =
-    hasAssessment && estimatedValue != null && estimatedValue > 0
-      ? (assessedValue! - estimatedValue) / estimatedValue
+    hasAssessment && comparisonBasis != null && comparisonBasis > 0
+      ? (assessedValue! - comparisonBasis) / comparisonBasis
       : null;
 
   const verdict: Verdict | null =
@@ -70,11 +90,11 @@ export default async function TaxesPage() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
       <header className="mb-1">
-        <h1 className="text-2xl font-semibold text-stone-900">
+        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
           Property tax watch
         </h1>
       </header>
-      <p className="mb-5 text-sm text-stone-500">
+      <p className="mb-5 text-sm text-stone-500 dark:text-stone-400">
         Your property tax bill is based on what the county says your home is
         worth. Enter the assessed value from your notice and Hearth will
         compare it against its own estimate, so you can spot an assessment
@@ -84,7 +104,7 @@ export default async function TaxesPage() {
       {!hasAssessment && (
         <div className="space-y-4">
           <div className="card space-y-2 text-center">
-            <p className="text-sm text-stone-600">
+            <p className="text-sm text-stone-600 dark:text-stone-300">
               Grab your county assessment notice (or your most recent
               property tax bill). It lists an assessed value for your home
               and the tax year it covers. Enter those two numbers and Hearth
@@ -103,7 +123,7 @@ export default async function TaxesPage() {
       {hasAssessment && !hasPurchaseData && (
         <div className="space-y-4">
           <div className="card space-y-2 text-center">
-            <p className="text-sm text-stone-600">
+            <p className="text-sm text-stone-600 dark:text-stone-300">
               Your {assessedYear} assessment of {money(assessedValue!)} is
               saved. To compare it against an estimate of what your home is
               actually worth, Hearth needs what you paid and the year you
@@ -124,16 +144,31 @@ export default async function TaxesPage() {
 
       {hasAssessment && estimatedValue != null && verdict != null && (
         <>
+          {/* Methodology caveat sits above the verdict so the reader knows
+              what kind of number they're about to see before the colored
+              card makes its call. */}
+          <p className="mb-4 text-xs text-stone-500 dark:text-stone-400">
+            Hearth&apos;s number is an estimate from statewide average price
+            trends, not an appraisal, and this page is not tax or legal
+            advice. Assessment rules, ratios, and appeal processes vary a lot
+            by county, and some counties assess at a fraction of market value
+            by design, so a gap here doesn&apos;t always mean something is
+            wrong. Appeals are decided by your county and outcomes are never
+            guaranteed. For a number you can rely on, talk to a local real
+            estate agent or licensed appraiser.
+          </p>
           <div
             className={`card-hero space-y-2 text-center ${
               verdict === "high"
-                ? "border-amber-300"
-                : "border-green-300"
+                ? "border-amber-300 dark:border-amber-800/50"
+                : "border-green-300 dark:border-green-800/50"
             }`}
           >
             <p
               className={`text-sm font-medium ${
-                verdict === "high" ? "text-amber-800" : "text-green-800"
+                verdict === "high"
+                  ? "text-amber-800 dark:text-amber-300"
+                  : "text-green-800 dark:text-green-300"
               }`}
             >
               {verdict === "high" && "Your assessment looks high"}
@@ -142,19 +177,33 @@ export default async function TaxesPage() {
             </p>
             <p
               className={`text-sm ${
-                verdict === "high" ? "text-amber-700" : "text-green-700"
+                verdict === "high"
+                  ? "text-amber-700 dark:text-amber-200"
+                  : "text-green-700 dark:text-green-200"
               }`}
             >
               {verdict === "high" &&
                 `The county assessed your home about ${Math.round(
                   diffPct! * 100
-                )}% above Hearth's estimate. Homeowners who appeal an inflated assessment often save hundreds of dollars a year, and appealing is usually free.`}
+                )}% above ${
+                  prop13Baseline != null
+                    ? "the trajectory Prop 13 allows (your purchase price growing about 2% a year)"
+                    : "Hearth's estimate"
+                }. A successful appeal lowers your bill every year until reassessment, and appealing is usually free.`}
               {verdict === "in_line" &&
-                "The county's number sits within about 10% of Hearth's estimate, which is normal. An appeal probably isn't worth your time this year."}
+                `The county's number sits within about 10% of ${
+                  prop13Baseline != null
+                    ? "the trajectory Prop 13 allows (your purchase price growing about 2% a year)"
+                    : "Hearth's estimate"
+                }, which is normal. An appeal probably isn't worth your time this year.`}
               {verdict === "favorable" &&
                 `The county assessed your home about ${Math.round(
                   Math.abs(diffPct!) * 100
-                )}% below Hearth's estimate, which works in your favor at tax time. Appealing could backfire: drawing the assessor's attention might raise your assessment, not lower it.`}
+                )}% below ${
+                  prop13Baseline != null
+                    ? "the trajectory Prop 13 allows"
+                    : "Hearth's estimate"
+                }, which works in your favor at tax time. Appealing could backfire: drawing the assessor's attention might raise your assessment, not lower it.`}
             </p>
           </div>
 
@@ -166,29 +215,46 @@ export default async function TaxesPage() {
               <p className="stat-number text-2xl">
                 {money(assessedValue!)}
               </p>
-              <p className="text-xs text-stone-500">
+              <p className="text-xs text-stone-500 dark:text-stone-400">
                 From your assessment notice.
               </p>
             </div>
-            <div className="card space-y-1 text-center">
-              <p className="stat-label">
-                Hearth&apos;s estimated value
-              </p>
-              <p className="stat-number text-2xl">
-                {money(estimatedValue)}
-              </p>
-              <p className="text-xs text-stone-500">
-                Based on {region ? `${region} price trends` : "statewide price trends"}{" "}
-                since you bought in {purchaseYear}.
-              </p>
-            </div>
+            {/* Show the number the verdict was actually judged against: the
+                Prop 13 trajectory in CA, Hearth's market estimate elsewhere. */}
+            {prop13Baseline != null ? (
+              <div className="card space-y-1 text-center">
+                <p className="stat-label">
+                  Prop 13 baseline ({assessedYear})
+                </p>
+                <p className="stat-number text-2xl">
+                  {money(prop13Baseline)}
+                </p>
+                <p className="text-xs text-stone-500 dark:text-stone-400">
+                  Your {purchaseYear} purchase price growing about 2% a year,
+                  the most Prop 13 normally allows.
+                </p>
+              </div>
+            ) : (
+              <div className="card space-y-1 text-center">
+                <p className="stat-label">
+                  Hearth&apos;s estimated value
+                </p>
+                <p className="stat-number text-2xl">
+                  {money(estimatedValue)}
+                </p>
+                <p className="text-xs text-stone-500 dark:text-stone-400">
+                  Based on {region ? `${region} price trends` : "statewide price trends"}{" "}
+                  since you bought in {purchaseYear}.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="card mt-6 space-y-2">
-            <h2 className="flex items-center text-sm font-semibold text-stone-900">
+            <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
               What is a property tax appeal?
             </h2>
-            <p className="text-sm text-stone-600">
+            <p className="text-sm text-stone-600 dark:text-stone-300">
               Every county lets homeowners challenge their assessment if they
               believe it is higher than what the home is really worth. You
               file a short form or letter with your county assessor (usually
@@ -215,16 +281,6 @@ export default async function TaxesPage() {
             />
           </div>
 
-          <p className="mt-6 text-xs text-stone-500">
-            Hearth&apos;s number is an estimate from statewide average price
-            trends, not an appraisal, and this page is not tax or legal
-            advice. Assessment rules, ratios, and appeal processes vary a lot
-            by county, and some counties assess at a fraction of market value
-            by design, so a gap here doesn&apos;t always mean something is
-            wrong. Appeals are decided by your county and outcomes are never
-            guaranteed. For a number you can rely on, talk to a local real
-            estate agent or licensed appraiser.
-          </p>
         </>
       )}
     </div>

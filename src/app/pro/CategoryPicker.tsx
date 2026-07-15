@@ -76,13 +76,15 @@ export default function CategoryPicker({
             aria-pressed={on}
             className={`relative flex items-center gap-3 rounded-xl border px-3 py-3 text-left transition-colors ${
               on
-                ? "border-hearth-500 bg-hearth-50 ring-1 ring-hearth-500"
-                : "border-stone-200 bg-white hover:bg-stone-50"
+                ? "border-hearth-500 bg-hearth-50 ring-1 ring-hearth-500 dark:border-hearth-400 dark:bg-hearth-900/40 dark:ring-hearth-400"
+                : "border-stone-200 bg-white hover:bg-stone-50 dark:border-white/10 dark:bg-stone-800 dark:hover:bg-stone-700"
             }`}
           >
             <span
               className={`flex h-8 w-8 items-center justify-center rounded-lg ${
-                on ? "bg-hearth-600 text-white" : "bg-stone-100 text-stone-500"
+                on
+                  ? "bg-hearth-600 text-white"
+                  : "bg-stone-100 text-stone-500 dark:bg-stone-700 dark:text-stone-400"
               }`}
             >
               <svg
@@ -99,13 +101,13 @@ export default function CategoryPicker({
             </span>
             <span
               className={`text-sm font-medium ${
-                on ? "text-hearth-700" : "text-stone-700"
+                on ? "text-hearth-700 dark:text-hearth-300" : "text-stone-700 dark:text-stone-300"
               }`}
             >
               {c.label}
             </span>
             {on && (
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-hearth-600">
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-hearth-600 dark:text-hearth-400">
                 <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor">
                   <path
                     fillRule="evenodd"
@@ -123,13 +125,15 @@ export default function CategoryPicker({
       <div
         className={`col-span-2 flex items-center gap-3 rounded-xl border px-3 py-3 transition-colors ${
           otherActive
-            ? "border-hearth-500 bg-hearth-50 ring-1 ring-hearth-500"
-            : "border-stone-200 bg-white"
+            ? "border-hearth-500 bg-hearth-50 ring-1 ring-hearth-500 dark:border-hearth-400 dark:bg-hearth-900/40 dark:ring-hearth-400"
+            : "border-stone-200 bg-white dark:border-white/10 dark:bg-stone-800"
         }`}
       >
         <span
           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-            otherActive ? "bg-hearth-600 text-white" : "bg-stone-100 text-stone-500"
+            otherActive
+              ? "bg-hearth-600 text-white"
+              : "bg-stone-100 text-stone-500 dark:bg-stone-700 dark:text-stone-400"
           }`}
         >
           <svg
@@ -146,7 +150,7 @@ export default function CategoryPicker({
         </span>
         <span
           className={`text-sm font-medium ${
-            otherActive ? "text-hearth-700" : "text-stone-700"
+            otherActive ? "text-hearth-700 dark:text-hearth-300" : "text-stone-700 dark:text-stone-300"
           }`}
         >
           Other
@@ -156,7 +160,7 @@ export default function CategoryPicker({
           value={other}
           onChange={(e) => setOther(e.target.value)}
           placeholder="Describe the service you provide"
-          className="min-w-0 flex-1 border-0 bg-transparent text-sm text-stone-700 placeholder:text-stone-500 focus:outline-none focus:ring-0"
+          className="min-w-0 flex-1 border-0 bg-transparent text-sm text-stone-700 placeholder:text-stone-500 focus:outline-none focus:ring-0 dark:text-stone-200 dark:placeholder:text-stone-500"
         />
       </div>
 

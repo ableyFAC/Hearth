@@ -28,8 +28,8 @@ export default function BackgroundCheckCard({
   return (
     <section className="card space-y-3">
       <div>
-        <h2 className="font-semibold text-stone-900">Background check</h2>
-        <p className="mt-1 text-sm text-stone-500">
+        <h2 className="font-semibold text-stone-900 dark:text-stone-100">Background check</h2>
+        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           Run by Checkr, a background check provider. Hearth covers the cost:
           it&apos;s free for you. Consent and the check itself happen on
           Checkr&apos;s site, after they email you an invitation. Hearth only
@@ -39,7 +39,7 @@ export default function BackgroundCheckCard({
 
       {status === "clear" ? (
         <div>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-medium text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200">
             <svg
               viewBox="0 0 24 24"
               className="h-3.5 w-3.5"
@@ -53,29 +53,29 @@ export default function BackgroundCheckCard({
             </svg>
             Background checked
           </span>
-          <p className="mt-1 text-xs text-emerald-600">
+          <p className="mt-1 text-xs text-green-600 dark:text-green-400">
             Cleared{checkedAt ? ` on ${formatCheckedDate(checkedAt)}` : ""}.
             This appears on your public page.
           </p>
         </div>
       ) : status === "consider" ? (
         <div>
-          <p className="text-xs text-red-500">
+          <p className="text-xs text-red-500 dark:text-red-400">
             The check did not clear. This is never shown publicly - only you
             can see this. Questions?{" "}
-            <a href="/pro/help" className="underline hover:text-red-600">
+            <a href="/pro/help" className="underline hover:text-red-600 dark:hover:text-red-300">
               Contact support
             </a>
             .
           </p>
         </div>
       ) : status === "pending" ? (
-        <p className="text-xs text-stone-500">
+        <p className="text-xs text-stone-500 dark:text-stone-400">
           Your background check is in progress. We&apos;ll update this as
           soon as Checkr reports back.
         </p>
       ) : status === "invited" ? (
-        <p className="text-xs text-stone-500">
+        <p className="text-xs text-stone-500 dark:text-stone-400">
           Check your email for Checkr&apos;s invitation to complete your
           background check.
         </p>
@@ -99,19 +99,19 @@ export default function BackgroundCheckCard({
               className="input max-w-[180px] text-xs"
             />
           </div>
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-stone-500 dark:text-stone-400">
             Your legal name goes to Checkr to run the check. Hearth doesn&apos;t
             store it.
           </p>
           <button
             type="submit"
-            className="rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50"
+            className="rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-700"
           >
             Start my background check
           </button>
         </form>
       ) : (
-        <p className="text-xs text-stone-500">
+        <p className="text-xs text-stone-500 dark:text-stone-400">
           Add an email address above first, then come back to start your
           background check.
         </p>

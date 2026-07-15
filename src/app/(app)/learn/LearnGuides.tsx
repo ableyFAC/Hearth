@@ -81,7 +81,7 @@ export default function LearnGuides({ guides }: { guides: GuideData[] }) {
                 className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                   category === c
                     ? "border-hearth-600 bg-hearth-600 text-white"
-                    : "border-stone-200 bg-white text-stone-600 hover:border-hearth-400 hover:text-hearth-700"
+                    : "border-stone-200 bg-white text-stone-600 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300"
                 }`}
               >
                 {c}
@@ -110,17 +110,17 @@ export default function LearnGuides({ guides }: { guides: GuideData[] }) {
           ))}
         </ul>
       ) : (
-        <p className="card text-sm text-stone-500">
+        <p className="card text-sm text-stone-500 dark:text-stone-400">
           No guides match &ldquo;{trimmedQuery}&rdquo;. Try a different word,
           or request a topic below.
         </p>
       )}
 
       <div className="card">
-        <p className="text-sm font-semibold text-stone-700">
+        <p className="text-sm font-semibold text-stone-700 dark:text-stone-300">
           Don&apos;t see your topic?
         </p>
-        <p className="mt-1 text-xs text-stone-500">
+        <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
           Tell us what you&apos;d like a guide for, and we&apos;ll add it.
         </p>
         <form

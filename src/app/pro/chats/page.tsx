@@ -7,7 +7,12 @@ import { getCurrentContractor } from "@/lib/contractor";
 import { labelFor, iconFor, JOB_CATEGORIES } from "@/lib/constants";
 import LeadChat from "@/components/LeadChat";
 import MarkChatSeen from "@/components/MarkChatSeen";
-import { sendQuoteAction, withdrawQuoteAction } from "./actions";
+import {
+  sendQuoteAction,
+  withdrawQuoteAction,
+  createInvoiceAction,
+  voidInvoiceAction,
+} from "./actions";
 
 // Seen-state cookie shared with the layout's unread badge.
 const SEEN_COOKIE = "hearth_chat_seen"; // { [leadId]: ISO timestamp last viewed }
@@ -87,13 +92,24 @@ export default async function ProChatsPage({
     return tb < ta ? -1 : tb > ta ? 1 : 0;
   });
 
-  // Which thread is open? The one in the URL, else the first conversation.
-  const selected =
-    convos.find((l) => l.id === searchParams.lead) ?? convos[0] ?? null;
+  // Which thread is open? Only the one named in the URL, mirroring the
+  // homeowner page. No convos[0] fallback: on phones the bare route shows just
+  // the list with the thread pane display:none, and auto-selecting would still
+  // render MarkChatSeen and mount LeadChat (which writes a read receipt) for
+  // that hidden pane, silently clearing the "New" badge and the nav unread
+  // badge on the newest unread conversation. Without ?lead=, desktop shows the
+  // "Select a conversation" placeholder instead.
+  const selected = convos.find((l) => l.id === searchParams.lead) ?? null;
+
+  // On phones the two-pane grid stacks, so tapping a conversation used to
+  // render the thread below the list where it looked like nothing happened.
+  // Instead we show one pane at a time: the list on the bare route, the thread
+  // once ?lead= is in the URL. Desktop (md+) always shows both.
+  const threadOpenOnMobile = Boolean(searchParams.lead);
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold text-stone-900">Chats</h1>
+      <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Chats</h1>
 
       {/* Mark the open conversation as read. */}
       {selected && (
@@ -101,17 +117,21 @@ export default async function ProChatsPage({
       )}
 
       {convos.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-stone-300 p-8 text-center text-sm text-stone-500">
+        <p className="rounded-xl border border-dashed border-stone-300 p-8 text-center text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400">
           No conversations yet. Apply to jobs on the{" "}
-          <Link href="/pro" className="font-medium text-hearth-700 underline">
+          <Link href="/pro" className="font-medium text-hearth-700 underline dark:text-hearth-300">
             Leads
           </Link>{" "}
           page, and when a homeowner picks you, your chat opens here.
         </p>
       ) : (
         <div className="grid gap-4 md:grid-cols-[280px_1fr]">
-          {/* ---- Conversation list ---- */}
-          <ul className="max-h-[40vh] divide-y divide-stone-100 overflow-y-auto rounded-xl border border-stone-200 bg-white md:h-[calc(100vh-13rem)] md:max-h-none">
+          {/* ---- Conversation list (hidden on phones while a thread is open) ---- */}
+          <ul
+            className={`${
+              threadOpenOnMobile ? "hidden md:block" : ""
+            } max-h-[40vh] divide-y divide-stone-100 overflow-y-auto rounded-xl border border-stone-200 bg-white dark:divide-white/10 dark:border-white/10 dark:bg-stone-800 md:h-[calc(100vh-13rem)] md:max-h-none`}
+          >
             {convos.map((l) => {
               const last = lastByLead.get(l.id);
               const isActive = selected?.id === l.id;
@@ -122,18 +142,18 @@ export default async function ProChatsPage({
                     href={`/pro/chats?lead=${l.id}`}
                     className={`block border-l-4 px-4 py-3 transition ${
                       isActive
-                        ? "border-hearth-500 bg-hearth-50"
+                        ? "border-hearth-500 bg-hearth-50 dark:border-hearth-400 dark:bg-hearth-900/40"
                         : unread
-                          ? "border-hearth-400 bg-hearth-50/60 hover:bg-hearth-50"
-                          : "border-transparent hover:bg-stone-50"
+                          ? "border-hearth-400 bg-hearth-50/60 hover:bg-hearth-50 dark:border-hearth-500 dark:bg-hearth-900/20 dark:hover:bg-hearth-900/30"
+                          : "border-transparent hover:bg-stone-50 dark:hover:bg-stone-700"
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span
                         className={`truncate ${
                           unread
-                            ? "font-bold text-stone-900"
-                            : "font-medium text-stone-900"
+                            ? "font-bold text-stone-900 dark:text-stone-100"
+                            : "font-medium text-stone-900 dark:text-stone-100"
                         }`}
                       >
                         {l.homeowner_name || "Homeowner"}
@@ -143,14 +163,14 @@ export default async function ProChatsPage({
                           New
                         </span>
                       ) : (
-                        <span className="shrink-0 text-xs text-stone-500">
+                        <span className="shrink-0 text-xs text-stone-500 dark:text-stone-400">
                           {iconFor(JOB_CATEGORIES, l.category)}
                         </span>
                       )}
                     </div>
                     <p
                       className={`truncate text-xs ${
-                        unread ? "font-medium text-stone-800" : "text-stone-500"
+                        unread ? "font-medium text-stone-800 dark:text-stone-200" : "text-stone-500 dark:text-stone-400"
                       }`}
                     >
                       {last
@@ -167,27 +187,52 @@ export default async function ProChatsPage({
             })}
           </ul>
 
-          {/* ---- Open thread ---- */}
+          {/* ---- Open thread (the only pane on phones once one is picked) ---- */}
           {selected ? (
-            <div className="h-[60vh] rounded-xl border border-stone-200 bg-white p-3 md:h-[calc(100vh-13rem)]">
+            <div
+              className={`${
+                threadOpenOnMobile ? "flex" : "hidden md:flex"
+              } h-[calc(100dvh-13rem)] flex-col rounded-xl border border-stone-200 bg-white p-3 dark:border-white/10 dark:bg-stone-800 md:h-[calc(100vh-13rem)]`}
+            >
+              <Link
+                href="/pro/chats"
+                className="mb-2 inline-flex w-fit shrink-0 items-center gap-1 text-sm font-medium text-hearth-700 hover:underline dark:text-hearth-300 md:hidden"
+              >
+                <span aria-hidden="true">←</span> All conversations
+              </Link>
               {/* `key` forces a fresh thread when switching conversations. */}
-              <LeadChat
-                key={selected.id}
-                leadId={selected.id}
-                role="contractor"
-                embedded
-                title={selected.homeowner_name || "Homeowner"}
-                subtitle={`${labelFor(JOB_CATEGORIES, selected.category)}${
-                  selected.property_address ? ` · ${selected.property_address}` : ""
-                }`}
-                contractorName={contractor.name}
-                sendQuoteAction={sendQuoteAction}
-                withdrawQuoteAction={withdrawQuoteAction}
-              />
+              <div className="min-h-0 flex-1">
+                <LeadChat
+                  key={selected.id}
+                  leadId={selected.id}
+                  role="contractor"
+                  embedded
+                  title={selected.homeowner_name || "Homeowner"}
+                  subtitle={`${labelFor(JOB_CATEGORIES, selected.category)}${
+                    selected.property_address ? ` · ${selected.property_address}` : ""
+                  }`}
+                  jobTitle={labelFor(JOB_CATEGORIES, selected.category)}
+                  contractorName={contractor.name}
+                  sendQuoteAction={sendQuoteAction}
+                  withdrawQuoteAction={withdrawQuoteAction}
+                  createInvoiceAction={createInvoiceAction}
+                  voidInvoiceAction={voidInvoiceAction}
+                />
+              </div>
             </div>
           ) : (
-            <div className="flex h-[60vh] items-center justify-center rounded-xl border border-dashed border-stone-300 text-sm text-stone-500 md:h-[calc(100vh-13rem)]">
+            <div
+              className={`${
+                threadOpenOnMobile ? "flex" : "hidden md:flex"
+              } h-[60vh] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-stone-300 text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400 md:h-[calc(100vh-13rem)]`}
+            >
               Select a conversation
+              <Link
+                href="/pro/chats"
+                className="text-sm font-medium text-hearth-700 hover:underline dark:text-hearth-300 md:hidden"
+              >
+                <span aria-hidden="true">←</span> All conversations
+              </Link>
             </div>
           )}
         </div>

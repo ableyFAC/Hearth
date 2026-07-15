@@ -13,10 +13,22 @@ import AskHearth from "@/components/AskHearth";
 import { getProactiveGreeting } from "@/lib/greeting";
 import ReviewButton from "@/app/(app)/contractors/ReviewButton";
 import { saveReviewAction } from "@/app/(app)/contractors/actions";
-import { acceptQuoteAction, declineQuoteAction } from "./actions";
+import {
+  acceptQuoteAction,
+  declineQuoteAction,
+  signInvoiceAction,
+} from "./actions";
 
 // Homeowner-side "seen" cookie (kept separate from the contractor's).
 const SEEN_COOKIE = "hearth_ho_chat_seen";
+
+// The plain companion message sendQuoteAction posts alongside every structured
+// quote ("Sent a quote: $X total"). Mirrors isQuoteCompanionBody in
+// LeadChat.tsx (a "use client" module, so it can't be imported here). The
+// regex fallback below must skip it: its "$X" is just an echo of the
+// structured quote, and reading it as a standing price would keep showing the
+// amount even after the quote itself is withdrawn.
+const isQuoteCompanionBody = (body: string) => body.startsWith("Sent a quote:");
 
 function readSeenMap(): Record<string, string> {
   try {
@@ -40,22 +52,16 @@ async function markChatSeenAction(leadId: string) {
   revalidatePath("/chats");
 }
 
-// Mark every conversation seen at once. Fires when the inbox is opened, so the
-// nav badge clears even on the default Ask Hearth pane where no single thread
-// is selected.
-async function markAllChatsSeenAction(leadIds: string[]) {
+// Fires when the inbox is opened, so the nav badge clears even on the default
+// Ask Hearth pane where no single thread is selected. The badge clear itself
+// happens client-side: MarkChatsSeen stamps `hearth:seen:<id>` in localStorage
+// for every listed lead and LiveUnreadBadge takes the max of that and the seen
+// cookie. This action deliberately does NOT write the per-thread seen cookie:
+// stamping every lead id here wiped the per-thread "New" indicator on
+// conversations the homeowner never opened. Only markChatSeenAction, fired for
+// the thread actually on screen, may advance a thread's seen timestamp.
+async function markAllChatsSeenAction(_leadIds: string[]) {
   "use server";
-  const jar = cookies();
-  let map: Record<string, string> = {};
-  try {
-    map = JSON.parse(jar.get(SEEN_COOKIE)?.value || "{}");
-  } catch {
-    map = {};
-  }
-  const now = new Date().toISOString();
-  for (const id of leadIds) map[id] = now;
-  jar.set(SEEN_COOKIE, JSON.stringify(map), { path: "/" });
-  revalidatePath("/chats");
 }
 
 export default async function HomeownerChatsPage({
@@ -98,8 +104,14 @@ export default async function HomeownerChatsPage({
     for (const m of msgs ?? []) {
       if (!lastByLead.has(m.lead_id)) lastByLead.set(m.lead_id, m);
       // Messages are newest first, so the first contractor price we see per lead
-      // is that pro's most recent quote.
-      if (m.sender_role === "contractor" && !quoteByLead.has(m.lead_id)) {
+      // is that pro's most recent quote. Companion messages are skipped: their
+      // amount belongs to a structured quote, which the pass below handles
+      // (including excluding it once withdrawn).
+      if (
+        m.sender_role === "contractor" &&
+        !isQuoteCompanionBody(m.body) &&
+        !quoteByLead.has(m.lead_id)
+      ) {
         const q = extractQuote(m.body);
         if (q != null) quoteByLead.set(m.lead_id, q * 100);
       }
@@ -152,9 +164,33 @@ export default async function HomeownerChatsPage({
   // default when there are no real (chosen-pro) conversations yet.
   const askSelected =
     !searchParams.lead || searchParams.lead === "ask-hearth";
-  const selected = askSelected
+  let selected = askSelected
     ? null
     : (convos.find((l) => l.id === searchParams.lead) ?? null);
+
+  // Notification deep links ("/chats?lead=X" from quote/message alerts) are
+  // property-blind, but the list above only holds the ACTIVE home's
+  // conversations. For a multi-home (Plus) user, a lead on another of their
+  // homes would otherwise dead-end on the empty "Select a conversation" pane,
+  // and its unread badge could never be cleared from the page the link opens.
+  // Fall back to fetching the lead directly: RLS only returns leads on
+  // properties this user can read, so a hit is safe to open even though it is
+  // not in the active home's list.
+  if (!askSelected && !selected && searchParams.lead) {
+    const { data: crossHomeLead } = await supabase
+      .from("contractor_leads")
+      .select("*, contractors(name)")
+      .eq("id", searchParams.lead)
+      .not("contractor_id", "is", null)
+      .maybeSingle();
+    if (crossHomeLead) selected = crossHomeLead;
+  }
+
+  // On phones the two-pane grid stacks, so tapping a conversation used to
+  // render the thread below the list where it looked like nothing happened.
+  // Instead we show one pane at a time: the list on the bare route, the thread
+  // once ?lead= is in the URL. Desktop (md+) always shows both.
+  const threadOpenOnMobile = Boolean(searchParams.lead);
 
   // The selected thread already has a pro assigned (accepted or closed; the
   // convos query above only includes leads with contractor_id set), so a
@@ -171,7 +207,7 @@ export default async function HomeownerChatsPage({
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold text-stone-900">Messages</h1>
+      <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Messages</h1>
 
       {/* Opening the inbox clears the nav badge, even on the Ask Hearth pane. */}
       <MarkChatsSeen
@@ -185,11 +221,11 @@ export default async function HomeownerChatsPage({
 
       {/* Compare the prices pros have sent in chat, cheapest first. */}
       {quoted.length > 0 && (
-        <div className="rounded-xl border border-stone-200 bg-white p-4">
-          <p className="text-sm font-semibold text-stone-900">
+        <div className="rounded-xl border border-stone-200 bg-white p-4 dark:border-white/10 dark:bg-stone-800">
+          <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
             Quotes from your pros
           </p>
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-stone-500 dark:text-stone-400">
             Prices your pros have sent in chat, lowest first.
           </p>
           <ul className="mt-2 space-y-1">
@@ -200,17 +236,17 @@ export default async function HomeownerChatsPage({
               >
                 <Link
                   href={`/chats?lead=${q.id}`}
-                  className="truncate text-sm text-stone-700 hover:text-hearth-700 hover:underline"
+                  className="truncate text-sm text-stone-700 hover:text-hearth-700 hover:underline dark:text-stone-300"
                 >
                   {q.name}
                 </Link>
                 <span className="flex shrink-0 items-center gap-2">
                   {quoted.length > 1 && q.amount === quoted[0].amount && (
-                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-700">
+                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-700 dark:bg-green-950/40 dark:text-green-200">
                       Lowest
                     </span>
                   )}
-                  <span className="font-semibold text-stone-900">
+                  <span className="font-semibold text-stone-900 dark:text-stone-100">
                     {formatUSDCents(q.amount)}
                   </span>
                 </span>
@@ -221,22 +257,26 @@ export default async function HomeownerChatsPage({
       )}
 
       <div className="grid gap-4 md:grid-cols-[280px_1fr]">
-        {/* ---- Conversation list ---- */}
-        <ul className="max-h-[40vh] divide-y divide-stone-100 overflow-y-auto rounded-xl border border-stone-200 bg-white md:h-[calc(100vh-13rem)] md:max-h-none">
+        {/* ---- Conversation list (hidden on phones while a thread is open) ---- */}
+        <ul
+          className={`${
+            threadOpenOnMobile ? "hidden md:block" : ""
+          } max-h-[40vh] divide-y divide-stone-100 overflow-y-auto rounded-xl border border-stone-200 bg-white dark:divide-white/10 dark:border-white/10 dark:bg-stone-800 md:h-[calc(100vh-13rem)] md:max-h-none`}
+        >
           {/* Pinned assistant */}
           <li>
             <Link
               href="/chats?lead=ask-hearth"
               className={`block border-l-4 px-4 py-3 transition ${
                 askSelected
-                  ? "border-hearth-500 bg-hearth-50"
-                  : "border-transparent hover:bg-stone-50"
+                  ? "border-hearth-500 bg-hearth-50 dark:bg-hearth-900/40"
+                  : "border-transparent hover:bg-stone-50 dark:hover:bg-stone-700"
               }`}
             >
-              <span className="truncate font-medium text-stone-900">
+              <span className="truncate font-medium text-stone-900 dark:text-stone-100">
                 ✨ Ask Hearth
               </span>
-              <p className="truncate text-xs text-stone-500">
+              <p className="truncate text-xs text-stone-500 dark:text-stone-400">
                 Your home assistant
               </p>
             </Link>
@@ -252,18 +292,18 @@ export default async function HomeownerChatsPage({
                     href={`/chats?lead=${l.id}`}
                     className={`block border-l-4 px-4 py-3 transition ${
                       isActive
-                        ? "border-hearth-500 bg-hearth-50"
+                        ? "border-hearth-500 bg-hearth-50 dark:bg-hearth-900/40"
                         : unread
-                          ? "border-hearth-400 bg-hearth-50/60 hover:bg-hearth-50"
-                          : "border-transparent hover:bg-stone-50"
+                          ? "border-hearth-400 bg-hearth-50/60 hover:bg-hearth-50 dark:bg-hearth-900/30 dark:hover:bg-hearth-900/40"
+                          : "border-transparent hover:bg-stone-50 dark:hover:bg-stone-700"
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span
                         className={`truncate ${
                           unread
-                            ? "font-bold text-stone-900"
-                            : "font-medium text-stone-900"
+                            ? "font-bold text-stone-900 dark:text-stone-100"
+                            : "font-medium text-stone-900 dark:text-stone-100"
                         }`}
                       >
                         {nameOf(l)}
@@ -273,14 +313,14 @@ export default async function HomeownerChatsPage({
                           New
                         </span>
                       ) : (
-                        <span className="shrink-0 text-xs text-stone-500">
+                        <span className="shrink-0 text-xs text-stone-500 dark:text-stone-400">
                           {iconFor(JOB_CATEGORIES, l.category)}
                         </span>
                       )}
                     </div>
                     <p
                       className={`truncate text-xs ${
-                        unread ? "font-medium text-stone-800" : "text-stone-500"
+                        unread ? "font-medium text-stone-800 dark:text-stone-200" : "text-stone-500 dark:text-stone-400"
                       }`}
                     >
                       {last
@@ -292,7 +332,7 @@ export default async function HomeownerChatsPage({
                         : labelFor(JOB_CATEGORIES, l.category)}
                     </p>
                     {quoteByLead.has(l.id) && (
-                      <span className="mt-1 inline-block rounded-full bg-hearth-50 px-2 py-0.5 text-[10px] font-semibold text-hearth-700">
+                      <span className="mt-1 inline-block rounded-full bg-hearth-50 px-2 py-0.5 text-[10px] font-semibold text-hearth-700 dark:bg-hearth-900/40 dark:text-hearth-300">
                         Quote {formatUSDCents(quoteByLead.get(l.id)!)}
                       </span>
                     )}
@@ -302,18 +342,40 @@ export default async function HomeownerChatsPage({
             })}
           </ul>
 
-          {/* ---- Open thread ---- */}
+          {/* ---- Open thread (the only pane on phones once one is picked) ---- */}
           {askSelected ? (
-            <div className="h-[60vh] rounded-xl border border-stone-200 bg-white p-3 md:h-[calc(100vh-13rem)]">
-              <AskHearth fill greeting={greeting} />
+            <div
+              className={`${
+                threadOpenOnMobile ? "flex" : "hidden md:flex"
+              } h-[calc(100dvh-13rem)] flex-col rounded-xl border border-stone-200 bg-white p-3 dark:border-white/10 dark:bg-stone-800 md:h-[calc(100vh-13rem)]`}
+            >
+              <Link
+                href="/chats"
+                className="mb-2 inline-flex w-fit shrink-0 items-center gap-1 text-sm font-medium text-hearth-700 hover:underline md:hidden"
+              >
+                <span aria-hidden="true">←</span> All conversations
+              </Link>
+              <div className="min-h-0 flex-1">
+                <AskHearth fill greeting={greeting} />
+              </div>
             </div>
           ) : selected ? (
-            <div className="flex h-[60vh] flex-col rounded-xl border border-stone-200 bg-white p-3 md:h-[calc(100vh-13rem)]">
+            <div
+              className={`${
+                threadOpenOnMobile ? "flex" : "hidden md:flex"
+              } h-[calc(100dvh-13rem)] flex-col rounded-xl border border-stone-200 bg-white p-3 dark:border-white/10 dark:bg-stone-800 md:h-[calc(100vh-13rem)]`}
+            >
+              <Link
+                href="/chats"
+                className="mb-2 inline-flex w-fit shrink-0 items-center gap-1 text-sm font-medium text-hearth-700 hover:underline md:hidden"
+              >
+                <span aria-hidden="true">←</span> All conversations
+              </Link>
               {/* A pro is assigned on every thread here, so a review is always
                   allowed (leave_review only requires an assigned pro, not a
                   closed conversation): "Leave a review" while working
                   together, or a quiet "You reviewed this pro" once done. */}
-              <div className="mb-2 flex flex-wrap shrink-0 items-center justify-between gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm">
+              <div className="mb-2 flex flex-wrap shrink-0 items-center justify-between gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm dark:border-white/10 dark:bg-stone-900">
                 {existingReview ? (
                   <div className="flex items-center gap-2">
                     <span className="text-amber-500">
@@ -322,12 +384,12 @@ export default async function HomeownerChatsPage({
                         {"★".repeat(5 - existingReview.rating)}
                       </span>
                     </span>
-                    <span className="text-xs text-stone-500">
+                    <span className="text-xs text-stone-500 dark:text-stone-400">
                       You reviewed this pro
                     </span>
                   </div>
                 ) : (
-                  <span className="text-stone-500">
+                  <span className="text-stone-500 dark:text-stone-400">
                     Worked with {nameOf(selected)}?
                   </span>
                 )}
@@ -348,15 +410,27 @@ export default async function HomeownerChatsPage({
                   embedded
                   title={nameOf(selected)}
                   subtitle={labelFor(JOB_CATEGORIES, selected.category)}
+                  jobTitle={labelFor(JOB_CATEGORIES, selected.category)}
                   contractorName={nameOf(selected)}
                   acceptQuoteAction={acceptQuoteAction}
                   declineQuoteAction={declineQuoteAction}
+                  signInvoiceAction={signInvoiceAction}
                 />
               </div>
             </div>
           ) : (
-            <div className="flex h-[60vh] items-center justify-center rounded-xl border border-dashed border-stone-300 text-sm text-stone-500 md:h-[calc(100vh-13rem)]">
+            <div
+              className={`${
+                threadOpenOnMobile ? "flex" : "hidden md:flex"
+              } h-[60vh] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-stone-300 text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400 md:h-[calc(100vh-13rem)]`}
+            >
               Select a conversation
+              <Link
+                href="/chats"
+                className="text-sm font-medium text-hearth-700 hover:underline md:hidden"
+              >
+                <span aria-hidden="true">←</span> All conversations
+              </Link>
             </div>
           )}
         </div>

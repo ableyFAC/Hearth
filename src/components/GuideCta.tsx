@@ -26,11 +26,11 @@ export default async function GuideCta({
 
   if (user) {
     return (
-      <section className="mt-12 rounded-2xl border border-hearth-200 bg-hearth-50 p-6 text-center shadow-sm">
-        <h2 className="text-lg font-semibold text-stone-900">
+      <section className="mt-12 rounded-2xl border border-hearth-200 bg-hearth-50 p-6 text-center shadow-sm dark:border-hearth-900 dark:bg-hearth-900/20">
+        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
           See this for YOUR home
         </h2>
-        <p className="mx-auto mt-2 max-w-md text-sm text-stone-600">
+        <p className="mx-auto mt-2 max-w-md text-sm text-stone-600 dark:text-stone-300">
           Everything above is a general, national range. Hearth already
           knows your home&apos;s actual age, size, and systems.
         </p>
@@ -45,11 +45,11 @@ export default async function GuideCta({
   }
 
   return (
-    <section className="mt-12 rounded-2xl border border-hearth-200 bg-hearth-50 p-6 text-center shadow-sm">
-      <h2 className="text-lg font-semibold text-stone-900">
+    <section className="mt-12 rounded-2xl border border-hearth-200 bg-hearth-50 p-6 text-center shadow-sm dark:border-hearth-900 dark:bg-hearth-900/20">
+      <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
         Get the answer for YOUR home
       </h2>
-      <p className="mx-auto mt-2 max-w-md text-sm text-stone-600">
+      <p className="mx-auto mt-2 max-w-md text-sm text-stone-600 dark:text-stone-300">
         Everything above is a general, national range. Hearth knows your
         home&apos;s actual age, size, and systems, and turns that into a
         house-specific answer, free.

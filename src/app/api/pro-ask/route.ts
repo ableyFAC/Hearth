@@ -41,9 +41,12 @@ export async function POST(req: NextRequest) {
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
+    // The setup detail belongs in the server logs, never in the chat.
+    console.error(
+      "Ask Hearth for Pros: GEMINI_API_KEY is not set in the environment."
+    );
     return NextResponse.json({
-      answer:
-        "Ask Hearth for Pros isn't set up yet. Add a GEMINI_API_KEY to .env.local to enable it.",
+      answer: "Ask Hearth is temporarily unavailable. Please try again soon.",
     });
   }
 

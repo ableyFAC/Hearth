@@ -9,8 +9,8 @@ export default async function NotificationsPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-stone-900">Notifications</h1>
-        <p className="mt-1 text-sm text-stone-500">
+        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Notifications</h1>
+        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           Choose what Hearth notifies you about. You can change these at any time.
         </p>
       </div>

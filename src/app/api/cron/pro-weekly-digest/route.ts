@@ -40,6 +40,13 @@ const MAX_JOBS = 2000; // sanity cap on each job scan
 const MAX_ROWS_PER_CHUNK = 5000; // sanity cap on each per-chunk bulk read
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// PostgREST caps every response at its max-rows setting (1000 in
+// supabase/config.toml), silently, regardless of a larger .limit(). So any
+// scan whose cap exceeds that (MAX_JOBS, MAX_ROWS_PER_CHUNK) pages with
+// .range() in cap-sized steps via fetchPaged() below instead of a single
+// over-cap .limit() that would quietly undercount.
+const PAGE_SIZE = 1000;
+
 const DIGEST_WINDOW_MS = 7 * DAY_MS;
 const RENEWAL_WINDOW_DAYS = 30;
 
@@ -70,6 +77,28 @@ function chunk<T>(items: T[], size: number): T[][] {
   return out;
 }
 
+// Drains a query past the PostgREST max-rows cap by paging with .range() in
+// PAGE_SIZE steps, up to maxRows total. Callers MUST order deterministically
+// (with an id tiebreak) so pages never skip or repeat rows; a short page
+// means the result set is exhausted.
+async function fetchPaged<T>(
+  maxRows: number,
+  page: (
+    from: number,
+    to: number
+  ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>
+): Promise<{ rows: T[]; error: string | null }> {
+  const rows: T[] = [];
+  for (let from = 0; from < maxRows; from += PAGE_SIZE) {
+    const to = Math.min(from + PAGE_SIZE, maxRows) - 1;
+    const { data, error } = await page(from, to);
+    if (error) return { rows, error: error.message };
+    rows.push(...(data ?? []));
+    if (!data || data.length < to - from + 1) break;
+  }
+  return { rows, error: null };
+}
+
 function plural(n: number, word: string): string {
   return n === 1 ? `${n} ${word}` : `${n} ${word}s`;
 }
@@ -91,13 +120,16 @@ function isoWeekKey(d: Date): string {
   return `${date.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
-// Whole days between now and a plain YYYY-MM-DD date column, timezone safe
+// Whole days between today and a plain YYYY-MM-DD date column, timezone safe
 // (never Date-parse a bare date string on its own, which JS treats as UTC and
 // can shift a day once local math gets involved), same approach as the
-// insurance-renewal cron.
-function daysUntil(dateStr: string, nowMs: number): number {
+// insurance-renewal cron. Both sides of the subtraction are UTC midnights:
+// the caller passes today's UTC midnight, NOT the raw run instant, otherwise
+// a 13:00 UTC run rounds an expires-today date to -1 ("expired 1 day ago"
+// while the document is still valid) and shifts every clause a day early.
+function daysUntil(dateStr: string, todayUtcMs: number): number {
   const target = new Date(`${dateStr}T00:00:00Z`).getTime();
-  return Math.round((target - nowMs) / DAY_MS);
+  return Math.round((target - todayUtcMs) / DAY_MS);
 }
 
 function renewalClause(label: string, days: number): string {
@@ -113,7 +145,15 @@ async function runCron(req: NextRequest) {
 
   const supabase = createAdminClient();
   const nowMs = Date.now();
-  const weekKey = isoWeekKey(new Date(nowMs));
+  const now = new Date(nowMs);
+  // Today's UTC midnight, for date-only math against date columns (see
+  // daysUntil).
+  const todayMs = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate()
+  );
+  const weekKey = isoWeekKey(now);
 
   // Everyone with a pro profile gets the brief, free and member alike.
   // Oldest first so the recipient set stays stable when a run hits the cap.
@@ -140,14 +180,20 @@ async function runCron(req: NextRequest) {
   // Jobs posted in the last 7 days (any status: "posted" is the fact being
   // reported; openness is checked separately below).
   const weekCutoff = new Date(nowMs - DIGEST_WINDOW_MS).toISOString();
-  const { data: recentJobs, error: jobsError } = await supabase
-    .from("contractor_leads")
-    .select("id, category, status, contractor_id")
-    .gte("created_at", weekCutoff)
-    .limit(MAX_JOBS);
+  const { rows: recentJobs, error: jobsError } = await fetchPaged(
+    MAX_JOBS,
+    (from, to) =>
+      supabase
+        .from("contractor_leads")
+        .select("id, category, status, contractor_id")
+        .gte("created_at", weekCutoff)
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to)
+  );
   if (jobsError) {
     return NextResponse.json(
-      { checked: 0, notified: 0, error: jobsError.message },
+      { checked: 0, notified: 0, error: jobsError },
       { status: 200 }
     );
   }
@@ -156,13 +202,17 @@ async function runCron(req: NextRequest) {
   // The fee math itself lives in lead_fee_cents(); age is all that gates it.
   const minAgingDays = Math.min(...AGING_LEAD_TIERS.map((t) => t.days));
   const agingCutoff = new Date(nowMs - minAgingDays * DAY_MS).toISOString();
-  const { data: agingJobs } = await supabase
-    .from("contractor_leads")
-    .select("id, category")
-    .is("contractor_id", null)
-    .eq("status", "new")
-    .lte("created_at", agingCutoff)
-    .limit(MAX_JOBS);
+  const { rows: agingJobs } = await fetchPaged(MAX_JOBS, (from, to) =>
+    supabase
+      .from("contractor_leads")
+      .select("id, category")
+      .is("contractor_id", null)
+      .eq("status", "new")
+      .lte("created_at", agingCutoff)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to)
+  );
 
   // Live (non-refunded) application counts per job, so "still open" and the
   // aging-deal count both respect the applicant cap.
@@ -208,13 +258,16 @@ async function runCron(req: NextRequest) {
   // of its current status.
   const appsSubmittedByContractor = new Map<string, number>();
   for (const ids of chunk(contractorIds, QUERY_CHUNK)) {
-    const { data: submitted } = await supabase
-      .from("lead_applications")
-      .select("contractor_id")
-      .in("contractor_id", ids)
-      .gte("created_at", weekCutoff)
-      .order("contractor_id", { ascending: true })
-      .limit(MAX_ROWS_PER_CHUNK);
+    const { rows: submitted } = await fetchPaged(MAX_ROWS_PER_CHUNK, (from, to) =>
+      supabase
+        .from("lead_applications")
+        .select("contractor_id")
+        .in("contractor_id", ids)
+        .gte("created_at", weekCutoff)
+        .order("contractor_id", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to)
+    );
     for (const s of submitted ?? []) {
       appsSubmittedByContractor.set(
         s.contractor_id,
@@ -230,13 +283,16 @@ async function runCron(req: NextRequest) {
   // instead of "posted in the last 7 days and happens to be won".
   const wonByContractor = new Map<string, number>();
   for (const ids of chunk(contractorIds, QUERY_CHUNK)) {
-    const { data: won } = await supabase
-      .from("contractor_leads")
-      .select("contractor_id")
-      .in("contractor_id", ids)
-      .gte("paid_at", weekCutoff)
-      .order("contractor_id", { ascending: true })
-      .limit(MAX_ROWS_PER_CHUNK);
+    const { rows: won } = await fetchPaged(MAX_ROWS_PER_CHUNK, (from, to) =>
+      supabase
+        .from("contractor_leads")
+        .select("contractor_id")
+        .in("contractor_id", ids)
+        .gte("paid_at", weekCutoff)
+        .order("contractor_id", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to)
+    );
     for (const w of won ?? []) {
       if (!w.contractor_id) continue;
       wonByContractor.set(
@@ -255,14 +311,17 @@ async function runCron(req: NextRequest) {
     { client_name: string; follow_up_on: string }[]
   >();
   for (const ids of chunk(contractorIds, QUERY_CHUNK)) {
-    const { data: dueClients } = await supabase
-      .from("pro_clients")
-      .select("contractor_id, client_name, follow_up_on")
-      .in("contractor_id", ids)
-      .not("follow_up_on", "is", null)
-      .lte("follow_up_on", todayStr)
-      .order("follow_up_on", { ascending: true })
-      .limit(MAX_ROWS_PER_CHUNK);
+    const { rows: dueClients } = await fetchPaged(MAX_ROWS_PER_CHUNK, (from, to) =>
+      supabase
+        .from("pro_clients")
+        .select("contractor_id, client_name, follow_up_on")
+        .in("contractor_id", ids)
+        .not("follow_up_on", "is", null)
+        .lte("follow_up_on", todayStr)
+        .order("follow_up_on", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to)
+    );
     for (const row of dueClients ?? []) {
       const list = followUpsByContractor.get(row.contractor_id) ?? [];
       list.push({
@@ -367,11 +426,11 @@ async function runCron(req: NextRequest) {
       const renewalInfo = renewalByContractor.get(contractor.id);
       const renewalItems: { label: string; days: number }[] = [];
       if (renewalInfo?.license_expires) {
-        const d = daysUntil(renewalInfo.license_expires, nowMs);
+        const d = daysUntil(renewalInfo.license_expires, todayMs);
         if (d <= RENEWAL_WINDOW_DAYS) renewalItems.push({ label: "license", days: d });
       }
       if (renewalInfo?.insurance_expires) {
-        const d = daysUntil(renewalInfo.insurance_expires, nowMs);
+        const d = daysUntil(renewalInfo.insurance_expires, todayMs);
         if (d <= RENEWAL_WINDOW_DAYS) renewalItems.push({ label: "insurance", days: d });
       }
 

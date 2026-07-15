@@ -63,8 +63,8 @@ export default function StrongPostMeter() {
   ];
 
   return (
-    <div ref={ref} className="rounded-lg bg-stone-50 p-3">
-      <p className="text-xs font-medium text-stone-600">
+    <div ref={ref} className="rounded-lg bg-stone-50 p-3 dark:bg-stone-700">
+      <p className="text-xs font-medium text-stone-600 dark:text-stone-300">
         Strong posts get faster, better-priced responses.
       </p>
       <ul className="mt-1.5 space-y-1">
@@ -72,7 +72,7 @@ export default function StrongPostMeter() {
           <li
             key={it.label}
             className={`flex items-center gap-2 text-xs ${
-              it.done ? "text-green-700" : "text-stone-500"
+              it.done ? "text-green-700 dark:text-green-400" : "text-stone-500 dark:text-stone-400"
             }`}
           >
             <span aria-hidden>{it.done ? "✓" : "○"}</span>

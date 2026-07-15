@@ -124,11 +124,11 @@ export default async function SearchPage({
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-stone-900">
+        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
           {q ? `Results for "${q}"` : "Search"}
         </h1>
         {q && (
-          <p className="mt-1 text-sm text-stone-500">
+          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
             {total > 0
               ? `Found ${total} match${total === 1 ? "" : "es"} in your home and pages.`
               : "Nothing on the site matched. Ask Hearth below."}
@@ -136,25 +136,38 @@ export default async function SearchPage({
         )}
       </div>
 
+      {/* No route, system, document, issue, or reminder matched: the answer
+          path IS the result, so Ask Hearth renders first and prominent
+          instead of trailing the page. With matches, it waits at the bottom
+          as the fallback it usually is. */}
+      {q && total === 0 && (
+        <section className="space-y-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+            Ask Hearth
+          </h2>
+          <AskHearth suggestions={[q]} />
+        </section>
+      )}
+
       {groups.map((g) => (
         <section key={g.title} className="space-y-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
             {g.title}
           </h2>
-          <ul className="divide-y divide-stone-100 overflow-hidden rounded-xl border border-stone-200 bg-white">
+          <ul className="divide-y divide-stone-100 overflow-hidden rounded-xl border border-stone-200 bg-white dark:divide-white/10 dark:border-white/10 dark:bg-stone-800">
             {g.items.map((r, i) => (
               <li key={`${r.href}-${i}`}>
                 <Link
                   href={r.href}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-hearth-50"
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-hearth-50 dark:hover:bg-stone-700"
                 >
                   {r.icon && <span className="text-lg">{r.icon}</span>}
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-stone-900">
+                    <span className="block truncate text-sm font-medium text-stone-900 dark:text-stone-100">
                       {r.label}
                     </span>
                     {r.sub && (
-                      <span className="block truncate text-xs text-stone-500">
+                      <span className="block truncate text-xs text-stone-500 dark:text-stone-400">
                         {r.sub}
                       </span>
                     )}
@@ -166,9 +179,9 @@ export default async function SearchPage({
         </section>
       ))}
 
-      {q && (
+      {q && total > 0 && (
         <section className="space-y-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
             Ask Hearth
           </h2>
           <AskHearth suggestions={[q]} />

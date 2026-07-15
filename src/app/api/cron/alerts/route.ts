@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { STATE_NAMES } from "@/lib/forecast";
 
 export const runtime = "nodejs";
 
@@ -7,13 +8,19 @@ export const runtime = "nodejs";
 // weather alerts already computed for the dashboard (see home-alerts/route.ts)
 // into rows in `notifications`, so a homeowner who isn't actively looking at
 // the dashboard still gets re-engaged. Safe to run repeatedly: it dedupes on
-// (user_id, kind, title) within a trailing window before inserting.
+// (user_id, kind) within a trailing window before inserting. The title is
+// deliberately NOT part of the key: it embeds the relative day ("tomorrow")
+// and rounded temperature, both of which change run to run for the same
+// freeze/heat event, so keying on it would notify daily for one cold snap.
 //
 // Recalls are intentionally left to the dashboard's home-alerts call for now -
 // they're per-brand and slower to fetch for every property on a schedule.
 // This endpoint focuses on the fast, cheap win: freeze/heat warnings.
 
-const DEDUPE_WINDOW_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
+const DAY_MS = 24 * 60 * 60 * 1000;
+// Covers the full 4-day forecast horizon, so a single event first spotted
+// "in 3 days" can never re-notify as it walks in to "today".
+const DEDUPE_WINDOW_MS = 4 * DAY_MS;
 const FETCH_TIMEOUT_MS = 4000;
 const MAX_PROPERTIES = 200; // cap the work a single run does
 
@@ -46,6 +53,20 @@ function whenLabel(i: number): string {
   return `in ${i} days`;
 }
 
+// True when an Open-Meteo geocoding result sits in the property's US state.
+// admin1 comes back as the full state name ("California"), while properties
+// usually store the two-letter code, so compare against both forms.
+function matchesState(result: any, state: string): boolean {
+  const admin1 = typeof result?.admin1 === "string" ? result.admin1.toLowerCase() : "";
+  if (!admin1) return false;
+  const wanted = state.trim();
+  const fullName = STATE_NAMES[wanted.toUpperCase()] ?? "";
+  return (
+    admin1 === wanted.toLowerCase() ||
+    (fullName !== "" && admin1 === fullName.toLowerCase())
+  );
+}
+
 // Reuses the Open-Meteo logic from home-alerts, trimmed to the single top
 // weather alert (freeze takes priority since burst pipes are the costlier
 // surprise) and without the per-system age tailoring, to keep the cron cheap.
@@ -56,13 +77,22 @@ async function topWeatherAlert(
   const place = [city, state].filter(Boolean).join(", ");
   if (!city || !place) return null;
 
+  // Open-Meteo ranks bare-name matches globally by prominence ("Venice" is
+  // Venice, Italy; "Glendale" is the bigger Glendale, AZ), so ask for several
+  // US candidates and pick the one in the property's state. A property with
+  // no state on file falls back to the top US match; a property whose state
+  // matches nothing is skipped rather than alerted for the wrong place.
   const geo = await fetchJson(
     `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
       city
-    )}&count=1&language=en&format=json`,
+    )}&count=10&language=en&format=json&countryCode=US`,
     FETCH_TIMEOUT_MS
   );
-  const loc = geo?.results?.[0];
+  const results: any[] = Array.isArray(geo?.results) ? geo.results : [];
+  const usResults = results.filter((r) => r?.country_code === "US");
+  const loc = state
+    ? usResults.find((r) => matchesState(r, state))
+    : usResults[0];
   if (!loc) return null;
 
   const fc = await fetchJson(
@@ -117,32 +147,76 @@ async function runCron(req: NextRequest) {
   const supabase = createAdminClient();
   let created = 0;
 
+  // Every property gets its turn: with no ordering, a bare .limit() would
+  // return the same de facto fixed rows every run and silently never
+  // weather-check anything past MAX_PROPERTIES. Instead, count the rows,
+  // order deterministically, and rotate a MAX_PROPERTIES-wide window by the
+  // day number, so every property is visited within ceil(N/200) days without
+  // any persisted cursor.
+  const { count, error: countError } = await supabase
+    .from("properties")
+    .select("id", { count: "exact", head: true })
+    .not("user_id", "is", null);
+  if (countError) {
+    return NextResponse.json(
+      { created: 0, error: countError.message },
+      { status: 200 }
+    );
+  }
+  if (!count) {
+    return NextResponse.json({ created: 0 });
+  }
+  const pages = Math.ceil(count / MAX_PROPERTIES);
+  const page = Math.floor(Date.now() / DAY_MS) % pages;
+  const from = page * MAX_PROPERTIES;
+
   const { data: properties, error } = await supabase
     .from("properties")
     .select("id, user_id, city, state")
     .not("user_id", "is", null)
-    .limit(MAX_PROPERTIES);
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true })
+    .range(from, from + MAX_PROPERTIES - 1);
 
   if (error || !properties) {
     return NextResponse.json({ created: 0, error: error?.message ?? "no properties" }, { status: 200 });
+  }
+
+  // Honor the "Weather and safety alerts" toggle on /account/notifications
+  // (the `alerts` key in users.notification_prefs; an unset preference reads
+  // as enabled, matching NotificationPrefsForm). Checked up front, before the
+  // per-property Open-Meteo fetches, so opted-out homes cost nothing.
+  const userIds = Array.from(
+    new Set(properties.map((p) => p.user_id as string))
+  );
+  const optedOut = new Set<string>();
+  const { data: prefUsers } = await supabase
+    .from("users")
+    .select("id, notification_prefs")
+    .in("id", userIds);
+  for (const u of prefUsers ?? []) {
+    if ((u.notification_prefs as any)?.alerts === false) optedOut.add(u.id);
   }
 
   const since = new Date(Date.now() - DEDUPE_WINDOW_MS).toISOString();
 
   for (const property of properties) {
     try {
+      if (optedOut.has(property.user_id as string)) continue;
+
       const alert = await topWeatherAlert(property.city, property.state);
       if (!alert) continue;
 
-      // Dedupe: skip if the same kind+title already went out to this user
-      // recently, so re-running the cron (or a forecast that hasn't moved)
-      // doesn't spam the same warning every run.
+      // Dedupe: skip if the same kind of alert already went out to this user
+      // recently, so re-running the cron (or the same freeze/heat event
+      // walking closer day by day) doesn't spam a warning every run. The
+      // title is intentionally not matched: it changes every run for the
+      // same event (see header comment).
       const { data: existing } = await supabase
         .from("notifications")
         .select("id")
         .eq("user_id", property.user_id)
         .eq("kind", alert.kind)
-        .eq("title", alert.title)
         .gt("created_at", since)
         .limit(1);
       if (existing && existing.length > 0) continue;

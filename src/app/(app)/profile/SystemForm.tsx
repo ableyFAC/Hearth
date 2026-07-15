@@ -30,7 +30,7 @@ export default function SystemForm({ propertyId }: { propertyId: string }) {
       }}
       className="card space-y-4"
     >
-      <h3 className="font-semibold text-stone-900">Add a system</h3>
+      <h3 className="font-semibold text-stone-900 dark:text-stone-100">Add a system</h3>
 
       <div className="grid grid-cols-2 gap-3">
         <div>

@@ -11,8 +11,16 @@
 // and inflation to the actual replacement year (a furnace due in 2035 will
 // not cost 2026 prices). Both are pure math so the whole feature stays
 // testable and server-render friendly.
-import type { HomeSystem } from "@/lib/database.types";
-import { DEFAULT_LIFESPANS, REPLACEMENT_INFO } from "@/lib/health";
+import type { HomeSystem, Issue } from "@/lib/database.types";
+import { DEFAULT_LIFESPANS, REPLACEMENT_INFO, openIssueFor } from "@/lib/health";
+
+// The slice of an open issue buildForecast actually needs. Callers (the
+// forecast page) query the full `issues` table but only these fields matter
+// here, matching what health.ts's openIssueFor accepts.
+type OpenIssueLite = Pick<
+  Issue,
+  "id" | "system_id" | "category" | "severity" | "description"
+>;
 
 // Rough construction/labor cost index by state, national average = 1.0. Used
 // to scale national cost ranges toward what an owner in that state actually
@@ -157,18 +165,22 @@ export interface Forecast {
 }
 
 // Years left before a system likely needs replacing, adjusted for the
-// owner-reported condition. Mirrors health.ts's effectiveYearsLeft, but
-// takes install_year/condition directly and always returns a number: a
-// system with no install year is placed at the midpoint of its typical
-// lifespan so it still lands somewhere on the timeline instead of
-// disappearing from the forecast. When neither an install year nor a
-// worrying condition rating backs that placement up, timingEstimated is
-// true: the WHEN is a guess and downstream code must treat it that way
-// (no due-soon urgency, no confident replacement year on the page).
+// owner-reported condition AND any open issue reported against it (the same
+// live signal Home reads via health.ts's openIssueFor/isMustDo - a resolved
+// issue simply stops being passed in here, since callers only pass open
+// ones). Mirrors health.ts's effectiveYearsLeft, but takes install_year/
+// condition/issue directly and always returns a number: a system with no
+// install year is placed at the midpoint of its typical lifespan so it still
+// lands somewhere on the timeline instead of disappearing from the forecast.
+// When neither an install year nor a worrying condition rating nor an open
+// issue backs that placement up, timingEstimated is true: the WHEN is a
+// guess and downstream code must treat it that way (no due-soon urgency, no
+// confident replacement year on the page).
 function yearsLeftFor(
   system: Pick<HomeSystem, "system_type" | "install_year" | "condition_rating">,
   currentYear: number,
-  lifespan: number
+  lifespan: number,
+  openIssue: OpenIssueLite | null = null
 ): { age: number | null; yearsLeft: number; timingEstimated: boolean } {
   const age = system.install_year != null ? currentYear - system.install_year : null;
   const ageBased = age != null ? lifespan - age : Math.round(lifespan / 2);
@@ -179,9 +191,19 @@ function yearsLeftFor(
   else if (c === 2) cap = 2; // worn - within ~2 years
   else if (c === 3) cap = 5; // fair - within ~5 years
 
+  // A reported problem is real data too, capped the same way a bad condition
+  // rating is (urgent mirrors "failing", medium mirrors "worn", low mirrors
+  // "fair"). Combine with the condition cap by taking whichever is sooner.
+  if (openIssue) {
+    const issueCap =
+      openIssue.severity === "urgent" ? 0 : openIssue.severity === "medium" ? 2 : 5;
+    cap = cap == null ? issueCap : Math.min(cap, issueCap);
+  }
+
   const yearsLeft = cap == null ? ageBased : Math.min(ageBased, cap);
-  // No install year AND no condition cap: the midpoint placement is pure
-  // guesswork. (A bad condition rating is real data, so it still counts.)
+  // No install year AND no condition cap AND no open issue: the midpoint
+  // placement is pure guesswork. (A bad condition rating or an open issue is
+  // real data, so either one still counts.)
   const timingEstimated = age == null && cap == null;
   return { age, yearsLeft, timingEstimated };
 }
@@ -205,21 +227,28 @@ function priorityReason(item: ForecastItem, isCostliest: boolean): string {
 // (e.g. new Date(Date.now()).getFullYear()). `state` is the property's
 // two-letter state code, used to regionally adjust national cost ranges;
 // pass null/undefined when unknown and national averages are used instead.
+// `openIssues` should be that property's issues with status="open" only
+// (same query shape as the dashboard) - passing resolved ones in would
+// re-flag a system the owner already fixed, since matching happens by
+// openIssueFor, not by status.
 export function buildForecast(
   systems: HomeSystem[],
   currentYear: number,
   state?: string | null,
-  horizonYears = 10
+  horizonYears = 10,
+  openIssues: OpenIssueLite[] = []
 ): Forecast {
   const multiplier = stateMultiplier(state);
 
   const items: ForecastItem[] = systems.map((system) => {
     const lifespan =
       system.expected_lifespan_years ?? DEFAULT_LIFESPANS[system.system_type] ?? 20;
+    const openIssue = openIssueFor(system, openIssues);
     const { age, yearsLeft, timingEstimated } = yearsLeftFor(
       system,
       currentYear,
-      lifespan
+      lifespan,
+      openIssue
     );
     const cost = REPLACEMENT_INFO[system.system_type] ?? { low: 1000, high: 5000 };
     const costLow = Math.round(cost.low * multiplier);
@@ -250,12 +279,19 @@ export function buildForecast(
   // is backed by real data. A guessed midpoint never creates urgency.
   const dueSoon = timeline.filter((i) => !i.timingEstimated && i.yearsLeft <= 1);
 
+  // "Within the horizon" means replacementYear lands in one of the chart's
+  // buckets: currentYear .. currentYear + horizonYears - 1, i.e. yearsLeft
+  // strictly less than horizonYears. Using <= here would count an item due in
+  // exactly horizonYears years in the total and set-aside while the bar chart
+  // (which only has horizonYears buckets) silently drops it, so the bars
+  // would not reconcile with the headline number.
+  //
   // Guessed-timing items stay in the total even when their placeholder
   // midpoint lands past the horizon: we do not know WHEN that roof is due,
   // only that it will be, and the fund should still cover it. The page
   // discloses this via estimatedTimingCount.
   const withinHorizon = timeline.filter(
-    (i) => i.yearsLeft <= horizonYears || i.timingEstimated
+    (i) => i.yearsLeft < horizonYears || i.timingEstimated
   );
   const totalMidCost = withinHorizon.reduce((sum, i) => sum + i.futureCost, 0);
 

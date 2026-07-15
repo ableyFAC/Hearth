@@ -50,7 +50,7 @@ export default function PostJobButton() {
   return (
     <div className="space-y-2">
       {error && (
-        <p role="alert" className="text-sm font-medium text-red-600">
+        <p role="alert" className="text-sm font-medium text-red-600 dark:text-red-400">
           {error}
         </p>
       )}

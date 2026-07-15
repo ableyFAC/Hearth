@@ -68,7 +68,7 @@ export default function LearnGuide({
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls={panelId}
-        className="flex w-full items-center justify-between gap-2 text-left font-medium text-stone-900"
+        className="flex w-full items-center justify-between gap-2 text-left font-medium text-stone-900 dark:text-stone-100"
       >
         <span className="flex flex-wrap items-center gap-2">
           <span>
@@ -83,7 +83,7 @@ export default function LearnGuide({
           )}
         </span>
         <span
-          className={`shrink-0 text-lg text-stone-500 transition-transform duration-200 ${
+          className={`shrink-0 text-lg text-stone-500 transition-transform duration-200 dark:text-stone-400 ${
             open ? "rotate-180" : ""
           }`}
           aria-hidden="true"
@@ -92,7 +92,7 @@ export default function LearnGuide({
         </span>
       </button>
 
-      <p className="mt-1 text-sm text-stone-500">{summary}</p>
+      <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">{summary}</p>
 
       <div
         id={panelId}
@@ -103,7 +103,7 @@ export default function LearnGuide({
         }`}
       >
         <div className="overflow-hidden">
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-stone-500 dark:text-stone-400">
             Typical lifespan: {lifespan} years
             {age != null ? ` · yours is about ${age} yrs old` : ""}
           </p>
@@ -128,7 +128,9 @@ export default function LearnGuide({
                   </span>
                   <span
                     className={
-                      checked[i] ? "text-stone-500 line-through" : "text-stone-600"
+                      checked[i]
+                        ? "text-stone-500 line-through dark:text-stone-500"
+                        : "text-stone-600 dark:text-stone-300"
                     }
                   >
                     {t}
@@ -143,7 +145,7 @@ export default function LearnGuide({
               type="button"
               onClick={() => ask(askQuestion)}
               tabIndex={open ? 0 : -1}
-              className="rounded-lg bg-hearth-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-hearth-700"
+              className="btn-primary px-3 py-1.5 text-xs"
             >
               ✨ Ask Hearth about this
             </button>
@@ -155,7 +157,7 @@ export default function LearnGuide({
                 )
               }
               tabIndex={open ? 0 : -1}
-              className="rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:border-hearth-400 hover:text-hearth-700"
+              className="rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:text-stone-300"
             >
               Something wrong?
             </button>

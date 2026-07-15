@@ -95,15 +95,15 @@ export default function PlusWelcome() {
           {current.emoji}
         </div>
         <div>
-          <h1 className="text-3xl font-semibold text-stone-900">
+          <h1 className="text-3xl font-semibold text-stone-900 dark:text-stone-100">
             {current.title}
           </h1>
-          <p className="mt-2 text-stone-600">{current.benefit}</p>
+          <p className="mt-2 text-stone-600 dark:text-stone-300">{current.benefit}</p>
         </div>
         {current.href && current.cta && (
           <Link
             href={current.href}
-            className="inline-block text-sm text-hearth-700 hover:underline"
+            className="inline-block text-sm text-hearth-700 hover:underline dark:text-hearth-300"
           >
             {current.cta} →
           </Link>
@@ -115,7 +115,7 @@ export default function PlusWelcome() {
           <span
             key={s.title}
             className={`h-2 w-2 rounded-full transition-colors ${
-              i === step ? "bg-hearth-600" : "bg-stone-200"
+              i === step ? "bg-hearth-600" : "bg-stone-200 dark:bg-stone-700"
             }`}
           />
         ))}
@@ -147,14 +147,14 @@ export default function PlusWelcome() {
           )}
         </div>
         {!last && (
-          <Link href="/dashboard" className="text-sm text-stone-500 hover:underline">
+          <Link href="/dashboard" className="text-sm text-stone-500 hover:underline dark:text-stone-400">
             Skip
           </Link>
         )}
       </div>
 
       {last && (
-        <p className="text-xs text-stone-500">
+        <p className="text-xs text-stone-500 dark:text-stone-400">
           If a Plus feature still looks locked, give it a minute to sync, then
           refresh.
         </p>

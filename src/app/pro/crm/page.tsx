@@ -8,10 +8,9 @@ import ClientRow from "./ClientRow";
 import { addClientAction, trackLeadAction } from "./actions";
 
 // The premium CRM upgrades a Hearth Pro membership adds on top of the free
-// pipeline. Honest framing: these are perks Pro unlocks, not buttons that
-// already work here. Shown in full (never blurred) so a free pro can see
-// exactly what is there; tapping any card sends a non-member to /pro/plus, and
-// a member to the real tool where one exists (via `href`).
+// pipeline. Honest framing: only things that actually work in the app today
+// may appear here. Tapping a card sends a non-member to /pro/plus, and a
+// member to the real tool (via `href`).
 const PRO_CRM_FEATURES: Array<{
   icon: string;
   title: string;
@@ -19,41 +18,21 @@ const PRO_CRM_FEATURES: Array<{
   href?: string;
 }> = [
   {
-    icon: "⏰",
-    title: "Automated follow-up reminders",
-    body: "Nudges schedule themselves after each stage, so no client goes cold while you're on a job.",
-  },
-  {
-    icon: "⭐",
-    title: "Automated review requests",
-    body: "The moment you mark a job won, Hearth asks the customer for a review for you.",
-  },
-  {
-    icon: "📝",
-    title: "Saved quote & estimate templates",
-    body: "Keep your best quotes on file and reuse them in seconds instead of retyping.",
-  },
-  {
-    icon: "🏷️",
-    title: "Customer tags & filtering",
-    body: "Tag clients by trade, source, or priority and filter your pipeline down to who matters now.",
-  },
-  {
-    icon: "♾️",
-    title: "Unlimited clients",
-    body: "The free pipeline is capped. Pro removes the cap so your whole book of business lives here.",
-  },
-  {
-    icon: "📊",
-    title: "Pipeline analytics & CSV export",
-    body: "See value by stage and win rate over time, and export the whole pipeline to a spreadsheet.",
-  },
-  {
     icon: "🤖",
     title: "AI back office",
-    body: "The estimate, invoice, and follow-up writer, plus instant alerts and automation perks.",
+    body: "Draft estimates, invoices, and follow-up messages in seconds, so evenings go back to being evenings.",
     href: "/pro/tools",
   },
+];
+
+// On our roadmap for the CRM, clearly labeled as planned. Nothing in this
+// list exists in the app yet, and nothing here is sold as if it does.
+const PLANNED_CRM_FEATURES: Array<{ icon: string; label: string }> = [
+  { icon: "⏰", label: "Automated follow-up reminders" },
+  { icon: "⭐", label: "Automated review requests when you win a job" },
+  { icon: "📝", label: "Saved quote and estimate templates" },
+  { icon: "🏷️", label: "Customer tags and filtering" },
+  { icon: "📊", label: "Pipeline analytics and CSV export" },
 ];
 
 const STAGES: { value: string; label: string }[] = [
@@ -161,8 +140,8 @@ export default async function ProCrmPage({
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-stone-900">Clients</h1>
-        <p className="mt-1 text-sm text-stone-500">
+        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Clients</h1>
+        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           Your pipeline: a stage, an estimated value, contact info, and a
           notes timeline for everyone you're doing business with.
         </p>
@@ -178,10 +157,10 @@ export default async function ProCrmPage({
           return (
             <div key={s.value} className="card">
               <p className="stat-label">{s.label}</p>
-              <p className="stat-number mt-1 text-2xl text-stone-900">
+              <p className="stat-number mt-1 text-2xl">
                 {items.length}
               </p>
-              <p className="mt-1 text-xs text-stone-500">
+              <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                 {dollarsFromCents(total)} estimated
               </p>
             </div>
@@ -209,9 +188,9 @@ export default async function ProCrmPage({
 
       {dueForFollowUp.length > 0 && (
         <section className="card-hero space-y-3">
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Follow up today{" "}
-            <span className="text-stone-500">({dueForFollowUp.length})</span>
+            <span className="text-stone-500 dark:text-stone-400">({dueForFollowUp.length})</span>
           </h2>
           <ul className="space-y-2">
             {dueForFollowUp.map((c) => (
@@ -227,7 +206,7 @@ export default async function ProCrmPage({
       )}
 
       <section className="card space-y-3">
-        <h2 className="text-lg font-semibold text-stone-900">
+        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
           Add a client
         </h2>
         <form action={addClientAction} className="grid gap-3 sm:grid-cols-2">
@@ -275,10 +254,10 @@ export default async function ProCrmPage({
       {suggestions.length > 0 && (
         <section className="space-y-3">
           <div>
-            <h2 className="text-lg font-semibold text-stone-900">
+            <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
               Track from your jobs
             </h2>
-            <p className="text-xs text-stone-500">
+            <p className="text-xs text-stone-500 dark:text-stone-400">
               Jobs a homeowner already chose you for. One tap adds them to
               your client list.
             </p>
@@ -294,13 +273,13 @@ export default async function ProCrmPage({
                   className="card flex items-center justify-between gap-3"
                 >
                   <div>
-                    <span className="flex items-center gap-2 font-medium text-stone-900">
+                    <span className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
                       <span className="icon-chip">
                         {iconFor(JOB_CATEGORIES, l.category)}
                       </span>{" "}
                       {suggestedName}
                     </span>
-                    <p className="text-xs text-stone-500">
+                    <p className="text-xs text-stone-500 dark:text-stone-400">
                       {labelFor(JOB_CATEGORIES, l.category)} ·{" "}
                       {new Date(l.created_at).toLocaleDateString()}
                     </p>
@@ -328,12 +307,12 @@ export default async function ProCrmPage({
       )}
 
       <section className="space-y-6">
-        <h2 className="text-lg font-semibold text-stone-900">
+        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
           Your clients{" "}
-          <span className="text-stone-500">({displayClients.length})</span>
+          <span className="text-stone-500 dark:text-stone-400">({displayClients.length})</span>
         </h2>
         {displayClients.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
+          <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400">
             {q
               ? "No clients match that search."
               : "No clients tracked yet. Add one above, or track a job you were already chosen for."}
@@ -344,9 +323,9 @@ export default async function ProCrmPage({
             if (items.length === 0) return null;
             return (
               <div key={s.value} className="space-y-2">
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-stone-500">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
                   {s.label}{" "}
-                  <span className="normal-case text-stone-300">
+                  <span className="normal-case text-stone-300 dark:text-stone-600">
                     ({items.length})
                   </span>
                 </h3>
@@ -366,25 +345,24 @@ export default async function ProCrmPage({
         )}
       </section>
 
-      {/* More with Pro: the premium CRM upgrades, shown in FULL (never hidden
-          behind a blur). Every card is visible and tappable. A non-member who
-          taps one is sent to /pro/plus to unlock it; a member is sent to the
-          real tool where one exists (href), or to /pro/plus otherwise. */}
+      {/* More with Pro: only the upgrades that really work today. A
+          non-member who taps one is sent to /pro/plus to unlock it; a member
+          is sent to the real tool (href). Everything still on the roadmap
+          lives in the clearly-labeled "What's coming" list below, never
+          dressed up as a working feature. */}
       <section className="space-y-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <div>
-            <h2 className="text-lg font-semibold text-stone-900">
+            <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
               More with Pro{" "}
-              <span className="chip ml-1 bg-hearth-100 align-middle text-hearth-800">
+              <span className="chip ml-1 bg-hearth-100 align-middle text-hearth-800 dark:bg-hearth-900 dark:text-hearth-200">
                 Pro
               </span>
             </h2>
-            <p className="text-xs text-stone-500">
-              Automations and templates that run the admin side of your pipeline
-              for you.{" "}
+            <p className="text-xs text-stone-500 dark:text-stone-400">
               {member
-                ? "These come with your membership."
-                : "Tap any to see how Pro unlocks it."}
+                ? "Included with your membership."
+                : "Tap to see how Pro unlocks it."}
             </p>
           </div>
           {!member && (
@@ -401,23 +379,44 @@ export default async function ProCrmPage({
               <Link
                 key={f.title}
                 href={href}
-                className="card group ring-1 ring-transparent transition hover:ring-hearth-300"
+                className="card group ring-1 ring-transparent transition hover:ring-hearth-300 dark:hover:ring-hearth-400"
               >
                 <div className="flex items-center justify-between">
                   <span className="icon-chip">{f.icon}</span>
                   {!member && (
-                    <span className="chip bg-hearth-100 text-hearth-800">
+                    <span className="chip bg-hearth-100 text-hearth-800 dark:bg-hearth-900 dark:text-hearth-200">
                       Pro
                     </span>
                   )}
                 </div>
-                <p className="mt-2 font-semibold text-stone-900 group-hover:text-hearth-800">
+                <p className="mt-2 font-semibold text-stone-900 group-hover:text-hearth-800 dark:text-stone-100 dark:group-hover:text-hearth-300">
                   {f.title}
                 </p>
-                <p className="mt-1 text-sm text-stone-600">{f.body}</p>
+                <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">{f.body}</p>
               </Link>
             );
           })}
+        </div>
+
+        <div className="rounded-xl border border-dashed border-stone-300 p-4 dark:border-stone-700">
+          <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+            What&apos;s coming
+          </h3>
+          <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+            On our roadmap for the CRM. These are planned, not in the app yet,
+            so we won&apos;t charge you for them or pretend they work today.
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {PLANNED_CRM_FEATURES.map((f) => (
+              <li
+                key={f.label}
+                className="flex items-start gap-2 text-sm text-stone-600 dark:text-stone-300"
+              >
+                <span className="mt-0.5">{f.icon}</span>
+                <span>{f.label}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
     </div>

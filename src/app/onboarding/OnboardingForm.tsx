@@ -5,23 +5,93 @@ import { lookupParcelAction, claimPropertyAction } from "./actions";
 import type { ParcelFacts } from "@/lib/parcel";
 import { PROPERTY_TYPES } from "@/lib/constants";
 
+// A trimmed length floor for "this is actually an address," not just "this
+// field isn't literally empty." Browsers treat a single space as satisfying
+// an <input required> constraint, so relying on that alone let a hasty Enter
+// press (or a stray keystroke) sail an unusable address like " " or "123"
+// straight through to a claimed home. Matches the floor enforced server-side
+// in claimPropertyAction/lookupParcelAction (./actions.ts) - the server copy
+// is the one that actually matters, this one just gives faster feedback.
+const MIN_ADDRESS_LENGTH = 5;
+
 export default function OnboardingForm({
   next,
 }: {
   next?: string | null;
 }) {
   const [step, setStep] = useState<"address" | "confirm">("address");
-  const [address, setAddress] = useState("");
+  const [street, setStreet] = useState("");
+  const [zip, setZip] = useState("");
   const [facts, setFacts] = useState<ParcelFacts | null>(null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function onLookup(e: React.FormEvent) {
     e.preventDefault();
+    setError(null);
+
+    // Enter in the address field (or clicking Continue) should only ever
+    // trigger a lookup, never skip straight past having a real address -
+    // catch the "just whitespace" / "a few stray characters" case here
+    // before it ever reaches the confirm-and-claim screen.
+    const s = street.trim();
+    if (s.length < MIN_ADDRESS_LENGTH) {
+      setError("Enter your home's street address to continue.");
+      return;
+    }
+    const z = zip.trim();
+    if (!/^\d{5}(-\d{4})?$/.test(z)) {
+      setError("Enter a valid 5-digit ZIP code.");
+      return;
+    }
+
     setBusy(true);
-    const result = await lookupParcelAction(address);
-    setFacts(result);
-    setBusy(false);
-    setStep("confirm");
+    try {
+      const result = await lookupParcelAction(s, z);
+      setFacts(result);
+      setStep("confirm");
+    } catch {
+      // A rejected server action (network blip, server hiccup) should never
+      // strand the button in its busy state with no explanation.
+      setError("That didn't go through. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Wraps the claim server action so a failure shows a friendly inline
+  // message instead of throwing raw to the error boundary. A successful
+  // claim redirects server-side, which is handled by the framework, not
+  // caught here.
+  async function onClaim(formData: FormData) {
+    setError(null);
+
+    // Fast client-side check so a blank/whitespace address (still possible
+    // here even though the field carries `required`: a single space passes
+    // that constraint, and the field is editable on this screen) never even
+    // makes the round trip. claimPropertyAction enforces the same floor
+    // server-side - that's the real gate, this is just quicker feedback.
+    const addressLine1 = ((formData.get("address_line1") as string) ?? "").trim();
+    if (addressLine1.length < MIN_ADDRESS_LENGTH) {
+      setError("Enter your home's address before claiming it.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await claimPropertyAction(formData);
+    } catch (err) {
+      // Surface claimPropertyAction's own validation message (e.g. an
+      // address rejected server-side) when there is one; fall back to the
+      // generic copy for network blips and other unexpected failures.
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : "That didn't go through. Please try again."
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -29,16 +99,16 @@ export default function OnboardingForm({
       {step === "address" && (
         <form onSubmit={onLookup} className="space-y-4">
           <div>
-            <h2 className="text-lg font-semibold text-stone-900">
+            <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
               What&apos;s your home address?
             </h2>
-            <p className="mt-1 text-sm text-stone-500">
+            <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
               Tell us your home&apos;s year built, size, and a few other
               details, or skip them and add them later.
             </p>
           </div>
 
-          <ul className="space-y-1.5 rounded-lg bg-hearth-50 p-3 text-sm text-hearth-800">
+          <ul className="space-y-1.5 rounded-lg bg-hearth-50 p-3 text-sm text-hearth-800 dark:bg-hearth-900/40 dark:text-hearth-200">
             <li className="flex items-start gap-2">
               <span aria-hidden="true">🛠️</span>
               <span>Track every system and know what needs attention</span>
@@ -57,42 +127,136 @@ export default function OnboardingForm({
             </li>
           </ul>
 
-          <div>
-            <label className="label" htmlFor="address">
-              Address
-            </label>
-            <input
-              id="address"
-              className="input"
-              placeholder="123 Oak St, San Francisco, CA 94110"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              required
-            />
-            <p className="mt-1 text-xs text-stone-500">
-              We ask so we can personalize maintenance and local pricing for
-              your home, it takes about 30 seconds.
-            </p>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-2">
+              <label className="label" htmlFor="street">
+                Street address
+              </label>
+              <input
+                id="street"
+                className="input"
+                placeholder="123 Oak St"
+                value={street}
+                onChange={(e) => setStreet(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor="zip">
+                ZIP code
+              </label>
+              <input
+                id="zip"
+                className="input"
+                placeholder="94110"
+                inputMode="numeric"
+                maxLength={10}
+                value={zip}
+                onChange={(e) => setZip(e.target.value)}
+                required
+              />
+            </div>
           </div>
+          <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+            We ask so we can personalize maintenance and local pricing for
+            your home, it takes about 30 seconds.
+          </p>
+          {/* RentCast IS wired up as the parcel source (src/lib/parcel.ts) -
+              it just needs RENTCAST_API_KEY set in the environment. Without
+              a key (or on a lookup miss), lookupParcelAction quietly falls
+              back to parsing the typed address into the next form instead of
+              a real records lookup, so the button stays "Continue" rather
+              than "Find my home" / "Looking up…": promising a search that
+              might silently not happen would be dishonest. */}
           <button className="btn-primary w-full" disabled={busy}>
-            {busy ? "Looking up…" : "Find my home"}
+            {busy ? "One moment…" : "Continue"}
           </button>
+          {error && (
+            <p
+              role="alert"
+              className="rounded-lg border border-red-200 bg-red-50 p-3 text-center text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
+            >
+              {error}
+            </p>
+          )}
         </form>
       )}
 
       {step === "confirm" && facts && (
-        <form action={claimPropertyAction} className="space-y-4">
+        <form action={onClaim} className="space-y-4">
           <div>
-            <h2 className="text-lg font-semibold text-stone-900">
-              Does this look right?
+            {/* source === "none" means no records lookup happened (see
+                src/lib/parcel.ts): the form only echoed the typed address, so
+                don't present it as a found result. The "Does this look right?"
+                copy is reserved for when a real source returns data. */}
+            <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+              {facts.source === "none"
+                ? "Tell us about your home"
+                : "Does this look right?"}
             </h2>
-            <p className="mt-1 text-sm text-stone-500">
-              Fill in what you know. Anything you skip you can add later.
+            <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+              {facts.source === "none"
+                ? "Fill in what you know. Everything is optional."
+                : "Fill in what you know. Anything you skip you can add later."}
             </p>
           </div>
 
           <input type="hidden" name="parcel_id" value={facts.parcel_id ?? ""} />
           <input type="hidden" name="next" value={next ?? ""} />
+
+          {/* RentCast enrichment (src/lib/parcel.ts) the owner can't edit and
+              isn't shown on this screen: carried through as hidden fields so
+              claimPropertyAction can persist them alongside the visible
+              facts above. */}
+          <input type="hidden" name="latitude" value={facts.latitude ?? ""} />
+          <input type="hidden" name="longitude" value={facts.longitude ?? ""} />
+          <input type="hidden" name="hoa_fee" value={facts.hoa_fee ?? ""} />
+          <input type="hidden" name="county" value={facts.county ?? ""} />
+          <input
+            type="hidden"
+            name="assessed_value"
+            value={facts.assessed_value ?? ""}
+          />
+          <input
+            type="hidden"
+            name="assessed_year"
+            value={facts.assessed_year ?? ""}
+          />
+          <input
+            type="hidden"
+            name="purchase_date"
+            value={facts.purchase_date ?? ""}
+          />
+          <input
+            type="hidden"
+            name="purchase_price"
+            value={facts.purchase_price ?? ""}
+          />
+          <input
+            type="hidden"
+            name="market_value"
+            value={facts.market_value ?? ""}
+          />
+          <input
+            type="hidden"
+            name="market_value_low"
+            value={facts.market_value_low ?? ""}
+          />
+          <input
+            type="hidden"
+            name="market_value_high"
+            value={facts.market_value_high ?? ""}
+          />
+          <input
+            type="hidden"
+            name="property_tax_history"
+            value={JSON.stringify(facts.property_tax_history ?? null)}
+          />
+          <input
+            type="hidden"
+            name="system_facts"
+            value={JSON.stringify(facts.system_facts ?? null)}
+          />
 
           <div>
             <label className="label">Address</label>
@@ -188,10 +352,18 @@ export default function OnboardingForm({
             </div>
           </div>
 
-          <p className="rounded-lg bg-hearth-50 p-3 text-xs text-hearth-800">
-            Confirm this is your home. You just need to own or manage it,
-            that&apos;s all we check.
+          <p className="rounded-lg bg-hearth-50 p-3 text-xs text-hearth-800 dark:bg-hearth-900/40 dark:text-hearth-200">
+            By claiming this home you&apos;re confirming you own or manage it.
           </p>
+
+          {error && (
+            <p
+              role="alert"
+              className="rounded-lg border border-red-200 bg-red-50 p-3 text-center text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
+            >
+              {error}
+            </p>
+          )}
 
           <div className="flex gap-3">
             <button
@@ -201,8 +373,8 @@ export default function OnboardingForm({
             >
               Back
             </button>
-            <button className="btn-primary flex-1">
-              Claim my home
+            <button className="btn-primary flex-1" disabled={busy}>
+              {busy ? "One moment…" : "Claim my home"}
             </button>
           </div>
         </form>

@@ -1,7 +1,5 @@
 // Playbook content: short, honest guides on how to win work on Hearth.
 // Plain data (no JSX) so the server page and the client accordion can share it.
-// The only statistic quoted anywhere is the 78% first-responder stat; nothing
-// else here is a made-up number.
 
 export type PlaybookSection = {
   title: string;
@@ -35,7 +33,7 @@ export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
       {
         title: "Apply when you can actually talk",
         body: [
-          "78% of homeowners go with the first pro to respond. Apply when you're free to answer a reply within the hour, not right before you go dark for a day. Being second with a better message still usually loses to being first.",
+          "Homeowners overwhelmingly go with the first pro who responds. Apply when you're free to answer a reply within the hour, not right before you go dark for a day. Being second with a better message still usually loses to being first.",
         ],
       },
       {
@@ -108,9 +106,9 @@ export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
     summary: "Most jobs are decided before the second pro even replies.",
     sections: [
       {
-        title: "The stat worth remembering",
+        title: "The pattern worth remembering",
         body: [
-          "78% of homeowners hire the first pro who responds. Not the cheapest, not the most decorated: the first. Speed is the one advantage every pro can afford.",
+          "Homeowners overwhelmingly go with the first pro who responds. Not the cheapest, not the most decorated: the first. Speed is the one advantage every pro can afford.",
         ],
       },
       {
@@ -122,7 +120,10 @@ export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
       {
         title: "Set yourself up to be first",
         body: [
-          "Turn on notifications and check the board when you have real gaps in your day, not just at night when everyone else does. A fresh posting with zero spots taken is the best moment on Hearth to spend a fee.",
+          "Two habits put you first in line:",
+          "- Turn on notifications so you see new postings the moment they go up",
+          "- Check the board during real gaps in your day, not just at night when everyone else does",
+          "A fresh posting with zero spots taken is the best moment on Hearth to spend a fee.",
         ],
       },
       {
@@ -204,9 +205,9 @@ export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
         ],
       },
       {
-        title: "Read the spot counter",
+        title: "Apply early when you can",
         body: [
-          "Every card shows 'X of 3 spots taken'. Zero taken means you can be first, which is the strongest position there is. Two taken means decide fast, and only apply if you're clearly the right fit for what's written.",
+          "A card marks itself 'Job full' the moment all 3 seats are taken, so if you can still apply, a seat is open. Being first is the strongest position there is; the longer a job sits open, the faster you should decide whether you're clearly the right fit for what's written.",
         ],
       },
       {
@@ -238,7 +239,10 @@ export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
       {
         title: "Say what's included",
         body: [
-          "Homeowners on Hearth get help reading quotes, so vague line items like 'materials' get questioned. A quote that spells out labor, materials, and cleanup wins trust even when it isn't the lowest number.",
+          "Homeowners on Hearth get help reading quotes, so vague line items like 'materials' get questioned. Spell out the specifics and you win trust even when you aren't the lowest number:",
+          "- Labor: hours or a flat rate",
+          "- Materials: what's actually being installed, not just \"materials\"",
+          "- Cleanup: haul-away and site cleanup included",
         ],
       },
       {

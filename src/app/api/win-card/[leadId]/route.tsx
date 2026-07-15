@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ImageResponse } from "next/og";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
-import { JOB_CATEGORIES, labelFor, iconFor } from "@/lib/constants";
+import { JOB_CATEGORIES, labelFor } from "@/lib/constants";
 import { ogFontOption } from "@/lib/ogFont";
 
 export const runtime = "nodejs";
@@ -181,8 +181,13 @@ export async function GET(
   const hasRating = contractor.review_count > 0 && contractor.rating != null;
   const fullStars = hasRating ? Math.round(contractor.rating!) : 0;
 
+  // Label only, no emoji icon: unlike the plain text this route otherwise
+  // renders, a raw unicode glyph makes satori fetch a twemoji SVG for it from
+  // an external CDN at render time. If that fetch fails or is blocked, the
+  // whole card fails mid-stream, which is exactly what corrupted this card's
+  // downloads before this fix. Same reasoning as the hand-drawn Star SVG
+  // above and the icon-free categoryLine in opengraph-image.tsx.
   const categoryLabel = labelFor(JOB_CATEGORIES, leadRow.category);
-  const categoryIcon = iconFor(JOB_CATEGORIES, leadRow.category);
   const location = cityState(leadRow.property_address);
   const celebrationLine = location
     ? `Another ${categoryLabel} job won in ${location} on Hearth.`
@@ -232,24 +237,9 @@ export async function GET(
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 16,
             marginTop: 28,
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 64,
-              height: 64,
-              borderRadius: 16,
-              backgroundColor: "#ffffff",
-              fontSize: 34,
-            }}
-          >
-            {categoryIcon}
-          </div>
           <div style={{ fontSize: 32, color: HEARTH_700, fontWeight: 600 }}>
             {categoryLabel}
           </div>

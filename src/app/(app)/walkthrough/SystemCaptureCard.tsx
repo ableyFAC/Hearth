@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { confirmSystemAction } from "./actions";
 import { labelFor, iconFor, SYSTEM_TYPES } from "@/lib/constants";
+import TakePhotoButton from "@/components/TakePhotoButton";
 import type { HomeSystem } from "@/lib/database.types";
 
 type Suggestion = {
@@ -157,12 +158,12 @@ export default function SystemCaptureCard({
 
   if (phase === "confirmed" && delta) {
     return (
-      <li className="card space-y-1 border-green-200 bg-green-50/60">
-        <p className="flex items-center gap-2 font-medium text-stone-900">
+      <li className="card space-y-1 border-green-200 bg-green-50/60 dark:border-green-900 dark:bg-green-950/30">
+        <p className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
           <span>{icon}</span> {name}
-          <span className="chip bg-green-100 text-green-700">✓ Confirmed</span>
+          <span className="chip bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-200">✓ Confirmed</span>
         </p>
-        <p className="text-sm text-green-800">
+        <p className="text-sm text-green-800 dark:text-green-200">
           {scoreMessage(delta.before, delta.after)}
         </p>
       </li>
@@ -171,19 +172,19 @@ export default function SystemCaptureCard({
 
   return (
     <li className="card space-y-3">
-      <p className="flex items-center gap-2 font-medium text-stone-900">
+      <p className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
         <span>{icon}</span> {name}
-        <span className="chip bg-stone-100 text-stone-500">Estimated</span>
+        <span className="chip bg-stone-100 text-stone-500 dark:bg-stone-700 dark:text-stone-400">Estimated</span>
       </p>
 
       {phase !== "review" && (
         <>
-          <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-stone-200 px-4 py-6 text-center hover:border-hearth-300 hover:bg-hearth-50">
+          <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-stone-200 px-4 py-6 text-center hover:border-hearth-300 hover:bg-hearth-50 dark:border-stone-700 dark:hover:bg-hearth-900/30">
             <span className="text-2xl">📷</span>
-            <span className="text-sm font-medium text-stone-700">
+            <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
               Snap the data plate
             </span>
-            <span className="text-xs text-stone-500">
+            <span className="text-xs text-stone-500 dark:text-stone-400">
               Hearth reads the brand, model, and age off it
             </span>
             <input
@@ -194,10 +195,18 @@ export default function SystemCaptureCard({
               className="hidden"
             />
           </label>
+          {/* The walkthrough IS the standing-at-the-furnace moment, so phones
+              get a straight-to-camera button; the tile above still opens the
+              gallery for a photo taken earlier. */}
+          <TakePhotoButton
+            onPick={onPick}
+            disabled={phase === "working"}
+            label="Open the camera"
+          />
           <button
             type="button"
             onClick={skipToManual}
-            className="text-xs text-stone-500 hover:text-stone-600"
+            className="block text-xs text-stone-500 hover:text-stone-600 dark:text-stone-400 dark:hover:text-stone-300"
           >
             No photo handy? Enter details by hand
           </button>
@@ -205,7 +214,7 @@ export default function SystemCaptureCard({
       )}
 
       {note && (
-        <p className="text-xs text-stone-500">
+        <p className="text-xs text-stone-500 dark:text-stone-400">
           {phase === "working" ? "⏳ " : ""}
           {note}
         </p>
@@ -220,7 +229,7 @@ export default function SystemCaptureCard({
             <img
               src={preview}
               alt={`${name} data plate`}
-              className="max-h-32 rounded-lg border border-stone-200 object-contain"
+              className="max-h-32 rounded-lg border border-stone-200 object-contain dark:border-white/10"
             />
           )}
 

@@ -26,7 +26,11 @@ type Mode = "speech" | "recorder" | "none";
 // or blow past the transcribe route's payload limit.
 const MAX_RECORD_MS = 60_000;
 const PREFERRED_MIME = "audio/webm;codecs=opus";
-const BLOCKED_MSG = "Microphone is blocked. Allow mic access in your browser.";
+// Denied-state copy that says HOW to fix it, not just what happened. Shown
+// longer than other flashes because it's instructions to follow.
+const BLOCKED_MSG =
+  "Microphone is blocked. Tap the icon by the address bar (or your browser's site settings), allow the mic, then try again.";
+const BLOCKED_MSG_MS = 8000;
 
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -78,13 +82,13 @@ export default function VoiceButton({
   }
 
   // Show a short error/status message in the bubble, then clear it.
-  function flashBubble(msg: string) {
+  function flashBubble(msg: string, ms = 4000) {
     if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
     setBubble(msg);
     flashTimerRef.current = setTimeout(() => {
       flashTimerRef.current = null;
       setBubble("");
-    }, 4000);
+    }, ms);
   }
 
   function releaseStream() {
@@ -124,10 +128,11 @@ export default function VoiceButton({
     } catch (err: any) {
       setListening(false);
       releaseStream();
+      const noMic =
+        err?.name === "NotFoundError" || err?.name === "DevicesNotFoundError";
       flashBubble(
-        err?.name === "NotFoundError" || err?.name === "DevicesNotFoundError"
-          ? "No microphone found."
-          : BLOCKED_MSG
+        noMic ? "No microphone found." : BLOCKED_MSG,
+        noMic ? undefined : BLOCKED_MSG_MS
       );
     }
   }
@@ -279,7 +284,7 @@ export default function VoiceButton({
       wantOnRef.current = false;
       setListening(false);
       if (err === "not-allowed" || err === "service-not-allowed") {
-        flashBubble(BLOCKED_MSG);
+        flashBubble(BLOCKED_MSG, BLOCKED_MSG_MS);
       } else if (err === "audio-capture") {
         flashBubble("No microphone found.");
       } else {
@@ -352,7 +357,7 @@ export default function VoiceButton({
   return (
     <span className="relative flex">
       {bubble ? (
-        <span className="pointer-events-none absolute bottom-full left-0 z-10 mb-1.5 w-max max-w-[min(220px,70vw)] rounded-lg border border-stone-200 bg-white px-2 py-1 text-left text-xs leading-snug text-stone-600 shadow-sm">
+        <span className="pointer-events-none absolute bottom-full left-0 z-10 mb-1.5 w-max max-w-[min(220px,70vw)] rounded-lg border border-stone-200 bg-white px-2 py-1 text-left text-xs leading-snug text-stone-600 shadow-sm dark:border-white/10 dark:bg-stone-800 dark:text-stone-300">
           {bubble}
         </span>
       ) : null}
@@ -360,11 +365,14 @@ export default function VoiceButton({
         type="button"
         onClick={toggle}
         disabled={disabled}
+        // title only shows on hover; aria-label covers touch + screen readers.
+        aria-label={listening ? "Listening. Tap to stop." : "Speak your question"}
+        aria-pressed={listening}
         title={listening ? "Listening. Tap to stop." : "Speak your question"}
         className={`flex items-center rounded-lg border px-2 text-lg disabled:opacity-50 ${
           listening
-            ? "animate-pulse border-red-300 bg-red-50 text-red-600"
-            : "border-stone-200 text-stone-500 hover:border-hearth-400 hover:text-hearth-700"
+            ? "animate-pulse border-red-300 bg-red-50 text-red-600 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300"
+            : "border-stone-200 text-stone-500 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-hearth-300"
         }`}
       >
         🎙

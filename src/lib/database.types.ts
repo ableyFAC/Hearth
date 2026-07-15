@@ -53,6 +53,14 @@ export interface QuoteLineItem {
   amount_cents: number;
 }
 
+// One line item on an invoice sent in chat (invoices.line_items). Same
+// cents-only convention as QuoteLineItem, computed once server side from the
+// dollar string the pro typed.
+export interface InvoiceLineItem {
+  description: string;
+  amount_cents: number;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -806,6 +814,28 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["pro_past_jobs"]["Insert"]>;
         Relationships: [];
       };
+      pro_tool_edits: {
+        Row: {
+          id: string;
+          contractor_id: string;
+          tool: string;
+          original_text: string;
+          edited_text: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          contractor_id: string;
+          tool: string;
+          original_text: string;
+          edited_text: string;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["pro_tool_edits"]["Insert"]
+        >;
+        Relationships: [];
+      };
       subscriptions: {
         Row: {
           id: string;
@@ -856,6 +886,40 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["lead_quotes"]["Insert"]>;
+        Relationships: [];
+      };
+      invoices: {
+        Row: {
+          id: string;
+          lead_id: string;
+          contractor_id: string;
+          property_id: string;
+          line_items: InvoiceLineItem[];
+          subtotal_cents: number;
+          total_cents: number;
+          status: string;
+          signed_at: string | null;
+          signed_by: string | null;
+          signature_method: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          lead_id: string;
+          contractor_id: string;
+          property_id: string;
+          line_items?: InvoiceLineItem[];
+          subtotal_cents: number;
+          total_cents: number;
+          status?: string;
+          signed_at?: string | null;
+          signed_by?: string | null;
+          signature_method?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["invoices"]["Insert"]>;
         Relationships: [];
       };
     };
@@ -942,4 +1006,6 @@ export type HouseholdMember = T["household_members"]["Row"];
 export type ProClient = T["pro_clients"]["Row"];
 export type ProClientNote = T["pro_client_notes"]["Row"];
 export type ProPastJob = T["pro_past_jobs"]["Row"];
+export type ProToolEdit = T["pro_tool_edits"]["Row"];
 export type LeadQuote = T["lead_quotes"]["Row"];
+export type Invoice = T["invoices"]["Row"];

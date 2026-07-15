@@ -79,12 +79,38 @@ export async function postJobAction(formData: FormData) {
 
   // Pros pay to apply, so a posting has to give them something to go on:
   // require a real description (at least 20 characters) before it goes live.
+  // The redirect carries what they typed back as query params (the page
+  // already prefills category/timing/desc/issue from searchParams), so a
+  // rejected post keeps the text fields. Contact fields re-prefill from the
+  // saved profile as usual. Photos are the one thing the round-trip can't
+  // keep: they live in PhotoUpload's client state, which the redirect
+  // remounts empty. So the already-uploaded objects are removed from storage
+  // (they'd be unreachable orphans otherwise) and the flash says plainly that
+  // photos need re-attaching.
   if ((issueDescription ?? "").trim().length < 20) {
+    if (photoUrls.length) {
+      // Best-effort cleanup, same pattern as saveDocumentAction: a storage
+      // hiccup here should never block the validation redirect.
+      const paths = photoUrls
+        .map((u) => u.split("/home-photos/")[1])
+        .filter((p): p is string => Boolean(p));
+      if (paths.length) {
+        await supabase.storage.from("home-photos").remove(paths);
+      }
+    }
     setFlash(
-      "Please describe the job in at least 20 characters so pros know what they're applying to.",
+      photoUrls.length
+        ? "Please describe the job in at least 20 characters so pros know what they're applying to. Your photos weren't kept, so please re-attach them."
+        : "Please describe the job in at least 20 characters so pros know what they're applying to.",
       "error"
     );
-    redirect("/contractors");
+    const keep = new URLSearchParams();
+    if (category) keep.set("category", category);
+    if (timing) keep.set("timing", timing);
+    if (message) keep.set("desc", message);
+    if (issueId) keep.set("issue", issueId);
+    const query = keep.toString();
+    redirect(query ? `/contractors?${query}` : "/contractors");
   }
 
   const address = [property.address_line1, property.city, property.state]
@@ -175,15 +201,59 @@ export async function postJobAction(formData: FormData) {
   // run against this database yet): write it via `as any`, and on the
   // missing-column fingerprint specifically, retry without it so posting never
   // breaks. Same pattern as the contractors insert in pro/actions.
-  let { error } = await supabase
+  let { data: inserted, error } = await supabase
     .from("contractor_leads")
     .insert(
       (budgetRange ? { ...leadRow, budget_range: budgetRange } : leadRow) as any
-    );
+    )
+    .select("id, created_at")
+    .single();
   if (error && budgetRange && isMissingSchemaError(error)) {
-    ({ error } = await supabase.from("contractor_leads").insert(leadRow as any));
+    ({ data: inserted, error } = await supabase
+      .from("contractor_leads")
+      .insert(leadRow as any)
+      .select("id, created_at")
+      .single());
   }
   if (error) throw new Error(error.message);
+
+  // Second half of the double-submit guard. The pre-insert check above is
+  // check-then-act: two truly concurrent submits (two tabs, a network retry
+  // landing in a second lambda) can both pass it before either insert lands.
+  // So re-check AFTER the insert: among identical open postings created within
+  // the same 15s window, every duplicate submit sees the same deterministic
+  // order (created_at, then id as the tiebreak), the first row is the keeper,
+  // and any submit whose own row isn't the keeper deletes its row (plus the
+  // carrier issue it just created, if any) and lands on the same "posted"
+  // redirect. App-level best effort, not a DB constraint: a residual race
+  // remains if a read misses a not-yet-visible concurrent commit, but the
+  // window shrinks from the whole action to the moments around the insert.
+  if (inserted?.id) {
+    const windowStart = new Date(
+      new Date(inserted.created_at).getTime() - 15000
+    ).toISOString();
+    const { data: twins } = await supabase
+      .from("contractor_leads")
+      .select("id")
+      .eq("property_id", property.id)
+      .eq("category", category)
+      .is("contractor_id", null)
+      .eq("status", "new")
+      .gte("created_at", windowStart)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
+    const keeper = twins?.[0];
+    if (keeper && keeper.id !== inserted.id) {
+      await supabase.from("contractor_leads").delete().eq("id", inserted.id);
+      // The keeper submit attaches photos to its own carrier issue; ours
+      // would be an orphan, so drop it (only if this submit created it: a
+      // pre-existing linked issue is never touched).
+      if (photoIssueId && photoIssueId !== issueId) {
+        await supabase.from("issues").delete().eq("id", photoIssueId);
+      }
+      redirect("/contractors?posted=1");
+    }
+  }
 
   // Attach the uploaded photos to the (existing or carrier) issue, exactly like
   // the issue tracker does, so pros see the "Photos attached" quality chip.
@@ -256,16 +326,80 @@ export async function postJobAction(formData: FormData) {
 }
 
 // Homeowner edits a posted job (category, timing, details, contact). RLS limits
-// the update to a lead on a property the caller owns.
+// the update to a lead on a property the caller owns. An edit re-applies the
+// posting guards from postJobAction (pros pay to apply, so an edit must not
+// degrade the posting below what a fresh post is allowed to be), and once any
+// pro has paid the non-refundable apply fee the category (and with it the
+// payout tier) is frozen, mirroring closeJobAction's refusal to cancel.
 export async function updateJobAction(formData: FormData) {
   const supabase = createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/signin");
+
   const leadId = String(formData.get("lead_id"));
   const category = formData.get("category") as string;
   const timing = (formData.get("timing") as string) || null;
   const message = ((formData.get("message") as string) || "").trim() || null;
   const homeownerName = (formData.get("homeowner_name") as string) || null;
-  const homeownerEmail = (formData.get("homeowner_email") as string) || null;
+  // Mirror postJobAction: the signed-in user's auth email is the fallback when
+  // the form field is left blank, so an edit never strips the contact email
+  // off the frozen lead packet.
+  const homeownerEmail =
+    (formData.get("homeowner_email") as string) || user.email || null;
   const homeownerPhone = (formData.get("homeowner_phone") as string) || null;
+
+  // Only a real category may set the payout tier: a forged value would fall
+  // back to the cheapest "other" fee in leadFeeFor.
+  if (!JOB_CATEGORIES.some((c) => c.value === category)) {
+    setFlash("Please pick a valid job category.", "error");
+    revalidatePath("/contractors");
+    return;
+  }
+
+  // Same 20-character description floor as postJobAction: pros pay to apply,
+  // so an edit can't blank out what they're applying to.
+  if ((message ?? "").length < 20) {
+    setFlash(
+      "Please describe the job in at least 20 characters so pros know what they're applying to.",
+      "error"
+    );
+    revalidatePath("/contractors");
+    return;
+  }
+
+  // RLS scopes this read to a lead the caller owns, same as the update below.
+  const { data: lead } = await supabase
+    .from("contractor_leads")
+    .select("id, category")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (!lead) {
+    setFlash("Something went wrong. Please try again.", "error");
+    revalidatePath("/contractors");
+    return;
+  }
+
+  // Once a pro has paid the (non-refundable) apply fee, the job they paid for
+  // can't morph into a different, differently-priced one: refuse a category
+  // swap, exactly as closeJobAction refuses a cancel. Timing/details/contact
+  // edits on the same category are still fine.
+  if (category !== lead.category) {
+    const { count } = await (supabase as any)
+      .from("lead_applications")
+      .select("id", { count: "exact", head: true })
+      .eq("lead_id", leadId);
+    if ((count ?? 0) > 0) {
+      setFlash(
+        "Pros have already paid to apply to this job, so its category can't change. Edit the details, or post the new work as a separate job.",
+        "error"
+      );
+      revalidatePath("/contractors");
+      return;
+    }
+  }
 
   const { error } = await supabase
     .from("contractor_leads")

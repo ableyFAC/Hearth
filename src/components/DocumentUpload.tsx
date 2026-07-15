@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { SYSTEM_TYPES } from "@/lib/constants";
 import { saveDocumentAction } from "@/lib/document-actions";
+import TakePhotoButton from "@/components/TakePhotoButton";
 
 const DOC_TYPES = [
   { value: "warranty", label: "Warranty" },
@@ -37,6 +38,10 @@ function toBase64(file: File): Promise<string> {
   });
 }
 
+// Each status note carries a tone so the color matches the news: red for
+// errors, green for success, calm stone for everything in between.
+type Note = { text: string; tone: "error" | "ok" | "working" };
+
 // The vault's "add" surface: pick a photo/PDF of a warranty, manual, receipt,
 // or an appliance data plate; Hearth reads the facts off it; the owner confirms
 // and saves. Then the saved card offers a one-tap "Add to my home".
@@ -48,7 +53,7 @@ function toBase64(file: File): Promise<string> {
 export default function DocumentUpload({ propertyId }: { propertyId: string }) {
   const supabase = createClient();
   const [phase, setPhase] = useState<"idle" | "working" | "review">("idle");
-  const [note, setNote] = useState<string | null>(null);
+  const [note, setNote] = useState<Note | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [fields, setFields] = useState<Extracted | null>(null);
@@ -65,12 +70,15 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
     const MAX_BYTES = 15 * 1024 * 1024; // 15MB
     if (picked.size > MAX_BYTES) {
       setPhase("idle");
-      setNote("That file is too large (max 15MB). Try a smaller photo or PDF.");
+      setNote({
+        text: "That file is too large (max 15MB). Try a smaller photo or PDF.",
+        tone: "error",
+      });
       return;
     }
 
     setPhase("working");
-    setNote("Reading the document…");
+    setNote({ text: "Reading the document…", tone: "working" });
     setFields(null);
     setFile(picked);
     // Local preview only, no storage object: a blob URL renders directly, no
@@ -105,18 +113,19 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
         summary: null,
       }
     );
-    setNote(
-      extracted
+    setNote({
+      text: extracted
         ? "Here's what Hearth read. Check it and save."
-        : "Couldn't read it automatically. Fill in what you like and save."
-    );
+        : "Couldn't read it automatically. Fill in what you like and save.",
+      tone: "working",
+    });
     setPhase("review");
   }
 
   function save(formData: FormData) {
     startSave(async () => {
       if (!file) return;
-      setNote("Uploading…");
+      setNote({ text: "Uploading…", tone: "working" });
       // Only now, on the owner's actual say-so, does the file land in
       // storage: the property-scoped path lets RLS gate it.
       const ext = file.name.split(".").pop() || "jpg";
@@ -125,9 +134,13 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
         .from("home-photos")
         .upload(path, file, { upsert: false });
       if (upErr) {
-        setNote(
-          "Couldn't upload the file (is the home-photos bucket set up?). Try again."
-        );
+        // The setup detail (a missing home-photos bucket, a policy problem)
+        // belongs in the console, not in front of the homeowner.
+        console.error("Document upload to home-photos failed:", upErr);
+        setNote({
+          text: "We couldn't upload that file. Please try again in a moment.",
+          tone: "error",
+        });
         return;
       }
       const { data: pub } = supabase.storage
@@ -140,7 +153,7 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
         // The action already flashed the error and removed the orphan file.
         // Keep the review form intact so the owner can retry, and never claim
         // it saved. Surface the reason inline too.
-        setNote(result.error);
+        setNote({ text: result.error, tone: "error" });
         return;
       }
       // Reset for the next upload; the saved card appears in the list below.
@@ -149,7 +162,7 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
       setFields(null);
       setFile(null);
       setPreview(null);
-      setNote("Saved. It's in your documents below.");
+      setNote({ text: "Saved. It's in your documents below.", tone: "ok" });
     });
   }
 
@@ -165,34 +178,47 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
   const val = (v: string | number | null) => (v == null ? "" : String(v));
 
   return (
-    <div className="rounded-xl border border-stone-200 bg-white p-4">
+    <div className="rounded-xl border border-stone-200 bg-white p-4 dark:border-white/10 dark:bg-stone-800">
       {phase !== "review" && (
-        <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-stone-200 px-4 py-8 text-center hover:border-hearth-300 hover:bg-hearth-50">
-          <span className="text-2xl">📄</span>
-          <span className="text-sm font-medium text-stone-700">
-            Add a warranty, manual, receipt, or a photo of a model label
-          </span>
-          <span className="text-xs text-stone-500">
-            Hearth reads it and fills in your home details for you
-          </span>
-          <input
-            type="file"
-            accept="image/*,application/pdf"
-            onChange={onPick}
+        <>
+          <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-stone-200 px-4 py-8 text-center hover:border-hearth-300 hover:bg-hearth-50 dark:border-white/10">
+            <span className="text-2xl">📄</span>
+            <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
+              Add a warranty, manual, receipt, or a photo of a model label
+            </span>
+            <span className="text-xs text-stone-500 dark:text-stone-400">
+              Hearth reads it and fills in your home details for you
+            </span>
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              onChange={onPick}
+              disabled={phase === "working"}
+              className="hidden"
+            />
+          </label>
+          {/* On phones, shooting the label/receipt right now beats hunting the
+              gallery. Same onPick, so extraction works identically. */}
+          <TakePhotoButton
+            onPick={onPick}
             disabled={phase === "working"}
-            className="hidden"
+            className="mt-2"
           />
-        </label>
+        </>
       )}
 
       {note && (
         <p
           className={`mt-2 text-xs ${
-            phase === "working" ? "text-stone-500" : "text-stone-500"
+            note.tone === "error"
+              ? "text-red-600 dark:text-red-400"
+              : note.tone === "ok"
+                ? "text-green-700 dark:text-green-300"
+                : "text-stone-500 dark:text-stone-400"
           }`}
         >
           {phase === "working" ? "⏳ " : ""}
-          {note}
+          {note.text}
         </p>
       )}
 
@@ -203,7 +229,7 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
             <img
               src={preview}
               alt="Document preview"
-              className="mb-1 max-h-40 rounded-lg border border-stone-200 object-contain"
+              className="mb-1 max-h-40 rounded-lg border border-stone-200 object-contain dark:border-white/10"
             />
           )}
 
@@ -311,7 +337,7 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
             <button
               type="button"
               onClick={cancel}
-              className="text-sm text-stone-500 hover:text-stone-700"
+              className="text-sm text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-300"
             >
               Cancel
             </button>

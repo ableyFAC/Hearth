@@ -1,6 +1,6 @@
 import type { PanicFlow, PrepKey } from "./PanicCard";
 
-// Five panic flows for the /emergency page. Short sentences, imperative, most
+// Six panic flows for the /emergency page. Short sentences, imperative, most
 // important action first. Each maps to an existing SERVICE_CATEGORIES value so
 // the "Get a pro on it" button lands in the normal post-a-job flow
 // (/contractors?category=...) with the category already picked.
@@ -82,6 +82,22 @@ export const FLOWS: PanicFlow[] = [
       "Keep kids and pets away from the area. Sewage is a health hazard: don't touch it with bare hands, and wash up if you do.",
       "Open a window or run a fan for ventilation if you can do it without walking through the mess.",
       "Call a plumber. If it's backing up from more than one drain or spreading fast, treat it as urgent, call now rather than waiting.",
+    ],
+  },
+  {
+    key: "water_heater",
+    emoji: "\u{1F6BF}",
+    title: "Water heater leaking or dead",
+    subtitle: "Cut the water and the fuel, then deal with the puddle.",
+    category: "plumbing",
+    desc: "Emergency: water heater leaking or not working. Need a plumber today.",
+    prepKey: "water_shutoff",
+    steps: [
+      "Turn off the water to the tank. The cold water inlet valve sits on top of the water heater; turn it clockwise until it stops. Can't find it or it won't budge? Shut off your water main instead.",
+      "Gas unit: turn the gas control knob on the front of the tank to off. If you smell gas, stop, leave the house, and treat it as a gas leak.",
+      "Electric unit: turn off the water heater's breaker at your panel. Never touch the unit's wiring while it's powered.",
+      "If it's actively leaking, drain it: screw a garden hose onto the drain valve near the bottom of the tank, run the hose to a floor drain or outside, and open the valve. Careful, the water can be scalding hot.",
+      "Move anything valuable away from the water and soak up what you can. Then call a plumber. A leaking tank won't fix itself, but with the water and fuel off, it can wait for a same-day pro, not 911.",
     ],
   },
 ];

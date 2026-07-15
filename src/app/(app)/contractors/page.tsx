@@ -31,6 +31,7 @@ import EditJobForm from "./EditJobForm";
 import PostJobButton from "./PostJobButton";
 import StrongPostMeter from "./StrongPostMeter";
 import PhotoUpload from "@/components/PhotoUpload";
+import PhotoTips from "@/components/PhotoTips";
 import ReviewButton from "./ReviewButton";
 import ContractorReviews from "./ContractorReviews";
 import HireAgainButton from "./HireAgainButton";
@@ -177,8 +178,8 @@ export default async function ContractorsPage({
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-stone-900">Post a job</h1>
-        <p className="mt-1 text-sm text-stone-500">
+        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Post a job</h1>
+        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           Describe what you need and post it. Local pros apply, then you review
           them and pick the one you want.
         </p>
@@ -187,8 +188,8 @@ export default async function ContractorsPage({
       {myPros.length > 0 && (
         <section className="space-y-3">
           <div>
-            <h2 className="text-lg font-semibold text-stone-900">My Pros</h2>
-            <p className="text-sm text-stone-500">
+            <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">My Pros</h2>
+            <p className="text-sm text-stone-500 dark:text-stone-400">
               Already worked with someone great? Hire them again, free, no
               apply fee.
             </p>
@@ -200,19 +201,19 @@ export default async function ContractorsPage({
                 className="card flex items-center justify-between gap-3"
               >
                 <div className="min-w-0">
-                  <p className="font-medium text-stone-900">
+                  <p className="font-medium text-stone-900 dark:text-stone-100">
                     {p.name}
                     {p.rating != null && (
-                      <span className="ml-2 text-xs text-amber-600">
+                      <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">
                         ★ {p.rating}
-                        <span className="text-stone-500">
+                        <span className="text-stone-500 dark:text-stone-400">
                           {" "}
                           · {p.reviewCount} review{p.reviewCount === 1 ? "" : "s"}
                         </span>
                       </span>
                     )}
                   </p>
-                  <p className="truncate text-sm text-stone-500">
+                  <p className="truncate text-sm text-stone-500 dark:text-stone-400">
                     Last hired for {labelFor(JOB_CATEGORIES, p.lastCategory)}
                     {p.lastDescription ? `: ${p.lastDescription}` : ""}
                   </p>
@@ -233,12 +234,12 @@ export default async function ContractorsPage({
           "3 open jobs" upsell would be false advertising, so it stays hidden.
           Flip COLD_START_FREE_POSTING to bring it back with the cap. */}
       {!COLD_START_FREE_POSTING && !plus && (
-        <div className="card flex items-center justify-between gap-4 border-hearth-200 bg-hearth-50">
+        <div className="card flex items-center justify-between gap-4 border-hearth-200 bg-hearth-50 dark:border-hearth-800/40 dark:bg-hearth-900/30">
           <div>
-            <p className="font-medium text-hearth-800">
+            <p className="font-medium text-hearth-800 dark:text-hearth-200">
               Juggling more than one project?
             </p>
-            <p className="text-sm text-hearth-700">
+            <p className="text-sm text-hearth-700 dark:text-hearth-300">
               Free covers 3 open jobs at a time. Hearth Plus is unlimited, plus
               priority matching so pros see yours first. Free first month, then
               $4.99.
@@ -254,122 +255,22 @@ export default async function ContractorsPage({
         <FadingBanner
           delay={2500}
           fadeMs={4500}
-          className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800"
+          className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200"
         >
-          ✅ Job posted. Matching pros can now apply. Their applications show up
-          under your jobs below.
+          ✅ Job posted. Matching pros can now apply, and we&apos;ll notify you
+          the moment one does. Honest note: Hearth is still new in some areas,
+          so if applications are slow it&apos;s our pro coverage catching up,
+          not a problem with your post.
         </FadingBanner>
       )}
 
-      <form
-        key={searchParams.posted ?? "new"}
-        action={postJobAction}
-        className="card space-y-4"
-      >
-        <input type="hidden" name="issue_id" value={issueId} />
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="label">What do you need?</label>
-            <CategoryFilter category={category} />
-          </div>
-          <div>
-            <label className="label">Preferred timing</label>
-            <select
-              name="timing"
-              className="select"
-              defaultValue={searchParams.timing || "few_weeks"}
-            >
-              {TIMING_OPTIONS.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div>
-            <label className="label">First and last name</label>
-            <input
-              name="homeowner_name"
-              className="input"
-              placeholder="Jane Doe"
-              defaultValue={profile?.full_name ?? ""}
-              required
-            />
-          </div>
-          <div>
-            <label className="label">Email (optional)</label>
-            <input
-              name="homeowner_email"
-              type="email"
-              className="input"
-              placeholder="you@example.com"
-              defaultValue={profile?.email ?? user?.email ?? ""}
-            />
-          </div>
-          <div>
-            <label className="label">Phone (optional)</label>
-            <PhoneInput
-              name="homeowner_phone"
-              defaultValue={profile?.phone ?? ""}
-            />
-            <p className="mt-1 text-xs text-stone-500">
-              So pros can reach you faster (optional).
-            </p>
-          </div>
-        </div>
-
-        <div>
-          {/* Not labeled optional: postJobAction enforces a 20-character floor
-              on the description for a standalone post (a post linked to an
-              issue can fall back to the issue's own description). */}
-          <label className="label">Details about your project</label>
-          <textarea
-            name="message"
-            className="textarea"
-            rows={3}
-            defaultValue={searchParams.desc ?? ""}
-            placeholder="What needs doing? A sentence or two helps pros give you an accurate quote."
-          />
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <PhotoUpload propertyId={property.id} />
-            <p className="mt-1 text-xs text-stone-500">
-              Pros quote more accurately when they can see the job.
-            </p>
-          </div>
-          <div>
-            <label className="label">Rough budget (optional)</label>
-            <select name="budget_range" className="select" defaultValue="">
-              <option value="">Prefer not to say</option>
-              {BUDGET_RANGES.map((b) => (
-                <option key={b.value} value={b.value}>
-                  {b.label}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-stone-500">
-              Helps pros give realistic quotes. Not a commitment.
-            </p>
-          </div>
-        </div>
-
-        <StrongPostMeter />
-
-        <PostJobButton />
-        <p className="text-xs text-stone-500">
-          Your contact stays private. Only the pro you choose from the applicants
-          gets your name, address, and contact details.
-        </p>
-      </form>
-
+      {/* Returning homeowners with live jobs see them first: applications
+          and chats are what they came back for, so they should not have to
+          scroll past a blank form to reach them. With no jobs yet, the
+          post-a-job form leads instead (the jobs section renders nothing). */}
       {leads && leads.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-stone-900">Your jobs</h2>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Your jobs</h2>
           <ul className="space-y-3">
             {leads.map((l) => {
               const apps = appsByLead.get(l.id) ?? [];
@@ -378,17 +279,17 @@ export default async function ContractorsPage({
                 <li key={l.id} className="card space-y-3">
                   <div className="flex items-center justify-between gap-2">
                     <div>
-                      <span className="font-medium text-stone-900">
+                      <span className="font-medium text-stone-900 dark:text-stone-100">
                         {iconFor(JOB_CATEGORIES, l.category)}{" "}
                         {labelFor(JOB_CATEGORIES, l.category)}
                       </span>
                       {l.issue_description && (
-                        <p className="text-sm text-stone-500">
+                        <p className="text-sm text-stone-500 dark:text-stone-400">
                           {l.issue_description}
                         </p>
                       )}
                     </div>
-                    <span className="shrink-0 rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-medium text-stone-500">
+                    <span className="shrink-0 rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-medium text-stone-500 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300">
                       {chosen
                         ? "Pro selected"
                         : `${apps.length} applicant${apps.length === 1 ? "" : "s"}`}
@@ -400,13 +301,13 @@ export default async function ContractorsPage({
                   {chosen ? (
                     // A pro has been picked: show them + open the message thread.
                     <div className="space-y-2">
-                      <div className="rounded-lg bg-stone-50 p-3 text-sm">
-                        <p className="font-medium text-stone-900">
+                      <div className="rounded-lg bg-stone-50 p-3 text-sm dark:bg-stone-700">
+                        <p className="font-medium text-stone-900 dark:text-stone-100">
                           {l.contractors?.name ?? "Your pro"}
                           {l.contractors?.review_count > 0 ? (
-                            <span className="ml-2 text-xs text-amber-600">
+                            <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">
                               ★ {l.contractors.rating}
-                              <span className="text-stone-500">
+                              <span className="text-stone-500 dark:text-stone-400">
                                 {" "}
                                 · {l.contractors.review_count} review
                                 {l.contractors.review_count === 1 ? "" : "s"}
@@ -414,7 +315,7 @@ export default async function ContractorsPage({
                             </span>
                           ) : null}
                         </p>
-                        <p className="text-stone-500">
+                        <p className="text-stone-500 dark:text-stone-400">
                           {l.contractors?.contact_phone || ""}
                           {l.contractors?.contact_email
                             ? ` · ${l.contractors.contact_email}`
@@ -440,8 +341,8 @@ export default async function ContractorsPage({
                         <div
                           className={
                             reviewByLead.has(l.id)
-                              ? "rounded-lg border border-stone-200 p-3"
-                              : "rounded-lg border border-dashed border-stone-300 p-3"
+                              ? "rounded-lg border border-stone-200 p-3 dark:border-white/10"
+                              : "rounded-lg border border-dashed border-stone-300 p-3 dark:border-stone-700"
                           }
                         >
                           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -449,20 +350,20 @@ export default async function ContractorsPage({
                               <div className="text-sm">
                                 <span className="text-amber-500">
                                   {"★".repeat(reviewByLead.get(l.id)!.rating)}
-                                  <span className="text-stone-300">
+                                  <span className="text-stone-300 dark:text-stone-600">
                                     {"★".repeat(
                                       5 - reviewByLead.get(l.id)!.rating
                                     )}
                                   </span>
                                 </span>
                                 {reviewByLead.get(l.id)!.comment && (
-                                  <p className="mt-0.5 text-stone-500">
+                                  <p className="mt-0.5 text-stone-500 dark:text-stone-400">
                                     {reviewByLead.get(l.id)!.comment}
                                   </p>
                                 )}
                               </div>
                             ) : (
-                              <p className="text-sm text-stone-500">
+                              <p className="text-sm text-stone-500 dark:text-stone-400">
                                 Job wrapped up? Leave{" "}
                                 {l.contractors?.name ?? "your pro"} a review.
                               </p>
@@ -481,17 +382,34 @@ export default async function ContractorsPage({
                     </div>
                   ) : apps.length === 0 ? (
                     <div className="space-y-2">
-                      <div className="rounded-lg border border-dashed border-stone-300 p-4 text-sm text-stone-500">
-                        <p>
-                          Your job is live. Pros usually apply within a day or
-                          two; we&apos;ll notify you the moment one does.
-                        </p>
+                      <div className="rounded-lg border border-dashed border-stone-300 p-4 text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400">
+                        {/* An asap job shouldn't be told "a day or two": point
+                            a real emergency at faster help instead. */}
+                        {l.timing === "asap" ? (
+                          <p>
+                            Your job is live and marked urgent. For active
+                            flooding or gas, don&apos;t wait: call a 24/7 pro
+                            directly, and use the{" "}
+                            <Link
+                              href="/emergency"
+                              className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+                            >
+                              Emergency page
+                            </Link>{" "}
+                            for shutoff steps.
+                          </p>
+                        ) : (
+                          <p>
+                            Your job is live. Pros usually apply within a day or
+                            two; we&apos;ll notify you the moment one does.
+                          </p>
+                        )}
                         {/* Photos ride on the lead's issue (photos rows keyed
                             to issue_id), so a lead with no issue_id definitely
                             has none. When issue_id exists we can't tell
                             without another query, so the tip stays quiet. */}
                         {!l.issue_id && (
-                          <p className="mt-1 text-xs text-stone-500">
+                          <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                             Tip: adding photos or more detail helps pros decide
                             to apply and quote accurately.
                           </p>
@@ -505,25 +423,25 @@ export default async function ContractorsPage({
                       {apps.map((a) => (
                         <li
                           key={a.id}
-                          className="rounded-lg border border-stone-200 p-3"
+                          className="rounded-lg border border-stone-200 p-3 dark:border-white/10"
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
-                                <span className="font-medium text-stone-900">
+                                <span className="font-medium text-stone-900 dark:text-stone-100">
                                   {a.contractors?.name ?? "A pro"}
                                 </span>
                                 {a.contractors?.review_count > 0 ? (
-                                  <span className="text-xs text-amber-600">
+                                  <span className="text-xs text-amber-600 dark:text-amber-400">
                                     ★ {a.contractors.rating}
-                                    <span className="text-stone-500">
+                                    <span className="text-stone-500 dark:text-stone-400">
                                       {" "}
                                       · {a.contractors.review_count} review
                                       {a.contractors.review_count === 1 ? "" : "s"}
                                     </span>
                                   </span>
                                 ) : (
-                                  <span className="text-xs text-stone-500">
+                                  <span className="text-xs text-stone-500 dark:text-stone-400">
                                     New
                                   </span>
                                 )}
@@ -534,7 +452,7 @@ export default async function ContractorsPage({
                                   count={a.contractors.review_count}
                                 />
                               )}
-                              <p className="text-xs text-stone-500">
+                              <p className="text-xs text-stone-500 dark:text-stone-400">
                                 {a.contractors?.service_area ?? ""}
                                 {a.contractors?.license_number
                                   ? ` · Lic. ${a.contractors.license_number}`
@@ -544,7 +462,7 @@ export default async function ContractorsPage({
                                 replyMinutesByContractor.get(a.contractor_id) ??
                                   null
                               ) && (
-                                <p className="text-xs font-medium text-green-700">
+                                <p className="text-xs font-medium text-green-700 dark:text-green-400">
                                   {formatResponseTime(
                                     replyMinutesByContractor.get(
                                       a.contractor_id
@@ -553,7 +471,7 @@ export default async function ContractorsPage({
                                 </p>
                               )}
                               {a.message && (
-                                <p className="mt-1 text-sm text-stone-600">
+                                <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
                                   {redactContact(a.message)}
                                 </p>
                               )}
@@ -580,7 +498,144 @@ export default async function ContractorsPage({
         </section>
       )}
 
-      <p className="text-center text-sm text-stone-500">
+      <form
+        key={searchParams.posted ?? "new"}
+        action={postJobAction}
+        className="card space-y-4"
+      >
+        <input type="hidden" name="issue_id" value={issueId} />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="label" htmlFor="job-category">
+              What do you need?
+            </label>
+            <CategoryFilter category={category} id="job-category" />
+          </div>
+          <div>
+            <label className="label" htmlFor="job-timing">
+              Preferred timing
+            </label>
+            <select
+              name="timing"
+              id="job-timing"
+              className="select"
+              defaultValue={searchParams.timing || "few_weeks"}
+            >
+              {TIMING_OPTIONS.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <label className="label" htmlFor="homeowner-name">
+              First and last name
+            </label>
+            <input
+              name="homeowner_name"
+              id="homeowner-name"
+              className="input"
+              placeholder="Jane Doe"
+              defaultValue={profile?.full_name ?? ""}
+              required
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="homeowner-email">
+              Email (optional)
+            </label>
+            <input
+              name="homeowner_email"
+              id="homeowner-email"
+              type="email"
+              className="input"
+              placeholder="you@example.com"
+              defaultValue={profile?.email ?? user?.email ?? ""}
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="homeowner-phone">
+              Phone (optional)
+            </label>
+            <PhoneInput
+              name="homeowner_phone"
+              id="homeowner-phone"
+              defaultValue={profile?.phone ?? ""}
+            />
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+              So pros can reach you faster (optional).
+            </p>
+          </div>
+        </div>
+
+        <div>
+          {/* Not labeled optional: postJobAction enforces a 20-character floor
+              on the description for a standalone post (a post linked to an
+              issue can fall back to the issue's own description). minLength
+              surfaces that floor in the browser before the action rejects it. */}
+          <label className="label" htmlFor="job-details">
+            Details about your project
+          </label>
+          <textarea
+            name="message"
+            id="job-details"
+            className="textarea"
+            rows={3}
+            minLength={20}
+            defaultValue={searchParams.desc ?? ""}
+            placeholder="What needs doing?"
+          />
+          <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+            A sentence or two helps pros quote accurately (20 characters
+            minimum).
+          </p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <PhotoUpload propertyId={property.id} id="job-photos" />
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+              Pros quote more accurately when they can see the job.
+            </p>
+            <PhotoTips />
+          </div>
+          <div>
+            <label className="label" htmlFor="job-budget">
+              Rough budget (optional)
+            </label>
+            <select
+              name="budget_range"
+              id="job-budget"
+              className="select"
+              defaultValue=""
+            >
+              <option value="">Prefer not to say</option>
+              {BUDGET_RANGES.map((b) => (
+                <option key={b.value} value={b.value}>
+                  {b.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+              Helps pros give realistic quotes. Not a commitment.
+            </p>
+          </div>
+        </div>
+
+        <StrongPostMeter />
+
+        <PostJobButton />
+        <p className="text-xs text-stone-500 dark:text-stone-400">
+          Your contact stays private. Only the pro you choose from the applicants
+          gets your name, address, and contact details.
+        </p>
+      </form>
+
+      <p className="text-center text-sm text-stone-500 dark:text-stone-400">
         <Link href="/issues" className="hover:underline">
           ← Back to issues
         </Link>

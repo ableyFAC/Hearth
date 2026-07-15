@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import ThemeToggle from "@/components/ThemeToggle";
 
 type MenuLink = {
   href: string;
@@ -11,46 +12,67 @@ type MenuLink = {
   accent?: "red";
 };
 
-// Avatar + dropdown shown in the top-right of both navs. The menu links differ
-// per side (contractor: company listing + billing; homeowner: account), but the
-// chrome - avatar, name, chevron, and the Log out form - is shared so the two
-// toolbars can't drift apart.
+// Avatar + dropdown shown in the top-right of both navs. Account-scoped only:
+// profile/settings/help links and Log out. Navigation destinations belong in
+// the nav itself (homeowner: ToolsMenu), not here. The chrome - avatar, name,
+// chevron, and the Log out form - is shared so the two toolbars can't drift
+// apart.
 export default function ProfileMenu({
   name,
   links,
   linksLabel,
   hasPlus,
-  plusTools,
   moreLinks,
+  themeToggle,
 }: {
   name: string | null;
   links: MenuLink[];
-  // Optional section label rendered above `links` (homeowner passes
-  // "Your home"). Omitted on the contractor side, which renders links plain.
+  // Optional section label rendered above `links` (contractor passes "Grow").
+  // Omitted on the homeowner side, which renders links plain.
   linksLabel?: string;
   // Homeowner-only: whether the signed-in user has Hearth Plus. Undefined on
   // the contractor side (ProNav), which has no Plus entry to show.
   hasPlus?: boolean;
-  // Homeowner premium tools, shown as a group in the menu. For non-Plus users
-  // they render locked (dimmed + a lock) and link to the upgrade page, so the
-  // menu doubles as a teaser of what Plus unlocks.
-  plusTools?: Array<{ href: string; label: string; locked?: boolean }>;
   // Secondary links tucked behind a "More" row so the menu opens showing only
   // the handful people reach for daily. Log out always stays visible.
   moreLinks?: MenuLink[];
+  // When true, a "Dark mode" row (with a visible on/off switch) renders above
+  // Log out so signed-in users can always change theme from either nav.
+  themeToggle?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [showMore, setShowMore] = useState(false);
+  // Plays the exit animation instead of an instant unmount: on the open ->
+  // closed transition the panel stays mounted for one more tick with
+  // fade-scale-out, then drops.
+  const [closing, setClosing] = useState(false);
+  const wasOpen = useRef(false);
   const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
 
-  // Close on outside click or Escape.
+  useEffect(() => {
+    if (!open && wasOpen.current) {
+      setClosing(true);
+      const t = setTimeout(() => setClosing(false), 120);
+      wasOpen.current = open;
+      return () => clearTimeout(t);
+    }
+    wasOpen.current = open;
+  }, [open]);
+  const shouldRender = open || closing;
+
+  // Close on outside click or Escape. Escape hands focus back to the trigger
+  // so keyboard users aren't dropped at the top of the page.
   useEffect(() => {
     if (!open) return;
     function onClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+        btnRef.current?.focus();
+      }
     }
     document.addEventListener("mousedown", onClick);
     document.addEventListener("keydown", onKey);
@@ -63,34 +85,45 @@ export default function ProfileMenu({
   return (
     <div ref={ref} className="relative">
       <button
+        ref={btnRef}
         type="button"
         onClick={() => {
           setOpen((v) => !v);
           setShowMore(false);
         }}
-        aria-haspopup="menu"
         aria-expanded={open}
-        className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 text-sm font-medium text-stone-700 hover:bg-hearth-50"
+        aria-label={name ? `Account menu for ${name}` : "Account menu"}
+        className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 text-sm font-medium text-stone-700 hover:bg-hearth-50 dark:text-stone-200 dark:hover:bg-stone-800"
       >
-        {/* Placeholder avatar - blank humanoid head + torso. */}
-        <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-stone-200 text-stone-500">
-          <svg
-            viewBox="0 0 24 24"
-            className="h-7 w-7"
-            fill="currentColor"
+        {name ? (
+          // Initials monogram - the first letter of the name in brand colors.
+          <span
             aria-hidden="true"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-hearth-100 font-semibold text-hearth-700 dark:bg-hearth-900 dark:text-hearth-300"
           >
-            <circle cx="12" cy="9" r="4" />
-            <path d="M4 20c0-3.6 3.6-6 8-6s8 2.4 8 6v1H4v-1z" />
-          </svg>
-        </span>
+            {name.trim().charAt(0).toUpperCase()}
+          </span>
+        ) : (
+          // Placeholder avatar - blank humanoid head + torso.
+          <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-stone-200 text-stone-500 dark:bg-stone-700 dark:text-stone-400">
+            <svg
+              viewBox="0 0 24 24"
+              className="h-7 w-7"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="9" r="4" />
+              <path d="M4 20c0-3.6 3.6-6 8-6s8 2.4 8 6v1H4v-1z" />
+            </svg>
+          </span>
+        )}
         {name && (
           <span className="hidden max-w-[12rem] truncate sm:inline">{name}</span>
         )}
         {/* Dropdown indicator. */}
         <svg
           viewBox="0 0 20 20"
-          className={`h-4 w-4 text-stone-500 transition-transform ${
+          className={`h-4 w-4 text-stone-500 transition-transform dark:text-stone-400 ${
             open ? "rotate-180" : ""
           }`}
           fill="currentColor"
@@ -104,34 +137,31 @@ export default function ProfileMenu({
         </svg>
       </button>
 
-      {open && (
+      {/* Plain disclosure panel, not an ARIA menu: we don't implement the
+          menu keyboard contract (arrow keys, focus trapping), so we don't
+          claim the role either. Tab + Escape work as expected. */}
+      {shouldRender && (
         <div
-          role="menu"
-          className="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-xl border border-stone-200 bg-white py-1.5 shadow-lg"
+          className={`absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-xl border border-stone-200 bg-white py-1.5 shadow-menu dark:border-white/10 dark:bg-stone-700 ${
+            open ? "motion-safe:animate-fade-scale" : "motion-safe:animate-fade-scale-out"
+          }`}
         >
           {hasPlus !== undefined && (
             <Link
               href="/plus"
-              role="menuitem"
               onClick={() => setOpen(false)}
               className={
                 hasPlus
-                  ? "block border-b border-stone-100 px-4 py-2 text-sm text-stone-500"
-                  : "block border-b border-stone-100 bg-hearth-50 px-4 py-2 text-sm font-medium text-hearth-700 hover:bg-hearth-100"
+                  ? "block border-b border-stone-100 px-4 py-2 text-sm text-stone-500 dark:border-white/10 dark:text-stone-400"
+                  : "block border-b border-stone-100 bg-hearth-50 px-4 py-2 text-sm font-medium text-hearth-700 hover:bg-hearth-100 dark:border-white/10 dark:bg-hearth-900/40 dark:text-hearth-300 dark:hover:bg-hearth-900/60"
               }
             >
               {hasPlus ? "Hearth Plus ✓" : "Upgrade to Hearth Plus"}
             </Link>
           )}
-          <div
-            className={
-              plusTools && plusTools.length > 0
-                ? "border-b border-stone-100 py-1"
-                : undefined
-            }
-          >
+          <div>
             {linksLabel && (
-              <p className="px-4 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+              <p className="px-4 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
                 {linksLabel}
               </p>
             )}
@@ -139,49 +169,22 @@ export default function ProfileMenu({
               <Link
                 key={l.href}
                 href={l.href}
-                role="menuitem"
                 onClick={() => setOpen(false)}
                 className={
                   l.accent === "red"
-                    ? "mx-1 flex items-center rounded-md px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
-                    : "mx-1 flex items-center rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-hearth-50"
+                    ? "mx-1 flex items-center rounded-md px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/15"
+                    : "mx-1 flex items-center rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-hearth-50 dark:text-stone-300 dark:hover:bg-stone-600"
                 }
               >
                 {l.label}
               </Link>
             ))}
           </div>
-          {plusTools && plusTools.length > 0 && (
-            <div className="border-b border-stone-100 py-1">
-              <p className="px-4 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-500">
-                Plus tools
-              </p>
-              {plusTools.map((l) => (
-                <Link
-                  key={l.href}
-                  href={l.href}
-                  role="menuitem"
-                  onClick={() => setOpen(false)}
-                  className={`mx-1 flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm hover:bg-hearth-50 ${
-                    l.locked ? "text-stone-500" : "text-stone-700"
-                  }`}
-                >
-                  <span>{l.label}</span>
-                  {l.locked && (
-                    <span aria-hidden="true" className="text-xs">
-                      🔒
-                    </span>
-                  )}
-                </Link>
-              ))}
-            </div>
-          )}
           {moreLinks && moreLinks.length > 0 && !showMore && (
             <button
               type="button"
-              role="menuitem"
               onClick={() => setShowMore(true)}
-              className="mx-1 flex w-[calc(100%-0.5rem)] items-center gap-1 rounded-md px-3 py-2 text-left text-sm text-stone-500 hover:bg-hearth-50 hover:text-stone-600"
+              className="mx-1 flex w-[calc(100%-0.5rem)] items-center gap-1 rounded-md px-3 py-2 text-left text-sm text-stone-500 hover:bg-hearth-50 hover:text-stone-600 dark:text-stone-400 dark:hover:bg-stone-600 dark:hover:text-stone-300"
             >
               More
               <svg
@@ -204,22 +207,21 @@ export default function ProfileMenu({
               <Link
                 key={l.href}
                 href={l.href}
-                role="menuitem"
                 onClick={() => setOpen(false)}
-                className="mx-1 flex items-center rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-hearth-50"
+                className="mx-1 flex items-center rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-hearth-50 dark:text-stone-300 dark:hover:bg-stone-600"
               >
                 {l.label}
               </Link>
             ))}
+          {themeToggle && <ThemeToggle variant="row" />}
           <form
             action="/auth/signout"
             method="post"
-            className="border-t border-stone-100"
+            className="border-t border-stone-100 dark:border-white/10"
           >
             <button
               type="submit"
-              role="menuitem"
-              className="block w-full px-4 py-2 text-left text-sm font-medium text-stone-500 transition-colors hover:bg-red-50 hover:text-red-600"
+              className="block w-full px-4 py-2 text-left text-sm font-medium text-stone-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:text-stone-400 dark:hover:bg-red-500/15 dark:hover:text-red-400"
             >
               Log out
             </button>

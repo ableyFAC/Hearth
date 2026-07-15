@@ -8,9 +8,9 @@ import {
   JOB_CATEGORIES,
   PRO_DEPOSIT_BOOST_PTS,
   LEAD_TIER_FEES,
+  GHOST_PROTECTION_DAYS,
 } from "@/lib/constants";
 import DepositForm from "./DepositForm";
-import Confetti from "@/components/Confetti";
 import FadingBanner from "@/components/FadingBanner";
 
 function dollars(cents: number | string | null) {
@@ -18,15 +18,18 @@ function dollars(cents: number | string | null) {
   return `$${((Number.isFinite(v) ? v : 0) / 100).toFixed(2)}`;
 }
 
+// One vocabulary for the whole apply-fee lifecycle, so a charge, its
+// ghost-protection return, and a post-refund re-charge all clearly describe
+// the same fee.
 const TX_LABEL: Record<string, string> = {
   deposit: "Deposit",
   bonus_grant: "Bonus credit",
   lead_charge: "Lead unlocked",
-  apply_fee: "Applied to job",
+  apply_fee: "Apply fee",
   bonus_expiry: "Bonus expired",
   adjustment: "Adjustment",
-  ghost_refund: "Ghost protection refund",
-  ghost_recharge: "Fee re-charged (job won)",
+  ghost_refund: "Apply fee returned",
+  ghost_recharge: "Apply fee re-charged: homeowner chose you after the refund",
   ghost_recharge_waived: "Re-charge waived",
 };
 
@@ -117,13 +120,12 @@ export default async function ProBillingPage({
         </div>
       )}
 
+      {/* A calm confirmation only: confetti is saved for winning a job, not
+          for spending money. */}
       {searchParams.paid && (
-        <>
-          <Confetti />
-          <FadingBanner className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
-            ✅ Payment received. Your wallet has been credited.
-          </FadingBanner>
-        </>
+        <FadingBanner className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+          ✅ Payment received. Your wallet has been credited.
+        </FadingBanner>
       )}
       {searchParams.canceled && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
@@ -134,7 +136,7 @@ export default async function ProBillingPage({
       {/* Balances */}
       <section className="grid gap-4 sm:grid-cols-2">
         <div className="card-hero">
-          <p className="stat-label text-hearth-800">Cash balance</p>
+          <p className="stat-label text-hearth-800">Lead credit</p>
           <p className="stat-number mt-1 text-4xl text-hearth-900">
             {dollars(cash)}
           </p>
@@ -208,7 +210,7 @@ export default async function ProBillingPage({
               return (
                 <li
                   key={t.id}
-                  className="card flex items-center justify-between"
+                  className="card flex items-center justify-between gap-3"
                 >
                   <div>
                     <span className="font-medium text-stone-900">
@@ -230,6 +232,13 @@ export default async function ProBillingPage({
               );
             })}
           </ul>
+        )}
+        {txns.length > 0 && (
+          <p className="text-xs text-stone-500">
+            Ghost protection: if the homeowner never responds within{" "}
+            {GHOST_PROTECTION_DAYS} days, your apply fee comes back on its own.
+            If they choose you after that refund, the same fee is re-charged.
+          </p>
         )}
       </section>
     </div>

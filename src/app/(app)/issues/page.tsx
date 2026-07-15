@@ -23,9 +23,9 @@ export default async function IssuesPage() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-stone-900">Issues</h1>
-          <p className="mt-1 text-sm text-stone-500">
-            Log a problem and get connected with a vetted pro.
+          <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Issues</h1>
+          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+            Log a problem and get connected with a local pro.
           </p>
         </div>
       </div>
@@ -33,7 +33,7 @@ export default async function IssuesPage() {
       <IssueForm propertyId={property.id} systems={systems ?? []} />
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-stone-900">Open</h2>
+        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Open</h2>
         {open.length ? (
           <ul className="space-y-2">
             {open.map((i) => (
@@ -41,7 +41,7 @@ export default async function IssuesPage() {
             ))}
           </ul>
         ) : (
-          <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
+          <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400">
             No open issues. 🎉
           </p>
         )}
@@ -49,7 +49,7 @@ export default async function IssuesPage() {
 
       {resolved.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-stone-900">Resolved</h2>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Resolved</h2>
           <ul className="space-y-2">
             {resolved.map((i) => (
               <IssueRow key={`${i.id}-${i.status}`} issue={i} initialResolved />

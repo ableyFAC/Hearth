@@ -106,10 +106,10 @@ export default function ApplyJobButton({
         setMessage(data.message as string);
       } else if (data?.reason === "rate_limited") {
         setDraftError(
-          "Hearth has hit today's free usage limit. Please try again later."
+          "You've hit today's drafting limit. It resets at midnight."
         );
       } else if (data?.reason === "no_key") {
-        setDraftError("The drafter isn't set up yet.");
+        setDraftError("Drafting is temporarily unavailable.");
       } else {
         setDraftError(
           data?.error || "Couldn't draft a message. Try writing your own."
@@ -203,8 +203,10 @@ export default function ApplyJobButton({
       <p className="text-xs text-stone-500">
         Applying charges the {fee} lead fee from your wallet. If the homeowner
         never responds and no one is picked, ghost protection returns it after{" "}
-        {GHOST_PROTECTION_DAYS} days. A licensed pro&apos;s first application
-        also comes back as lead credit if they aren&apos;t chosen.
+        {GHOST_PROTECTION_DAYS} days. For licensed pros, the first-application
+        guarantee also applies. Not chosen on your first application? The fee
+        comes back as lead credit, spendable on any lead, and it expires after
+        60 days.
       </p>
       <div className="flex gap-2">
         <button

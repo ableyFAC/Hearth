@@ -30,6 +30,15 @@ const THRESHOLDS = [7];
 const HORIZON_DAYS = Math.max(...THRESHOLDS);
 const MAX_CONTRACTORS = 500; // cap the work a single run does per document kind
 
+// Lower bound on the candidate scan. The overdue nudge fires once, shortly
+// after an expiry crosses zero, so a document more than a couple of weeks
+// past its date has already had its reminder (or missed its window) and can
+// safely drop out of the daily scan. Without this floor, never-renewed
+// churned pros would accumulate at the FRONT of the ascending-ordered,
+// capped window forever and eventually starve current pros' 7-day and
+// expiry-day reminders. Two weeks still tolerates a stretch of missed runs.
+const OVERDUE_GRACE_DAYS = 14;
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // PostgREST silently truncates every response at its max-rows cap (default
@@ -133,22 +142,29 @@ async function runCron(req: NextRequest) {
   const horizonStr = new Date(utcTodayMs() + HORIZON_DAYS * DAY_MS)
     .toISOString()
     .slice(0, 10);
+  const floorStr = new Date(utcTodayMs() - OVERDUE_GRACE_DAYS * DAY_MS)
+    .toISOString()
+    .slice(0, 10);
 
   // license_expires is a migration 0051 column not yet in the generated
   // types, so both queries go through a cast. Soonest expiry first so the
-  // recipient set stays stable if a run hits the cap. If the migration
-  // hasn't run yet, Postgres rejects the select: log and exit cleanly.
+  // recipient set stays stable if a run hits the cap; bounded below at
+  // OVERDUE_GRACE_DAYS so long-expired rows can't consume the window (see
+  // the constant's comment). If the migration hasn't run yet, Postgres
+  // rejects the select: log and exit cleanly.
   const [{ data: rawLicense, error: licenseError }, { data: rawInsurance, error: insuranceError }] =
     await Promise.all([
       (supabase.from("contractors") as any)
         .select("id, user_id, license_expires")
         .not("license_expires", "is", null)
+        .gte("license_expires", floorStr)
         .lte("license_expires", horizonStr)
         .order("license_expires", { ascending: true })
         .limit(MAX_CONTRACTORS),
       (supabase.from("contractors") as any)
         .select("id, user_id, insurance_expires")
         .not("insurance_expires", "is", null)
+        .gte("insurance_expires", floorStr)
         .lte("insurance_expires", horizonStr)
         .order("insurance_expires", { ascending: true })
         .limit(MAX_CONTRACTORS),

@@ -16,12 +16,9 @@ export default function SupportForm({
   phone: string;
 }) {
   return (
-    <form
-      action={saveSupportMessageAction}
-      className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm"
-    >
-      <h2 className="text-base font-semibold text-stone-900">Contact us</h2>
-      <p className="mt-1 text-sm text-stone-600">
+    <form action={saveSupportMessageAction} className="card">
+      <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">Contact us</h2>
+      <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
         Send us a message and we will get back to you.
       </p>
 

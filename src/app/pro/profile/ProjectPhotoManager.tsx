@@ -98,14 +98,14 @@ export default function ProjectPhotoManager({
         multiple
         onChange={onPick}
         disabled={photos.length >= MAX_PHOTOS}
-        className="block w-full text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-hearth-100 file:px-3 file:py-1.5 file:text-hearth-800"
+        className="block w-full text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-hearth-100 file:px-3 file:py-1.5 file:text-hearth-800 dark:text-stone-300"
       />
-      <p className="mt-1 text-xs text-stone-500">
+      <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
         Up to {MAX_PHOTOS} photos. Tag a photo &quot;Before&quot; to build a
         before/after story.
       </p>
-      {busy && <p className="mt-1 text-xs text-stone-500">Uploading…</p>}
-      {err && <p className="mt-1 text-xs text-amber-600">{err}</p>}
+      {busy && <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">Uploading…</p>}
+      {err && <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">{err}</p>}
 
       {photos.length > 0 && (
         <ul className="mt-2 flex flex-wrap gap-3">
@@ -116,13 +116,13 @@ export default function ProjectPhotoManager({
                 <img
                   src={p.url}
                   alt={`project photo ${i + 1}`}
-                  className="h-24 w-24 rounded-lg border border-stone-200 object-cover"
+                  className="h-24 w-24 rounded-lg border border-stone-200 object-cover dark:border-white/10"
                 />
                 <button
                   type="button"
                   onClick={() => remove(i)}
                   aria-label="Remove photo"
-                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-stone-200 bg-white text-xs text-stone-500 shadow-sm hover:text-stone-800"
+                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-stone-200 bg-white text-xs text-stone-500 shadow-sm hover:text-stone-800 dark:border-white/10 dark:bg-stone-800 dark:text-stone-400 dark:hover:text-stone-100"
                 >
                   ×
                 </button>
@@ -132,8 +132,8 @@ export default function ProjectPhotoManager({
                 onClick={() => toggleBefore(i)}
                 className={`mt-1 w-full rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${
                   p.before
-                    ? "border-amber-200 bg-amber-50 text-amber-700"
-                    : "border-stone-200 bg-white text-stone-500 hover:bg-stone-50"
+                    ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                    : "border-stone-200 bg-white text-stone-500 hover:bg-stone-50 dark:border-white/10 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"
                 }`}
               >
                 {p.before ? "Before" : "After"}

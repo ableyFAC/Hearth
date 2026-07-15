@@ -3,7 +3,8 @@
 // open redirect an attacker could use to bounce a signed-in victim to a
 // look-alike site. Used everywhere ?next= is read across the sign-in and
 // sign-up funnel (src/app/signin, /get-started, /homeowner-signup,
-// /contractor-signup, /onboarding) so the rule can't drift between them.
+// /contractor-signup, /onboarding, /auth/callback, /auth/confirm) so the
+// rule can't drift between them.
 export function safeNextPath(value: string | null | undefined): string | null {
   // No backslashes anywhere: browsers normalize "/\evil.com" to
   // "//evil.com", which would sneak an absolute URL past the "//" check.

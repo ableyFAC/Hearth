@@ -15,27 +15,44 @@ import {
 import PlanToggle from "./PlanToggle";
 import PlusWelcome from "./PlusWelcome";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
-import { COLD_START_FREE_POSTING } from "@/lib/constants";
+import {
+  COLD_START_FREE_POSTING,
+  COLD_START_FREE_ALERTS,
+} from "@/lib/constants";
 
 const COMPARISON: Array<{ label: string; free: string; plus: string }> = [
-  // COLD START: while COLD_START_FREE_POSTING is on, posting is uncapped for
-  // everyone, so the row says so honestly. The gated version comes back when
-  // the flag flips.
-  COLD_START_FREE_POSTING
-    ? {
-        label: "Open job postings",
-        free: "Unlimited while Hearth is new",
-        plus: "Unlimited",
-      }
-    : { label: "Open job postings", free: "3 at a time", plus: "Unlimited" },
-  { label: "Matching to pros", free: "Standard", plus: "Priority" },
-  { label: "Home tracking & document vault", free: "Included", plus: "Included" },
-  { label: "Homes you can track", free: "1 home", plus: "Up to 5 homes" },
+  // Plus-exclusive rows lead: they're the reason to upgrade.
   { label: "Maintenance plan", free: "-", plus: "Auto-built for your home" },
   { label: "Cost forecast & repair fund", free: "-", plus: "10-year outlook" },
-  { label: "AI quote analyzer", free: "-", plus: "Included" },
+  { label: "Quote analyzer", free: "-", plus: "Included" },
   { label: "Home report for resale & insurance", free: "-", plus: "Included" },
+  // When the posting cap is on, unlimited postings are a real Plus perk, so
+  // the row sits up here with the other upgrades.
+  ...(COLD_START_FREE_POSTING
+    ? []
+    : [{ label: "Open job postings", free: "3 at a time", plus: "Unlimited" }]),
+  // COLD START: while COLD_START_FREE_ALERTS is on, every pro hears about
+  // every matching job instantly, so "priority matching" isn't a real perk
+  // yet. The row returns when the flag flips.
+  ...(COLD_START_FREE_ALERTS
+    ? []
+    : [{ label: "Matching to pros", free: "Standard", plus: "Priority" }]),
+  { label: "Home tracking & document vault", free: "Included", plus: "Included" },
+  { label: "Homes you can track", free: "1 home", plus: "Up to 5 homes" },
   { label: "Proactive alerts", free: "In-app", plus: "All alerts, every channel" },
+  // COLD START: while COLD_START_FREE_POSTING is on, posting is uncapped for
+  // everyone, so the row says so honestly and sits last, since it isn't a
+  // selling point right now. The gated version moves back up when the flag
+  // flips.
+  ...(COLD_START_FREE_POSTING
+    ? [
+        {
+          label: "Open job postings",
+          free: "Unlimited while Hearth is new",
+          plus: "Unlimited",
+        },
+      ]
+    : []),
 ];
 
 export default async function PlusPage({
@@ -61,7 +78,7 @@ export default async function PlusPage({
     const included = [
       "Unlimited job postings, matched first",
       "Cost forecast and repair fund",
-      "AI quote analyzer",
+      "Quote analyzer",
       "Home report for resale and insurance",
       "Up to 5 homes",
       "A maintenance plan auto-built for your home",
@@ -70,13 +87,13 @@ export default async function PlusPage({
     return (
       <div className="mx-auto max-w-2xl space-y-6">
         <div className="text-center">
-          <h1 className="text-2xl font-semibold text-stone-900">Hearth Plus</h1>
+          <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Hearth Plus</h1>
         </div>
         <div className="card-hero space-y-4 text-center">
-          <p className="text-lg font-medium text-hearth-700">
+          <p className="text-lg font-medium text-hearth-700 dark:text-hearth-300">
             You&apos;re on Hearth Plus
           </p>
-          <p className="text-sm text-stone-500">
+          <p className="text-sm text-stone-500 dark:text-stone-400">
             {sub?.plan === "yearly" ? "Yearly" : "Monthly"} plan
             {sub?.current_period_end
               ? ` · renews ${new Date(sub.current_period_end).toLocaleDateString()}`
@@ -86,8 +103,8 @@ export default async function PlusPage({
             <button className="btn-secondary">Manage billing</button>
           </form>
           {sub?.stripe_subscription_id && cancelsAt && (
-            <div className="space-y-2 border-t border-stone-100 pt-4">
-              <p className="text-sm text-stone-600">
+            <div className="space-y-2 border-t border-stone-100 pt-4 dark:border-white/10">
+              <p className="text-sm text-stone-600 dark:text-stone-300">
                 Your membership ends on {cancelsAt.toLocaleDateString()}. You
                 keep every Plus benefit until then.
               </p>
@@ -97,8 +114,8 @@ export default async function PlusPage({
             </div>
           )}
           {sub?.stripe_subscription_id && !cancelsAt && (
-            <div className="space-y-2 border-t border-stone-100 pt-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-stone-500">
+            <div className="space-y-2 border-t border-stone-100 pt-4 dark:border-white/10">
+              <p className="text-xs font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
                 Change plan
               </p>
               {sub.plan !== "yearly" && (
@@ -110,7 +127,7 @@ export default async function PlusPage({
                       yesLabel="Yes, switch to yearly"
                     />
                   </form>
-                  <p className="text-xs text-stone-500">
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
                     Starts today. Unused monthly time is credited toward the
                     yearly charge.
                   </p>
@@ -125,7 +142,7 @@ export default async function PlusPage({
                       yesLabel="Yes, switch at renewal"
                     />
                   </form>
-                  <p className="text-xs text-stone-500">
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
                     You keep every Plus benefit through {renewsOn}. Monthly
                     billing starts after that, so you lose nothing you paid for.
                   </p>
@@ -133,7 +150,7 @@ export default async function PlusPage({
               )}
               {sub.plan === "yearly" && scheduledDowngrade && (
                 <>
-                  <p className="text-sm text-stone-600">
+                  <p className="text-sm text-stone-600 dark:text-stone-300">
                     Switching to monthly on{" "}
                     {scheduledDowngrade.switchesAt.toLocaleDateString()}
                   </p>
@@ -154,14 +171,14 @@ export default async function PlusPage({
           )}
         </div>
         <div className="card">
-          <p className="mb-3 text-sm font-semibold text-stone-900">
+          <p className="mb-3 text-sm font-semibold text-stone-900 dark:text-stone-100">
             Everything you have
           </p>
           <ul className="space-y-2">
             {included.map((f) => (
               <li
                 key={f}
-                className="flex items-start gap-2 text-sm text-stone-700"
+                className="flex items-start gap-2 text-sm text-stone-700 dark:text-stone-300"
               >
                 <span className="mt-0.5 font-bold text-green-600">✓</span>
                 <span>{f}</span>
@@ -173,14 +190,19 @@ export default async function PlusPage({
     );
   }
 
+  // The free month is granted only when there's no existing homeowner
+  // subscription row (the same signal startPlusCheckoutAction checks), so a
+  // returning subscriber never sees "free month" copy they wouldn't get.
+  const trialEligible = !sub;
+
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       {/* COLD START: the posting cap is off while COLD_START_FREE_POSTING is
           on, so this banner must not show even if the URL is hit directly.
           Keep it for when the flag flips back. */}
       {!COLD_START_FREE_POSTING && searchParams.reason === "job_limit" && (
-        <div className="card border-hearth-200 bg-hearth-50 text-center">
-          <p className="text-sm text-hearth-800">
+        <div className="card border-hearth-200 bg-hearth-50 text-center dark:border-hearth-800/40 dark:bg-hearth-900/30">
+          <p className="text-sm text-hearth-800 dark:text-hearth-200">
             You&apos;ve used all 3 of your free job posts. Hearth Plus lets you
             post unlimited jobs and keeps the quotes rolling.
           </p>
@@ -188,8 +210,8 @@ export default async function PlusPage({
       )}
 
       {searchParams.reason === "home_limit" && (
-        <div className="card border-hearth-200 bg-hearth-50 text-center">
-          <p className="text-sm text-hearth-800">
+        <div className="card border-hearth-200 bg-hearth-50 text-center dark:border-hearth-800/40 dark:bg-hearth-900/30">
+          <p className="text-sm text-hearth-800 dark:text-hearth-200">
             You&apos;ve added your free home. Hearth Plus lets you manage up
             to 5 homes in one place.
           </p>
@@ -197,8 +219,8 @@ export default async function PlusPage({
       )}
 
       {searchParams.reason === "plan" && (
-        <div className="card border-hearth-200 bg-hearth-50 text-center">
-          <p className="text-sm text-hearth-800">
+        <div className="card border-hearth-200 bg-hearth-50 text-center dark:border-hearth-800/40 dark:bg-hearth-900/30">
+          <p className="text-sm text-hearth-800 dark:text-hearth-200">
             Hearth Plus builds a maintenance plan tuned to your home&apos;s
             systems, a few tasks at a time so it never piles up.
           </p>
@@ -206,8 +228,8 @@ export default async function PlusPage({
       )}
 
       {searchParams.reason === "forecast" && (
-        <div className="card border-hearth-200 bg-hearth-50 text-center">
-          <p className="text-sm text-hearth-800">
+        <div className="card border-hearth-200 bg-hearth-50 text-center dark:border-hearth-800/40 dark:bg-hearth-900/30">
+          <p className="text-sm text-hearth-800 dark:text-hearth-200">
             Hearth Plus forecasts what your home will need over the next 10
             years and the amount to set aside each month, so a big repair is a
             plan, not a panic.
@@ -216,8 +238,8 @@ export default async function PlusPage({
       )}
 
       {searchParams.reason === "quote" && (
-        <div className="card border-hearth-200 bg-hearth-50 text-center">
-          <p className="text-sm text-hearth-800">
+        <div className="card border-hearth-200 bg-hearth-50 text-center dark:border-hearth-800/40 dark:bg-hearth-900/30">
+          <p className="text-sm text-hearth-800 dark:text-hearth-200">
             You&apos;ve used your free quote check. Plus reads every quote you
             get, flags padding, and writes the negotiation message, unlimited.
           </p>
@@ -225,8 +247,8 @@ export default async function PlusPage({
       )}
 
       {searchParams.reason === "report" && (
-        <div className="card border-hearth-200 bg-hearth-50 text-center">
-          <p className="text-sm text-hearth-800">
+        <div className="card border-hearth-200 bg-hearth-50 text-center dark:border-hearth-800/40 dark:bg-hearth-900/30">
+          <p className="text-sm text-hearth-800 dark:text-hearth-200">
             Hearth Plus builds a shareable home report of your systems,
             documents, and upkeep history, ready for insurers or buyers.
           </p>
@@ -234,18 +256,17 @@ export default async function PlusPage({
       )}
 
       {searchParams.reason === "tax" && (
-        <div className="card border-hearth-200 bg-hearth-50 text-center">
-          <p className="text-sm text-hearth-800">
-            Your assessment looks high, and Plus drafts the appeal letter for
-            you. Homeowners who appeal often save hundreds a year, and one win
-            covers years of Plus.
+        <div className="card border-hearth-200 bg-hearth-50 text-center dark:border-hearth-800/40 dark:bg-hearth-900/30">
+          <p className="text-sm text-hearth-800 dark:text-hearth-200">
+            Your assessment looks high. Plus drafts the appeal letter for
+            you, ready to file with your county.
           </p>
         </div>
       )}
 
       {searchParams.reason === "insurance" && (
-        <div className="card border-hearth-200 bg-hearth-50 text-center">
-          <p className="text-sm text-hearth-800">
+        <div className="card border-hearth-200 bg-hearth-50 text-center dark:border-hearth-800/40 dark:bg-hearth-900/30">
+          <p className="text-sm text-hearth-800 dark:text-hearth-200">
             Plus builds your requote packet: your home&apos;s facts, upkeep
             record, and the questions to ask, ready to hand to insurance
             agents so they compete for you.
@@ -254,57 +275,83 @@ export default async function PlusPage({
       )}
 
       <div className="text-center">
-        <h1 className="text-3xl font-semibold text-stone-900">
-          Get your home fixed faster
+        {/* Money protection, not job-posting speed: the paid tier's real value
+            is knowing what's coming (forecast, quote check, plan) before it
+            hits the wallet. The reason banners above add the specific pitch. */}
+        <h1 className="text-3xl font-semibold text-stone-900 dark:text-stone-100">
+          Know what&apos;s coming before it costs you
         </h1>
-        <p className="mt-2 text-sm text-stone-500">
+        <p className="mt-2 text-sm font-medium text-hearth-700 dark:text-hearth-300">
+          {trialEligible
+            ? "First month free, then $4.99/mo. Cancel anytime."
+            : "$4.99/mo, or $39.99/yr. Cancel anytime."}
+        </p>
+        <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
           {COLD_START_FREE_POSTING
             ? // COLD START: posting is uncapped for everyone right now, so the
               // pitch leans on the perks that stay exclusive.
-              "Line up vetted pros, on your terms. Get matched first and keep every proactive alert working for you."
-            : "Line up vetted pros, on your terms. Post more jobs at once, get matched first, and keep every proactive alert working for you."}
+              "Line up local pros, on your terms. Get matched first and keep every proactive alert working for you."
+            : "Line up local pros, on your terms. Post more jobs at once, get matched first, and keep every proactive alert working for you."}
         </p>
         <div className="mt-5">
+          {/* Label mirrors the pricing card's button exactly, so the promise
+              made here is the one the button below keeps. Non-trial users
+              land on the yearly plan by default (see PlanToggle). */}
           <a href="#pricing" className="btn-primary">
-            Start my Plus plan
+            {trialEligible ? "Start my free month" : "Get a year of Plus"}
           </a>
-          <p className="mt-2 text-xs text-stone-500">
+          <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
             Cancel anytime. No commitment.
           </p>
         </div>
       </div>
 
-      <div className="card overflow-hidden p-0">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-stone-200 text-left text-stone-500">
-              <th className="px-4 py-3 font-medium"> </th>
-              <th className="px-4 py-3 font-medium">Free</th>
-              <th className="px-4 py-3 font-medium text-hearth-700">
-                Hearth Plus
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {COMPARISON.map((row) => (
-              <tr key={row.label} className="border-b border-stone-100 last:border-0">
-                <td className="px-4 py-3 text-stone-700">{row.label}</td>
-                <td className="px-4 py-3 text-stone-500">{row.free}</td>
-                <td className="px-4 py-3 font-medium text-hearth-700">
-                  {row.plus}
-                </td>
+      {/* The full comparison stays available but foldable, so the page reads
+          headline -> anchor -> pricing without a wall of rows in between.
+          A server component can't know the viewport, so `open` is the
+          desktop-first default; phone users can collapse it. */}
+      <details open className="group">
+        <summary className="w-fit cursor-pointer list-none [&::-webkit-details-marker]:hidden text-sm font-semibold text-stone-900 dark:text-stone-100">
+          <span className="mr-1 inline-block transition-transform group-open:rotate-90">
+            ▸
+          </span>
+          Compare everything
+        </summary>
+        <div className="card mt-3 overflow-hidden p-0">
+          {/* Tighter cells and smaller text below sm so all three columns fit
+              a 360px viewport without horizontal scrolling. */}
+          <table className="w-full text-xs sm:text-sm">
+            <thead>
+              <tr className="border-b border-stone-200 text-left text-stone-500 dark:border-stone-700 dark:text-stone-400">
+                <th className="px-2 py-3 font-medium sm:px-4"> </th>
+                <th className="px-2 py-3 font-medium sm:px-4">Free</th>
+                <th className="px-2 py-3 font-medium text-hearth-700 sm:px-4 dark:text-hearth-300">
+                  Hearth Plus
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {COMPARISON.map((row) => (
+                <tr key={row.label} className="border-b border-stone-100 last:border-0 dark:border-white/10">
+                  <td className="px-2 py-3 text-stone-700 sm:px-4 dark:text-stone-300">{row.label}</td>
+                  <td className="px-2 py-3 text-stone-500 sm:px-4 dark:text-stone-400">{row.free}</td>
+                  <td className="px-2 py-3 font-medium text-hearth-700 sm:px-4 dark:text-hearth-300">
+                    {row.plus}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
 
-      {/* The free month is granted only when there's no existing homeowner
-          subscription row (the same signal startPlusCheckoutAction checks), so
-          a returning subscriber never sees "free month" copy they wouldn't get. */}
-      <PlanToggle trialEligible={!sub} />
+      <p className="text-center text-sm text-stone-600 dark:text-stone-300">
+        A year of Plus costs less than one hour of an emergency plumber.
+      </p>
 
-      <p className="text-center text-xs text-stone-500">
+      <PlanToggle trialEligible={trialEligible} />
+
+      <p className="text-center text-xs text-stone-500 dark:text-stone-400">
         Questions?{" "}
         <Link href="/account/help" className="hover:underline">
           Visit help

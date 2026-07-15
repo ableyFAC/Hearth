@@ -24,14 +24,30 @@ export const COLD_START_FREE_ALERTS = true;
 // =============================================================================
 export const FOUNDER = {
   name: "Landen Chu",
+  // Second founder, credited alongside `name` in the founder copy. Blank it
+  // out and the pages drop back to single-founder wording on their own.
+  coFounder: "William Tran",
+  // Not currently rendered in the founder copy (the landing and /pros pages
+  // say "homeowners in Orange County" instead); kept for future use.
   city: "Fountain Valley",
   cellPhone: "",
   // Public contact email for prospective pros (shown on /pros). The in-app
   // help page needs an account, so signed-out visitors need SOME reachable
-  // channel; until this is filled the page simply shows no contact link
-  // rather than a dead one.
-  email: "",
+  // channel. Real, monitored inbox; if it ever goes unmonitored, blank it
+  // out and the pages simply show no contact link rather than a dead one.
+  email: "landenchu2000@gmail.com",
 };
+
+// Founder credit fragment for the landing pages, e.g. "Landen Chu and
+// William Tran, homeowners in Orange County". The homeowner noun pluralizes
+// to match how many names are filled in, and the whole string is empty when
+// both names are blank so each page can fall back to its honest generic line.
+const FOUNDER_NAMES = [FOUNDER.name, FOUNDER.coFounder].filter(Boolean);
+export const FOUNDER_CREDIT = FOUNDER_NAMES.length
+  ? `${FOUNDER_NAMES.join(" and ")}, ${
+      FOUNDER_NAMES.length > 1 ? "homeowners" : "a homeowner"
+    } in Orange County`
+  : "";
 
 export const SYSTEM_TYPES = [
   { value: "roof", label: "Roof", icon: "🏠" },
@@ -97,6 +113,94 @@ export const JOB_CATEGORIES = [
   ...SERVICE_CATEGORIES,
   { value: "other", label: "Other", icon: "🔧" },
 ] as const;
+
+// Per-category "what to shoot" lists shown next to the photo picker when a
+// homeowner posts a job or reports an issue. Keyed by JOB_CATEGORIES values
+// (ISSUE_CATEGORIES values are a subset, so both forms share this list). Text
+// only, on purpose: a concrete shot list of THEIR house teaches better than a
+// stock photo of someone else's, and hotlinked example images rot or carry
+// licensing risk. Keep each list at 2-4 short lines so it stays scannable.
+export const PHOTO_TIPS: Record<string, string[]> = {
+  plumbing: [
+    "A close-up of the leak or drip itself",
+    "One step back showing the whole fixture or pipe",
+    "The shutoff valve for that fixture",
+    "Any water damage or staining around it",
+  ],
+  structural: [
+    "The crack up close, with a coin or tape measure for scale",
+    "A wide shot of the whole wall or slab",
+    "Where the crack meets the floor or ceiling",
+    "Any nearby doors or windows that stick",
+  ],
+  roof: [
+    "The problem area from the ground, zoomed in if you can",
+    "The gutter line and roof edge",
+    "A ceiling stain inside, if there is one",
+  ],
+  electrical: [
+    "The breaker panel with the door open",
+    "The outlet, switch, or fixture in question",
+    "Any scorch marks or discoloration, up close",
+  ],
+  hvac: [
+    "The unit's label plate with the model number",
+    "The whole unit, indoor and outdoor if you have both",
+    "The thermostat showing its current reading",
+  ],
+  windows: [
+    "The damage up close",
+    "The whole window or door from inside",
+    "The same window or door from outside",
+  ],
+  remodeling: [
+    "The whole room or area from a corner",
+    "Each wall or surface you want changed",
+    "Anything staying put that pros will work around",
+  ],
+  landscaping: [
+    "A wide shot of the whole yard or area",
+    "The specific spots that need work, up close",
+    "Access points like gates or side yards",
+  ],
+  cleaning: [
+    "The rooms or areas that need the most attention",
+    "Any problem spots like stains or buildup, up close",
+  ],
+  painting: [
+    "The whole wall or surface in daylight",
+    "Peeling, cracking, or stains up close",
+    "Trim, ceilings, or doors if they're included",
+  ],
+  home_inspection: [
+    "The front of the house from the street",
+    "Any specific spots you're worried about",
+    "The attic or crawl space entrance, if you know where it is",
+  ],
+  pest: [
+    "The pests or droppings you've found, up close",
+    "Any damage, like chewed wood or wiring",
+    "Where they seem to be getting in, if you've spotted it",
+  ],
+  garage_door: [
+    "The whole door from outside",
+    "The opener unit and its label",
+    "The damaged section, track, or spring up close",
+  ],
+  handyman: [
+    "Each item on your list, one photo per fix",
+    "A step back showing where each one lives",
+  ],
+  other: [
+    "The problem up close",
+    "A step back showing the whole area",
+    "Anything a pro would need to bring the right parts",
+  ],
+};
+
+export function photoTipsFor(category: string): string[] {
+  return PHOTO_TIPS[category] ?? PHOTO_TIPS.other;
+}
 
 // Popular remodel / improvement projects we surface as recommendations.
 // `category` maps each project to the contractor category used for matching.

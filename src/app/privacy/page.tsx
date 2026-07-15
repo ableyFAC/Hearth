@@ -5,13 +5,19 @@ import { FOUNDER } from "@/lib/constants";
 // see src/lib/supabase/middleware.ts for the allowlist entry and
 // src/app/sitemap.ts for the sitemap entry. Content is derived from the
 // actual code paths (Supabase, Gemini, Stripe, CSLB, Checkr) rather than a
-// generic template, and is marked as a draft pending owner/counsel review.
+// generic template.
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
+// Prefer FOUNDER.email once the owner fills it in; until then fall back to
+// the owner's personal address so signed-out visitors (who can't reach the
+// in-app Help page) still have a working contact channel.
+const CONTACT_EMAIL = FOUNDER.email || "landenchu2000@gmail.com";
+
 export const metadata: Metadata = {
-  title: "Privacy Policy | Hearth",
+  // The root layout's title template appends "| Hearth"; don't repeat it here.
+  title: "Privacy Policy",
   description:
     "What Hearth collects, how it is used, who it is shared with, and how to delete it.",
   alternates: {
@@ -23,26 +29,22 @@ export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-2xl px-6 pb-16 pt-10">
       <p className="text-sm">
-        <a href="/" className="text-stone-500 hover:text-hearth-700">
+        <a href="/" className="text-stone-500 hover:text-hearth-700 dark:text-stone-400 dark:hover:text-hearth-300">
           ← Hearth
         </a>
       </p>
 
-      <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
-        Draft: under review by the owner.
-      </div>
-
-      <h1 className="mt-4 text-2xl font-bold text-stone-900 sm:text-3xl">
+      <h1 className="mt-4 text-2xl font-bold text-stone-900 sm:text-3xl dark:text-stone-100">
         Privacy Policy
       </h1>
-      <p className="mt-3 text-sm text-stone-500">
+      <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
         Last updated July 2026. Plain English, and honest about what actually
         happens in the app today.
       </p>
 
-      <div className="mt-8 space-y-8 text-stone-700">
+      <div className="mt-8 space-y-8 text-stone-700 dark:text-stone-300">
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             The short version
           </h2>
           <p className="mt-2 leading-relaxed">
@@ -55,7 +57,7 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             What we collect and where it lives
           </h2>
           <p className="mt-2 leading-relaxed">
@@ -67,7 +69,7 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Ask Hearth and Google Gemini
           </h2>
           <p className="mt-2 leading-relaxed">
@@ -82,7 +84,7 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Photos and documents
           </h2>
           <p className="mt-2 leading-relaxed">
@@ -95,7 +97,7 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">Payments</h2>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Payments</h2>
           <p className="mt-2 leading-relaxed">
             Payments (Hearth Plus, contractor fees, deposits) are processed by
             Stripe. Hearth never sees or stores your full card number; Stripe
@@ -104,7 +106,7 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Contractor license and background checks
           </h2>
           <p className="mt-2 leading-relaxed">
@@ -119,7 +121,7 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Notifications
           </h2>
           <p className="mt-2 leading-relaxed">
@@ -131,20 +133,20 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             What we don&apos;t do
           </h2>
           <p className="mt-2 leading-relaxed">
             We do not sell your personal data. We do not run third-party ad
-            trackers or ad pixels on Hearth (verified by a network audit of
-            the app). Contractor leads share only what&apos;s needed to quote
+            trackers or ad pixels on Hearth. Contractor leads share only
+            what&apos;s needed to quote
             the job, name, address, and the request, with the specific pro
             you chose, never your broader home condition profile.
           </p>
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Deleting your data
           </h2>
           <p className="mt-2 leading-relaxed">
@@ -155,29 +157,17 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">Questions</h2>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Questions</h2>
           <p className="mt-2 leading-relaxed">
-            {FOUNDER.email ? (
-              <>
-                Questions about this policy or your data can be sent to{" "}
-                <a
-                  href={`mailto:${FOUNDER.email}`}
-                  className="text-hearth-700 hover:underline"
-                >
-                  {FOUNDER.email}
-                </a>
-                .
-              </>
-            ) : (
-              // No email configured yet (FOUNDER.email blank): point only at
-              // the in-app Help page, which always exists. The /pros contact
-              // link is also FOUNDER-gated, so referencing it here would be a
-              // pointer to nothing until the owner fills those fields in.
-              <>
-                Questions about this policy or your data: reach us from the
-                Help page in your account.
-              </>
-            )}
+            Questions about this policy or your data can be sent to{" "}
+            <a
+              href={`mailto:${CONTACT_EMAIL}`}
+              className="text-hearth-700 hover:underline dark:text-hearth-300"
+            >
+              {CONTACT_EMAIL}
+            </a>
+            . If you have an account, you can also reach us from the Help
+            page.
           </p>
         </section>
       </div>

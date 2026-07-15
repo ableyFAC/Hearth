@@ -25,19 +25,19 @@ export default function ReferralCard({ code }: { code: string }) {
   return (
     <section className="card space-y-3">
       <div>
-        <h2 className="text-lg font-semibold text-stone-900">Refer a pro</h2>
-        <p className="mt-1 text-sm text-stone-500">
+        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Refer a pro</h2>
+        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           Know a good contractor? When a pro you refer wins their first job on
           Hearth, you both get $25 of application credit, up to 10 referrals a
           year.
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 font-mono text-sm text-stone-700">
+        <span className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 font-mono text-sm text-stone-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300">
           {code}
         </span>
         <span
-          className="min-w-0 truncate text-xs text-stone-500"
+          className="min-w-0 truncate text-xs text-stone-500 dark:text-stone-400"
           title={path}
         >
           {path}

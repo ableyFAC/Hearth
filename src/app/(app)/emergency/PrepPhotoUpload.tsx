@@ -61,11 +61,11 @@ export default function PrepPhotoUpload({
   return (
     <form
       action={savePrepItemAction}
-      className="space-y-2 rounded-lg border border-stone-200 p-3"
+      className="space-y-2 rounded-lg border border-stone-200 p-3 dark:border-white/10"
     >
       <input type="hidden" name="key" value={itemKey} />
       <input type="hidden" name="photo_url" value={photoUrl} />
-      <p className="text-sm font-medium text-stone-800">{label}</p>
+      <p className="text-sm font-medium text-stone-800 dark:text-stone-200">{label}</p>
       {preview ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -74,7 +74,7 @@ export default function PrepPhotoUpload({
           className="h-28 w-full rounded-md object-cover"
         />
       ) : (
-        <div className="flex h-28 items-center justify-center rounded-md bg-stone-50 text-xs text-stone-500">
+        <div className="flex h-28 items-center justify-center rounded-md bg-stone-50 text-xs text-stone-500 dark:bg-stone-900 dark:text-stone-400">
           No photo yet
         </div>
       )}
@@ -82,9 +82,9 @@ export default function PrepPhotoUpload({
         type="file"
         accept="image/*"
         onChange={onPick}
-        className="block w-full text-xs text-stone-500 file:mr-2 file:rounded-md file:border-0 file:bg-hearth-100 file:px-2 file:py-1 file:text-hearth-800"
+        className="block w-full text-xs text-stone-500 file:mr-2 file:rounded-md file:border-0 file:bg-hearth-100 file:px-2 file:py-1 file:text-hearth-800 dark:text-stone-400 dark:file:bg-hearth-900 dark:file:text-hearth-300"
       />
-      {busy && <p className="text-xs text-stone-500">Uploading…</p>}
+      {busy && <p className="text-xs text-stone-500 dark:text-stone-400">Uploading…</p>}
       {err && <p className="text-xs text-amber-600">{err}</p>}
       <textarea
         name="note"

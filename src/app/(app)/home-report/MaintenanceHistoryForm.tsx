@@ -1,0 +1,87 @@
+"use client";
+
+import { useRef, useState } from "react";
+import { addMaintenanceHistoryAction } from "./actions";
+
+// Lets the owner log a past maintenance event (date, what was done, optional
+// cost/pro) directly. Never AI-generated: every field here is something the
+// owner typed in. Print:hidden - a report someone shares with a buyer or
+// insurer shouldn't include an empty "add an entry" button.
+export default function MaintenanceHistoryForm() {
+  const [open, setOpen] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        className="btn-secondary print:hidden"
+        onClick={() => setOpen(true)}
+      >
+        + Log something you had done
+      </button>
+    );
+  }
+
+  return (
+    <form
+      ref={formRef}
+      action={async (fd) => {
+        await addMaintenanceHistoryAction(fd);
+        formRef.current?.reset();
+        setOpen(false);
+      }}
+      className="card print:hidden space-y-3"
+    >
+      <h3 className="font-semibold text-stone-900 dark:text-stone-100">Log a maintenance record</h3>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2">
+          <label className="label">What was done</label>
+          <input
+            name="title"
+            className="input"
+            placeholder="Furnace serviced"
+            required
+          />
+        </div>
+        <div>
+          <label className="label">Date</label>
+          <input
+            name="completed_date"
+            type="date"
+            className="input"
+            max={new Date().toISOString().slice(0, 10)}
+            required
+          />
+        </div>
+        <div>
+          <label className="label">Cost (optional)</label>
+          <input
+            name="cost"
+            inputMode="decimal"
+            className="input"
+            placeholder="150"
+          />
+        </div>
+        <div className="col-span-2">
+          <label className="label">Pro or vendor (optional)</label>
+          <input
+            name="performed_by"
+            className="input"
+            placeholder="ABC Heating & Air"
+          />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          className="btn-secondary"
+          onClick={() => setOpen(false)}
+        >
+          Cancel
+        </button>
+        <button className="btn-primary flex-1">Save entry</button>
+      </div>
+    </form>
+  );
+}

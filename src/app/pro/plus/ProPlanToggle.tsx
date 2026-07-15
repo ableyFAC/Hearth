@@ -19,7 +19,7 @@ export default function ProPlanToggle() {
 
   return (
     <div id="pricing" className="card-hero space-y-4 text-center">
-      <div className="mx-auto inline-flex rounded-full border border-stone-200 bg-stone-50 p-1">
+      <div className="mx-auto inline-flex rounded-full border border-stone-200 bg-stone-50 p-1 dark:border-white/10 dark:bg-stone-800">
         {(Object.keys(PLANS) as Array<keyof typeof PLANS>).map((key) => (
           <button
             key={key}
@@ -29,13 +29,13 @@ export default function ProPlanToggle() {
             className={`relative rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
               plan === key
                 ? "bg-hearth-600 text-white shadow-sm"
-                : "text-stone-500 hover:text-stone-700"
+                : "text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
             }`}
           >
             <span className="block leading-tight">{PLANS[key].label}</span>
             <span
               className={`block text-[10px] font-normal leading-tight ${
-                plan === key ? "text-hearth-100" : "text-stone-500"
+                plan === key ? "text-hearth-100" : "text-stone-500 dark:text-stone-400"
               }`}
             >
               {PLANS[key].price}
@@ -55,20 +55,20 @@ export default function ProPlanToggle() {
               $9.99 first month front and center, so the discount is
               impossible to miss. Both numbers are real: $29.99 is what month
               two actually costs. */}
-          <p className="text-sm font-medium text-hearth-700">
+          <p className="text-sm font-medium text-hearth-700 dark:text-hearth-300">
             First month deal
           </p>
-          <p className="text-4xl font-semibold text-stone-900">
-            <span className="mr-2 align-middle text-2xl font-normal text-stone-500 line-through">
+          <p className="text-4xl font-semibold text-stone-900 dark:text-stone-100">
+            <span className="mr-2 align-middle text-2xl font-normal text-stone-500 line-through dark:text-stone-400">
               ${PRO_PLAN.monthly}
             </span>
             ${PRO_PLAN.introFirstMonth}
-            <span className="text-base font-normal text-stone-500">
+            <span className="text-base font-normal text-stone-500 dark:text-stone-400">
               {" "}
               your first month
             </span>
           </p>
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-stone-500 dark:text-stone-400">
             then ${PRO_PLAN.monthly}/mo. Cancel anytime.
           </p>
         </div>
@@ -77,15 +77,15 @@ export default function ProPlanToggle() {
           {/* Honest anchor: the struck-through number is the plan's real
               monthly price. Yearly genuinely works out to $19.99/mo, never
               an invented list price. */}
-          <p className="text-sm font-medium text-hearth-700">Yearly deal</p>
-          <p className="text-4xl font-semibold text-stone-900">
-            <span className="mr-2 align-middle text-2xl font-normal text-stone-500 line-through">
+          <p className="text-sm font-medium text-hearth-700 dark:text-hearth-300">Yearly deal</p>
+          <p className="text-4xl font-semibold text-stone-900 dark:text-stone-100">
+            <span className="mr-2 align-middle text-2xl font-normal text-stone-500 line-through dark:text-stone-400">
               ${PRO_PLAN.monthly}
             </span>
             ${(PRO_PLAN.yearly / 12).toFixed(2)}
-            <span className="text-base font-normal text-stone-500">/mo</span>
+            <span className="text-base font-normal text-stone-500 dark:text-stone-400">/mo</span>
           </p>
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-stone-500 dark:text-stone-400">
             billed yearly at ${PRO_PLAN.yearly}. Save $
             {Math.round(PRO_PLAN.monthly * 12 - PRO_PLAN.yearly)} vs paying
             monthly.
@@ -100,7 +100,7 @@ export default function ProPlanToggle() {
             ? `Start for $${PRO_PLAN.introFirstMonth}`
             : "Get a year of Pro"}
         </button>
-        <p className="text-xs text-stone-500">
+        <p className="text-xs text-stone-500 dark:text-stone-400">
           Cancel anytime. Your lead access never changes either way.
         </p>
       </form>

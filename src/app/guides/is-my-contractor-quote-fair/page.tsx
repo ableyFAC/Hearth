@@ -33,7 +33,7 @@ const FAQS = [
   },
   {
     q: "Can Hearth tell me if my quote is fair?",
-    a: "Hearth's AI Quote Analyzer reads a quote you upload or paste in, compares the total and each line item to typical costs, flags anything that looks padded, vague, or duplicated, and drafts a message you can send back if you want to negotiate.",
+    a: "Hearth's Quote analyzer reads a quote you upload or paste in, compares the total and each line item to typical costs, flags anything that looks padded, vague, or duplicated, and drafts a message you can send back if you want to negotiate.",
   },
 ];
 
@@ -63,21 +63,21 @@ export default function IsMyContractorQuoteFairGuide() {
       />
 
       <p className="text-sm">
-        <a href="/guides" className="text-stone-500 hover:text-hearth-700">
+        <a href="/guides" className="text-stone-500 hover:text-hearth-700 dark:text-stone-400 dark:hover:text-hearth-300">
           ← All guides
         </a>
       </p>
 
-      <h1 className="mt-3 text-2xl font-bold text-stone-900 sm:text-3xl">
+      <h1 className="mt-3 text-2xl font-bold text-stone-900 sm:text-3xl dark:text-stone-100">
         Is my contractor's quote fair? How to read it before you sign
       </h1>
-      <p className="mt-3 text-sm text-stone-500">
+      <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
         General guidance for reading any home repair or improvement quote.
       </p>
 
-      <div className="mt-8 space-y-6 text-stone-700">
+      <div className="mt-8 space-y-6 text-stone-700 dark:text-stone-300">
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             How to read a quote
           </h2>
           <p className="mt-2 leading-relaxed">
@@ -95,7 +95,7 @@ export default function IsMyContractorQuoteFairGuide() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">Red flags</h2>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Red flags</h2>
           <p className="mt-2 leading-relaxed">
             Be cautious of pressure to sign the same day the quote is given,
             or a demand for full payment before any work begins. A
@@ -109,7 +109,7 @@ export default function IsMyContractorQuoteFairGuide() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             What a fair process looks like
           </h2>
           <p className="mt-2 leading-relaxed">
@@ -126,16 +126,16 @@ export default function IsMyContractorQuoteFairGuide() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Already have a quote in hand?
           </h2>
           <p className="mt-2 leading-relaxed">
             Hearth's{" "}
             <a
               href="/quote-check"
-              className="text-hearth-700 hover:underline"
+              className="text-hearth-700 hover:underline dark:text-hearth-300"
             >
-              AI Quote Analyzer
+              Quote analyzer
             </a>{" "}
             reads a quote you upload or paste in, compares the total and each
             line item to typical costs, flags anything that looks padded,
@@ -145,14 +145,14 @@ export default function IsMyContractorQuoteFairGuide() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Frequently asked questions
           </h2>
           <div className="mt-2 space-y-4">
             {FAQS.map((f) => (
               <div key={f.q}>
-                <h3 className="font-medium text-stone-900">{f.q}</h3>
-                <p className="mt-1 text-sm leading-relaxed text-stone-600">
+                <h3 className="font-medium text-stone-900 dark:text-stone-100">{f.q}</h3>
+                <p className="mt-1 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
                   {f.a}
                 </p>
               </div>

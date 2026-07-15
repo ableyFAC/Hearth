@@ -130,7 +130,7 @@ export async function addSystemAction(formData: FormData) {
   await attachPhotos(formData, property.id, row.id);
   setFlash(`Added ${labelFor(SYSTEM_TYPES, systemType)}`);
   revalidatePath("/dashboard");
-  revalidatePath("/dashboard");
+  revalidatePath("/home-report");
 }
 
 // One-tap add: create a system with just its type + default lifespan. The owner
@@ -149,7 +149,7 @@ export async function quickAddSystemAction(formData: FormData) {
   if (error) throw new Error(error.message);
   setFlash(`Added ${labelFor(SYSTEM_TYPES, systemType)}`);
   revalidatePath("/dashboard");
-  revalidatePath("/dashboard");
+  revalidatePath("/home-report");
 }
 
 export async function deleteSystemAction(formData: FormData) {
@@ -160,7 +160,7 @@ export async function deleteSystemAction(formData: FormData) {
   if (error) throw new Error(error.message);
   setFlash("System removed", "info");
   revalidatePath("/dashboard");
-  revalidatePath("/dashboard");
+  revalidatePath("/home-report");
 }
 
 export async function updateSystemAction(formData: FormData) {
@@ -201,7 +201,7 @@ export async function updateSystemAction(formData: FormData) {
   if (property) await attachPhotos(formData, property.id, id);
   setFlash("System updated");
   revalidatePath("/dashboard");
-  revalidatePath("/dashboard");
+  revalidatePath("/home-report");
 }
 
 export async function updatePropertyAction(formData: FormData) {
@@ -231,5 +231,5 @@ export async function updatePropertyAction(formData: FormData) {
   if (error) throw new Error(error.message);
   setFlash("Home details saved");
   revalidatePath("/dashboard");
-  revalidatePath("/dashboard");
+  revalidatePath("/home-report");
 }

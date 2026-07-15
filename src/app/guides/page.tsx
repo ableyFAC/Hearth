@@ -48,7 +48,8 @@ const GUIDES = [
 ];
 
 export const metadata: Metadata = {
-  title: "Home maintenance guides | Hearth",
+  // The root layout's title template appends "| Hearth"; don't repeat it here.
+  title: "Home maintenance guides",
   description:
     "Plain-English guides to common home maintenance questions: replacement costs, slab leak warning signs, maintenance schedules, and how to read a contractor's quote.",
 };
@@ -56,10 +57,10 @@ export const metadata: Metadata = {
 export default function GuidesIndex() {
   return (
     <main className="mx-auto max-w-2xl px-6 pb-16 pt-10">
-      <h1 className="text-2xl font-bold text-stone-900">
+      <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">
         Home maintenance guides
       </h1>
-      <p className="mt-2 text-sm text-stone-600">
+      <p className="mt-2 text-sm text-stone-600 dark:text-stone-300">
         Plain-English answers to the questions homeowners search for most,
         with no login required.
       </p>
@@ -76,8 +77,8 @@ export default function GuidesIndex() {
                   {g.icon}
                 </span>
                 <div>
-                  <h2 className="font-semibold text-stone-900">{g.title}</h2>
-                  <p className="mt-1 text-sm text-stone-600">{g.blurb}</p>
+                  <h2 className="font-semibold text-stone-900 dark:text-stone-100">{g.title}</h2>
+                  <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">{g.blurb}</p>
                 </div>
               </div>
             </a>

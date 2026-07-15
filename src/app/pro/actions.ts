@@ -14,6 +14,7 @@ import { requestReviewForWonLead } from "@/lib/reviewRequest";
 import { lookupCslbLicense, type CslbLookupResult } from "@/lib/cslb";
 import { createCandidateAndInvite } from "@/lib/checkr";
 import { isMissingSchemaError } from "@/lib/dbErrors";
+import { findActiveJobConflicts } from "@/lib/activeJobConflicts";
 
 // Real CSLB check (0055) is debounced off the most recent check we recorded:
 // license_verified_at (stamped only on a 'verified' outcome) or the
@@ -182,19 +183,46 @@ export async function saveCompanyAction(formData: FormData) {
   const existing = await getCurrentContractor();
 
   if (existing) {
-    // The license is a legal identifier: once set it's locked and
-    // can't be changed from the profile. Keep the existing value so a missing
-    // (read-only) field can't wipe or swap it.
-    if (existing.license_number) {
+    // The license is a legal identifier: locked once VERIFIED (0037), not
+    // before. Until a check confirms the number, the pro can still correct a
+    // typo. A form that didn't carry the field at all (a read-only or absent
+    // input posts nothing) keeps the stored value either way, so a lean form
+    // can't wipe or swap it.
+    const licenseEntry = formData.get("license_number");
+    const licenseVerified =
+      (existing as any).license_verified_status === "verified";
+    if (
+      existing.license_number &&
+      (licenseVerified || licenseEntry === null)
+    ) {
       fields.license_number = existing.license_number;
     }
+    // A changed number resets verification to square one: any earlier check
+    // proved a different license. 'pending' when a number is on file,
+    // 'unverified' when it was cleared, per 0037's vocabulary.
+    const licenseChanged =
+      fields.license_number !== (existing.license_number ?? null);
+    const licenseWrite = licenseChanged
+      ? {
+          license_verified_status: fields.license_number
+            ? "pending"
+            : "unverified",
+          license_verified_at: null,
+          license_verify_detail: null,
+        }
+      : {};
     let { error } = await supabase
       .from("contractors")
-      .update({ ...fields, ...stateWrite } as any)
+      .update({ ...fields, ...stateWrite, ...licenseWrite } as any)
       .eq("id", existing.id);
     // Same graceful missing-column retry as the insert path below: if 0046
-    // hasn't run yet, save everything else rather than failing the whole form.
-    if (error && hasStateWrite && isMissingSchemaError(error)) {
+    // (or 0037/0055) hasn't run yet, save everything else rather than
+    // failing the whole form.
+    if (
+      error &&
+      (hasStateWrite || licenseChanged) &&
+      isMissingSchemaError(error)
+    ) {
       ({ error } = await supabase
         .from("contractors")
         .update(fields)
@@ -202,21 +230,32 @@ export async function saveCompanyAction(formData: FormData) {
     }
     if (error) throw new Error(error.message);
 
-    // Real CSLB check (0055), only when this save is what actually puts a
-    // license number on file for the first time: license_number is locked
-    // once set (above), so an already-verified/pending/failed pro re-saving
-    // unrelated fields never re-triggers a CSLB fetch here. Re-checking an
-    // existing license is "Verify now" (verifyLicenseNowAction below) or the
-    // weekly recheck cron. Best-effort: a CSLB hiccup must never block the
-    // profile save that already succeeded.
-    if (!existing.license_number && fields.license_number) {
+    // Real CSLB check (0055), only when this save actually changed the
+    // license number on file (first time, or a pre-verification typo fix: a
+    // verified number is locked above, so it never re-triggers here). CSLB
+    // is California's registry, so the lookup only runs for companies
+    // serving CA; any other state's license stays 'pending' (on file, not
+    // yet checkable) instead of collecting a public "failed" badge from a
+    // registry that was never going to have it. Re-checking an unchanged
+    // license is "Verify now" (verifyLicenseNowAction below) or the weekly
+    // recheck cron. Best-effort: a CSLB hiccup must never block the profile
+    // save that already succeeded.
+    const effectiveServiceState = hasStateWrite
+      ? serviceState
+      : (((existing as any).service_state as string | null) ?? null);
+    if (
+      licenseChanged &&
+      fields.license_number &&
+      effectiveServiceState === "CA"
+    ) {
       try {
         await verifyContractorLicense(
           supabase,
           existing.id,
           fields.license_number,
-          existing.license_verified_at,
-          (existing as any).license_verify_detail
+          // The number just changed, so no earlier check applies to it:
+          // don't let the old number's timestamp debounce this one away.
+          null
         );
       } catch (err) {
         console.error(
@@ -231,15 +270,19 @@ export async function saveCompanyAction(formData: FormData) {
     redirect("/pro/profile");
   }
 
-  // First-time setup. vetted = true so the company is matchable immediately
-  // (in production this would be a manual verification step). id is
-  // generated here (instead of left to the column default) so a CSLB check
-  // right after the insert has the new row's id without a second round trip.
+  // First-time setup. `vetted` is a matchability flag, not a trust claim:
+  // true is what lets matching include the company, and nothing has actually
+  // been vetted at signup. No homeowner-facing copy may call a pro "vetted"
+  // off this column; the real trust signals are the CSLB license check
+  // (0055) and the opt-in background check (0057). id is generated here
+  // (instead of left to the column default) so a CSLB check right after the
+  // insert has the new row's id without a second round trip.
   const newContractorId = randomUUID();
   const base = {
     id: newContractorId,
     ...fields,
     user_id: user.id,
+    // Matchable immediately; see the note above. Not a vetting claim.
     vetted: true,
   };
 
@@ -282,9 +325,12 @@ export async function saveCompanyAction(formData: FormData) {
   if (error) throw new Error(error.message);
 
   // Real CSLB check (0055) for a license number supplied at onboarding.
+  // California companies only: CSLB is CA's registry, so any other state's
+  // license stays 'pending' (on file, awaiting a check) instead of getting a
+  // public "failed" badge from a lookup that could never succeed.
   // Best-effort: a CSLB hiccup must never block account creation, which
   // already succeeded above.
-  if (fields.license_number) {
+  if (fields.license_number && serviceState === "CA") {
     try {
       await verifyContractorLicense(
         supabase,
@@ -311,27 +357,84 @@ async function assertContractor() {
   return contractor;
 }
 
-// "Verify now" button on /pro/profile: an on-demand CSLB re-check for a pro
-// whose license number is on file but not yet verified. Same
-// verifyContractorLicense used by saveCompanyAction and the weekly recheck
-// cron, so the debounce and the never-downgrade-on-'error' rule apply here
-// too.
-export async function verifyLicenseNowAction() {
+// "Verify now" / "Reverify" button on /pro/profile: an on-demand CSLB check
+// for a pro whose license number is on file but not yet verified. The button
+// lives inside the profile <form>, so the action receives the form's data and
+// checks the license number currently in the input, not a stale DB value: a
+// pro who fixes a typo and clicks "Reverify" means the corrected number, and
+// a changed number is persisted (reset to 'pending', per 0037) before the
+// check. Same verifyContractorLicense used by saveCompanyAction and the
+// weekly recheck cron, so the debounce and the never-downgrade-on-'error'
+// rule apply here too; the debounce is skipped when the number changed, since
+// the previous check proved a different license.
+export async function verifyLicenseNowAction(formData: FormData) {
   const contractor = await assertContractor();
-  const licenseNumber = contractor.license_number;
+
+  const stored = contractor.license_number ?? null;
+  const licenseVerified =
+    (contractor as any).license_verified_status === "verified";
+  // A verified number is locked (mirrors saveCompanyAction), and a form
+  // without the field (read-only or absent input posts nothing) keeps the
+  // stored value, so neither path can swap a locked license.
+  const licenseEntry = formData.get("license_number");
+  const typed =
+    licenseEntry === null ? null : String(licenseEntry).trim() || null;
+  const licenseNumber =
+    licenseVerified || licenseEntry === null ? stored : typed;
   if (!licenseNumber) {
     setFlash("Add a license number first.", "error");
     revalidatePath("/pro/profile");
     return;
   }
 
+  // CSLB covers California licenses only, so a pro who explicitly serves
+  // another state is refused honestly: their license stays on file, not
+  // publicly "failed" by a registry that was never going to have it. A
+  // null/blank service_state ("All states", or a pre-0046 row) IS eligible:
+  // this is an explicit user-initiated check, and a non-CSLB number safely
+  // parses as not-found.
+  const serviceState =
+    (((contractor as any).service_state as string | null) ?? null) || null;
+  if (serviceState !== null && serviceState !== "CA") {
+    setFlash(
+      "Automatic license checks currently cover California (CSLB) licenses only. Yours stays on file; set State You Serve to California to run a CSLB check.",
+      "info"
+    );
+    revalidatePath("/pro/profile");
+    return;
+  }
+
   const supabase = createClient();
+
+  // A corrected (unsaved) number is persisted first, resetting verification
+  // to square one: any earlier check proved a different license. If this
+  // write fails, bail rather than check a number that isn't on file.
+  const licenseChanged = licenseNumber !== stored;
+  if (licenseChanged) {
+    const { error } = await (supabase.from("contractors") as any)
+      .update({
+        license_number: licenseNumber,
+        license_verified_status: "pending",
+        license_verified_at: null,
+        license_verify_detail: null,
+      })
+      .eq("id", contractor.id);
+    if (error) {
+      console.error("verifyLicenseNowAction: license save failed:", error.message);
+      setFlash("Couldn't save the corrected license number. Try again.", "error");
+      revalidatePath("/pro/profile");
+      return;
+    }
+  }
+
   const result = await verifyContractorLicense(
     supabase,
     contractor.id,
     licenseNumber,
-    contractor.license_verified_at,
-    (contractor as any).license_verify_detail
+    // A just-changed number was never checked: the old number's timestamps
+    // must not debounce this check away.
+    licenseChanged ? null : contractor.license_verified_at,
+    licenseChanged ? null : (contractor as any).license_verify_detail
   );
 
   if (!result) {
@@ -508,18 +611,39 @@ export async function applyToJobAction(formData: FormData) {
   const contractor = await assertContractor();
   const leadId = String(formData.get("id"));
   const message = (formData.get("message") as string) || "";
+
+  // Marketplace integrity: a pro with an active job for this homeowner in
+  // this category already has them in Messages, so a second apply fee would
+  // double-charge them for the same relationship. Checked here (friendly
+  // error, no charge attempted) and again inside apply_to_lead (0060) as the
+  // hard backstop. Completed/closed jobs never block: rehires stay open.
+  const conflicts = await findActiveJobConflicts(contractor.id, [leadId]);
+  const conflict = conflicts.get(leadId);
+  if (conflict) {
+    setFlash(
+      `You already have an active ${labelFor(JOB_CATEGORIES, conflict.category)} job with this homeowner. Message them there instead; once that job wraps up, you can apply to their new ones again.`,
+      "error"
+    );
+    revalidatePath("/pro");
+    return;
+  }
+
   const supabase = createClient() as any;
   const { data, error } = await supabase.rpc("apply_to_lead", {
     p_lead: leadId,
     p_message: message,
   });
   if (error)
-    // The DB raises 'Job is full' at the applicant cap - a different problem
-    // than a short wallet, so it gets its own message instead of the raw error.
+    // The DB raises 'Job is full' at the applicant cap and 'Already working
+    // with this homeowner' at the relationship guard (0060) - both different
+    // problems than a short wallet, so each gets its own message instead of
+    // the raw error.
     setFlash(
       error.message.includes("Job is full")
         ? "This job is full: 3 pros already applied. Try another job."
-        : error.message,
+        : error.message.includes("Already working with this homeowner")
+          ? "You already have an active job with this homeowner in this category. Message them there instead."
+          : error.message,
       "error"
     );
   else if (data === false)

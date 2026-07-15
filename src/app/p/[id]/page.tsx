@@ -159,9 +159,10 @@ export async function generateMetadata({
 // JSON-LD for Google review-star rich results. Hearth hosts third-party
 // reviews, so LocalBusiness + AggregateRating markup is eligible (a pro's own
 // site would not be). Every number mirrors the page render EXACTLY: same
-// rating value, same review_count, same per-review ratings and dates, in the
-// same order. The RPC exposes no address fields and no reviewer names, so we
-// emit neither (authors become a generic label rather than invented names).
+// rating value, same review_count. Per-review markup is deliberately omitted:
+// Review schema wants an author, the RPC intentionally exposes no reviewer
+// identity, and inventing one would be fabrication. The aggregate needs no
+// authors, so it carries the rich result on its own.
 function buildJsonLd(profile: PublicProfile): Record<string, unknown> {
   const jsonLd: Record<string, unknown> = {
     "@context": "https://schema.org",
@@ -177,20 +178,6 @@ function buildJsonLd(profile: PublicProfile): Record<string, unknown> {
       bestRating: 5,
       worstRating: 1,
     };
-    jsonLd.review = profile.reviews.slice(0, 10).map((r) => ({
-      "@type": "Review",
-      reviewRating: {
-        "@type": "Rating",
-        ratingValue: r.rating,
-        bestRating: 5,
-        worstRating: 1,
-      },
-      // Same YYYY-MM-DD the page renders next to each review.
-      datePublished: r.created_at.slice(0, 10),
-      // The RPC intentionally exposes no reviewer identity.
-      author: { "@type": "Person", name: "Verified Hearth homeowner" },
-      ...(r.comment ? { reviewBody: r.comment } : {}),
-    }));
   }
   return jsonLd;
 }
@@ -200,7 +187,7 @@ function Stars({ rating }: { rating: number }) {
   return (
     <span className="text-amber-500" aria-hidden>
       {"★".repeat(full)}
-      <span className="text-stone-300">{"★".repeat(5 - full)}</span>
+      <span className="text-stone-300 dark:text-stone-600">{"★".repeat(5 - full)}</span>
     </span>
   );
 }
@@ -208,16 +195,16 @@ function Stars({ rating }: { rating: number }) {
 function NotReadyCard() {
   return (
     <main className="mx-auto max-w-xl px-6 py-16 text-center">
-      <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
-        <div className="h-20 bg-gradient-to-br from-hearth-100 via-hearth-50 to-stone-100" />
+      <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-white/10 dark:bg-stone-800">
+        <div className="h-20 bg-gradient-to-br from-hearth-100 via-hearth-50 to-stone-100 dark:from-hearth-900/40 dark:via-stone-800 dark:to-stone-800" />
         <div className="px-6 pb-8 pt-2">
           <p className="text-3xl" aria-hidden>
             🏡
           </p>
-          <h1 className="mt-3 text-xl font-semibold text-stone-900">
+          <h1 className="mt-3 text-xl font-semibold text-stone-900 dark:text-stone-100">
             This page is not ready yet
           </h1>
-          <p className="mt-2 text-sm text-stone-500">
+          <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
             The pro&apos;s public page is still being set up. Please check back
             soon.
           </p>
@@ -225,7 +212,7 @@ function NotReadyCard() {
       </div>
       <a
         href="/pros"
-        className="mt-6 inline-block text-sm font-medium text-hearth-700 hover:underline"
+        className="mt-6 inline-block text-sm font-medium text-hearth-700 hover:underline dark:text-hearth-300"
       >
         Powered by Hearth
       </a>
@@ -303,8 +290,8 @@ export default async function PublicProPage({
           ),
         }}
       />
-      <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
-        <div className="h-20 bg-gradient-to-br from-hearth-100 via-hearth-50 to-stone-100" />
+      <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-white/10 dark:bg-stone-800">
+        <div className="h-20 bg-gradient-to-br from-hearth-100 via-hearth-50 to-stone-100 dark:from-hearth-900/40 dark:via-stone-800 dark:to-stone-800" />
         <div className="px-6 pb-6">
           {/* Logo (Pro members) or a neutral monogram */}
           <div className="-mt-8 mb-4">
@@ -313,36 +300,36 @@ export default async function PublicProPage({
               <img
                 src={profile.logo_url}
                 alt={`${profile.name} logo`}
-                className="h-16 w-16 rounded-2xl bg-white object-cover shadow-sm ring-2 ring-white"
+                className="h-16 w-16 rounded-2xl bg-white object-cover shadow-sm ring-2 ring-white dark:ring-stone-800"
               />
             ) : (
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-stone-200 bg-stone-50 text-xl font-semibold text-stone-500 shadow-sm ring-2 ring-white">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-stone-200 bg-stone-50 text-xl font-semibold text-stone-500 shadow-sm ring-2 ring-white dark:border-white/10 dark:bg-stone-700 dark:text-stone-400 dark:ring-stone-800">
                 {profile.name.slice(0, 1).toUpperCase()}
               </div>
             )}
           </div>
 
-          <h1 className="text-2xl font-bold text-stone-900">{profile.name}</h1>
+          <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">{profile.name}</h1>
 
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
             {hasRating ? (
-              <span className="font-medium text-stone-700">
+              <span className="font-medium text-stone-700 dark:text-stone-300">
                 <Stars rating={profile.rating!} />{" "}
                 <span className="tabular-nums">{profile.rating}</span>
-                <span className="font-normal text-stone-500">
+                <span className="font-normal text-stone-500 dark:text-stone-400">
                   {" "}
                   · {profile.review_count} review
                   {profile.review_count === 1 ? "" : "s"}
                 </span>
               </span>
             ) : (
-              <span className="text-stone-500">No reviews yet</span>
+              <span className="text-stone-500 dark:text-stone-400">No reviews yet</span>
             )}
           </div>
 
           {showBadge && (
             <div className="mt-3">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-medium text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200">
                 <svg
                   viewBox="0 0 24 24"
                   className="h-3.5 w-3.5"
@@ -356,7 +343,7 @@ export default async function PublicProPage({
                 </svg>
                 {badgeLabel}
               </span>
-              <p className="mt-1 text-[11px] text-stone-500">
+              <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
                 Details provided by the business. Not independently verified by
                 Hearth.
               </p>
@@ -367,7 +354,7 @@ export default async function PublicProPage({
             <div className="mt-3 flex flex-wrap gap-3">
               {licenseVerifiedLabel && (
                 <div>
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-medium text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200">
                     <svg
                       viewBox="0 0 24 24"
                       className="h-3.5 w-3.5"
@@ -381,14 +368,14 @@ export default async function PublicProPage({
                     </svg>
                     License verified
                   </span>
-                  <p className="mt-1 text-[11px] text-stone-500">
+                  <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
                     Checked against the CSLB public database on {licenseVerifiedLabel}.
                   </p>
                 </div>
               )}
               {backgroundCheckedLabel && (
                 <div>
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-medium text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200">
                     <svg
                       viewBox="0 0 24 24"
                       className="h-3.5 w-3.5"
@@ -402,7 +389,7 @@ export default async function PublicProPage({
                     </svg>
                     Background checked
                   </span>
-                  <p className="mt-1 text-[11px] text-stone-500">
+                  <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
                     Background check run by Checkr on {backgroundCheckedLabel}.
                   </p>
                 </div>
@@ -415,7 +402,7 @@ export default async function PublicProPage({
               {profile.categories.map((c) => (
                 <span
                   key={c}
-                  className="rounded-full border border-stone-200 bg-stone-50 px-2.5 py-0.5 text-xs font-medium text-stone-600"
+                  className="rounded-full border border-stone-200 bg-stone-50 px-2.5 py-0.5 text-xs font-medium text-stone-600 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300"
                 >
                   {iconFor(JOB_CATEGORIES, c)} {labelFor(JOB_CATEGORIES, c)}
                 </span>
@@ -424,9 +411,9 @@ export default async function PublicProPage({
           )}
 
           {about && (
-            <section className="mt-5 border-t border-stone-100 pt-4">
-              <h2 className="text-sm font-semibold text-stone-900">About</h2>
-              <p className="mt-1 whitespace-pre-line text-sm text-stone-600">
+            <section className="mt-5 border-t border-stone-100 pt-4 dark:border-white/10">
+              <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">About</h2>
+              <p className="mt-1 whitespace-pre-line text-sm text-stone-600 dark:text-stone-400">
                 {about}
               </p>
             </section>
@@ -435,11 +422,11 @@ export default async function PublicProPage({
           {/* Projects: the pro's own portfolio albums (0045). Deliberately a
               separate section from Reviews; nothing here feeds rating math. */}
           {projects.length > 0 && (
-            <section className="mt-5 border-t border-stone-100 pt-4">
-              <h2 className="text-sm font-semibold text-stone-900">
+            <section className="mt-5 border-t border-stone-100 pt-4 dark:border-white/10">
+              <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
                 Projects
               </h2>
-              <p className="mt-0.5 text-[11px] text-stone-500">
+              <p className="mt-0.5 text-[11px] text-stone-500 dark:text-stone-400">
                 Photos provided by the business.
               </p>
               <ul className="mt-2 space-y-4">
@@ -451,7 +438,7 @@ export default async function PublicProPage({
                   return (
                     <li
                       key={i}
-                      className="rounded-xl border border-stone-100 bg-stone-50/50 p-3"
+                      className="rounded-xl border border-stone-100 bg-stone-50/50 p-3 dark:border-white/10 dark:bg-stone-800/50"
                     >
                       {p.photos.length > 0 && (
                         <div className="flex gap-2 overflow-x-auto">
@@ -461,14 +448,14 @@ export default async function PublicProPage({
                               <img
                                 src={ph.url}
                                 alt={`${p.title} photo ${j + 1}`}
-                                className="h-24 w-24 rounded-lg border border-stone-200 object-cover"
+                                className="h-24 w-24 rounded-lg border border-stone-200 object-cover dark:border-white/10"
                               />
                               {hasPair && (
                                 <span
                                   className={`absolute bottom-1 left-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
                                     ph.is_before
                                       ? "bg-stone-900/70 text-white"
-                                      : "bg-emerald-600/90 text-white"
+                                      : "bg-green-600/90 text-white"
                                   }`}
                                 >
                                   {ph.is_before ? "Before" : "After"}
@@ -479,12 +466,12 @@ export default async function PublicProPage({
                         </div>
                       )}
                       <p
-                        className={`text-sm font-medium text-stone-900 ${p.photos.length > 0 ? "mt-2" : ""}`}
+                        className={`text-sm font-medium text-stone-900 dark:text-stone-100 ${p.photos.length > 0 ? "mt-2" : ""}`}
                       >
                         {p.title}
                       </p>
                       {(p.category || p.months) && (
-                        <p className="mt-0.5 text-xs text-stone-500">
+                        <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
                           {p.category
                             ? `${iconFor(JOB_CATEGORIES, p.category)} ${labelFor(JOB_CATEGORIES, p.category)}`
                             : ""}
@@ -493,7 +480,7 @@ export default async function PublicProPage({
                         </p>
                       )}
                       {p.description && (
-                        <p className="mt-1 whitespace-pre-line text-sm text-stone-600">
+                        <p className="mt-1 whitespace-pre-line text-sm text-stone-600 dark:text-stone-400">
                           {p.description}
                         </p>
                       )}
@@ -504,33 +491,33 @@ export default async function PublicProPage({
             </section>
           )}
 
-          <section className="mt-5 border-t border-stone-100 pt-4">
-            <h2 className="text-sm font-semibold text-stone-900">
+          <section className="mt-5 border-t border-stone-100 pt-4 dark:border-white/10">
+            <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
               Reviews
               {profile.review_count > 0 && (
-                <span className="ml-1 font-normal text-stone-500">
+                <span className="ml-1 font-normal text-stone-500 dark:text-stone-400">
                   ({profile.review_count})
                 </span>
               )}
             </h2>
             {profile.reviews.length === 0 ? (
-              <p className="mt-1 text-sm text-stone-500">
+              <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
                 No reviews yet. Reviews come from real Hearth jobs only.
               </p>
             ) : (
-              <ul className="mt-1 divide-y divide-stone-100">
+              <ul className="mt-1 divide-y divide-stone-100 dark:divide-white/10">
                 {profile.reviews.map((r, i) => (
                   <li key={i} className="py-3">
                     <div className="flex items-center justify-between">
                       <span className="text-xs">
                         <Stars rating={r.rating} />
                       </span>
-                      <span className="text-[11px] text-stone-500">
+                      <span className="text-[11px] text-stone-500 dark:text-stone-400">
                         {r.created_at.slice(0, 10)}
                       </span>
                     </div>
                     {r.comment && (
-                      <p className="mt-1 text-sm text-stone-600">{r.comment}</p>
+                      <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">{r.comment}</p>
                     )}
                   </li>
                 ))}
@@ -540,8 +527,8 @@ export default async function PublicProPage({
         </div>
       </div>
 
-      <p className="mt-6 text-center text-sm text-stone-500">
-        <a href="/pros" className="hover:text-hearth-700 hover:underline">
+      <p className="mt-6 text-center text-sm text-stone-500 dark:text-stone-400">
+        <a href="/pros" className="hover:text-hearth-700 hover:underline dark:hover:text-hearth-300">
           <span aria-hidden>🏡</span> Powered by Hearth
         </a>
       </p>

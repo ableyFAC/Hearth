@@ -58,20 +58,20 @@ export default function PublicPageCard({
       {/* Share link: every pro gets this, member or not. */}
       <section className="card space-y-3">
         <div>
-          <h2 className="font-semibold text-stone-900">Share your page</h2>
-          <p className="mt-1 text-sm text-stone-500">
+          <h2 className="font-semibold text-stone-900 dark:text-stone-100">Share your page</h2>
+          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
             Anyone can open it, no account needed. It shows your business name,
             services, and your real Hearth reviews.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <code className="min-w-0 flex-1 truncate rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-600">
+          <code className="min-w-0 flex-1 truncate rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-600 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300">
             {fullUrl}
           </code>
           <button
             type="button"
             onClick={() => copyText("link", fullUrl)}
-            className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-medium text-stone-600 shadow-sm hover:bg-stone-50"
+            className="btn-secondary px-3"
           >
             {copiedKey === "link" ? "Copied!" : "Copy link"}
           </button>
@@ -79,7 +79,7 @@ export default function PublicPageCard({
             href={path}
             target="_blank"
             rel="noreferrer"
-            className="rounded-lg bg-hearth-600 px-3 py-2 text-sm font-semibold text-white hover:bg-hearth-700"
+            className="btn-primary px-3"
           >
             View page
           </a>
@@ -99,24 +99,24 @@ export default function PublicPageCard({
       {member && (
         <section className="card space-y-4">
           <div>
-            <h2 className="font-semibold text-stone-900">
+            <h2 className="font-semibold text-stone-900 dark:text-stone-100">
               Share kit{" "}
-              <span className="ml-1 rounded-full border border-hearth-200 bg-hearth-50 px-2 py-0.5 text-xs font-medium text-hearth-700">
+              <span className="ml-1 rounded-full border border-hearth-200 bg-hearth-50 px-2 py-0.5 text-xs font-medium text-hearth-700 dark:border-hearth-800 dark:bg-hearth-900/40 dark:text-hearth-300">
                 Pro member
               </span>
             </h2>
-            <p className="mt-1 text-sm text-stone-500">
+            <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
               Ready-made pieces for social posts and your own website. They
               always show your real Hearth numbers.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-4 dark:border-white/10">
             <div className="min-w-0">
-              <p className="text-sm font-medium text-stone-900">
+              <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
                 Share card image
               </p>
-              <p className="mt-0.5 text-xs text-stone-500">
+              <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
                 A 1200x630 image of your page, sized for social posts. Pair it
                 with the caption.
               </p>
@@ -126,36 +126,36 @@ export default function PublicPageCard({
                 href={shareCardUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-600 shadow-sm hover:bg-stone-50"
+                className="btn-secondary text-xs px-3 py-1.5"
               >
                 Download share card
               </a>
               <button
                 type="button"
                 onClick={() => copyText("caption", caption)}
-                className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-600 shadow-sm hover:bg-stone-50"
+                className="btn-secondary text-xs px-3 py-1.5"
               >
                 {copiedKey === "caption" ? "Copied!" : "Copy caption"}
               </button>
             </div>
           </div>
 
-          <div className="border-t border-stone-100 pt-4">
-            <p className="text-sm font-medium text-stone-900">
+          <div className="border-t border-stone-100 pt-4 dark:border-white/10">
+            <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
               Rating widget for your website
             </p>
-            <p className="mt-0.5 text-xs text-stone-500">
+            <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
               Paste this into your site. It shows your full Hearth rating and
               review count, exactly as they appear here.
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-600">
+              <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-600 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300">
                 {widgetSnippet}
               </code>
               <button
                 type="button"
                 onClick={() => copyText("widget", widgetSnippet)}
-                className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-600 shadow-sm hover:bg-stone-50"
+                className="btn-secondary text-xs px-3 py-1.5"
               >
                 {copiedKey === "widget" ? "Copied!" : "Copy embed code"}
               </button>
@@ -167,13 +167,13 @@ export default function PublicPageCard({
       {member ? (
         <form action={savePublicPageAction} className="card space-y-5">
           <div>
-            <h2 className="font-semibold text-stone-900">
+            <h2 className="font-semibold text-stone-900 dark:text-stone-100">
               Page extras{" "}
-              <span className="ml-1 rounded-full border border-hearth-200 bg-hearth-50 px-2 py-0.5 text-xs font-medium text-hearth-700">
+              <span className="ml-1 rounded-full border border-hearth-200 bg-hearth-50 px-2 py-0.5 text-xs font-medium text-hearth-700 dark:border-hearth-800 dark:bg-hearth-900/40 dark:text-hearth-300">
                 Pro member
               </span>
             </h2>
-            <p className="mt-1 text-sm text-stone-500">
+            <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
               Your logo and about section appear on your public page. Saving
               license and insurance details adds an &quot;on file&quot; badge;
               the details themselves stay private.
@@ -195,16 +195,16 @@ export default function PublicPageCard({
               placeholder="What you do, how long you've been at it, and what customers can expect."
               className="input h-auto"
             />
-            <p className="mt-1 text-xs text-stone-500">
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
               Up to 1,000 characters.
             </p>
           </div>
 
-          <div className="border-t border-stone-100 pt-4">
-            <h3 className="text-sm font-semibold text-stone-900">
+          <div className="border-t border-stone-100 pt-4 dark:border-white/10">
+            <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
               License &amp; insurance vault
             </h3>
-            <p className="mt-1 text-xs text-stone-500">
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
               Kept private. Your page only shows an &quot;on file&quot; badge,
               worded as provided by you, not verified by Hearth.
             </p>
@@ -214,10 +214,10 @@ export default function PublicPageCard({
                 <label className="label">License number</label>
                 {licenseLocked ? (
                   <>
-                    <div className="input cursor-not-allowed select-none bg-stone-100 text-stone-500">
+                    <div className="input cursor-not-allowed select-none bg-stone-100 text-stone-500 dark:bg-stone-700 dark:text-stone-400">
                       {contractor.license_number}
                     </div>
-                    <p className="mt-1 text-xs text-stone-500">
+                    <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                       Locked once set. Contact support to update it.
                     </p>
                   </>
@@ -261,14 +261,14 @@ export default function PublicPageCard({
             </div>
 
             {hasVault && (
-              <p className="mt-3 text-xs text-emerald-700">
+              <p className="mt-3 text-xs text-green-700 dark:text-green-400">
                 Your page shows the &quot;on file&quot; badge for what
                 you&apos;ve saved.
               </p>
             )}
           </div>
 
-          <div className="flex justify-end border-t border-stone-100 pt-4">
+          <div className="flex justify-end border-t border-stone-100 pt-4 dark:border-white/10">
             <button type="submit" className="btn-primary">
               Save Page Extras
             </button>
@@ -276,13 +276,13 @@ export default function PublicPageCard({
         </form>
       ) : (
         <section className="card space-y-3">
-          <h2 className="font-semibold text-stone-900">
+          <h2 className="font-semibold text-stone-900 dark:text-stone-100">
             Make it yours with Hearth Pro
           </h2>
-          <p className="text-sm text-stone-500">
+          <p className="text-sm text-stone-500 dark:text-stone-400">
             Your basic page is live for every pro. Members can dress it up:
           </p>
-          <ul className="space-y-1.5 text-sm text-stone-600">
+          <ul className="space-y-1.5 text-sm text-stone-600 dark:text-stone-300">
             <li>🖼️ Your logo at the top of the page</li>
             <li>✍️ An about section in your own words</li>
             <li>
@@ -297,7 +297,7 @@ export default function PublicPageCard({
               full Hearth rating and review count
             </li>
           </ul>
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-stone-500 dark:text-stone-400">
             Membership never changes your rating or reviews: those are real
             for everyone.
           </p>

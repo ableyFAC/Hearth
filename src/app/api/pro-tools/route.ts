@@ -14,6 +14,10 @@ export const runtime = "nodejs";
 // overdue invoice reminder they can copy and send. Members only: this is
 // brand-new surface, nothing free moves behind it.
 //
+// Each draft also carries in a few of the pro's own recent edits to that
+// same tool (pro_tool_edits, migration 0063) as style guidance, so the
+// wording drifts toward how this particular pro actually talks over time.
+//
 // Input:  { tool: "estimate", description, category?, price?, materials? }
 //       | { tool: "invoice", description, amount, workDone? }
 //       | { tool: "followup", situation: "no_reply" | "review" | "checkin", context? }
@@ -27,6 +31,12 @@ const MAX_NOTES = 2000;
 const MAX_SHORT = 120;
 const MAX_REVIEW = 1500;
 const MAX_STORY = 1000;
+
+// How many of the pro's own past edits to feed back in as style guidance,
+// and how much of each one to keep. Small on purpose: this is a nudge on
+// voice and format, not a document the model needs in full.
+const MAX_STYLE_EXAMPLES = 3;
+const MAX_STYLE_EXAMPLE_CHARS = 500;
 
 // Same fallback list as /api/analyze-quote: each free-tier model has its own
 // daily quota, so a 429 on one falls through to the next.
@@ -425,6 +435,36 @@ export async function POST(req: NextRequest) {
     userPrompt = promptLines.join("\n") + "\n\nWrite the reminder message.";
   } else {
     return NextResponse.json({ error: "Unknown tool." }, { status: 400 });
+  }
+
+  // The "remember my edits" loop, read side (see pro_tool_edits, migration
+  // 0063). A pro's own recent edits to THIS tool are fed back in as few-shot
+  // examples so the draft comes out closer to how they actually like it
+  // worded next time, instead of the same generic voice every time. Newest
+  // first, capped small so the prompt stays cheap, and each example itself
+  // trimmed for the same reason. Only real edits ever land in this table
+  // (see recordToolEditAction in src/app/pro/tools/actions.ts), so this is
+  // never conditioning on a fabricated preference.
+  const { data: styleRows } = await supabase
+    .from("pro_tool_edits")
+    .select("original_text, edited_text")
+    .eq("contractor_id", contractor.id)
+    .eq("tool", tool)
+    .order("created_at", { ascending: false })
+    .limit(MAX_STYLE_EXAMPLES);
+  if (styleRows && styleRows.length) {
+    const examples = styleRows
+      .map((row, i) => {
+        const before = row.original_text.slice(0, MAX_STYLE_EXAMPLE_CHARS);
+        const after = row.edited_text.slice(0, MAX_STYLE_EXAMPLE_CHARS);
+        return `Example ${i + 1}\nWe wrote:\n${before}\n\nThe pro changed it to:\n${after}`;
+      })
+      .join("\n\n");
+    instruction +=
+      "\n\nHere is how this pro likes their " +
+      tool +
+      " wording, from their own past edits. Match their voice and format, not just the topic:\n\n" +
+      examples;
   }
 
   // Members share the same per-user daily cap as the other AI routes (the

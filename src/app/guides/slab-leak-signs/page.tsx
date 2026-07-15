@@ -25,8 +25,8 @@ const FAQS = [
     a: "The most common signs are a warm or hot spot on the floor, a water bill that jumps without a clear reason, the sound of running water when every faucet and appliance is off, and in more advanced cases, damp carpet, a musty smell, or cracks in the flooring or slab itself.",
   },
   {
-    q: "Why are Fountain Valley and Huntington Beach homes prone to slab leaks?",
-    a: "Much of the housing stock in Fountain Valley and Huntington Beach was built in the 1960s and 1970s, when copper supply lines were commonly run directly through the concrete slab. Copper pipe of that era is now well past a typical plumbing system's working life, and decades sitting in direct contact with concrete and soil makes it more prone to corrosion and pinhole leaks than pipe run through accessible walls or an attic.",
+    q: "How much does a slab leak repair cost?",
+    a: "It depends mostly on where the leak sits and how it has to be accessed. A spot repair through a reachable section of slab is usually the cheapest option, a reroute costs more because it involves running new pipe through the attic or walls, and a full repipe is the biggest job since it replaces every supply line at once. Because access and pipe length vary so much from house to house, we don't quote a number here: a licensed plumber can give you one once they've located the leak.",
   },
   {
     q: "What are my repair options for a slab leak?",
@@ -64,22 +64,22 @@ export default function SlabLeakSignsGuide() {
       />
 
       <p className="text-sm">
-        <a href="/guides" className="text-stone-500 hover:text-hearth-700">
+        <a href="/guides" className="text-stone-500 hover:text-hearth-700 dark:text-stone-400 dark:hover:text-hearth-300">
           ← All guides
         </a>
       </p>
 
-      <h1 className="mt-3 text-2xl font-bold text-stone-900 sm:text-3xl">
+      <h1 className="mt-3 text-2xl font-bold text-stone-900 sm:text-3xl dark:text-stone-100">
         Slab leak signs: how to spot one early
       </h1>
-      <p className="mt-3 text-sm text-stone-500">
+      <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
         General guidance for homeowners, especially in older Orange County
         tract homes.
       </p>
 
-      <div className="mt-8 space-y-6 text-stone-700">
+      <div className="mt-8 space-y-6 text-stone-700 dark:text-stone-300">
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             What to look for
           </h2>
           <p className="mt-2 leading-relaxed">
@@ -96,7 +96,7 @@ export default function SlabLeakSignsGuide() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Why Fountain Valley and Huntington Beach homes are prone to this
           </h2>
           <p className="mt-2 leading-relaxed">
@@ -111,13 +111,13 @@ export default function SlabLeakSignsGuide() {
             plumbing. It's a pattern of the era and construction method, not
             a reflection of how well any individual home has been cared for.
           </p>
-          <p className="mt-2 text-sm text-stone-500">
+          <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
             See what Hearth offers homeowners in{" "}
-            <a href="/fountain-valley" className="text-hearth-700 hover:underline">
+            <a href="/fountain-valley" className="text-hearth-700 hover:underline dark:text-hearth-300">
               Fountain Valley
             </a>{" "}
             or{" "}
-            <a href="/huntington-beach" className="text-hearth-700 hover:underline">
+            <a href="/huntington-beach" className="text-hearth-700 hover:underline dark:text-hearth-300">
               Huntington Beach
             </a>
             .
@@ -125,7 +125,7 @@ export default function SlabLeakSignsGuide() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Repair options, at a high level
           </h2>
           <p className="mt-2 leading-relaxed">
@@ -143,7 +143,7 @@ export default function SlabLeakSignsGuide() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             When it's an emergency
           </h2>
           <p className="mt-2 leading-relaxed">
@@ -158,14 +158,14 @@ export default function SlabLeakSignsGuide() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-900">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Frequently asked questions
           </h2>
           <div className="mt-2 space-y-4">
             {FAQS.map((f) => (
               <div key={f.q}>
-                <h3 className="font-medium text-stone-900">{f.q}</h3>
-                <p className="mt-1 text-sm leading-relaxed text-stone-600">
+                <h3 className="font-medium text-stone-900 dark:text-stone-100">{f.q}</h3>
+                <p className="mt-1 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
                   {f.a}
                 </p>
               </div>

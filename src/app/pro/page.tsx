@@ -19,6 +19,7 @@ import JobStatusSelect from "./JobStatusSelect";
 import SetupChecklist, { type SetupItem } from "@/components/pro/SetupChecklist";
 import { agingLeadFee } from "@/lib/leadPricing";
 import { hasProPlan } from "@/lib/subscription";
+import { findActiveJobConflicts } from "@/lib/activeJobConflicts";
 
 const SEVERITY_STYLE: Record<string, string> = {
   low: "border-stone-200 bg-stone-50 text-stone-600",
@@ -109,6 +110,16 @@ export default async function ProDashboard({
   const open = (openJobs ?? []) as any[];
   const apps = (myApps ?? []) as any[];
 
+  // Open jobs posted by a homeowner this pro already has an active job with,
+  // in the same category. Those cards get "message them instead" in place of
+  // the apply button: the pro already has the homeowner in Messages, so a
+  // second apply fee would double-charge them for the same relationship.
+  // Once the earlier job closes, the job becomes applyable again.
+  const relationshipConflicts = await findActiveJobConflicts(
+    contractor.id,
+    open.map((j) => j.id)
+  );
+
   // Sort the open-jobs board. The effective fee (after the aging markdown) is
   // what "cheapest" means to a pro, and "deal" surfaces the biggest markdowns.
   const sort =
@@ -143,9 +154,30 @@ export default async function ProDashboard({
     .select("id, cash_balance_cents, bonus_balance_cents")
     .eq("contractor_id", contractor.id)
     .maybeSingle();
+  // Spendable bonus is what apply_to_lead (migration 0058) actually honors:
+  // only bonus backed by live, unexpired grants. The raw wallet counter can
+  // overstate that for up to a day, because an expired grant lingers in the
+  // counter until the daily expire-bonus sweep reconciles it. Cap at the live
+  // grant sum so canAfford and the ?need= deposit amount below match what the
+  // apply RPC will accept, instead of offering an Apply that gets refused or
+  // under-asking on the add-funds prompt.
+  const rawBonusCents = Number(wallet?.bonus_balance_cents ?? 0);
+  let bonusAvailCents = rawBonusCents;
+  if (wallet?.id && rawBonusCents > 0) {
+    const { data: grants } = await (supabase as any)
+      .from("bonus_grants")
+      .select("remaining_cents")
+      .eq("wallet_id", wallet.id)
+      .gt("remaining_cents", 0)
+      .gt("expires_at", new Date().toISOString());
+    const grantSumCents = ((grants ?? []) as any[]).reduce(
+      (sum: number, g: any) => sum + Number(g.remaining_cents ?? 0),
+      0
+    );
+    bonusAvailCents = Math.min(rawBonusCents, grantSumCents);
+  }
   const balanceCents =
-    Number(wallet?.cash_balance_cents ?? 0) +
-    Number(wallet?.bonus_balance_cents ?? 0);
+    Number(wallet?.cash_balance_cents ?? 0) + bonusAvailCents;
   const balance = balanceCents / 100;
   const lowBalance = balanceCents < 5000;
 
@@ -219,6 +251,9 @@ export default async function ProDashboard({
       <LeadsRealtime contractorId={contractor.id} />
       <ChatDrawer role="contractor" />
 
+      {/* The one true page heading; the sections below step down to h2. */}
+      <h1 className="text-2xl font-semibold text-stone-900">Your leads</h1>
+
       <SetupChecklist items={setupItems} />
 
       {lowBalance && (
@@ -233,7 +268,11 @@ export default async function ProDashboard({
         </div>
       )}
 
-      <section className="card-hero space-y-1">
+      {/* Hero treatment only once there are results to celebrate; before the
+          first application this is just a quiet pointer. */}
+      <section
+        className={`space-y-1 ${appliedCount === 0 ? "card" : "card-hero"}`}
+      >
         <p className="stat-label">Your results</p>
         {appliedCount === 0 ? (
           <>
@@ -242,10 +281,12 @@ export default async function ProDashboard({
               start winning work.
             </p>
             {apps.length === 0 && (
+              // The canonical guarantee sentence: the 60 days mirrors the
+              // bonus-grant expiry in migration 0041.
               <p className="text-xs text-stone-500">
                 {contractor.license_number
-                  ? "Your first application is guaranteed: if you're not chosen, the fee comes back as lead credit you can spend on future leads (it expires, and isn't withdrawable cash)."
-                  : "Adding your license unlocks the first-application guarantee: if you're not chosen for your first job, the fee comes back as lead credit for future leads (it expires, not cash back)."}
+                  ? "Not chosen on your first application? The fee comes back as lead credit, spendable on any lead, and it expires after 60 days."
+                  : "Adding your license unlocks the first-application guarantee. Not chosen on your first application? The fee comes back as lead credit, spendable on any lead, and it expires after 60 days."}
               </p>
             )}
           </>
@@ -268,13 +309,9 @@ export default async function ProDashboard({
         )}
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-3">
-        <div className="card">
-          <p className="stat-label">Open jobs</p>
-          <p className="stat-number mt-1 text-4xl text-stone-900">
-            {open.length}
-          </p>
-        </div>
+      {/* Two stats only: the Open jobs section right below already shows its
+          own count, so a third card would just repeat it. */}
+      <section className="grid gap-4 sm:grid-cols-2">
         <div className="card">
           <p className="stat-label">Active jobs</p>
           <p className="stat-number mt-1 text-4xl text-stone-900">
@@ -297,21 +334,21 @@ export default async function ProDashboard({
       <section id="open-jobs" className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
-            <h1 className="text-2xl font-semibold text-stone-900">
+            <h2 className="text-xl font-semibold text-stone-900">
               Open jobs <span className="text-stone-500">({open.length})</span>
-            </h1>
+            </h2>
             <p className="text-sm text-stone-500">
               Jobs homeowners posted in your categories. Apply to one and the
               homeowner reviews you. If they pick you, you get their contact.
             </p>
           </div>
           {open.length > 1 && (
-            <div className="flex gap-1">
+            <div className="flex gap-2">
               {SORT_OPTIONS.map((o) => (
                 <Link
                   key={o.value}
                   href={o.value === "new" ? "/pro" : `/pro?sort=${o.value}`}
-                  className={`rounded-full border px-2 py-0.5 text-xs ${
+                  className={`rounded-full border px-3 py-1.5 text-xs ${
                     sort === o.value
                       ? "border-hearth-300 bg-hearth-50 font-medium text-hearth-700"
                       : "border-stone-200 text-stone-500 hover:border-stone-300"
@@ -355,9 +392,9 @@ export default async function ProDashboard({
                 <li className="flex items-start gap-2 text-stone-600">
                   <span aria-hidden>✔️</span>
                   <span>
-                    Your first application is guaranteed: if you&apos;re not
-                    chosen, the fee comes back as lead credit for future leads
-                    (it expires, not withdrawable cash).{" "}
+                    Not chosen on your first application? The fee comes back
+                    as lead credit, spendable on any lead, and it expires
+                    after 60 days.{" "}
                     <Link
                       href="/pro/billing"
                       className="font-medium text-hearth-700 hover:underline"
@@ -408,6 +445,7 @@ export default async function ProDashboard({
               const baseStr = money(j.payout_amount);
               const spots = Number(j.application_count ?? 0);
               const full = spots >= MAX_APPLICANTS_PER_JOB;
+              const conflict = relationshipConflicts.get(j.id);
               const chips = qualityChips(j);
               // Homeowner's rough budget band (0047): a pricing signal, not a
               // quote. "not-sure" carries no signal, so no chip for it.
@@ -423,6 +461,15 @@ export default async function ProDashboard({
                         {iconFor(JOB_CATEGORIES, j.category)}
                       </span>{" "}
                       {labelFor(JOB_CATEGORIES, j.category)}
+                      {/* Locality: the city arrives once open_jobs_for_me
+                          returns it (its migration lives outside this file);
+                          until then the guard just hides it. Pros price a
+                          lead by where it is. */}
+                      {j.city ? (
+                        <span className="font-normal text-stone-500">
+                          in {j.city}
+                        </span>
+                      ) : null}
                     </span>
                     {j.issue_severity && (
                       <span
@@ -475,21 +522,39 @@ export default async function ProDashboard({
                       ))}
                     </div>
                   )}
-                  <div className="flex flex-wrap gap-4 text-xs text-stone-500">
-                    {postedAgo(j.created_at) && (
-                      <span className="text-xs text-stone-500">
-                        {postedAgo(j.created_at)}
-                      </span>
-                    )}
-                    {j.timing && (
-                      <span>Timing: {labelFor(TIMING_OPTIONS, j.timing)}</span>
-                    )}
-                    <span>
-                      {spots} of {MAX_APPLICANTS_PER_JOB} spots taken
-                    </span>
-                  </div>
+                  {(postedAgo(j.created_at) || j.timing) && (
+                    <div className="flex flex-wrap gap-4 text-xs text-stone-500">
+                      {postedAgo(j.created_at) && (
+                        <span className="text-xs text-stone-500">
+                          {postedAgo(j.created_at)}
+                        </span>
+                      )}
+                      {j.timing && (
+                        <span>
+                          Timing: {labelFor(TIMING_OPTIONS, j.timing)}
+                        </span>
+                      )}
+                    </div>
+                  )}
 
-                  {full ? (
+                  {conflict ? (
+                    // No apply button: the pro already has this homeowner in
+                    // Messages for this trade, so buying a second lead would
+                    // just double-charge them for the same relationship. The
+                    // card reopens for applying once that job wraps up.
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-hearth-200 bg-hearth-50 px-3 py-2 text-sm text-hearth-800">
+                      <span>
+                        You already have an active{" "}
+                        {labelFor(JOB_CATEGORIES, conflict.category)} job with
+                        this homeowner.
+                      </span>
+                      <OpenChatButton
+                        leadId={conflict.activeLeadId}
+                        name={conflict.homeownerName || "Homeowner"}
+                        label="Message them instead"
+                      />
+                    </div>
+                  ) : full ? (
                     <p className="rounded-lg border border-stone-200 bg-stone-100 px-3 py-2 text-center text-sm font-medium text-stone-500">
                       Job full
                     </p>
@@ -517,7 +582,7 @@ export default async function ProDashboard({
       {/* ---- Active jobs: ones the homeowner picked you for ---- */}
       <section className="space-y-3">
         <div>
-          <h2 className="text-2xl font-semibold text-stone-900">
+          <h2 className="text-xl font-semibold text-stone-900">
             Your jobs <span className="text-stone-500">({assigned.length})</span>
           </h2>
           <p className="text-sm text-stone-500">

@@ -76,6 +76,7 @@ export async function logIssueFromChat(payload: {
   setFlash("Logged to your home record.", "success");
   revalidatePath("/dashboard");
   revalidatePath("/issues");
+  revalidatePath("/forecast");
 }
 
 export async function setReminderFromChat(payload: {

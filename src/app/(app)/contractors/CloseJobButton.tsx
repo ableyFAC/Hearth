@@ -25,7 +25,7 @@ export default function CloseJobButton({ leadId }: { leadId: string }) {
         <button
           type="button"
           onClick={() => setConfirming(true)}
-          className="text-xs text-stone-500 hover:text-red-600"
+          className="text-xs text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
         >
           Close job
         </button>
