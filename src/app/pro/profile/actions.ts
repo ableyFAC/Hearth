@@ -231,7 +231,14 @@ export async function deleteAccountAction(formData: FormData) {
   const admin = createAdminClient();
   // Remove the public company listing first so it can't linger as an orphaned
   // record (their wallet/reviews cascade with it; leads simply detach).
-  await admin.from("contractors").delete().eq("user_id", user.id);
+  const { error: listingError } = await admin
+    .from("contractors")
+    .delete()
+    .eq("user_id", user.id);
+  if (listingError) {
+    setFlash("Couldn't save your changes. Please try again.", "error");
+    redirect("/pro/profile");
+  }
 
   const { error } = await admin.auth.admin.deleteUser(user.id);
   if (error) {
