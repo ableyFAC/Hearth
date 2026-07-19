@@ -69,6 +69,16 @@ const isCloseMarker = (body: string) =>
 // Quick reactions offered in the message menu.
 const EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "👎"];
 
+// Client-side guard against an unbounded chat-flood insert (security audit
+// finding #9): generous for any real message, but caps what a scripted/looped
+// sender can push through a single insert. rate_limit_hit is service_role-only
+// (see migration 0068), so it can't be called from this client component; the
+// matching server-side length floor is the `messages_body_length` CHECK
+// constraint added in migration 0086. A true per-user SEND RATE limit still
+// needs this insert moved behind a server action - see that migration's header
+// comment for the follow-up this defers.
+const MAX_MESSAGE_LENGTH = 4000;
+
 // Photo messages reuse the same text `body` column: an uploaded image is stored
 // as "[img]<public-url>" so both sides can render it without a schema change.
 const IMG_PREFIX = "[img]";
@@ -156,6 +166,7 @@ export default function LeadChat({
   const [invoiceBusy, setInvoiceBusy] = useState(false);
   const [confirmVoidId, setConfirmVoidId] = useState<string | null>(null);
   const [filtered, setFiltered] = useState(false);
+  const [tooLong, setTooLong] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [reported, setReported] = useState(false);
@@ -250,39 +261,54 @@ export default function LeadChat({
     // instantly (requires Realtime enabled on those tables in Supabase). It
     // does not cover message_reactions or lead_reads (read receipts), so the
     // poll below still does real work for those, just on a slower cadence.
-    const channel = supabase
-      .channel(`lead-${leadId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-          filter: `lead_id=eq.${leadId}`,
-        },
-        () => load()
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "lead_quotes",
-          filter: `lead_id=eq.${leadId}`,
-        },
-        () => load()
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "invoices",
-          filter: `lead_id=eq.${leadId}`,
-        },
-        () => load()
-      )
-      .subscribe();
+    // The topic is unique per mount, not just per lead: supabase-js returns
+    // the SAME already-subscribed channel instance for a repeated topic, and
+    // a second .on() on an already-subscribed channel throws. That collision
+    // is reachable via React dev StrictMode's mount-cleanup-remount (the
+    // cleanup's removeChannel is async, so the remount can win the race), so
+    // a random suffix isolates every instance instead of sharing one topic.
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      const topic = `lead-${leadId}-` + Math.random().toString(36).slice(2);
+      channel = supabase
+        .channel(topic)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "messages",
+            filter: `lead_id=eq.${leadId}`,
+          },
+          () => load()
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "lead_quotes",
+            filter: `lead_id=eq.${leadId}`,
+          },
+          () => load()
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "invoices",
+            filter: `lead_id=eq.${leadId}`,
+          },
+          () => load()
+        )
+        .subscribe();
+    } catch {
+      // Realtime is strictly best-effort: the poll/visibilitychange paths
+      // below keep the thread working on their own, so a subscribe failure
+      // here must never crash the chat.
+      console.warn("LeadChat: realtime subscription failed, falling back to polling");
+    }
 
     const t = setInterval(load, 45000);
     // Coming back to the tab marks the thread read right away (load() skips
@@ -292,7 +318,14 @@ export default function LeadChat({
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) {
+        try {
+          supabase.removeChannel(channel);
+        } catch {
+          // Best-effort cleanup: nothing to do if this fails, the channel is
+          // going away along with the component either way.
+        }
+      }
       clearInterval(t);
       document.removeEventListener("visibilitychange", onVisible);
     };
@@ -404,7 +437,6 @@ export default function LeadChat({
     // Mask profanity before the message is stored; slurs also auto-report.
     const { clean, flagged, slur } = censor(text);
     setFiltered(flagged);
-    setBusy(true);
     const uid = await ensureUid();
     // When replying, prepend a short quote of the message being replied to.
     const snippet = replyingTo
@@ -412,6 +444,17 @@ export default function LeadChat({
         (replyingTo.body.length > 60 ? "…" : "")
       : "";
     const finalBody = replyingTo ? `↩︎ ${snippet}\n${clean}` : clean;
+    // Abuse guard (security audit finding #9): block an oversized message
+    // client-side before it's ever sent, rather than letting it hit the DB's
+    // length CHECK (migration 0086) and surface as a raw insert error. Checked
+    // on the final stored body (reply-quote prefix included), not just the
+    // typed text, so the combination can never sneak past the DB's own cap.
+    if (finalBody.length > MAX_MESSAGE_LENGTH) {
+      setTooLong(true);
+      return;
+    }
+    setTooLong(false);
+    setBusy(true);
     setBody("");
     setReplyingTo(null);
     try {
@@ -1487,9 +1530,11 @@ export default function LeadChat({
               ref={inputRef}
               className="input"
               value={body}
+              maxLength={MAX_MESSAGE_LENGTH}
               onChange={(e) => {
                 setBody(e.target.value);
                 if (filtered) setFiltered(false);
+                if (tooLong) setTooLong(false);
               }}
               placeholder="Type a message…"
             />
@@ -1500,6 +1545,11 @@ export default function LeadChat({
           {filtered && (
             <p className="text-xs text-amber-600 dark:text-amber-400">
               Your message was filtered to keep the chat respectful.
+            </p>
+          )}
+          {tooLong && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              That message is too long (max {MAX_MESSAGE_LENGTH.toLocaleString()} characters). Please shorten it.
             </p>
           )}
         </div>

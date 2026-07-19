@@ -29,10 +29,24 @@ export default function PhotoUpload({
     setErr(null);
 
     const MAX_BYTES = 15 * 1024 * 1024; // 15MB per photo
+    // Real allowed raster types only - matches the storage bucket's own
+    // allowed_mime_types (migration 0079). `accept="image/*"` is only a
+    // browser hint; without this check, a client `file.type.startsWith(
+    // "image/")` test would still let image/svg+xml through, which can carry
+    // a <script> and gets served back off Hearth's own storage origin
+    // (security audit finding #7). The bucket-level allow-list is the real
+    // backstop once 0079 is applied live; this is defense-in-depth so the
+    // upload never even starts and the rejection message is clear.
+    const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
     let failures = 0;
+    let sawSvg = false;
     for (const file of files) {
-      // Skip anything oversized or not actually an image (accept="" is a hint).
-      if (file.size > MAX_BYTES || !file.type.startsWith("image/")) {
+      if (file.type === "image/svg+xml") {
+        sawSvg = true;
+        continue;
+      }
+      // Skip anything oversized or not one of the allowed raster types.
+      if (file.size > MAX_BYTES || !ALLOWED_TYPES.has(file.type)) {
         failures++;
         continue;
       }
@@ -52,11 +66,15 @@ export default function PhotoUpload({
     }
     setBusy(false);
     // Only show an error if something actually failed, worded to the real count
-    // (so one bad file doesn't make successful ones look failed).
+    // (so one bad file doesn't make successful ones look failed). SVG gets its
+    // own friendly, specific message rather than folding into the generic
+    // upload-failure count.
     setErr(
-      failures
-        ? `${failures} photo${failures > 1 ? "s" : ""} couldn't upload (is the home-photos bucket created?). You can still save without ${failures > 1 ? "them" : "it"}.`
-        : null
+      sawSvg
+        ? "SVG images aren't supported. Please use a PNG, JPEG, or WEBP photo."
+        : failures
+          ? `${failures} photo${failures > 1 ? "s" : ""} couldn't upload (is the home-photos bucket created?). You can still save without ${failures > 1 ? "them" : "it"}.`
+          : null
     );
     // Reset so picking the same file again still fires onChange.
     input.value = "";
@@ -70,7 +88,7 @@ export default function PhotoUpload({
       <input
         id={id}
         type="file"
-        accept="image/*"
+        accept="image/png,image/jpeg,image/webp"
         multiple
         onChange={onPick}
         className="block w-full text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-hearth-100 file:px-3 file:py-1.5 file:text-hearth-800 dark:text-stone-300 dark:file:bg-hearth-900 dark:file:text-hearth-300"

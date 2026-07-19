@@ -15,11 +15,14 @@ const siteUrl = () =>
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 
-// Start a Hearth Plus checkout (monthly or yearly). Uses the pre-created
-// Stripe Price if one is configured, otherwise falls back to inline
-// price_data so the flow works before Products/Prices are set up in Stripe.
+// Start a Hearth Plus checkout (weekly, monthly, or yearly). Uses the
+// pre-created Stripe Price if one is configured, otherwise falls back to
+// inline price_data so the flow works before Products/Prices are set up in
+// Stripe.
 export async function startPlusCheckoutAction(formData: FormData) {
-  const plan = (formData.get("plan") as string) === "yearly" ? "yearly" : "monthly";
+  const rawPlan = formData.get("plan") as string;
+  const plan =
+    rawPlan === "weekly" || rawPlan === "yearly" ? rawPlan : "monthly";
 
   // Deliberately NOT src/lib/auth.ts's getUser(): that helper trusts
   // getSession(), which reads the user id straight off the (unverified)
@@ -35,9 +38,20 @@ export async function startPlusCheckoutAction(formData: FormData) {
   if (!user) redirect("/signin");
 
   const priceId =
-    plan === "yearly"
-      ? process.env.STRIPE_PRICE_PLUS_YEARLY
-      : process.env.STRIPE_PRICE_PLUS_MONTHLY;
+    plan === "weekly"
+      ? process.env.STRIPE_PRICE_PLUS_WEEKLY
+      : plan === "yearly"
+        ? process.env.STRIPE_PRICE_PLUS_YEARLY
+        : process.env.STRIPE_PRICE_PLUS_MONTHLY;
+
+  const planAmount =
+    plan === "weekly"
+      ? PLUS_PLAN.weekly
+      : plan === "yearly"
+        ? PLUS_PLAN.yearly
+        : PLUS_PLAN.monthly;
+  const planInterval =
+    plan === "weekly" ? ("week" as const) : plan === "yearly" ? ("year" as const) : ("month" as const);
 
   const lineItem = priceId
     ? { price: priceId, quantity: 1 }
@@ -45,10 +59,8 @@ export async function startPlusCheckoutAction(formData: FormData) {
         quantity: 1,
         price_data: {
           currency: "usd",
-          unit_amount: Math.round(
-            (plan === "yearly" ? PLUS_PLAN.yearly : PLUS_PLAN.monthly) * 100
-          ),
-          recurring: { interval: plan === "yearly" ? ("year" as const) : ("month" as const) },
+          unit_amount: Math.round(planAmount * 100),
+          recurring: { interval: planInterval },
           product_data: { name: "Hearth Plus" },
         },
       };
@@ -95,9 +107,11 @@ export async function startPlusCheckoutAction(formData: FormData) {
     }
   }
 
-  // Brand-new subscribers on the monthly plan get their first month free (a
-  // 30-day trial). Yearly is already discounted, so no trial there.
-  const freeTrial = plan === "monthly" && !existing;
+  // Every brand-new subscriber gets a free trial (PLUS_PLAN.trialDays), no
+  // matter which cadence they pick - weekly, monthly, or yearly. `existing`
+  // already scopes to a homeowner-side Plus subscription, so a returning
+  // subscriber switching cadence never gets a second trial.
+  const freeTrial = !existing;
 
   // Consent record. California's Automatic Renewal Law requires keeping proof
   // of what the subscriber agreed to (Bus. & Prof. Code 17602(b)(2): at least
@@ -115,7 +129,7 @@ export async function startPlusCheckoutAction(formData: FormData) {
     mode: "subscription",
     line_items: [lineItem],
     // The step-up flag mirrors the Pro side so the renewal-reminders cron has
-    // one signal to read for both memberships. Plus's free month is a Stripe
+    // one signal to read for both memberships. Plus's free trial is a Stripe
     // trial, which stays visible on the subscription, but the flag costs
     // nothing and keeps the two flows from diverging.
     subscription_data: {

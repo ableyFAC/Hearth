@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Inbox, MessageCircle, Users, Building2 } from "lucide-react";
 import Logo from "@/components/Logo";
 import NavLinks from "@/components/NavLinks";
 import ProfileMenu from "@/components/ProfileMenu";
@@ -10,25 +9,25 @@ export default function ProNav({ company }: { company: string | null }) {
   // Playbook, Tools, and Membership moved into the profile menu's "Grow"
   // group below: useful, but not a daily-use tab.
   const LINKS = [
-    { href: "/pro", label: "Leads", icon: Inbox },
+    { href: "/pro", label: "Leads", icon: "leads" },
     {
       href: "/pro/chats",
       label: "Messages",
       liveBadge: "contractor" as const,
-      icon: MessageCircle,
+      icon: "messages",
     },
-    { href: "/pro/crm", label: "Clients", icon: Users },
+    { href: "/pro/crm", label: "Clients", icon: "clients" },
     {
       href: "/pro/business",
       label: "My Business",
       shortLabel: "Business",
-      icon: Building2,
+      icon: "business",
     },
   ];
 
   return (
     <>
-    <header className="sticky top-0 z-30 border-b border-stone-200/70 bg-white/80 backdrop-blur dark:border-white/10 dark:bg-stone-900/80">
+    <header className="sticky top-0 z-30 border-b border-stone-200 bg-hearth-50 dark:border-white/10 dark:bg-stone-900">
       <div className="mx-auto flex max-w-5xl flex-col gap-3 px-6 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <Link
@@ -81,7 +80,7 @@ export default function ProNav({ company }: { company: string | null }) {
         breakpoint. */}
     <nav
       aria-label="Primary"
-      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-stone-200/70 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden dark:border-white/10 dark:bg-stone-900/95"
+      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-stone-200 bg-hearth-50 pb-[env(safe-area-inset-bottom)] sm:hidden dark:border-white/10 dark:bg-stone-900"
     >
       <NavLinks links={LINKS} variant="bottom" />
     </nav>

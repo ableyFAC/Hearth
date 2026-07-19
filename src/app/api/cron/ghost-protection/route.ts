@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendNotification } from "@/lib/notify";
 
 export const runtime = "nodejs";
 
@@ -126,6 +127,20 @@ async function runCron(req: NextRequest) {
     }
   }
 
+  // Contact details so the email/SMS channels can fire once their providers
+  // are configured (same pattern as the other crons), for just the pros who
+  // actually got a refund this run.
+  const refundUserIds = Array.from(
+    new Set(Array.from(refundsByContractor.values(), (list) => list[0].userId))
+  );
+  const { data: refundUsers } = refundUserIds.length
+    ? await supabase
+        .from("users")
+        .select("id, email, phone")
+        .in("id", refundUserIds)
+    : { data: [] };
+  const contactByUser = new Map((refundUsers ?? []).map((u) => [u.id, u]));
+
   // Tell each pro their money came back, once per contractor for this run.
   // Best-effort: the refunds are already committed, and a notification
   // hiccup must not stop the run. No extra dedupe key is needed here: a
@@ -149,12 +164,15 @@ async function runCron(req: NextRequest) {
               totalCents
             )} total went back to your wallet.`;
 
-      await supabase.from("notifications").insert({
-        user_id: userId,
+      const contact = contactByUser.get(userId);
+      await sendNotification(supabase, {
+        userId,
         kind: "ghost_refund",
         title,
         body,
         url: "/pro",
+        email: contact?.email ?? null,
+        phone: contact?.phone ?? null,
       });
     } catch {
       // One bad notification shouldn't stop the rest of the run.

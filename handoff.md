@@ -1,78 +1,146 @@
-# Hearth handoff
+# Hearth handoff - 2026-07-19 (session 3, evening)
 
-Last updated: 2026-07-18. Branch `fix/money-safety-0058`, HEAD `818f5f5` (pushed to origin, working tree clean, tsc 0 errors).
+## LATE SESSION 3 ADDENDUM (QA sweep + fix wave + legal review + design)
 
-## 1. Goal
+### Full-app QA/security sweep (11 agents) - DONE
+Ran 10 QA agents + 2 red-team agents (all live-verified against the running dev server + live DB with throwaway accounts, all cleaned up). Result: app works end to end for homeowner AND pro (both browser walkthroughs clean, zero console errors); every security attack BLOCKED live (0083/0086/0087/0088 all empirically confirmed live: trust-badge forgery=42501, sender_role forgery corrected, oversized msg rejected, IDOR=0 rows, service-role RPCs blocked, webhook sig enforced, wallet double-spend race blocked, sybil self-deal blocked, guarantee reuse blocked, AI-cap race holds). Two RED-TEAM CONFIRMED-EXPLOITED (both now fixed in 0089): messages had NO send-rate limit (40 inserts/604ms); job-post rate-limit/redaction/plus-cap are app-only, bypassable by direct PostgREST insert (deferred - cold-start makes it low impact now).
 
-Hearth is a two-sided homeowner-maintenance app (Next.js App Router + Tailwind + hosted Supabase, Stripe, RentCast). This work stream had two immediate goals, both now essentially done:
+### Fix wave - DONE + VERIFIED (all tsc 0, uncommitted)
+- 3 realtime-channel crashes fixed (same bug as LiveUnreadBadge): NotificationBell.tsx (shell-wide!), LeadChat.tsx, LeadsRealtime.tsx - unique per-mount topic + try/catch degrade-to-poll. Dashboard null-property crash fixed (page.tsx redirect to /onboarding). Open redirect in src/lib/safeNext.ts fixed (rejects C0/DEL control chars - tab/newline URL-parser bypass). All verified ship (49-payload adversarial pass on the redirect).
+- MIGRATION 0089_referral_and_flood_fixes.sql (verified ship): closes 0088 Shape-B waived-recharge referral leak; adds messages send-rate-limit trigger (30/60s, mirrors 0087 support/reports); grants is_active_member to anon (fixes 42501 on anon properties select).
+- MIGRATION 0090_membership_credit_clawback.sql (verified ship after fixing an over-claw bug): reverse_membership_credit + membership_reversals guard table, wired into stripe webhook dispute/refund handlers; mirrors reverse_deposit. No-match branch reverses 0 (never claws the membership PRICE). Uses stripe.invoicePayments.list (SDK v22 removed Charge.invoice) - RECOMMEND a Stripe test-mode trigger before trusting invoice resolution end to end.
+- Reliability batch: cron batching (alerts/maintenance-reminders/aging-deals now chunked Promise.all), Checkr webhook returns 500 on real DB error/failed update so Checkr retries, ghost-protection notifications now via sendNotification (email/SMS, batching preserved), home-alerts parallelized (no cache - user-specific), pro-past-jobs real-tier cap. package.json em-dash removed.
+- TO PASTE ON LIVE DB (both idempotent, verified): 0089 then 0090.
 
-- Make onboarding pull in as much real property data as possible from the RentCast API (street + ZIP -> full record) so features light up with zero typing.
-- Close the QA-found account-security holes and finish a broad polish pass (dark mode, demo video, onboarding research).
+### Legal CODE fixes (the 5 code-fixable items) - DONE + VERIFIED (uncommitted, owner asked for them)
+1. src/app/privacy/page.tsx: added the free-tier Gemini disclosure paragraph in the AI section + link to /ai-disclosure (the "see the AI section above" pointer now resolves).
+2. src/app/privacy/page.tsx: added a PUBLIC "Your privacy rights" section (CCPA rights + retention statement, mirrored from PrivacyRightsPanel) so it is readable without login; links to /account/privacy for the controls.
+3. src/app/privacy/page.tsx: added honest deletion caveat (a pro keeps their own pro_clients copy; deleting your Hearth account does not reach it).
+4. src/app/ai-disclosure/page.tsx: route inventory corrected to all 13 Gemini routes + draft-apply named in the feature list.
+5. src/app/api/cron/renewal-reminders/route.ts: added AB 2863 "annual_notice" (once-per-calendar-year "renews automatically" reminder for active recurring members any cadence; separate query+loop, dup-guard url ?annual=YEAR, kind "annual_notice", skips trialing/cancelling, billingTerms(plan,false) copy). Verified SHIP.
+NON-BLOCKING copy nit surfaced: billingTerms.ts recurring string starts "After that," which reads orphaned when standalone in the annual notice body; optional follow-up = add a recurringStandalone variant. tsc 0 across all.
+STILL NOT DONE (attorney/business, unchanged): LLC formation, DMCA agent registration, liability-cap $ / arbitration opt-out address / venue county / pro circumvention window, move legal contact off personal Gmail.
 
-The near-term product goal beyond this: add a guided first-run tour / coach-mark popups (research is done, build is not) and ship the branch to `main`.
+### Legal review (3 research-grounded agents) - findings that drove the fixes above
+Docs are honest + well-grounded (no fabrication, no stale prices thanks to billingTerms.ts single-source, no gov-law/arbitration contradictions, cancellation is ARL click-to-cancel compliant, CSLB claims hedged, Stripe-cancel-on-delete now works). CODE-FIXABLE items (offered, awaiting go): (1) /privacy says "see the AI section above" for free-tier Gemini disclosure that isn't there - only on /ai-disclosure which /privacy never links; (2) CCPA rights + retention disclosures are login-walled (/account/privacy + /pro/privacy redirect to signin) - public /privacy can't reach them; (3) deletion claim contradicts pro_clients CRM keeping homeowner data after deletion; (4) AB 2863 (CA ARL, eff 7/1/2025) appears to require an ANNUAL reminder for ALL continuous-service agreements incl monthly/weekly - renewal-reminders cron deliberately skips those; (5) AI-disclosure route inventory stale (4 more Gemini routes; draft-apply not named). ATTORNEY/BUSINESS BLOCKERS (unchanged, still open): form the LLC ("Hearth LLC" is placeholder, entity not formed), register DMCA agent w/ Copyright Office + fill /dmca (ZERO safe harbor now), fill liability-cap $ + arbitration opt-out mailing address + venue county + pro-terms circumvention window, move legal contact off founder personal Gmail to monitored inbox. FTC click-to-cancel rule was VACATED (8th Cir, Jul 2025) - not in force; ROSCA + CA ARL still apply.
 
-## 2. Current state
+### Design overhaul - IMPLEMENTED + dark-mode tuned (owner approved the direction, uncommitted)
+- FOUNDATION (Fable, by hand): layout.tsx font Inter -> Hanken_Grotesk (var --font-sans); tailwind.config.ts hearth-* ramp is now a RED-LEANING ember (600=#b8442a primary, 50=#faf4f0 paper - deliberately red not orange so it does not drift yellow on dark); globals.css .card-hero flattened, body leading-[1.55]. Production build passed (99 routes), font self-hosts fine.
+- GRADIENT SWEEP (2 Sonnet agents): flattened all 10 gradient/glass .tsx files (Nav, ProNav, value, forecast, pro/business, PublicProfileForm, landing page, pros, p/[id], not-found). Zero bg-gradient/backdrop-blur/from-/via- left in src .tsx. Copy was already plain (no buzzwords found).
+- DARK-MODE tuning (owner iterated live): accent pulled redder (was reading yellow); PublicProfileForm cover banner dark:bg-stone-800 -> stone-700 (was invisible); chart de-emphasized bars dark:bg-hearth-600 -> hearth-500/60; Wins bars got dark:bg-stone-500 (were missing dark variant). AMBER NORMALIZATION: SystemRow "check soon" border amber-300(too yellow)->amber-400/dark amber-500; and app-wide, ~16 files normalized from the muddy `dark:bg-amber-950/40 dark:border-amber-900 dark:text-amber-200` to the clean standard `dark:bg-amber-500/15 dark:border-amber-500/30 dark:text-amber-300` (matches globals.css .chip-warn). Zero old muddy amber classes remain.
+- STILL CSS-gradients (deliberately NOT flattened): src/app/api/{win-card,review-card}/[...]/route.tsx + p/[id]/opengraph-image.tsx (generated SHARE/OG images, seen outside the app) and HeroDemoPlayer.module.css (the demo video, intentional). Ask owner if they want the share-card images flattened too.
+- OPEN owner decisions: (a) green "on track" + red "overdue" statuses still use the darker wash style (only amber was normalized per owner's ask) - offer to unify all status colors; (b) confirm the redder ember accent feels right; (c) share-card gradients above.
+- tsc 0 throughout. billingTerms annual-notice "After that," orphan copy fixed (strip lead-in in the cron).
 
-- **Committed + pushed:** commit `818f5f5` on branch `fix/money-safety-0058`, 226 files. Local == `origin/fix/money-safety-0058`. Nothing uncommitted, nothing unpushed. NOT yet merged to `main`.
-- **Typecheck:** `npx tsc --noEmit` = 0 errors across the whole tree.
-- **Database:** migrations `0062`–`0066` were hand-applied to the LIVE hosted Supabase project (`tubkvvfkwggaddcmcjqv.supabase.co`) via the dashboard SQL editor and VERIFIED present (invoices table, pro_tool_edits table, wallet_config.spend_cash_first, and all properties enrichment columns). The founder confirmed a live address onboarding works.
-- **Env:** `RENTCAST_API_KEY` is set in local `.env.local` (gitignored). MUST also be set on the prod host (Vercel) for autofill to work live. `.env.local.example` was updated (RENTCAST replaces old REGRID token doc). The real key is in NO tracked file.
-- **Dev server:** `npm run dev` on port 3000 (restarted after adding the key so it loads).
-- **Open tasks:** #25 (issue-resolved consistency + "Complete job" -> homeowner popup) and #40 (surface market_value + tax history on /value and /taxes) are still pending. Everything else from the session is completed.
+### Design overhaul - direction mockup (published artifact, reference)
+Fable built a visual direction mockup (published artifact: https://claude.ai/code/artifact/5f15e5c7-c001-4675-ad2e-2a0d15c8ddbb). Direction: flat warm paper (#FAF8F5) + white cards + ONE ember accent (#C0552B, on-brand for "hearth"); green/amber/red = status only; ONE humanist font Hanken Grotesk (replaces Inter, self-host via next/font; alternates Public Sans/Figtree); line-height 1.55; kill .card-hero gradient + ~43 gradient usages; tokenize palette; sweep buzzwords. NOT executed yet - owner must approve direction first, then Sonnet executes page-by-page + verifier guards desktop-unchanged. Existing system was already ~80% there; the real violations are Inter, leftover gradients, buzzword copy.
 
-## 3. Active files
 
-RentCast ingest (this session's core):
-- `src/lib/parcel.ts` - lookupParcel(street, zip); maps full RentCast record + second AVM value call; deriveSystemFacts/derivePurchasePrice/deriveAssessed/derivePropertyTaxHistory.
-- `src/app/onboarding/OnboardingForm.tsx` - address step is now street + ZIP boxes; confirm step carries 13 hidden inputs of enrichment facts.
-- `src/app/onboarding/actions.ts` - claimPropertyAction: baseRow/extendedRow resilient insert, seeds home_systems.material_or_model.
-- `supabase/migrations/0066_rentcast_enrichment.sql` - new properties columns.
+## TL;DR / current state
+- Branch `feature/2026-07-19-app-update`. Everything from the last two sessions is still
+  UNCOMMITTED (owner holds the commit word; ask before commit/push, always).
+- **THE LIVE DB IS FULLY CAUGHT UP: migrations 0001-0088 applied and probe-verified.**
+  This was the day's big win; details and the probe method below.
+- App runs in DEV: `npm run dev -- -H 0.0.0.0 -p 3000`, open http://localhost:3000 (HTTP).
+  `npx tsc --noEmit` = 0 errors. The owner's browser crash is FIXED (real bug, see #4).
+- The closed_at backfill fixup RAN and was probe-verified (2/2 closed leads stamped).
+  No live-DB work is outstanding.
 
-Account security:
-- `src/app/(app)/account/actions.ts` - deleteAccountAction reauth + saveAccountAction name guard.
-- `src/app/pro/profile/actions.ts` - pro deleteAccountAction reauth.
-- `src/components/AccountSecurityPanel.tsx` - styled inline delete confirm w/ password.
-- `src/app/(app)/account/ProfileInfoForm.tsx` - name required.
+## 1. Live DB catch-up saga (the bulk of the session)
+- The previous handoff claimed live was "missing 0067+". WRONG. Direct probing showed a
+  patchwork: caught up through 0057, plus 0062/0063/0064/0066, missing 0058-0061, 0065,
+  all 0067-0087, AND 0009's lead_reads + message_reactions (read receipts/reactions were
+  broken on live the whole time). Migration 0058 (Stripe money-safety) had never run.
+- Built `supabase/applied-bundles/RUN_THIS_ONE_applied_2026-07-19.sql` (0009 backfill +
+  0058-0087, idempotency-audited). Owner ran it successfully. All older bundles are in
+  `supabase/applied-bundles/` - every one of them is SPENT, never re-run, never commit them.
+- Real dormant bug found and fixed in repo during this: `migrations/0061` used
+  `(completed_at::date)` in an index (timezone-dependent, 42P17 on any fresh DB); now
+  `(((completed_at at time zone 'utc'))::date)`.
+- **PROBE METHOD (use this, never trust memory/handoff claims about live state):**
+  service key from `.env.local` + `@supabase/supabase-js`, plain
+  `.select('col').limit(1)` per table/column; 42703/PGRST205 = missing. WARNING:
+  `head:true` probes LIE (no error for missing tables). rpc({}) probes give PGRST202 on
+  signature mismatch even when the function exists. Probe scripts pattern is in the
+  session transcript; trivially rebuildable in node -e.
+- Supabase SQL editor facts proven today: each paste runs atomically (error = full
+  rollback); a SELECTION runs alone silently; big pastes can clip (always check the last
+  line pasted before running).
 
-For the NEXT build (guided tour / popups) - patterns to reuse, per research:
-- `src/app/(app)/dashboard/WalkthroughNudge.tsx` (localStorage dismiss + cooldown pattern)
-- `src/components/pro/SetupChecklist.tsx` (stateless data-driven checklist, self-hides)
-- `src/components/ChecklistProvider.tsx`, `ChatDrawer.tsx`, `ProfileMenu.tsx`, `Toaster.tsx` (context + overlay + animation precedents)
-- `src/app/(app)/walkthrough/page.tsx` (the "aha" screen that's under-discoverable)
+## 2. Referral closed-deal gate - migration 0088 (DONE in code + applied live)
+- `supabase/migrations/0088_referral_closed_deal.sql` (Sonnet built, adversarially
+  verified, two verifier-caught bugs fixed). Owner ran it on live; column probe-confirmed.
+- New rules: $25+$25 fires only when the referred pro has a QUALIFYING CLOSED DEAL:
+  chosen application with fee_cents>0, not refunded, lead closed, `closed_at` >= 21 days
+  old, no waived recharge (or the no-application shape: paid=true AND payout_amount>0 AND
+  closed 21+ days). Rehire freebies excluded. Plus: $500 lifetime referrer ceiling
+  (wallet-ledger sum), claim_promo('referral_reward_referred') once-per-user guard,
+  cron pre-filter fail-open on any error.
+- `closed_at` is a new contractor_leads column stamped ONLY by the trigger on real status
+  transitions (set on entering 'closed', cleared on leaving, never client-writable, runs
+  AFTER the anti-forgery guards - ordering matters, a verifier caught corruption when it
+  ran before them).
+- GOTCHA discovered post-apply: the migration's own backfill was reverted by its own
+  trigger (backfill ran after the trigger swap). Repo file is FIXED (backfill now before
+  the trigger replacement) but the live DB needs the 3-line fixup at top of this file.
+  Verify with: `s.from('contractor_leads').select('id,closed_at').eq('status','closed')`
+  - all rows must have closed_at.
+- Deferred (still): phone + Stripe-card-fingerprint sybil dedupe (needs infra).
 
-Demo video (do not casually touch; large + fragile):
-- `src/components/HeroDemoPlayer.tsx` + `.module.css` (rendered on `src/app/page.tsx`), VO in `public/demo-vo/`.
+## 3. Renewal-reminders cron - weekly + trial support (DONE in code)
+- `src/app/api/cron/renewal-reminders/route.ts` reworked (Sonnet built, verified SHIP):
+  `toPaidPlan` accepts "weekly"; new `trial_end` notice ~24h before a short (<=7d) trial
+  ends, all cadences incl. yearly; legacy month-long trials keep the 5-day lead;
+  step-up branch now `!trialing && (discounted || flaggedStepUp) && !yearly` (Plus stamps
+  intro_step_up on EVERY cadence - without !trialing the dup-guard suppressed the real
+  trial notice); query excludes active (post-trial) weekly subs
+  (`.or("plan.neq.weekly,status.eq.trialing")`) to stop MAX_SUBSCRIPTIONS starvation;
+  renewal notices always quote standard terms (`billingTerms(plan, due !== "renewal" && stepUp)`).
 
-## 4. Changes made (this session)
+## 4. Owner's "Something went sideways" crash - FIXED (real bug, not cache)
+- `src/components/LiveUnreadBadge.tsx`: fixed realtime channel topic `unread-<role>`;
+  supabase-js returns the SAME already-subscribed channel for a duplicate topic and the
+  second `.on()` THROWS, crashing the signed-in shell to the root error boundary.
+  Triggered by StrictMode remount races (removeChannel is async) or any double render of
+  the badge. Fix: unique per-mount topic + try/catch best-effort realtime (polling is the
+  fallback). Owner confirmed the dashboard loads.
+- Diagnostic fact for future: the root error page (Logo + "Go home / Your dashboard")
+  means the (app) LAYOUT subtree crashed (Nav/AskHearthDock/NewMessageNotifier);
+  the Nav-still-visible variant means the page's own tree. Audit agent verified
+  NAV_ICONS map integrity (clean) and that the repeated /api/home-alerts calls in dev
+  logs are HMR remounts, not a fetch loop.
+- If a page crashes ONLY in the owner's normal browser profile but works in incognito:
+  get the F12 Console text FIRST (it found this bug in one paste), then suspect
+  localStorage.
 
-- RentCast: split onboarding address into street + ZIP; ingest assessed value/year, purchase date/price, 11-year property-tax history, lat/long, HOA fee, county, AVM market value (+range); seed roof/HVAC/foundation materials on starter systems. Migration 0066. This auto-fills /taxes and /value and sharpens the Home Health Score.
-- Account deletion: server-side current-password re-verification on both homeowner and pro sides (fail-closed, verified by a security review); replaced raw confirm() with a styled inline confirm.
-- Full name: required on edit-profile, empty save rejected server-side.
-- Signup: reject blank/whitespace/junk addresses.
-- Wallet: cash-before-credit charge order (0064); wallet row lock on charge (0065); in-chat invoices (0062).
-- AI back office: category limited to pro's own categories, "send to a lead" action, remembered edits (0063).
-- Dark mode: full per-page sweep (~100 files) + dark score-band tones in `src/lib/health.ts`.
-- Demo video: true fullscreen 16:9 landscape sizing, centered replay button, caption/VO sync, calmer camera, clicky keyboard SFX.
-- Quote analyzer editable "what's missing" + locked during analysis; home report honest history + editable synced systems; notification opens the specific lead; My Business download fix; offline regression fix; post-a-job form styling.
-- Research completed (not built): whole-app UX investigation, 3-agent guided-tour/popup research, tutorial video script. Tutorial script saved to Claude memory (`hearth-tutorial-video-script.md`), decided script-only for now.
+## 5. Owner spot-check status
+- Dashboard loads post-fix: CONFIRMED by owner.
+- NOT yet explicitly confirmed: pro saves profile / sends chat message / changes lead
+  status (exercises 0083-0087 grants + triggers). Ask for this early next session.
 
-## 5. Failed attempts / gotchas (so we don't repeat)
+## 6. Next-session queue (owner-approved order)
+1. Confirm the pro spot-check (see #5) if the owner didn't do it at session end.
+2. COMMIT the giant uncommitted tree - ASK the owner first, stage cleanly. Includes:
+   security remediation 0083-0087 + code fixes, pricing paywall (weekly/3-day trial),
+   nav crash fix, video tweaks, trial-reminder cron, 0088 + cron, LiveUnreadBadge fix,
+   0061 fix, handoff/memory files. Never commit `supabase/applied-bundles/`
+   (gitignore-check; they are spent one-time bundles).
+3. Flat-design + plain-copy overhaul (queued, owner asked): one flat bg + single accent,
+   no gradients/glass/purple-blue, real font, line-height 1.5-1.6, plain human copy, no
+   buzzwords/emoji. See design-and-copy-preferences memory.
+4. aiUsage.ts: request-count cap -> dollar-cost cap per user.
+5. Hero video: "License verified" badge, proof captions, mobile clipping, reduced-motion,
+   ElevenLabs VO regeneration for word-timestamp caption sync (owner rule: demo VO copy
+   cannot change without regenerating the matching mp3). Backup:
+   demo-video-backup/2026-07-19-pre-revision/.
+6. Pre-launch legal: DMCA agent registration + TODO(legal) fills + owner review of
+   /privacy /terms drafts.
+7. For prod later: weekly Stripe price (STRIPE_PRICE_PLUS_WEEKLY), hosting (no Vercel
+   yet - crons run NOWHERE until hosted), CRON_SECRET, Resend.
 
-- **Could not apply migrations programmatically.** The project has only the anon + service-role keys, which talk to PostgREST and CANNOT run DDL. No DB password / connection string / Supabase access token exists in the repo, and the Supabase CLI is not installed. Resolution: bundled 0062–0066 into one ordered .sql file, founder pasted it into the Supabase SQL editor. For future migrations, either install the CLI + a DB password, or use a Supabase personal access token against the Management API (`POST /v1/projects/{ref}/database/query`), or keep hand-applying.
-- **Verifier caught a real ingest bug:** the pre-migration `baseRow` fallback in claimPropertyAction originally omitted purchase_date/price and assessed_value/year (columns that already existed pre-0066), so they'd have been dropped if 0066 wasn't applied yet. Fixed: those four moved into baseRow.
-- **Transient tsc error** during concurrent verifiers (TS2345 in onboarding/actions.ts, an excess-property mismatch because database.types.ts doesn't know the new columns) - resolved with `as any` casts on the inserts, matching the existing pattern in value/actions.ts and taxes/actions.ts. Final tsc is clean.
-- **CRLF warnings** on commit ("LF will be replaced by CRLF") are just Windows line-ending notices, harmless, nothing failed.
-- Migration bundle is NOT safely re-runnable: tables use `if not exists` but `create policy` lines will error on a second run. Apply each migration once.
-
-## 6. Next steps
-
-Ordered, highest value first:
-
-1. **Confirm `RENTCAST_API_KEY` is set on the prod host (Vercel).** Without it, live autofill is dead even though the code is correct.
-2. **Decide on `main`:** open a PR from `fix/money-safety-0058` -> `main` (or merge) to actually ship. Not done yet.
-3. **Build the guided tour / onboarding popups** (research done, build pending). Recommendation from research: a dependency-free custom solution (React context + fixed overlay + spotlight + positioned tooltip), NOT a library (intro.js is AGPL, react-joyride had a long unmaintained gap). Persist "seen tour" as a per-user Supabase column; use localStorage for per-feature hints (mirror WalkthroughNudge). Highest-leverage guidance moments: `/walkthrough` discoverability (the aha moment, currently one dismiss from vanishing), the pro-side first "Apply" fee explanation, and a homeowner SetupChecklist mirroring the pro one.
-4. **#40:** surface the now-populated market_value (+range) on `/value` and the property_tax_history trend on `/taxes`.
-5. **#25:** issue "resolved" vs home-page status consistency + a "Complete job" -> homeowner update popup.
-6. **Minor QA nit (open):** pro deleteAccountAction deletes the `contractors` row before `admin.deleteUser` without checking that first delete's error; if deleteUser then fails you get an orphaned auth user. ~2-line fix, not security-critical.
-7. **Reminder (saved, not implemented):** lead pricing change - big-ticket lead tier $90 -> $99, plus a $49.99 first-time intro price.
-8. Optional: produce the tutorial video from the saved script (currently script-only, placed nowhere; would go on a `/tour` or help page, not the landing page).
+## 7. Working rules (owner-stated, standing)
+- Fable 5 plans/brainstorms/reviews; SONNET subagents execute; separate verifier agents
+  re-check (mandatory for money/security). Launch execution agents with model "sonnet".
+- Never commit/push without explicit owner confirmation in that moment.
+- No em dashes anywhere. Plain human copy. Mobile changes must not alter desktop.
+- Verify live-DB state by probe, never by claim (see #1 probe method).

@@ -37,6 +37,10 @@ comment on column public.maintenance_tasks.cost_cents is
 comment on column public.maintenance_tasks.performed_by is
   'Owner-entered pro/vendor name for this maintenance event, optional free text (not a contractor_id - the owner may have used someone off-platform).';
 
+-- The day component pins the completion timestamp to a UTC calendar day.
+-- A bare completed_at::date cast depends on the session TimeZone (only
+-- STABLE), which Postgres rejects inside an index expression (42P17);
+-- "at time zone 'utc'" first makes the cast IMMUTABLE and deterministic.
 create unique index if not exists maintenance_tasks_history_dedupe_idx
-  on public.maintenance_tasks (property_id, lower(title), (completed_at::date))
+  on public.maintenance_tasks (property_id, lower(title), (((completed_at at time zone 'utc'))::date))
   where status = 'done' and completed_at is not null;

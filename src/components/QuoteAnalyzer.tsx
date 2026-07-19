@@ -29,7 +29,7 @@ type Mode = "photo" | "text";
 const VERDICT_STYLE: Record<Verdict, { label: string; classes: string }> = {
   fair: { label: "Looks fair", classes: "border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200" },
   low: { label: "Looks low", classes: "border-hearth-200 bg-hearth-50 text-hearth-700 dark:border-hearth-900 dark:bg-hearth-900/40 dark:text-hearth-300" },
-  high: { label: "Looks high", classes: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200" },
+  high: { label: "Looks high", classes: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300" },
   unclear: { label: "Not enough info", classes: "border-stone-200 bg-stone-100 text-stone-600 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300" },
 };
 
@@ -396,7 +396,7 @@ export default function QuoteAnalyzer({
                 {result.red_flags.map((flag, i) => (
                   <li
                     key={i}
-                    className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                    className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300"
                   >
                     {flag}
                   </li>

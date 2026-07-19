@@ -2,7 +2,31 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  Home,
+  AlertTriangle,
+  Briefcase,
+  MessageCircle,
+  Inbox,
+  Users,
+  Building2,
+  type LucideIcon,
+} from "lucide-react";
 import LiveUnreadBadge from "@/components/LiveUnreadBadge";
+
+// Icons are resolved HERE (a client component) by string key. Nav/ProNav are
+// server components, so their LINKS data must carry a plain string, never a
+// Lucide component - passing a function/component across the server->client
+// boundary throws "Functions cannot be passed directly to Client Components".
+const NAV_ICONS: Record<string, LucideIcon> = {
+  home: Home,
+  issues: AlertTriangle,
+  post: Briefcase,
+  messages: MessageCircle,
+  leads: Inbox,
+  clients: Users,
+  business: Building2,
+};
 
 type NavLink = {
   href: string;
@@ -10,8 +34,10 @@ type NavLink = {
   // Compact label for the mobile bottom tab bar (variant="bottom"); falls
   // back to `label` when omitted.
   shortLabel?: string;
-  // Icon for the mobile bottom tab bar; ignored by the top variant.
-  icon?: React.ComponentType<{ className?: string }>;
+  // Icon KEY for the mobile bottom tab bar (see NAV_ICONS); ignored by the top
+  // variant. A string, not a component, so it stays serializable across the
+  // server->client boundary.
+  icon?: string;
   badge?: number;
   liveBadge?: "homeowner" | "contractor";
 };
@@ -39,7 +65,7 @@ export default function NavLinks({
           (l.href !== "/pro" && pathname.startsWith(l.href + "/"));
 
         if (variant === "bottom") {
-          const Icon = l.icon;
+          const Icon = l.icon ? NAV_ICONS[l.icon] : undefined;
           return (
             <Link
               key={l.href}

@@ -397,15 +397,16 @@ export const PRO_PLAN = {
 // plays for the contractor side: the ONE place the homeowner prices live, so
 // the /plus page, the checkout action, the auto-renewal disclosure in
 // src/lib/billingTerms.ts, and the renewal-reminder cron can never quote a
-// price the card isn't actually charged. First-time monthly subscribers get a
-// free first month (a 30-day Stripe trial); yearly carries no trial because
-// it is already discounted.
+// price the card isn't actually charged. Every brand-new subscriber, on any
+// cadence, gets a 3-day free trial (a Stripe trial, so nothing is charged
+// until it ends); yearly is also discounted on top of that.
 export const PLUS_PLAN = {
+  weekly: 1.99,
   monthly: 4.99,
   // 33% off monthly x 12 ($59.88), about $3.33/mo. Always compare against
   // monthly x 12 in copy, never an invented list price.
   yearly: 39.99,
-  trialDays: 30,
+  trialDays: 3,
 } as const;
 
 // Extra percentage points a Pro member earns on top of the deposit-bonus tier

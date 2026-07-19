@@ -61,6 +61,26 @@ export async function postJobAction(formData: FormData) {
     setFlash("You're posting jobs too quickly, please wait a bit.", "error");
     redirect("/contractors");
   }
+  // Daily cap on top of the hourly one (security audit finding #3): the hourly
+  // limiter alone still lets one account post up to 8 * 24 = 192 times a day,
+  // each fanning out up to ~200 pro emails/SMS with no consent gate on the
+  // email side - a real cost/reputation cannon. 20/day is far above what any
+  // real household could ever need (the free-tier open-job cap below is 3
+  // OPEN jobs at once, not a daily count) but stops a scripted/looped poster
+  // cold. Same fixed-window limiter, same fail-open-on-DB-hiccup behavior as
+  // the hourly check above.
+  const { data: allowedDay } = await admin.rpc("rate_limit_hit", {
+    p_bucket: `post-day:${user.id}`,
+    p_limit: 20,
+    p_window_seconds: 86400,
+  });
+  if (allowedDay === false) {
+    setFlash(
+      "You've reached today's posting limit. Please try again tomorrow.",
+      "error"
+    );
+    redirect("/contractors");
+  }
 
   const category = formData.get("category") as string;
   const issueId = (formData.get("issue_id") as string) || null;

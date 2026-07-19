@@ -23,6 +23,8 @@ export const runtime = "nodejs";
 
 const UPCOMING_DAYS = 3;
 const MAX_TASKS = 500; // cap the work a single run does
+// Keep Promise.all fan-out bounded.
+const SEND_CHUNK = 10;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -32,6 +34,12 @@ type Task = {
   title: string;
   due_date: string;
 };
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
 
 function isAuthorized(req: NextRequest): boolean {
   const expected = process.env.CRON_SECRET;
@@ -176,101 +184,106 @@ async function runCron(req: NextRequest) {
   const nowIso = new Date().toISOString();
   let created = 0;
 
-  for (const [userId, b] of byUser) {
-    const user = userById.get(userId);
-    if (!user) continue;
-    // An unset preference reads as enabled, matching NotificationPrefsForm.
-    if (user.notification_prefs?.reminders === false) {
-      // Stamp the skipped tasks' markers anyway: an opt-out is a deliberate
-      // "do not send", not a transient failure, and unstamped rows would
-      // re-match the candidate queries every run until they starved the
-      // MAX_TASKS window for everyone else. Re-enabling reminders applies to
-      // future tasks; these deliberately-suppressed ones stay quiet.
-      try {
-        if (b.upcoming.length > 0) {
-          await supabase
-            .from("maintenance_tasks")
-            .update({ reminded_upcoming_at: nowIso })
-            .in(
-              "id",
-              b.upcoming.map((t) => t.id)
-            );
+  for (const batch of chunk(Array.from(byUser), SEND_CHUNK)) {
+    await Promise.all(
+      batch.map(async ([userId, b]) => {
+        const user = userById.get(userId);
+        if (!user) return;
+        // An unset preference reads as enabled, matching NotificationPrefsForm.
+        if (user.notification_prefs?.reminders === false) {
+          // Stamp the skipped tasks' markers anyway: an opt-out is a
+          // deliberate "do not send", not a transient failure, and unstamped
+          // rows would re-match the candidate queries every run until they
+          // starved the MAX_TASKS window for everyone else. Re-enabling
+          // reminders applies to future tasks; these deliberately-suppressed
+          // ones stay quiet.
+          try {
+            if (b.upcoming.length > 0) {
+              await supabase
+                .from("maintenance_tasks")
+                .update({ reminded_upcoming_at: nowIso })
+                .in(
+                  "id",
+                  b.upcoming.map((t) => t.id)
+                );
+            }
+            if (b.overdue.length > 0) {
+              await supabase
+                .from("maintenance_tasks")
+                .update({ reminded_overdue_at: nowIso })
+                .in(
+                  "id",
+                  b.overdue.map((t) => t.id)
+                );
+            }
+          } catch {
+            // A failed stamp just means the rows are re-fetched (and
+            // re-skipped) next run; nothing is ever sent to an opted-out
+            // user either way.
+          }
+          return;
         }
-        if (b.overdue.length > 0) {
-          await supabase
-            .from("maintenance_tasks")
-            .update({ reminded_overdue_at: nowIso })
-            .in(
-              "id",
-              b.overdue.map((t) => t.id)
-            );
-        }
-      } catch {
-        // A failed stamp just means the rows are re-fetched (and re-skipped)
-        // next run; nothing is ever sent to an opted-out user either way.
-      }
-      continue;
-    }
 
-    try {
-      if (b.upcoming.length > 0) {
-        const one = b.upcoming.length === 1 ? b.upcoming[0] : null;
-        const sent = await sendNotification(supabase, {
-          userId,
-          kind: "maintenance_upcoming",
-          title: one
-            ? `Reminder: ${one.title} is due ${dueLabel(one.due_date)}`
-            : `${b.upcoming.length} maintenance tasks are due this week`,
-          body: one ? null : titleList(b.upcoming),
-          url: "/dashboard#this-month",
-          email: user.email,
-          phone: user.phone,
-        });
-        if (sent) {
-          created += 1;
-          const { error: markErr } = await supabase
-            .from("maintenance_tasks")
-            .update({ reminded_upcoming_at: nowIso })
-            .in(
-              "id",
-              b.upcoming.map((t) => t.id)
-            );
-          // A failed stamp means tomorrow's run would notify again - surface it.
-          if (markErr) console.error("reminder marker (upcoming):", markErr.message);
-        }
-      }
+        try {
+          if (b.upcoming.length > 0) {
+            const one = b.upcoming.length === 1 ? b.upcoming[0] : null;
+            const sent = await sendNotification(supabase, {
+              userId,
+              kind: "maintenance_upcoming",
+              title: one
+                ? `Reminder: ${one.title} is due ${dueLabel(one.due_date)}`
+                : `${b.upcoming.length} maintenance tasks are due this week`,
+              body: one ? null : titleList(b.upcoming),
+              url: "/dashboard#this-month",
+              email: user.email,
+              phone: user.phone,
+            });
+            if (sent) {
+              created += 1;
+              const { error: markErr } = await supabase
+                .from("maintenance_tasks")
+                .update({ reminded_upcoming_at: nowIso })
+                .in(
+                  "id",
+                  b.upcoming.map((t) => t.id)
+                );
+              // A failed stamp means tomorrow's run would notify again - surface it.
+              if (markErr) console.error("reminder marker (upcoming):", markErr.message);
+            }
+          }
 
-      if (b.overdue.length > 0) {
-        const one = b.overdue.length === 1 ? b.overdue[0] : null;
-        const sent = await sendNotification(supabase, {
-          userId,
-          kind: "maintenance_overdue",
-          title: one
-            ? `Overdue: ${one.title} is still waiting on you`
-            : `${b.overdue.length} maintenance tasks are overdue`,
-          body: one
-            ? "A few minutes now can save a repair bill later."
-            : titleList(b.overdue),
-          url: "/dashboard#this-month",
-          email: user.email,
-          phone: user.phone,
-        });
-        if (sent) {
-          created += 1;
-          const { error: markErr } = await supabase
-            .from("maintenance_tasks")
-            .update({ reminded_overdue_at: nowIso })
-            .in(
-              "id",
-              b.overdue.map((t) => t.id)
-            );
-          if (markErr) console.error("reminder marker (overdue):", markErr.message);
+          if (b.overdue.length > 0) {
+            const one = b.overdue.length === 1 ? b.overdue[0] : null;
+            const sent = await sendNotification(supabase, {
+              userId,
+              kind: "maintenance_overdue",
+              title: one
+                ? `Overdue: ${one.title} is still waiting on you`
+                : `${b.overdue.length} maintenance tasks are overdue`,
+              body: one
+                ? "A few minutes now can save a repair bill later."
+                : titleList(b.overdue),
+              url: "/dashboard#this-month",
+              email: user.email,
+              phone: user.phone,
+            });
+            if (sent) {
+              created += 1;
+              const { error: markErr } = await supabase
+                .from("maintenance_tasks")
+                .update({ reminded_overdue_at: nowIso })
+                .in(
+                  "id",
+                  b.overdue.map((t) => t.id)
+                );
+              if (markErr) console.error("reminder marker (overdue):", markErr.message);
+            }
+          }
+        } catch {
+          // One homeowner's failure shouldn't stop the rest of the batch.
         }
-      }
-    } catch {
-      // One homeowner's failure shouldn't stop the rest of the run.
-      continue;
-    }
+      })
+    );
   }
 
   return NextResponse.json({ created });

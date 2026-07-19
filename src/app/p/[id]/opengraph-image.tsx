@@ -20,7 +20,6 @@ const UUID_RE =
 
 // Warm hearth palette (tailwind.config.ts).
 const HEARTH_50 = "#fbf7f2";
-const HEARTH_100 = "#f3e9dd";
 const HEARTH_500 = "#a9743f";
 const HEARTH_700 = "#73482b";
 const HEARTH_900 = "#4f3324";
@@ -116,7 +115,7 @@ export default async function OgImage({
     flexDirection: "column" as const,
     justifyContent: "center",
     padding: "0 80px",
-    background: `linear-gradient(135deg, ${HEARTH_100} 0%, ${HEARTH_50} 55%, #ffffff 100%)`,
+    background: HEARTH_50,
     position: "relative" as const,
     fontFamily: "sans-serif",
   };
@@ -145,72 +144,102 @@ export default async function OgImage({
     .slice(0, 3)
     .map((c) => labelFor(JOB_CATEGORIES, c))
     .join("  ·  ");
+  // A business name is free-text a pro controls (pro/actions.ts). Capped
+  // here so a crafted/very-long name can't blow up satori's layout - same
+  // "never let untrusted text 500 a public card" rule as win-card/
+  // review-card's excerpt()/name handling.
+  const displayName =
+    profile.name.length > 60
+      ? `${profile.name.slice(0, 60).trimEnd()}…`
+      : profile.name;
 
-  return new ImageResponse(
-    (
-      <div style={frame}>
-        <Wordmark />
+  try {
+    return new ImageResponse(
+      (
+        <div style={frame}>
+          <Wordmark />
 
-        <div
-          style={{
-            fontSize: profile.name.length > 28 ? 58 : 76,
-            fontWeight: 700,
-            color: HEARTH_900,
-            lineHeight: 1.1,
-            maxWidth: 1000,
-          }}
-        >
-          {profile.name}
-        </div>
+          <div
+            style={{
+              fontSize: displayName.length > 28 ? 58 : 76,
+              fontWeight: 700,
+              color: HEARTH_900,
+              lineHeight: 1.1,
+              maxWidth: 1000,
+            }}
+          >
+            {displayName}
+          </div>
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 20,
-            marginTop: 36,
-          }}
-        >
-          {hasRating ? (
-            <>
-              <div style={{ display: "flex", gap: 4 }}>
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <Star key={i} filled={i < fullStars} />
-                ))}
-              </div>
-              <div style={{ fontSize: 44, fontWeight: 700, color: HEARTH_900 }}>
-                {profile.rating}
-              </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 20,
+              marginTop: 36,
+            }}
+          >
+            {hasRating ? (
+              <>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <Star key={i} filled={i < fullStars} />
+                  ))}
+                </div>
+                <div style={{ fontSize: 44, fontWeight: 700, color: HEARTH_900 }}>
+                  {profile.rating}
+                </div>
+                <div style={{ fontSize: 36, color: STONE_400 }}>
+                  {profile.review_count} review
+                  {profile.review_count === 1 ? "" : "s"}
+                </div>
+              </>
+            ) : (
               <div style={{ fontSize: 36, color: STONE_400 }}>
-                {profile.review_count} review
-                {profile.review_count === 1 ? "" : "s"}
+                New on Hearth
               </div>
-            </>
-          ) : (
-            <div style={{ fontSize: 36, color: STONE_400 }}>
-              New on Hearth
+            )}
+          </div>
+
+          {categoryLine && (
+            <div style={{ fontSize: 34, color: HEARTH_700, marginTop: 28 }}>
+              {categoryLine}
             </div>
           )}
+
+          <div
+            style={{
+              position: "absolute",
+              bottom: 0,
+              left: 0,
+              width: "100%",
+              height: 14,
+              backgroundColor: HEARTH_500,
+            }}
+          />
         </div>
-
-        {categoryLine && (
-          <div style={{ fontSize: 34, color: HEARTH_700, marginTop: 28 }}>
-            {categoryLine}
+      ),
+      { ...size, ...ogFontOption() }
+    );
+  } catch (err) {
+    // Belt-and-suspenders: displayName is already length-capped above, but
+    // satori can still choke on other free-text (categoryLine, unusual
+    // unicode, etc). Never let a crafted profile 500 this public route -
+    // fall back to the same generic branded card used when the profile
+    // itself is missing.
+    console.error("opengraph-image render failed", err);
+    return new ImageResponse(
+      (
+        <div style={{ ...frame, alignItems: "center" }}>
+          <div style={{ fontSize: 84, fontWeight: 700, color: HEARTH_900 }}>
+            Hearth
           </div>
-        )}
-
-        <div
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            width: "100%",
-            height: 14,
-            backgroundColor: HEARTH_500,
-          }}
-        />
-      </div>
-    ),
-    { ...size, ...ogFontOption() }
-  );
+          <div style={{ fontSize: 36, color: HEARTH_700, marginTop: 16 }}>
+            Trusted pros for your home
+          </div>
+        </div>
+      ),
+      { ...size, ...ogFontOption() }
+    );
+  }
 }

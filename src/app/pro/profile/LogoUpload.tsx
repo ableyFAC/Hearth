@@ -29,8 +29,22 @@ export default function LogoUpload({
     setErr(null);
 
     const MAX_BYTES = 5 * 1024 * 1024; // 5MB is plenty for a logo
-    if (file.size > MAX_BYTES || !file.type.startsWith("image/")) {
-      setErr("Please pick an image under 5MB.");
+    // Real allowed raster types only - matches the pro-logos bucket's own
+    // allowed_mime_types (migration 0079). This bucket is PUBLIC and serves
+    // logos on unauthenticated pro pages, which makes it the worst place for
+    // the client's old `file.type.startsWith("image/")` check to have let
+    // image/svg+xml through: an SVG can carry a <script> and would execute on
+    // Hearth's own storage/proxy origin against any visitor viewing that pro's
+    // page (security audit finding #7).
+    const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+    if (file.type === "image/svg+xml") {
+      setErr("SVG images aren't supported. Please use a PNG, JPEG, or WEBP logo.");
+      setBusy(false);
+      input.value = "";
+      return;
+    }
+    if (file.size > MAX_BYTES || !ALLOWED_TYPES.has(file.type)) {
+      setErr("Please pick a PNG, JPEG, or WEBP image under 5MB.");
       setBusy(false);
       input.value = "";
       return;
@@ -83,7 +97,7 @@ export default function LogoUpload({
         )}
         <input
           type="file"
-          accept="image/*"
+          accept="image/png,image/jpeg,image/webp"
           onChange={onPick}
           className="block w-full text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-hearth-100 file:px-3 file:py-1.5 file:text-hearth-800 dark:text-stone-300 dark:file:bg-hearth-900/40 dark:file:text-hearth-200"
         />

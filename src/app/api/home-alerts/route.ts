@@ -44,6 +44,13 @@ function whenLabel(i: number): string {
   return `in ${i} days`;
 }
 
+// No route-segment caching here: the response is scoped to the signed-in
+// user's active property (getActiveProperty reads the session), so a shared
+// `revalidate` would serve one homeowner's weather/recall data to the next
+// caller. Instead, the independent external calls below run concurrently
+// (the weather leg and the recalls leg via Promise.all, and the up to 4 CPSC
+// brand lookups inside the recalls leg via their own Promise.all) so a slow
+// upstream costs latency once, not once per call.
 export async function GET() {
   const empty = NextResponse.json({ weather: [], recalls: [] });
   let property: any = null;
@@ -61,10 +68,17 @@ export async function GET() {
     return empty;
   }
 
-  const weather: Alert[] = [];
-  const recalls: Alert[] = [];
+  const [weather, recalls] = await Promise.all([
+    fetchWeather(property, systems),
+    fetchRecalls(systems),
+  ]);
 
-  // --- Weather (Open-Meteo, no key) ---
+  return NextResponse.json({ weather, recalls });
+}
+
+// --- Weather (Open-Meteo, no key) ---
+async function fetchWeather(property: any, systems: any[]): Promise<Alert[]> {
+  const weather: Alert[] = [];
   try {
     const place = [property.city, property.state].filter(Boolean).join(", ");
     if (place) {
@@ -124,8 +138,12 @@ export async function GET() {
   } catch {
     /* leave weather empty */
   }
+  return weather;
+}
 
-  // --- Recalls (CPSC SaferProducts, no key) ---
+// --- Recalls (CPSC SaferProducts, no key) ---
+async function fetchRecalls(systems: any[]): Promise<Alert[]> {
+  const recalls: Alert[] = [];
   try {
     // Keywords that must co-occur with a brand name for a recall to count as a
     // real match for that system. This stops a brand that is also a common word
@@ -165,14 +183,29 @@ export async function GET() {
       if (brands.size >= 4) break;
     }
 
+    // Fetch every brand's CPSC results concurrently instead of one at a
+    // time - up to 4 lookups at FETCH_TIMEOUT_MS each is the bulk of this
+    // route's latency otherwise. This can fetch one or two more brands than
+    // strictly needed if an early brand alone would have filled the 3-recall
+    // cap, but that's a fair trade for not paying the timeout serially; the
+    // selection below still processes brands in the same order and keeps the
+    // same first-3-matches result.
+    const brandEntries = Array.from(brands.entries());
+    const brandResults = await Promise.all(
+      brandEntries.map(([brand]) =>
+        fetchJson(
+          `https://www.saferproducts.gov/RestWebServices/Recall?format=json&ProductName=${encodeURIComponent(
+            brand
+          )}`,
+          4000
+        )
+      )
+    );
+
     const seen = new Set<string>();
-    for (const [brand, { label: sysLabel, type: sysType }] of brands) {
-      const data = await fetchJson(
-        `https://www.saferproducts.gov/RestWebServices/Recall?format=json&ProductName=${encodeURIComponent(
-          brand
-        )}`,
-        4000
-      );
+    for (let i = 0; i < brandEntries.length; i++) {
+      const [brand, { label: sysLabel, type: sysType }] = brandEntries[i];
+      const data = brandResults[i];
       if (!Array.isArray(data)) continue;
       const keywords = SYSTEM_KEYWORDS[sysType] ?? [];
       for (const rec of data.slice(0, 20)) {
@@ -208,5 +241,5 @@ export async function GET() {
     /* leave recalls empty */
   }
 
-  return NextResponse.json({ weather, recalls });
+  return recalls;
 }

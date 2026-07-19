@@ -417,11 +417,11 @@ export default async function ProBusinessPage() {
                 </p>
                 <p className="flex items-center gap-3 text-[10px] text-stone-500 dark:text-stone-400">
                   <span className="flex items-center gap-1">
-                    <span className="inline-block h-2 w-2 rounded-sm bg-gradient-to-t from-hearth-500 to-hearth-400" />
+                    <span className="inline-block h-2 w-2 rounded-sm bg-hearth-500 dark:bg-hearth-400" />
                     Applications
                   </span>
                   <span className="flex items-center gap-1">
-                    <span className="inline-block h-2 w-2 rounded-sm bg-stone-300" />
+                    <span className="inline-block h-2 w-2 rounded-sm bg-stone-300 dark:bg-stone-500" />
                     Wins
                   </span>
                 </p>
@@ -457,15 +457,15 @@ export default async function ProBusinessPage() {
                             className={`w-3 rounded-t-md ${
                               m.applications > 0
                                 ? isCurrent
-                                  ? "bg-gradient-to-t from-hearth-600 to-hearth-500"
-                                  : "bg-gradient-to-t from-hearth-500 to-hearth-400"
+                                  ? "bg-hearth-600 dark:bg-hearth-500"
+                                  : "bg-hearth-400 dark:bg-hearth-500/60"
                                 : "bg-stone-100 dark:bg-stone-700"
                             }`}
                             style={{ height: `${appHeight}px` }}
                           />
                           <div
                             className={`w-3 rounded-t-md ${
-                              m.wins > 0 ? "bg-stone-300" : "bg-stone-100 dark:bg-stone-700"
+                              m.wins > 0 ? "bg-stone-300 dark:bg-stone-500" : "bg-stone-100 dark:bg-stone-700"
                             }`}
                             style={{ height: `${winHeight}px` }}
                           />

@@ -56,7 +56,7 @@ export default function PublicProfileForm({
   return (
     <form action={saveCompanyAction} className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-white/10 dark:bg-stone-800">
       {/* Cover banner + avatar */}
-      <div className="relative h-32 bg-gradient-to-br from-stone-100 to-stone-200 sm:h-40 dark:from-stone-700 dark:to-stone-800">
+      <div className="relative h-32 bg-stone-100 sm:h-40 dark:bg-stone-700">
         <button
           type="button"
           className="absolute right-4 top-4 inline-flex items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm font-medium text-stone-600 shadow-sm hover:bg-stone-50 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
@@ -209,7 +209,7 @@ export default function PublicProfileForm({
                   )}
                   {hasLicense &&
                     (verifyStatus === "pending" || verifyStatus === "unverified") && (
-                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
                         Verification pending
                       </span>
                     )}

@@ -144,7 +144,7 @@ export default async function ProBillingPage({
         </div>
         <div className="card border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/15">
           <p className="stat-label text-amber-800 dark:text-amber-400">Bonus credit</p>
-          <p className="stat-number mt-1 text-2xl text-amber-900 dark:text-amber-200">
+          <p className="stat-number mt-1 text-2xl text-amber-900 dark:text-amber-300">
             {dollars(bonus)}
           </p>
           <p className="mt-1 text-xs text-amber-700">

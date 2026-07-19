@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
-import { hasProPlan } from "@/lib/subscription";
+import { hasPlus, hasProPlan } from "@/lib/subscription";
 import { countAiUsage } from "@/lib/aiUsage";
 import { JOB_CATEGORIES } from "@/lib/constants";
 
@@ -100,8 +100,10 @@ export async function POST(req: NextRequest) {
 
   // Same per-user daily cap as the other AI routes (the shared ai_usage
   // table), so this can't be a side door around the abuse limits on the paid
-  // model. Fails open.
-  const { overLimit } = await countAiUsage(user.id, true);
+  // model. Fails open. isPlus reflects the caller's real entitlement (same
+  // check as /api/draft-apply) rather than always granting the higher cap.
+  const higherTier = (await hasPlus()) || (await hasProPlan());
+  const { overLimit } = await countAiUsage(user.id, higherTier);
   if (overLimit) {
     return NextResponse.json({ job: null, reason: "rate_limited" });
   }

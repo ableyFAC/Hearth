@@ -5,11 +5,10 @@ export default function ProNotFound() {
   return (
     <main className="mx-auto max-w-xl px-6 py-16 text-center">
       <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-white/10 dark:bg-stone-800">
-        <div className="h-20 bg-gradient-to-br from-hearth-100 via-hearth-50 to-stone-100 dark:from-hearth-900/40 dark:via-stone-800 dark:to-stone-800" />
+        {/* Flat warm banner strip, no gradient: hearth-100 in light, a
+            translucent hearth tint over the stone-800 card in dark. */}
+        <div className="h-20 bg-hearth-100 dark:bg-hearth-900/30" />
         <div className="px-6 pb-8 pt-2">
-          <p className="text-3xl" aria-hidden>
-            🏡
-          </p>
           <h1 className="mt-3 text-xl font-semibold text-stone-900 dark:text-stone-100">
             This pro page has moved or expired
           </h1>

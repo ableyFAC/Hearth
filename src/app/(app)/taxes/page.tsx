@@ -178,7 +178,7 @@ export default async function TaxesPage() {
             <p
               className={`text-sm ${
                 verdict === "high"
-                  ? "text-amber-700 dark:text-amber-200"
+                  ? "text-amber-700 dark:text-amber-300"
                   : "text-green-700 dark:text-green-200"
               }`}
             >

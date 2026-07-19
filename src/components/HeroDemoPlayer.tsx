@@ -1267,10 +1267,11 @@ export default function HeroDemoPlayer() {
       if (capState && !seeking) {
         const cs = capState;
         const per = cs.durMs / cs.chunks.length;
-        // No lead: drive captions straight off the audio position so the words
-        // don't appear BEFORE the voice (the intro caption read as ahead of the
-        // audible line with the old +150ms lead).
-        const idx = Math.floor((cs.a.currentTime * 1000) / per);
+        // Small lead to counter the captions lagging behind the voice on
+        // playback. This is an even-time-split approximation (the mp3s carry no
+        // per-word timestamps), so it is a calibration, not frame-perfect. Tune
+        // this single offset if the words drift ahead of or behind the audio.
+        const idx = Math.floor((cs.a.currentTime * 1000 + 250) / per);
         if (cs.a.ended || idx >= cs.chunks.length) {
           if (cs.lastIdx !== -1) {
             setCaption([]);

@@ -80,6 +80,24 @@ export async function lookupParcelAction(
   if (allowed === false) {
     throw new Error("Too many address lookups. Please try again in a bit.");
   }
+  // Daily ceiling on top of the hourly one (security audit finding #6): the
+  // hourly limiter alone still lets one account burn 10 * 24 = 240 lookups a
+  // day, each up to 2 billed RentCast calls, against a 50-lookups/MONTH free
+  // tier. 25/day is generous for any real household (nobody looks up 25
+  // addresses in a day) but caps the worst case at ~50 billed calls/day/
+  // account instead of ~480. Same fixed-window limiter, same fail-open
+  // behavior as the hourly check above - a rate-limiter hiccup must never
+  // block a legit onboarding lookup.
+  const { data: allowedDay } = await admin.rpc("rate_limit_hit", {
+    p_bucket: `parcel-day:${user.id}`,
+    p_limit: 25,
+    p_window_seconds: 86400,
+  });
+  if (allowedDay === false) {
+    throw new Error(
+      "Too many address lookups today. Please try again tomorrow."
+    );
+  }
 
   return lookupParcel(street.trim(), zip.trim());
 }
@@ -128,7 +146,7 @@ export async function claimPropertyAction(formData: FormData) {
       const admin = createAdminClient();
       await (admin as any)
         .from("market_waitlist")
-        .insert({ role: "homeowner", zip: claimZip });
+        .insert({ role: "homeowner", zip: claimZip, email: user.email });
     } catch {
       // Best-effort only - see comment above.
     }

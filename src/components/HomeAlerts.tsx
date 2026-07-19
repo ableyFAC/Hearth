@@ -62,7 +62,7 @@ export default function HomeAlerts() {
             className={`flex items-start gap-2 rounded-lg border p-3 text-sm ${
               a.kind === "recall"
                 ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40"
-                : "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40"
+                : "border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/15"
             }`}
           >
             <Icon className={`h-5 w-5 shrink-0 ${ICON_STYLE[a.kind]}`} aria-hidden="true" />

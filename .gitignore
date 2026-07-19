@@ -51,3 +51,6 @@ yarn-error.log*
 
 # local video rollback backups (git history is the real backup once committed)
 /demo-video-backup/
+
+# spent one-time SQL apply bundles (canonical migrations live in supabase/migrations/)
+/supabase/applied-bundles/

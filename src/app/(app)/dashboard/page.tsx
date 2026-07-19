@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { hasPlus } from "@/lib/subscription";
@@ -54,7 +55,8 @@ export default async function HomePage({
   // "View my plan" lands here with ?plan=open so the collapsed task groups
   // start expanded, making the click visibly do something.
   const planOpen = searchParams.plan === "open";
-  const property = (await getActiveProperty())!;
+  const property = await getActiveProperty();
+  if (!property) redirect("/onboarding");
   const supabase = createClient();
   const plus = await hasPlus();
 

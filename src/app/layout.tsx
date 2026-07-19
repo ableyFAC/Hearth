@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
 import Toaster from "@/components/Toaster";
 import { readFlash } from "@/lib/flash";
 
 // Self-hosted via next/font, exposed as a CSS variable so Tailwind's
-// font-sans (see tailwind.config.ts) picks it up everywhere.
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+// font-sans (see tailwind.config.ts) picks it up everywhere. Hanken Grotesk
+// is a warm humanist grotesque, chosen deliberately over the default-looking
+// Inter/Geist; its tabular figures keep health scores and dollar amounts
+// aligned in columns.
+const sans = Hanken_Grotesk({ subsets: ["latin"], variable: "--font-sans" });
 
 // Runs before first paint so a saved dark theme never flashes light. Kept as
 // a plain string (not a component) because it must execute synchronously in
@@ -52,14 +55,14 @@ export default function RootLayout({
   return (
     // suppressHydrationWarning: the theme script adds .dark to <html> before
     // React hydrates, which is an expected server/client mismatch.
-    // The Inter variable + font-sans live on <html>, not <body>: Tailwind's
+    // The font variable + font-sans live on <html>, not <body>: Tailwind's
     // preflight declares font-family on html, and a var() undefined at that
     // level invalidates the whole declaration, silently dropping the site to
     // the browser's default serif.
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${inter.variable} font-sans`}
+      className={`${sans.variable} font-sans`}
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />

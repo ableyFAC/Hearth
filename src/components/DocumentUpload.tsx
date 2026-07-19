@@ -77,6 +77,35 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
       return;
     }
 
+    // Real allowed types only - matches the home-photos bucket's own
+    // allowed_mime_types (migration 0079: png/jpeg/webp/pdf, deliberately no
+    // SVG). accept="image/*,application/pdf" is only a browser hint; a naive
+    // client check like `type.startsWith("image/")` would still let
+    // image/svg+xml through, which can carry a <script> and gets served back
+    // off Hearth's own storage origin (security audit finding #7).
+    if (picked.type === "image/svg+xml") {
+      setPhase("idle");
+      setNote({
+        text: "SVG images aren't supported. Please use a PNG, JPEG, WEBP photo, or a PDF.",
+        tone: "error",
+      });
+      return;
+    }
+    const ALLOWED_TYPES = new Set([
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+      "application/pdf",
+    ]);
+    if (!ALLOWED_TYPES.has(picked.type)) {
+      setPhase("idle");
+      setNote({
+        text: "Please pick a PNG, JPEG, WEBP photo, or a PDF.",
+        tone: "error",
+      });
+      return;
+    }
+
     setPhase("working");
     setNote({ text: "Reading the document…", tone: "working" });
     setFields(null);
@@ -191,7 +220,7 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
             </span>
             <input
               type="file"
-              accept="image/*,application/pdf"
+              accept="image/png,image/jpeg,image/webp,application/pdf"
               onChange={onPick}
               disabled={phase === "working"}
               className="hidden"

@@ -57,13 +57,13 @@ function dueChip(
   if (days === 0) {
     return {
       label: "Due today",
-      className: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200",
+      className: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300",
     };
   }
   if (days <= 7) {
     return {
       label: `Due in ${days} day${days === 1 ? "" : "s"}`,
-      className: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200",
+      className: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300",
     };
   }
   return {

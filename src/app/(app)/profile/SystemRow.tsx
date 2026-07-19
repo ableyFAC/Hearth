@@ -26,7 +26,7 @@ import MaterialSelect from "@/components/MaterialSelect";
 
 const STAGE_STYLE: Record<string, string> = {
   healthy: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-200 dark:border-green-900",
-  aging: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-900",
+  aging: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30",
   due: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-200 dark:border-red-900",
   unknown: "bg-stone-50 text-stone-500 border-stone-200 dark:bg-stone-700 dark:text-stone-400 dark:border-white/10",
 };
@@ -309,9 +309,9 @@ export default function SystemRow({
       onClick={() => setExpanded((v) => !v)}
       className={`card flex cursor-pointer items-start justify-between gap-4 ${
         needsBorder
-          ? "!border !border-red-400"
+          ? "!border !border-red-400 dark:!border-red-500"
           : estimatedDue
-            ? "!border !border-amber-300"
+            ? "!border !border-amber-400 dark:!border-amber-500"
             : ""
       }`}
     >
@@ -332,7 +332,7 @@ export default function SystemRow({
               mustDo
                 ? "border-red-300 bg-red-100 font-semibold text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
                 : estimatedDue
-                  ? "border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                  ? "border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300"
                   : STAGE_STYLE[h.stage]
             }`}
           >

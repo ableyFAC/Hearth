@@ -288,6 +288,20 @@ export default function PrivacyPage() {
             homeowner&apos;s data: it is the contractor&apos;s own account
             information.
           </p>
+          <p className="mt-3 leading-relaxed">
+            One more fact worth being direct about: Hearth currently uses
+            Google&apos;s free-tier Gemini API quota. Under Google&apos;s
+            terms for that tier, Google may use what you submit, and
+            Gemini&apos;s responses, to improve its own products, and human
+            reviewers at Google may read disconnected samples of that
+            content. That is Google&apos;s policy for the free tier, not
+            Hearth&apos;s choice. We plan to move to Google&apos;s paid tier,
+            under which Google does not use your data this way. See{" "}
+            <a href="/ai-disclosure" className="text-hearth-700 hover:underline dark:text-hearth-300">
+              How Hearth Uses AI
+            </a>{" "}
+            for the fuller explanation.
+          </p>
         </section>
 
         <section>
@@ -428,12 +442,57 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+            Your privacy rights
+          </h2>
+          <p className="mt-2 leading-relaxed">
+            If you are a California resident, you have these rights over your
+            personal information: to know what we&apos;ve collected about you
+            and where it came from, to get a copy of it, to have us delete it,
+            to correct anything that&apos;s wrong, to opt out of the sale or
+            sharing of it, and to limit how we use sensitive information such
+            as your home&apos;s precise location, financial details, and
+            message contents. Hearth does not sell your data or share it for
+            advertising, so there is nothing to opt out of on that point, and
+            we use sensitive information only to run Hearth itself, never to
+            profile you or advertise to you. We will never deny you service or
+            treat you worse for exercising any of these rights.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            We keep each category of data for as long as your account is
+            open, aside from a narrow set of records the law requires us to
+            keep, such as invoices and payment records.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            The controls to act on these rights, downloading your data,
+            deleting your account, and correcting your profile, live in your
+            account settings once you&apos;re signed in, under Account &gt;
+            Your privacy rights. See{" "}
+            <a href="/account/privacy" className="text-hearth-700 hover:underline dark:text-hearth-300">
+              Your privacy rights
+            </a>{" "}
+            for those controls, or email{" "}
+            <LegalContact />
+            {" "}for anything they don&apos;t cover.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Deleting your data
           </h2>
           <p className="mt-2 leading-relaxed">
             You can permanently delete your account, and the data tied to it,
             at any time under Account &gt; Account security &gt; Delete
             Account. This cannot be undone.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            One honest caveat: if you shared information with a pro through a
+            job or a conversation, that pro is a separate business, and they
+            may keep their own copy of it, such as your name, phone, email,
+            or address, in their own business records. Deleting your Hearth
+            account removes your data from Hearth&apos;s systems, but it
+            doesn&apos;t reach a pro&apos;s independent copy of what you sent
+            them.
           </p>
         </section>
 

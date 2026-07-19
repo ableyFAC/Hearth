@@ -194,6 +194,256 @@ async function creditDepositSession(
   );
 }
 
+// Claw back a deposit after a dispute/refund. Mirrors applyDepositOnce's
+// retry contract: reverse_deposit (migration 0085) claims the event id
+// inside the same transaction as the debit, so on any non-missing-function
+// error the safe move is to ask Stripe to redeliver (retry: true) - a retry
+// after a real commit is a provable no-op. If the live DB predates 0085 the
+// RPC doesn't exist yet; log loudly and ACK (retry: false) rather than 500
+// forever on a migration that hasn't shipped.
+//
+// The event id alone is NOT enough to dedup a chargeback/refund: one
+// underlying dispute fires charge.dispute.created AND
+// charge.dispute.funds_withdrawn (same dispute.amount, different event ids),
+// and charge.refunded fires once per partial refund with a CUMULATIVE
+// amount_refunded. reverse_deposit tracks a cumulative reversed_cents PER
+// CHARGE (deposit_reversals, keyed on payment_intent) and only debits the
+// wallet by the increment over what's already been reversed for that charge,
+// so passing the same reported total twice (or a growing cumulative total)
+// is always safe - the caller here doesn't need to do any of that math
+// itself, just report the (payment_intent, reported cumulative total,
+// original deposit) triple on every call.
+async function reverseDepositOnce(
+  admin: any,
+  eventId: string,
+  contractorId: string,
+  paymentIntentId: string,
+  reportedCents: number,
+  depositCents: number,
+  reason: string
+): Promise<{ retry: boolean }> {
+  const { error } = await admin.rpc("reverse_deposit", {
+    p_event_id: eventId,
+    p_contractor_id: contractorId,
+    p_payment_intent: paymentIntentId,
+    p_reported_cents: reportedCents,
+    p_deposit_cents: depositCents,
+    p_reason: reason,
+  });
+  if (!error) return { retry: false };
+  if (isMissingFn(error, "reverse_deposit")) {
+    console.error(
+      "reverse_deposit RPC missing (migration 0085 not live yet), skipping wallet reversal for",
+      contractorId,
+      error.message ?? error
+    );
+    return { retry: false };
+  }
+  console.error(
+    "reverse_deposit failed, asking Stripe to redeliver:",
+    error.message ?? error
+  );
+  return { retry: true };
+}
+
+// Resolve a payment_intent id back to the wallet-deposit checkout session
+// that created it, the same metadata shape creditDepositSession reads
+// (type "deposit", contractor_id, deposit_cents). Stripe Checkout sessions
+// aren't reachable from a PaymentIntent directly, so this lists sessions by
+// payment_intent instead. Returns null for any charge that isn't a wallet
+// deposit (a subscription invoice charge, for instance) - nothing to
+// reverse, and dispute/refund events on those are silently ignored here.
+async function resolveDepositSession(
+  paymentIntentId: string | null
+): Promise<{ contractorId: string; depositCents: number } | null> {
+  if (!paymentIntentId) return null;
+  try {
+    const sessions = await stripe.checkout.sessions.list({
+      payment_intent: paymentIntentId,
+      limit: 1,
+    });
+    const session = sessions.data[0] as any;
+    const meta = session?.metadata ?? {};
+    if (meta.type !== "deposit" || !meta.contractor_id) return null;
+    return {
+      contractorId: meta.contractor_id,
+      depositCents: Number(meta.deposit_cents) || 0,
+    };
+  } catch (err) {
+    console.error(
+      "resolveDepositSession failed for payment_intent",
+      paymentIntentId,
+      err
+    );
+    return null;
+  }
+}
+
+// Shared by all three dispute/refund event handlers below: resolve the
+// charge back to its deposit session, then reverse it. reportedCents is
+// whatever this event reports as the running total for the charge (a
+// dispute's flat dispute.amount, or a refund's cumulative amount_refunded) -
+// NOT an increment. reverse_deposit itself caps the target at
+// deposit.depositCents and debits only the increment over what's already
+// been reversed for this payment_intent, so it's safe to pass the same or a
+// growing reportedCents on every call for the same charge.
+async function handleDepositReversal(
+  paymentIntentId: string | null,
+  eventId: string,
+  reportedCents: number,
+  reason: string
+): Promise<{ retry: boolean }> {
+  if (!paymentIntentId || reportedCents <= 0) return { retry: false };
+  const deposit = await resolveDepositSession(paymentIntentId);
+  if (!deposit) return { retry: false }; // not a wallet-deposit charge
+  const admin = createAdminClient();
+  return reverseDepositOnce(
+    admin,
+    eventId,
+    deposit.contractorId,
+    paymentIntentId,
+    reportedCents,
+    deposit.depositCents,
+    reason
+  );
+}
+
+// Resolve a payment_intent id back to the Pro membership invoice it paid
+// (if any) and the contractor whose per-cycle wallet credit that invoice
+// earned (grant_membership_credit, migration 0034). The Charge object no
+// longer carries an `invoice` field in this Stripe API version (Charges and
+// Invoices decoupled behind the newer Invoice Payments API), so the invoice
+// is looked up the supported way: list InvoicePayments by payment_intent and
+// read `.invoice` off the match. From there this walks the same subscription
+// -> subscriptions.user_id -> contractors chain invoice.payment_succeeded
+// below already walks to GRANT the credit in the first place, run in
+// reverse. Returns null for anything that isn't a Pro membership invoice
+// charge: a homeowner Plus invoice (a subscriptions row exists but its plan
+// doesn't start with pro_), an invoice with no matching subscriptions row, or
+// - most commonly - a payment_intent that was never invoice-backed at all (a
+// wallet deposit is a one-time Checkout Session payment with no invoice).
+async function resolveMembershipContractor(
+  paymentIntentId: string | null
+): Promise<{ contractorId: string; invoiceId: string } | null> {
+  if (!paymentIntentId) return null;
+  try {
+    const payments = await stripe.invoicePayments.list({
+      payment: { type: "payment_intent", payment_intent: paymentIntentId },
+      limit: 1,
+    });
+    const invoiceRef = payments.data[0]?.invoice;
+    const invoiceId =
+      typeof invoiceRef === "string" ? invoiceRef : invoiceRef?.id ?? null;
+    if (!invoiceId) return null;
+
+    const invoice = await stripe.invoices.retrieve(invoiceId);
+    const rawSub =
+      (invoice as any).subscription ??
+      (invoice as any).parent?.subscription_details?.subscription ??
+      null;
+    const subscriptionId = typeof rawSub === "string" ? rawSub : rawSub?.id ?? null;
+    if (!subscriptionId) return null;
+
+    const admin = createAdminClient();
+    // Side-blind matching would be wrong here too (see invoice.payment_succeeded
+    // below): only a pro_ plan ever earned a membership credit on this invoice.
+    const { data: subRow } = await (admin as any)
+      .from("subscriptions")
+      .select("user_id, plan")
+      .eq("stripe_subscription_id", subscriptionId)
+      .maybeSingle();
+    if (!subRow?.user_id || !subRow?.plan?.startsWith("pro_")) return null;
+
+    const { data: contractorRow } = await (admin as any)
+      .from("contractors")
+      .select("id")
+      .eq("user_id", subRow.user_id)
+      .maybeSingle();
+    if (!contractorRow?.id) return null;
+    return { contractorId: contractorRow.id, invoiceId };
+  } catch (err) {
+    console.error(
+      "resolveMembershipContractor failed for payment_intent",
+      paymentIntentId,
+      err
+    );
+    return null;
+  }
+}
+
+// Claw back a Pro membership's per-cycle wallet credit after the invoice that
+// earned it is disputed/refunded. Mirrors reverseDepositOnce's retry contract:
+// reverse_membership_credit (migration 0090) claims the event id inside the
+// same transaction as the debit, so on any non-missing-function error the
+// safe move is to ask Stripe to redeliver (retry: true) - a retry after a
+// real commit is a provable no-op. If the live DB predates 0090 the RPC
+// doesn't exist yet; log loudly and ACK (retry: false) rather than 500
+// forever on a migration that hasn't shipped.
+async function reverseMembershipCreditOnce(
+  admin: any,
+  eventId: string,
+  contractorId: string,
+  invoiceId: string,
+  amountCents: number,
+  reason: string
+): Promise<{ retry: boolean }> {
+  const { error } = await admin.rpc("reverse_membership_credit", {
+    p_event_id: eventId,
+    p_contractor_id: contractorId,
+    p_reference: invoiceId,
+    p_amount_cents: amountCents,
+    p_reason: reason,
+  });
+  if (!error) return { retry: false };
+  if (isMissingFn(error, "reverse_membership_credit")) {
+    console.error(
+      "reverse_membership_credit RPC missing (migration 0090 not live yet), skipping credit clawback for",
+      contractorId,
+      error.message ?? error
+    );
+    return { retry: false };
+  }
+  console.error(
+    "reverse_membership_credit failed, asking Stripe to redeliver:",
+    error.message ?? error
+  );
+  return { retry: true };
+}
+
+// Shared by all three dispute/refund event handlers below (the membership
+// side): resolve the payment_intent back to the Pro membership invoice and
+// contractor whose credit it earned, then reverse it. Takes the SAME
+// payment_intent id each handler already extracts for the deposit path below
+// (handleDepositReversal) - a charge is never both a wallet deposit and a
+// membership invoice charge, so trying both resolutions unconditionally on
+// every dispute/refund event is always safe; exactly one of them can match.
+// reportedCents is whatever this event reports as the running total for the
+// underlying charge (a dispute's flat dispute.amount, or a refund's
+// cumulative amount_refunded) - reverse_membership_credit caps the actual
+// debit at what this invoice actually granted and tracks the cumulative
+// amount already reversed per invoice, so it's safe to pass the same or a
+// growing reportedCents on every call for the same charge, exactly like
+// handleDepositReversal above.
+async function handleMembershipReversal(
+  paymentIntentId: string | null,
+  eventId: string,
+  reportedCents: number,
+  reason: string
+): Promise<{ retry: boolean }> {
+  if (!paymentIntentId || reportedCents <= 0) return { retry: false };
+  const target = await resolveMembershipContractor(paymentIntentId);
+  if (!target) return { retry: false }; // not a Pro membership invoice charge
+  const admin = createAdminClient();
+  return reverseMembershipCreditOnce(
+    admin,
+    eventId,
+    target.contractorId,
+    target.invoiceId,
+    reportedCents,
+    reason
+  );
+}
+
 // Billing interval read off a paid invoice's own line items, for deciding
 // the membership-credit amount. The recurring interval lives at
 // line.price.recurring.interval in older Stripe API versions, line.plan on
@@ -569,6 +819,86 @@ export async function POST(req: NextRequest) {
         "session",
         session.id
       );
+    }
+  }
+
+  // Chargeback: pull the deposited money back out of the wallet. Both
+  // dispute.created and dispute.funds_withdrawn are handled (a card network
+  // can fire either or both depending on when funds actually leave the
+  // account); each carries its own Stripe event id and the same
+  // dispute.amount. reverse_deposit tracks the cumulative amount already
+  // reversed per payment_intent (deposit_reversals, migration 0085), so the
+  // second event is a provable no-op rather than a second debit.
+  if (
+    event.type === "charge.dispute.created" ||
+    event.type === "charge.dispute.funds_withdrawn"
+  ) {
+    const dispute = event.data.object as any;
+    const paymentIntentId =
+      typeof dispute.payment_intent === "string"
+        ? dispute.payment_intent
+        : dispute.payment_intent?.id ?? null;
+    const { retry } = await handleDepositReversal(
+      paymentIntentId,
+      event.id,
+      Number(dispute.amount) || 0,
+      `Chargeback: dispute ${dispute.id ?? "(unknown)"} (${event.type})`
+    );
+    if (retry) {
+      return NextResponse.json({ error: "deposit reversal failed" }, { status: 500 });
+    }
+
+    // Same dispute, checked against the OTHER money bucket a charge can back:
+    // a Pro membership invoice's per-cycle wallet credit (see
+    // resolveMembershipContractor above). Reuses the SAME paymentIntentId
+    // just resolved for the deposit path above: a charge is never both a
+    // deposit and a membership invoice charge, so this is a no-op whenever
+    // the deposit branch above actually matched, and vice versa.
+    const { retry: retryMembership } = await handleMembershipReversal(
+      paymentIntentId,
+      event.id,
+      Number(dispute.amount) || 0,
+      `Chargeback: dispute ${dispute.id ?? "(unknown)"} (${event.type})`
+    );
+    if (retryMembership) {
+      return NextResponse.json({ error: "membership credit reversal failed" }, { status: 500 });
+    }
+  }
+
+  // Refund (not a dispute): the pro or support refunded the charge directly.
+  // amount_refunded is the charge's cumulative refunded total, so a charge
+  // refunded in several partial increments fires this event once per
+  // increment, each reporting the new running total. reverse_deposit debits
+  // the wallet only by the increment over what's already been reversed for
+  // this payment_intent, so cumulative partial refunds are handled correctly
+  // instead of re-debiting the running total on every event.
+  if (event.type === "charge.refunded") {
+    const charge = event.data.object as any;
+    const paymentIntentId =
+      typeof charge.payment_intent === "string"
+        ? charge.payment_intent
+        : charge.payment_intent?.id ?? null;
+    const { retry } = await handleDepositReversal(
+      paymentIntentId,
+      event.id,
+      Number(charge.amount_refunded) || 0,
+      `Refund: charge ${charge.id ?? "(unknown)"} refunded`
+    );
+    if (retry) {
+      return NextResponse.json({ error: "deposit reversal failed" }, { status: 500 });
+    }
+
+    // Same refund, checked against the membership-credit bucket (see the
+    // dispute branch above for why both checks can run unconditionally on
+    // the same paymentIntentId already resolved for the deposit path).
+    const { retry: retryMembership } = await handleMembershipReversal(
+      paymentIntentId,
+      event.id,
+      Number(charge.amount_refunded) || 0,
+      `Refund: charge ${charge.id ?? "(unknown)"} refunded`
+    );
+    if (retryMembership) {
+      return NextResponse.json({ error: "membership credit reversal failed" }, { status: 500 });
     }
   }
 

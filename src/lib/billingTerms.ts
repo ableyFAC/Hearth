@@ -24,7 +24,7 @@ import { PLUS_PLAN, PRO_PLAN } from "@/lib/constants";
 // acknowledgment describing how to cancel, and a cancellation path at least
 // as easy as signing up was.
 
-export type PaidPlan = "monthly" | "yearly" | "pro_monthly" | "pro_yearly";
+export type PaidPlan = "weekly" | "monthly" | "yearly" | "pro_monthly" | "pro_yearly";
 
 export type BillingTerms = {
   // "Hearth Plus", "Hearth Pro" - the thing being bought.
@@ -56,55 +56,88 @@ export function billingTerms(
   introEligible: boolean
 ): BillingTerms {
   const pro = plan === "pro_monthly" || plan === "pro_yearly";
-  const yearly = plan === "yearly" || plan === "pro_yearly";
   const product = pro ? "Hearth Pro" : "Hearth Plus";
   const cancelPath = pro ? "/pro/plus" : "/plus";
   const cancel = `Cancel anytime online at ${cancelPath} using the "Cancel membership" button. Cancelling takes effect at the end of the period you have already paid for, and there is nothing to call or email.`;
 
-  if (yearly) {
-    const price = money(pro ? PRO_PLAN.yearly : PLUS_PLAN.yearly);
+  // Hearth Pro: unaffected by the Plus pricing change. Yearly carries no
+  // trial or intro discount; monthly keeps its one-time intro-month coupon
+  // (money moves today, just less of it, so the step-up copy says by how
+  // much).
+  if (pro) {
+    if (plan === "pro_yearly") {
+      const price = money(PRO_PLAN.yearly);
+      return {
+        product,
+        chargedToday: `${price} today.`,
+        recurring: `After that, ${price} is automatically charged to the same payment method every 12 months until you cancel.`,
+        stepUp: null,
+        cancel,
+        cancelPath,
+      };
+    }
+
+    const full = money(PRO_PLAN.monthly);
+    if (introEligible) {
+      const intro = money(PRO_PLAN.introFirstMonth);
+      return {
+        product,
+        chargedToday: `${intro} today for your first month.`,
+        recurring: `After that first month, the price goes up to ${full} and ${full} is automatically charged to the same payment method every month until you cancel.`,
+        stepUp: `Your first month is ${intro}. Every month after that is ${full}.`,
+        cancel,
+        cancelPath,
+      };
+    }
     return {
       product,
-      chargedToday: `${price} today.`,
-      recurring: `After that, ${price} is automatically charged to the same payment method every 12 months until you cancel.`,
+      chargedToday: `${full} today.`,
+      recurring: `After that, ${full} is automatically charged to the same payment method every month until you cancel.`,
       stepUp: null,
       cancel,
       cancelPath,
     };
   }
 
-  const full = money(pro ? PRO_PLAN.monthly : PLUS_PLAN.monthly);
-
-  // Hearth Pro's intro month is a one-time coupon: money moves today, just
-  // less of it. Hearth Plus's is a 30-day Stripe trial: nothing is charged
-  // today at all. Both step up, and both have to say by how much.
-  if (introEligible && pro) {
-    const intro = money(PRO_PLAN.introFirstMonth);
-    return {
-      product,
-      chargedToday: `${intro} today for your first month.`,
-      recurring: `After that first month, the price goes up to ${full} and ${full} is automatically charged to the same payment method every month until you cancel.`,
-      stepUp: `Your first month is ${intro}. Every month after that is ${full}.`,
-      cancel,
-      cancelPath,
-    };
-  }
+  // Hearth Plus: weekly, monthly, or yearly. Every brand-new subscriber gets
+  // the same free trial (a Stripe trial, so nothing is charged until it
+  // ends) no matter which cadence they pick - `introEligible` mirrors the
+  // exact "no existing Plus subscription" signal startPlusCheckoutAction
+  // uses, so a returning subscriber never sees trial copy for a trial they
+  // will not get.
+  const cadenceNoun =
+    plan === "weekly" ? "week" : plan === "yearly" ? "year" : "month";
+  // Yearly is billed on a 12-month cycle, not a calendar year, so the
+  // recurring disclosure says "every 12 months" rather than "every year" to
+  // stay precise about when the charge actually lands.
+  const recurEvery = plan === "yearly" ? "every 12 months" : `every ${cadenceNoun}`;
+  const price = money(
+    plan === "weekly"
+      ? PLUS_PLAN.weekly
+      : plan === "yearly"
+        ? PLUS_PLAN.yearly
+        : PLUS_PLAN.monthly
+  );
+  const trialDays = PLUS_PLAN.trialDays;
+  // "$1.99 a week" / "$4.99 a month", but yearly reads better as a bare price
+  // since recurEvery already spells out "every 12 months" right after it.
+  const perCadence = plan === "yearly" ? price : `${price} a ${cadenceNoun}`;
 
   if (introEligible) {
     return {
       product,
-      chargedToday: `Nothing today. Your first ${PLUS_PLAN.trialDays} days are free.`,
-      recurring: `When the free month ends, ${full} is automatically charged to your payment method, and ${full} every month after that until you cancel.`,
-      stepUp: `Your first month is free. Every month after that is ${full}.`,
-      cancel,
+      chargedToday: `Nothing today. Your first ${trialDays} days are free.`,
+      recurring: `After the ${trialDays}-day free trial, ${perCadence} is automatically charged to your payment method, and it renews ${recurEvery} until you cancel.`,
+      stepUp: `Free for ${trialDays} days. After that it is ${perCadence}, and it renews ${recurEvery} until you cancel.`,
+      cancel: `${cancel} If you cancel before the ${trialDays}-day trial ends, you will not be charged anything.`,
       cancelPath,
     };
   }
 
   return {
     product,
-    chargedToday: `${full} today.`,
-    recurring: `After that, ${full} is automatically charged to the same payment method every month until you cancel.`,
+    chargedToday: `${price} today.`,
+    recurring: `After that, ${price} is automatically charged to the same payment method ${recurEvery} until you cancel.`,
     stepUp: null,
     cancel,
     cancelPath,

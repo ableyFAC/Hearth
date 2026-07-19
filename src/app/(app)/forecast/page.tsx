@@ -241,11 +241,9 @@ export default async function ForecastPage() {
                       <div
                         className={`w-7 rounded-t-md ${
                           y.amount > 0
-                            ? `bg-gradient-to-t ${
-                                y.amount === max
-                                  ? "from-hearth-600 to-hearth-500"
-                                  : "from-hearth-500 to-hearth-400"
-                              }`
+                            ? y.amount === max
+                              ? "bg-hearth-600 dark:bg-hearth-500"
+                              : "bg-hearth-400 dark:bg-hearth-500/60"
                             : "bg-stone-100 dark:bg-stone-700"
                         }`}
                         style={{ height: `${height}px` }}

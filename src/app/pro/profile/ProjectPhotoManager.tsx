@@ -45,8 +45,10 @@ export default function ProjectPhotoManager({
         overflow++;
         continue;
       }
-      // Skip anything oversized or not actually an image (accept="" is a hint).
-      if (file.size > MAX_BYTES || !file.type.startsWith("image/")) {
+      // Skip anything oversized or not an allowed raster image. SVG is rejected
+      // explicitly: this writes to the PUBLIC pro-logos bucket, where an SVG
+      // could carry script that runs on the storage origin.
+      if (file.size > MAX_BYTES || !["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
         failures++;
         continue;
       }
@@ -132,7 +134,7 @@ export default function ProjectPhotoManager({
                 onClick={() => toggleBefore(i)}
                 className={`mt-1 w-full rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${
                   p.before
-                    ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                    ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300"
                     : "border-stone-200 bg-white text-stone-500 hover:bg-stone-50 dark:border-white/10 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"
                 }`}
               >

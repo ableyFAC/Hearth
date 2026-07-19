@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Home, AlertTriangle, Briefcase, MessageCircle } from "lucide-react";
 import Logo from "@/components/Logo";
 import HomeSwitcher from "@/components/HomeSwitcher";
 import NavLinks from "@/components/NavLinks";
@@ -21,25 +20,25 @@ export default function Nav({
   hasPlus: boolean;
 }) {
   const LINKS = [
-    { href: "/dashboard", label: "Home", icon: Home },
-    { href: "/issues", label: "Issues", icon: AlertTriangle },
+    { href: "/dashboard", label: "Home", icon: "home" },
+    { href: "/issues", label: "Issues", icon: "issues" },
     {
       href: "/contractors",
       label: "Post a Job",
       shortLabel: "Post",
-      icon: Briefcase,
+      icon: "post",
     },
     {
       href: "/chats",
       label: "Messages",
       liveBadge: "homeowner" as const,
-      icon: MessageCircle,
+      icon: "messages",
     },
   ];
 
   return (
     <>
-    <header className="sticky top-0 z-30 border-b border-stone-200/70 bg-white/80 backdrop-blur dark:border-white/10 dark:bg-stone-900/80">
+    <header className="sticky top-0 z-30 border-b border-stone-200 bg-hearth-50 dark:border-white/10 dark:bg-stone-900">
       <div className="mx-auto flex max-w-5xl flex-col gap-3 px-6 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <Link
@@ -117,7 +116,7 @@ export default function Nav({
         dock and the toast notifier above this bar on the same breakpoint. */}
     <nav
       aria-label="Primary"
-      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-stone-200/70 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden dark:border-white/10 dark:bg-stone-900/95"
+      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-stone-200 bg-hearth-50 pb-[env(safe-area-inset-bottom)] sm:hidden dark:border-white/10 dark:bg-stone-900"
     >
       <NavLinks links={LINKS} variant="bottom" />
     </nav>

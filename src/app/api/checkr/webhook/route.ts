@@ -40,11 +40,20 @@ export async function POST(req: NextRequest) {
   }
 
   const admin = createAdminClient();
-  const { data: contractor } = await (admin as any)
+  const { data: contractor, error: lookupError } = await (admin as any)
     .from("contractors")
     .select("id, user_id, background_check_status, background_check_detail")
     .eq("checkr_candidate_id", event.candidateId)
     .maybeSingle();
+
+  if (lookupError) {
+    // A real DB error (not "no rows" - maybeSingle only errors on an actual
+    // failure) is indistinguishable from "no contractor" unless checked
+    // explicitly. Ack with a 500 so Checkr retries instead of the event
+    // being silently lost.
+    console.error("checkr webhook: contractor lookup failed:", lookupError.message);
+    return NextResponse.json({ error: "lookup failed" }, { status: 500 });
+  }
 
   if (!contractor) {
     // No matching contractor (candidate id was never saved, or belongs to a
@@ -128,7 +137,10 @@ export async function POST(req: NextRequest) {
       .update(fields)
       .eq("id", contractor.id);
     if (error) {
+      // The status update is the whole point of this event; a failed write
+      // must not ACK as if it landed. 500 makes Checkr retry.
       console.error("checkr webhook: contractor update failed:", error.message);
+      return NextResponse.json({ error: "update failed" }, { status: 500 });
     }
   }
 

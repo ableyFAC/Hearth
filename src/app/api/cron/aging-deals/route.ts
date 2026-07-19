@@ -36,6 +36,15 @@ const ALERT_KIND = "aging_deal";
 const ALERT_URL = "/pro";
 const ALERT_TITLE = "Deals on jobs in your trades";
 
+// Keep Promise.all fan-out bounded.
+const SEND_CHUNK = 10;
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 function isAuthorized(req: NextRequest): boolean {
   const expected = process.env.CRON_SECRET;
   if (!expected) return false;
@@ -216,41 +225,44 @@ async function runCron(req: NextRequest) {
   let checked = 0;
   let notified = 0;
 
-  for (const contractor of memberContractors) {
-    try {
-      checked += 1;
-      if (alreadyNotified.has(contractor.user_id)) continue;
+  for (const batch of chunk(memberContractors, SEND_CHUNK)) {
+    await Promise.all(
+      batch.map(async (contractor) => {
+        try {
+          checked += 1;
+          if (alreadyNotified.has(contractor.user_id)) return;
 
-      // Null categories means "takes anything", matching open_jobs_for_me().
-      const cats: string[] | null = contractor.categories;
-      const deals = openJobs.filter(
-        (j) =>
-          (cats === null || cats.includes(j.category)) &&
-          !applicantsByJob.get(j.id)?.has(contractor.id)
-      );
-      if (deals.length === 0) continue;
+          // Null categories means "takes anything", matching open_jobs_for_me().
+          const cats: string[] | null = contractor.categories;
+          const deals = openJobs.filter(
+            (j) =>
+              (cats === null || cats.includes(j.category)) &&
+              !applicantsByJob.get(j.id)?.has(contractor.id)
+          );
+          if (deals.length === 0) return;
 
-      const label = offLabel(deals.map((d) => d.off));
-      const body =
-        deals.length === 1
-          ? `1 job in your trades is now ${label} to apply.`
-          : `${deals.length} jobs in your trades are now ${label} to apply.`;
+          const label = offLabel(deals.map((d) => d.off));
+          const body =
+            deals.length === 1
+              ? `1 job in your trades is now ${label} to apply.`
+              : `${deals.length} jobs in your trades are now ${label} to apply.`;
 
-      const contact = userById.get(contractor.user_id);
-      const sent = await sendNotification(supabase, {
-        userId: contractor.user_id,
-        kind: ALERT_KIND,
-        title: ALERT_TITLE,
-        body,
-        url: ALERT_URL,
-        email: contact?.email ?? null,
-        phone: contact?.phone ?? null,
-      });
-      if (sent) notified += 1;
-    } catch {
-      // One bad member shouldn't stop the rest of the run.
-      continue;
-    }
+          const contact = userById.get(contractor.user_id);
+          const sent = await sendNotification(supabase, {
+            userId: contractor.user_id,
+            kind: ALERT_KIND,
+            title: ALERT_TITLE,
+            body,
+            url: ALERT_URL,
+            email: contact?.email ?? null,
+            phone: contact?.phone ?? null,
+          });
+          if (sent) notified += 1;
+        } catch {
+          // One bad member shouldn't stop the rest of the batch.
+        }
+      })
+    );
   }
 
   return NextResponse.json({ checked, notified });

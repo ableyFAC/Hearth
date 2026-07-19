@@ -67,7 +67,7 @@ export default async function PlusPage({
   // When the row HAS landed, the acknowledgment on the last step can state the
   // real plan; when it hasn't, PlusWelcome falls back to the cancellation
   // terms plus a pointer to the emailed acknowledgment. "trialing" is what the
-  // free first month looks like in Stripe, so it is the step-up signal here.
+  // free 3-day trial looks like in Stripe, so it is the step-up signal here.
   if (searchParams.welcome === "1") {
     return (
       <PlusWelcome
@@ -111,7 +111,12 @@ export default async function PlusPage({
             You&apos;re on Hearth Plus
           </p>
           <p className="text-sm text-stone-500 dark:text-stone-400">
-            {sub?.plan === "yearly" ? "Yearly" : "Monthly"} plan
+            {sub?.plan === "yearly"
+              ? "Yearly"
+              : sub?.plan === "weekly"
+              ? "Weekly"
+              : "Monthly"}{" "}
+            plan
             {sub?.current_period_end
               ? ` · renews ${new Date(sub.current_period_end).toLocaleDateString()}`
               : ""}
@@ -256,9 +261,9 @@ export default async function PlusPage({
     );
   }
 
-  // The free month is granted only when there's no existing homeowner
+  // The 3-day trial is granted only when there's no existing homeowner
   // subscription row (the same signal startPlusCheckoutAction checks), so a
-  // returning subscriber never sees "free month" copy they wouldn't get.
+  // returning subscriber never sees trial copy they wouldn't get.
   const trialEligible = !sub;
 
   return (
@@ -349,8 +354,8 @@ export default async function PlusPage({
         </h1>
         <p className="mt-2 text-sm font-medium text-hearth-700 dark:text-hearth-300">
           {trialEligible
-            ? "First month free, then $4.99/mo. Cancel anytime."
-            : "$4.99/mo, or $39.99/yr. Cancel anytime."}
+            ? "Free for 3 days, then $4.99/mo or $39.99/yr. Cancel anytime."
+            : "$1.99/wk, $4.99/mo, or $39.99/yr. Cancel anytime."}
         </p>
         <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
           {COLD_START_FREE_POSTING
@@ -364,7 +369,7 @@ export default async function PlusPage({
               made here is the one the button below keeps. Non-trial users
               land on the yearly plan by default (see PlanToggle). */}
           <a href="#pricing" className="btn-primary">
-            {trialEligible ? "Start my free month" : "Get a year of Plus"}
+            {trialEligible ? "Start my 3 days free" : "See plans"}
           </a>
           <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
             Cancel anytime. No commitment.

@@ -5,10 +5,11 @@ import type { Metadata } from "next";
 // src/app/privacy/page.tsx: see src/lib/supabase/middleware.ts for the
 // allowlist entry and src/app/sitemap.ts for the sitemap entry. Content is
 // derived from the actual code paths (the /api/ask, /api/pro-ask,
-// /api/analyze-quote, /api/pro-tools, /api/ingest-inspection,
-// /api/extract-document, /api/tax-appeal, /api/insurance-packet,
-// /api/transcribe routes all call Google's Gemini Flash models) rather than a
-// generic template. The inline label under AI output
+// /api/analyze-quote, /api/pro-tools, /api/pro-past-jobs,
+// /api/ingest-inspection, /api/extract-document, /api/confirm-system,
+// /api/tax-appeal, /api/insurance-packet, /api/pro-compliance,
+// /api/draft-apply, /api/transcribe routes all call Google's Gemini Flash
+// models) rather than a generic template. The inline label under AI output
 // (src/components/AiNotice.tsx) links here.
 
 const SITE_URL =
@@ -108,6 +109,14 @@ export default function AiDisclosurePage() {
               </span>
               : drafted estimates, follow-ups, replies, job write-ups, and the
               compliance-document date reading.
+            </li>
+            <li>
+              <span className="font-medium text-stone-900 dark:text-stone-100">
+                Applying to a job
+              </span>
+              : when a pro applies to an open lead, the first-pass apply
+              message is drafted for them. It fills the textarea, it doesn&apos;t
+              send anything; the pro edits it before sending.
             </li>
             <li>
               <span className="font-medium text-stone-900 dark:text-stone-100">

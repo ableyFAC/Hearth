@@ -18,7 +18,7 @@ const STAGE_LABEL: Record<string, string> = {
 };
 const STAGE_STYLE: Record<string, string> = {
   healthy: "border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200",
-  aging: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200",
+  aging: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300",
   due: "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200",
   unknown: "border-stone-200 bg-stone-50 text-stone-500 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400",
 };
@@ -257,7 +257,7 @@ export default async function LearnPage() {
           ? STAGE_LABEL[h.stage]
           : undefined,
       statusStyle: estimatedDue
-        ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+        ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300"
         : h
           ? STAGE_STYLE[h.stage]
           : undefined,

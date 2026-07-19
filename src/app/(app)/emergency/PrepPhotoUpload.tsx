@@ -37,8 +37,18 @@ export default function PrepPhotoUpload({
     const file = input.files?.[0];
     input.value = "";
     if (!file) return;
-    if (file.size > MAX_BYTES || !file.type.startsWith("image/")) {
-      setErr("That file's too big or isn't an image.");
+    // Real allowed raster types only - matches the home-photos bucket's own
+    // allowed_mime_types (migration 0079). accept="image/*" is only a browser
+    // hint; the old `type.startsWith("image/")` check would still let
+    // image/svg+xml through, which can carry a <script> and gets served back
+    // off Hearth's own storage origin (security audit finding #7).
+    const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+    if (file.type === "image/svg+xml") {
+      setErr("SVG images aren't supported. Please use a PNG, JPEG, or WEBP photo.");
+      return;
+    }
+    if (file.size > MAX_BYTES || !ALLOWED_TYPES.has(file.type)) {
+      setErr("That file's too big or isn't a supported image type (PNG, JPEG, WEBP).");
       return;
     }
     setBusy(true);
@@ -80,7 +90,7 @@ export default function PrepPhotoUpload({
       )}
       <input
         type="file"
-        accept="image/*"
+        accept="image/png,image/jpeg,image/webp"
         onChange={onPick}
         className="block w-full text-xs text-stone-500 file:mr-2 file:rounded-md file:border-0 file:bg-hearth-100 file:px-2 file:py-1 file:text-hearth-800 dark:text-stone-400 dark:file:bg-hearth-900 dark:file:text-hearth-300"
       />

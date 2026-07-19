@@ -1,24 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/notify";
+import { isMissingSchemaError } from "@/lib/dbErrors";
 
 export const runtime = "nodejs";
 
 // Daily job (Vercel Cron, see vercel.json) behind the pro-refers-pro program:
-// when a referred pro wins their FIRST job, both the referred pro and their
-// referrer get $25 of 90-day expiring application credit (never cash).
+// when a referred pro CLOSES their first PAID job (contractor_leads.status =
+// 'closed', a real fee actually paid - not refunded, not waived, not a $0
+// rehire), and 21 days have passed since it closed, both the referred pro and
+// their referrer get $25 of 90-day expiring application credit (never cash).
 //
 // All the money logic lives in the grant_referral_rewards() DB function
-// (migration 0044), which re-checks every rule atomically (real attribution,
-// not self, a real won job, once per referred pro ever, referrer capped at 10
-// rewarded referrals per calendar year) behind FOR UPDATE locks on both
-// wallets. This route only finds rough candidates, calls the function per
-// referred contractor, and notifies both parties on each success, so re-runs
-// and overlapping runs are safe and nobody is ever credited twice.
+// (migration 0044, tightened by 0084's sybil guard and 0088's closed-deal +
+// 21-day-hold gate), which re-checks every rule atomically (real attribution,
+// not self, a real closed and paid deal past its hold, once per referred pro
+// ever, referrer capped at 10 rewarded referrals per calendar year and a $500
+// lifetime ceiling) behind FOR UPDATE locks on both wallets. This route only
+// finds rough candidates, calls the function per referred contractor, and
+// notifies both parties on each success, so re-runs and overlapping runs are
+// safe and nobody is ever credited twice.
 
 const MAX_GRANTS = 100; // cap the RPC calls (and money) per run
 const MAX_SCAN = 500; // sanity cap on the candidate scan
 const QUERY_CHUNK = 200; // keep .in() lists bounded
+const REFERRAL_HOLD_DAYS = 21; // keep in sync with 0088's v_hold
 
 const REWARD_KIND = "referral_reward";
 const REWARD_URL = "/pro/billing";
@@ -79,32 +85,63 @@ async function runCron(req: NextRequest) {
     return NextResponse.json({ checked: 0, granted: 0 });
   }
 
-  // Won-job filter: the reward fires only on a real revenue event. Same
-  // terminal win shapes the DB function checks: a 'chosen' application, or a
-  // lead assigned to the contractor with paid = true.
+  // Closed-deal filter: the reward now fires only on a real, closed, paid
+  // deal past its 21-day hold, not merely a "win". This is an
+  // over-approximation ONLY - the DB function (grant_referral_rewards) is the
+  // sole authority and re-checks every rule (fee actually paid, not
+  // refunded/waived, payout_amount > 0, the hold itself) atomically behind
+  // wallet locks. This filter must never MISS a contractor who will actually
+  // qualify; passing through some who won't is fine and expected.
   const candidateIds = candidates.map((c) => c.id);
-  const winners = new Set<string>();
+  const holdCutoffIso = new Date(
+    Date.now() - REFERRAL_HOLD_DAYS * 24 * 60 * 60 * 1000
+  ).toISOString();
+  const closedDealContractors = new Set<string>();
+  let closedAtAvailable = true;
   for (const ids of chunk(candidateIds, QUERY_CHUNK)) {
-    const [{ data: chosenApps }, { data: paidLeads }] = await Promise.all([
-      supabase
-        .from("lead_applications")
-        .select("contractor_id")
-        .in("contractor_id", ids)
-        .eq("status", "chosen"),
-      supabase
-        .from("contractor_leads")
-        .select("contractor_id")
-        .in("contractor_id", ids)
-        .eq("paid", true),
-    ]);
-    for (const a of chosenApps ?? []) {
-      if (a.contractor_id) winners.add(a.contractor_id);
+    // closed_at (0088) isn't in the hand-maintained database.types.ts, same
+    // as referred_by above - go through a cast rather than widen the shared
+    // Database type just for this one column.
+    const { data: closedLeads, error: closedError } = await (
+      supabase.from("contractor_leads") as any
+    )
+      .select("contractor_id")
+      .in("contractor_id", ids)
+      .eq("status", "closed")
+      .not("closed_at", "is", null)
+      .lte("closed_at", holdCutoffIso);
+    if (closedError) {
+      if (isMissingSchemaError(closedError)) {
+        // Pre-0088 DB: closed_at doesn't exist yet. Fall back to treating
+        // every candidate as a rough winner - the RPC still decides, so this
+        // only widens the (harmless) over-approximation, never narrows it.
+        console.error(
+          "referral-rewards: closed_at not available yet (pre-0088 DB), falling back to all candidates:",
+          closedError.message
+        );
+        closedAtAvailable = false;
+        break;
+      }
+      // Any other error (transient network/DB hiccup, timeout, etc.): the RPC
+      // is the sole authority on whether a candidate actually qualifies, so a
+      // pre-filter must never NARROW the candidate set just because one of
+      // its own queries failed. Treat this chunk's contractors as rough
+      // winners too, same fail-open contract as the missing-schema branch
+      // above, rather than silently dropping them from the run.
+      console.error(
+        "referral-rewards: closed-deal query failed, treating chunk as rough winners:",
+        closedError.message
+      );
+      for (const id of ids) closedDealContractors.add(id);
+      continue;
     }
-    for (const l of paidLeads ?? []) {
-      if (l.contractor_id) winners.add(l.contractor_id);
+    for (const l of closedLeads ?? []) {
+      if (l.contractor_id) closedDealContractors.add(l.contractor_id);
     }
   }
-  candidates = candidates.filter((c) => winners.has(c.id));
+  candidates = closedAtAvailable
+    ? candidates.filter((c) => closedDealContractors.has(c.id))
+    : candidates;
 
   // Already-rewarded filter: a referral_reward ledger row on the referred
   // pro's wallet means this referral was already paid out. Cheap pre-filter
@@ -205,7 +242,7 @@ async function runCron(req: NextRequest) {
           userId: candidate.user_id,
           kind: REWARD_KIND,
           title: "You earned $25 of application credit",
-          body: "You won your first job on Hearth, so $25 of application credit was added to your wallet as a referral bonus. It works on any application and expires in 90 days.",
+          body: "You completed your first job on Hearth, so $25 of application credit was added to your wallet as a referral bonus. It works on any application and expires in 90 days.",
           url: REWARD_URL,
           email: contact?.email ?? null,
           phone: contact?.phone ?? null,
@@ -218,7 +255,7 @@ async function runCron(req: NextRequest) {
           userId: referrerUserId,
           kind: REWARD_KIND,
           title: "Your referral earned you $25 of credit",
-          body: "A pro you referred just won their first job on Hearth, so $25 of application credit was added to your wallet. It works on any application and expires in 90 days.",
+          body: "A pro you referred completed their first job on Hearth, so $25 of application credit was added to your wallet. It works on any application and expires in 90 days.",
           url: REWARD_URL,
           email: contact?.email ?? null,
           phone: contact?.phone ?? null,

@@ -116,7 +116,6 @@
 
 .box {
   --room-bg: #15100c;
-  --room-vignette: radial-gradient(120% 90% at 50% 0%, #241b13 0%, #15100c 60%, #0f0b08 100%);
   --room-ink: #f3e9dd;
   --room-ink-dim: #b9a68e;
   --room-line: #3a2f27;
@@ -146,7 +145,6 @@
   border-radius: 16px;
   overflow: hidden;
   background: var(--room-bg);
-  background-image: var(--room-vignette);
   box-shadow: 0 30px 60px -24px rgb(0 0 0 / 0.5), 0 0 0 1px var(--room-line);
   color: var(--room-ink);
   font-family: var(--sans);
@@ -228,7 +226,7 @@
   width: 100%;
   max-width: 600px;
   border-radius: 12px;
-  background: linear-gradient(180deg, #241b13, #1a130d);
+  background: #1f1810;
   padding: 5px;
   box-shadow: 0 24px 64px rgb(0 0 0 / 0.45);
 }
@@ -341,7 +339,7 @@
   box-shadow: 0 1px 2px 0 rgb(94 60 40 / 0.05);
 }
 .cardHero {
-  background: linear-gradient(160deg, #ffffff, var(--dev-bg));
+  background: #ffffff;
   border-color: #e6d1ba;
 }
 .cardLabel {
@@ -656,7 +654,7 @@
   margin: -9px 0 0 -9px;
   border-radius: 50%;
   border: 1.5px solid var(--dev-accent);
-  background: radial-gradient(circle, rgb(192 143 96 / 0.4), rgb(192 143 96 / 0) 70%);
+  background: rgb(192 143 96 / 0.16);
   opacity: 0;
   pointer-events: none;
 }
@@ -785,7 +783,7 @@
   right: 0;
   bottom: 0;
   z-index: 11;
-  background: linear-gradient(0deg, rgb(10 7 5 / 0.85) 0%, rgb(10 7 5 / 0.5) 60%, rgb(10 7 5 / 0) 100%);
+  background: rgb(10 7 5 / 0.55);
   padding: 16px 12px 8px;
 }
 .controlBar { display: flex; align-items: center; gap: 10px; }
@@ -906,7 +904,7 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  background: linear-gradient(180deg, rgb(21 16 12 / 0.35), rgb(15 11 8 / 0.72));
+  background: rgb(15 11 8 / 0.55);
   cursor: pointer;
   border: none;
   width: 100%;
@@ -919,7 +917,6 @@
   inset: 0;
   z-index: -1;
   background: var(--room-bg);
-  background-image: var(--room-vignette);
 }
 .playCircle {
   width: 58px;

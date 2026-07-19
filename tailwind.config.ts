@@ -11,10 +11,10 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        // Inter is loaded in app/layout.tsx via next/font and exposed as
-        // --font-inter; system stack covers the flash before it resolves.
+        // Hanken Grotesk is loaded in app/layout.tsx via next/font and exposed
+        // as --font-sans; the system stack covers the flash before it resolves.
         sans: [
-          "var(--font-inter)",
+          "var(--font-sans)",
           "ui-sans-serif",
           "system-ui",
           "-apple-system",
@@ -69,18 +69,24 @@ const config: Config = {
         menu: "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)",
       },
       colors: {
-        // Hearth palette: warm, calm, trustworthy.
+        // Hearth palette: one warm-paper ground rising to a single ember
+        // accent (the fireplace). 600 is the primary accent used by
+        // .btn-primary and focus rings; 50 is the app's warm-paper
+        // background. The ramp is pulled toward RED (a deep terracotta ember,
+        // not orange) so it does not drift yellow - warm mid tones gain
+        // luminance on the dark ground and read yellow if left too orange, so
+        // the 400-600 steps in particular are red-leaning.
         hearth: {
-          50: "#fbf7f2",
-          100: "#f3e9dd",
-          200: "#e6d1ba",
-          300: "#d4b08c",
-          400: "#c08f60",
-          500: "#a9743f",
-          600: "#915d32",
-          700: "#73482b",
-          800: "#5e3c28",
-          900: "#4f3324",
+          50: "#faf4f0",
+          100: "#f6e4dc",
+          200: "#eec6b7",
+          300: "#e09f85",
+          400: "#d07257",
+          500: "#c14f34",
+          600: "#b8442a",
+          700: "#98371f",
+          800: "#7d2f1b",
+          900: "#682816",
         },
       },
     },

@@ -212,10 +212,10 @@ export default async function ValuePage() {
                             : moneyShort(p.value)}
                         </span>
                         <div
-                          className={`w-7 rounded-t-md bg-gradient-to-t ${
+                          className={`w-7 rounded-t-md ${
                             p.year === currentYear
-                              ? "from-hearth-600 to-hearth-500"
-                              : "from-hearth-500 to-hearth-400"
+                              ? "bg-hearth-600 dark:bg-hearth-500"
+                              : "bg-hearth-400 dark:bg-hearth-500/60"
                           }`}
                           style={{ height: `${height}px` }}
                         />

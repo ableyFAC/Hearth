@@ -6,7 +6,7 @@ import { MapPin, Lock } from "lucide-react";
 
 const SEVERITY_STYLE: Record<string, string> = {
   low: "border-stone-200 bg-stone-50 text-stone-600 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300",
-  medium: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200",
+  medium: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300",
   urgent: "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200",
 };
 

@@ -13,6 +13,12 @@ export async function depositAction(formData: FormData) {
   const dollars = Number(formData.get("amount"));
   const cents = Math.round(dollars * 100);
   if (!cents || cents < 500) redirect("/pro/billing"); // $5 minimum to deposit
+  // $2,000 maximum per deposit. The amount that lands in Stripe checkout
+  // metadata (and therefore what apply_deposit ultimately credits) is set
+  // server-side right here, so this cap isn't itself forgeable - it exists to
+  // bound how much a single chargeback can claw back through, on top of the
+  // reverse_deposit wallet-reversal handling in the Stripe webhook.
+  if (cents > 200_000) redirect("/pro/billing"); // $2,000 maximum per deposit
 
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");

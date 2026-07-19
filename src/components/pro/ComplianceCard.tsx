@@ -30,7 +30,7 @@ function StatusPill({ status }: { status: ComplianceStatus }) {
   }
   if (status === "expiring") {
     return (
-      <span className="chip border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+      <span className="chip border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
         Expiring soon
       </span>
     );

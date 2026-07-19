@@ -67,10 +67,10 @@ export default async function Home({
 
   return (
     <main className="pb-16">
-      {/* Warm gradient band wraps header, hero, and the product preview.
-          In dark it keeps a faint hearth glow at the top, then settles into
-          the body's stone-900. */}
-      <div className="bg-gradient-to-b from-hearth-50 via-white to-white dark:from-hearth-900/40 dark:via-stone-900 dark:to-stone-900">
+      {/* Warm band wraps header, hero, and the product preview: a single
+          flat fill, hearth-50 in light and stone-900 in dark (matching the
+          body), no gradient. */}
+      <div className="bg-hearth-50 dark:bg-stone-900">
         <div className="mx-auto max-w-3xl px-6 pt-6">
           {/* Slim header: wordmark left, theme switch + quiet pro door right */}
           <header className="flex items-center justify-between">

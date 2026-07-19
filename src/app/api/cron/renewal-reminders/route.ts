@@ -7,31 +7,64 @@ import { billingTerms, type PaidPlan } from "@/lib/billingTerms";
 export const runtime = "nodejs";
 
 // Daily job (Vercel Cron, see vercel.json) that warns paying members BEFORE a
-// charge they might not be expecting. Two cases, and only two:
+// charge they might not be expecting. Four cases:
 //
-//   1. Step-up. The current period is running on a free month (Hearth Plus)
-//      or an intro month (Hearth Pro), and the next charge is at the higher
-//      standard price. This is the case regulators care most about, because
-//      the amount changes without the member doing anything.
-//   2. Yearly renewal. A 12-month term is about to auto-renew for another
+//   1. Trial ending. Every brand-new Hearth Plus subscriber, on any cadence
+//      (weekly, monthly, yearly), starts with a 3-day Stripe free trial, and
+//      the notice fires about a day before that trial ends and the first
+//      real charge lands. California's Automatic Renewal Law 3-to-21-day
+//      window for free periods only kicks in past 31 days, so for this
+//      3-day trial the 1-day lead is not a statutory requirement, it is a
+//      best-practice heads-up and a chargeback defense. A legacy month-long
+//      trial is long enough to fall inside that statutory window, so it
+//      keeps the same 5-day lead the step-up case below uses.
+//   2. Step-up. The current period is running on an intro month (Hearth
+//      Pro), and the next charge is at the higher standard price. This is
+//      the case regulators care most about, because the amount changes
+//      without the member doing anything.
+//   3. Yearly renewal. A 12-month term is about to auto-renew for another
 //      12 months at the same price.
+//   4. Annual continuous-service notice. Once every calendar year, every
+//      ACTIVE (past-trial, not set to cancel) Plus or Pro subscriber gets a
+//      reminder that their membership renews automatically, on ANY cadence
+//      (weekly, monthly, or yearly). This case is not windowed against
+//      current_period_end the way 1-3 are: California's Automatic Renewal
+//      Law, as amended by AB 2863 (effective July 1, 2025), extended the
+//      annual-reminder requirement in Bus. & Prof. Code 17602(h) to cover
+//      ongoing weekly and monthly subscriptions, not just terms of a year or
+//      longer, so a monthly member now needs the same once-a-year "this
+//      renews automatically" notice a yearly member already gets near their
+//      term date under case 3. See the ANNUAL NOTICE section below for how
+//      this case is queried and de-duplicated separately from cases 1-3.
 //
-// The windows come from California's Automatic Renewal Law (Bus. & Prof. Code
-// 17602(a)(5)-(6)): 3 to 21 days before a promotional or free period ends,
-// and 15 to 45 days before a term of a year or longer renews. Reminders fire
-// at the near edge of each window (a few days out, not three weeks out) so
-// the notice arrives when it is still actionable and does not read as noise.
+// The windows for cases 1-3 come from California's Automatic Renewal Law
+// (Bus. & Prof. Code 17602(a)(5)-(6)): 3 to 21 days before a promotional or
+// free period ends, and 15 to 45 days before a term of a year or longer
+// renews. Reminders fire at the near edge of each window (a few days out,
+// not three weeks out) so the notice arrives when it is still actionable and
+// does not read as noise. Case 4 is not a pre-charge warning tied to a
+// renewal date, it is a once-a-year notice, so it has no "days out" window
+// to sit inside.
 //
-// Deliberately NOT covered: an ordinary monthly renewal at an unchanged
-// price. Nothing requires it, the amount is not changing, and a monthly
+// An ordinary monthly renewal at an unchanged price still gets no PER-PERIOD
+// reminder: nothing requires one, the amount is not changing, and a monthly
 // "you're about to be charged again" is the kind of message people mute,
-// which would bury the two notices above that actually matter.
+// which would bury the notices above that actually matter. But every such
+// subscriber DOES get case 4's once-a-year notice, which is what 17602(h)
+// now requires for continuous-service agreements regardless of cadence.
 //
-// Noise control: at most one reminder per subscription per period. The dup
-// guard is keyed to the PERIOD ITSELF - the period end date rides in the
-// notification url - so daily re-runs across the whole window are no-ops and
-// the next period, which has a new end date, re-arms the guard on its own.
-// Same once-per-key-forever pattern as the insurance-renewal cron.
+// Noise control: at most one reminder per subscription per period for cases
+// 1-3. The dup guard is keyed to the PERIOD ITSELF - the period end date
+// rides in the notification url, except for the trial_end kind, where the
+// key is the trial's own end date (the same date as the period end while
+// trialing, but named explicitly so the anchor is documented rather than
+// incidental) - so daily re-runs across the whole window are no-ops and the
+// next period, which has a new end date, re-arms the guard on its own. Case
+// 4 uses its own kind ("annual_notice") and its own dup guard keyed to the
+// CALENDAR YEAR rather than the period, since it has to fire once a year on
+// any cadence, including cadences (weekly, monthly) that roll over many
+// times before a year is up. Same once-per-key-forever pattern as the
+// insurance-renewal cron.
 //
 // Notification preferences are deliberately NOT consulted. These are billing
 // notices required before money moves, not marketing, and a muted "reminders"
@@ -43,6 +76,14 @@ const STEP_UP_LEAD_DAYS = 5;
 // Yearly renewal reminders: fire this many days before the term renews.
 // Inside the 15-45 day window.
 const RENEWAL_LEAD_DAYS = 20;
+// Trial-ending reminders: fire this many days before a SHORT trial ends,
+// about 24h out. A 3-day trial does not have room for a 5-day lead.
+const TRIAL_LEAD_DAYS = 1;
+// A trial this short (days) gets the 24h lead above; anything longer (a
+// legacy month-long free trial) keeps the step-up case's 5-day lead so the
+// notice stays inside the ARL's 3-21 day window for free periods over 31
+// days.
+const SHORT_TRIAL_MAX_DAYS = 7;
 
 // How wide a slice of dates each run considers. A run that fails or is
 // skipped would otherwise leave a permanent hole: catching a few days on
@@ -51,10 +92,20 @@ const RENEWAL_LEAD_DAYS = 20;
 const WINDOW_SLACK_DAYS = 3;
 
 const MAX_SUBSCRIPTIONS = 300; // cap the work (and the Stripe calls) per run
+// The annual-notice pass below is a separate query with its own budget
+// rather than sharing MAX_SUBSCRIPTIONS, so a run where both passes fill up
+// can spend up to MAX_SUBSCRIPTIONS + MAX_ANNUAL_SUBSCRIPTIONS Stripe calls.
+const MAX_ANNUAL_SUBSCRIPTIONS = 300;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const REMINDER_KIND = "renewal_reminder";
+// Separate kind from REMINDER_KIND: case 4 (see header comment) satisfies a
+// different legal requirement on a different cadence (once a calendar year,
+// not once a billing period), so it gets its own kind rather than sharing
+// REMINDER_KIND, keeping the two dup guards from ever colliding on the same
+// url.
+const ANNUAL_NOTICE_KIND = "annual_notice";
 
 // PostgREST silently truncates every response at its max-rows cap. The
 // per-user lookups here fetch at most one row per id, so 200 stays well under
@@ -99,7 +150,7 @@ function fmtDate(d: Date): string {
 // Anything unrecognized returns null and the row is skipped rather than
 // guessed at: a reminder quoting the wrong price is worse than none.
 function toPaidPlan(plan: string | null | undefined): PaidPlan | null {
-  if (plan === "monthly" || plan === "yearly") return plan;
+  if (plan === "weekly" || plan === "monthly" || plan === "yearly") return plan;
   if (plan === "pro_monthly" || plan === "pro_yearly") return plan;
   return null;
 }
@@ -134,6 +185,13 @@ async function runCron(req: NextRequest) {
   )
     .select("user_id, plan, status, stripe_subscription_id, current_period_end")
     .in("status", ["active", "trialing"])
+    // An ACTIVE weekly sub never gets a notice (weekly is deliberately not
+    // covered outside its trial), but its current_period_end is always
+    // inside this query's short horizon, so it would sit in the window
+    // forever, crowding out monthly/yearly candidates against MAX_SUBSCRIPTIONS
+    // and burning a Stripe retrieve every run for nothing. Only a TRIALING
+    // weekly sub can be due, so only that one is fetched.
+    .or("plan.neq.weekly,status.eq.trialing")
     .not("stripe_subscription_id", "is", null)
     .not("current_period_end", "is", null)
     .gte("current_period_end", floor)
@@ -156,12 +214,78 @@ async function runCron(req: NextRequest) {
   const subs = ((rawSubs ?? []) as SubRow[]).filter(
     (s) => Boolean(s.user_id) && Boolean(s.stripe_subscription_id)
   );
-  if (subs.length === 0) {
+
+  // ANNUAL NOTICE (case 4 in the header comment above): a second, separate
+  // query for the AB 2863 / 17602(h) once-a-year notice. It cannot share the
+  // query above, which is windowed tightly around current_period_end and
+  // deliberately excludes active weekly subs (see the .or() filter's comment
+  // a few lines up) - reusing that query here would reopen the exact
+  // weekly-starvation problem that filter exists to close, since a weekly
+  // sub's current_period_end is always inside a few-day window but this
+  // notice is due only once a year.
+  //
+  // Instead this pass works off a per-year backlog: the year is baked into
+  // the notification url (see ANNUAL_NOTICE_KIND below), so once a
+  // subscriber gets this year's notice they drop out of the candidate set
+  // and stay out until January 1 re-arms it. That means MAX_ANNUAL_SUBSCRIPTIONS
+  // only ever gets spent on subscribers still owed a notice this year, and a
+  // subscriber base under that cap clears out early in the year and goes
+  // quiet - no day-of-year math needed to spread the work out.
+  const year = new Date(now).getUTCFullYear();
+  const yearStart = new Date(Date.UTC(year, 0, 1)).toISOString();
+
+  // Everyone already covered for `year`, so the candidate query below can
+  // exclude them up front instead of spending a Stripe call to find out. The
+  // per-row dup guard further down still runs as the real safety net, so an
+  // incomplete list here (past this generous limit) risks a wasted Stripe
+  // call, never a duplicate notification.
+  const { data: alreadyNotified } = await supabase
+    .from("notifications")
+    .select("user_id")
+    .eq("kind", ANNUAL_NOTICE_KIND)
+    .gte("created_at", yearStart)
+    .limit(5000);
+  const excludedIds = Array.from(
+    new Set((alreadyNotified ?? []).map((n) => n.user_id as string))
+  );
+
+  // Active (not trialing), not already covered for `year`, has a live
+  // Stripe subscription to check. Trialing is excluded here at the query
+  // level, not just left to the Stripe check below: a member still inside
+  // their free trial has not yet agreed to a recurring charge worth this
+  // notice, and case 1 (trial_end) already covers that member. Unlike the
+  // query above, EVERY cadence is wanted here, including weekly, so there is
+  // no plan filter.
+  let annualQuery = (supabase.from("subscriptions") as any)
+    .select("user_id, plan, status, stripe_subscription_id, current_period_end")
+    .eq("status", "active")
+    .not("stripe_subscription_id", "is", null)
+    // No natural "soonest first" for this pass (every candidate is equally
+    // due until the year is covered), so user_id just gives a stable order.
+    .order("user_id", { ascending: true })
+    .limit(MAX_ANNUAL_SUBSCRIPTIONS);
+  for (const ids of chunk(excludedIds, QUERY_CHUNK)) {
+    annualQuery = annualQuery.not("user_id", "in", `(${ids.join(",")})`);
+  }
+  const { data: rawAnnualSubs, error: annualError } = await annualQuery;
+  if (annualError) {
+    console.error(
+      "renewal-reminders cron: annual-notice subscriptions query failed:",
+      annualError.message
+    );
+  }
+  const annualSubs = ((rawAnnualSubs ?? []) as SubRow[]).filter(
+    (s) => Boolean(s.user_id) && Boolean(s.stripe_subscription_id)
+  );
+
+  if (subs.length === 0 && annualSubs.length === 0) {
     return NextResponse.json({ checked: 0, notified: 0 });
   }
 
   // Contact details for the email channel.
-  const userIds = Array.from(new Set(subs.map((s) => s.user_id)));
+  const userIds = Array.from(
+    new Set([...subs.map((s) => s.user_id), ...annualSubs.map((s) => s.user_id)])
+  );
   const userById = new Map<string, { id: string; email: string | null }>();
   for (const ids of chunk(userIds, QUERY_CHUNK)) {
     const { data: users } = await supabase
@@ -209,6 +333,38 @@ async function runCron(req: NextRequest) {
             stripeSub.status === "trialing" ||
             (typeof stripeSub.trial_end === "number" &&
               stripeSub.trial_end * 1000 > now);
+
+          // How long the trial runs, in days, so a short 3-day Plus trial and
+          // a legacy month-long free trial can use different lead windows
+          // below. Stripe's trial_start/trial_end are unix SECONDS; older
+          // subscriptions can be missing trial_start, so start_date (also
+          // seconds) is the fallback for when the trial began. Unknown length
+          // is treated as short below: a lead time that is too long is a
+          // wasted notice, one that is too short is a surprise charge.
+          const trialStartSec =
+            typeof stripeSub.trial_start === "number"
+              ? stripeSub.trial_start
+              : stripeSub.start_date;
+          const trialLengthDays: number | null =
+            typeof stripeSub.trial_end === "number" &&
+            typeof trialStartSec === "number"
+              ? Math.round((stripeSub.trial_end - trialStartSec) / 86400)
+              : null;
+
+          // When actually trialing, how many days until that trial ends
+          // (and the first real charge fires). Falls back to periodEnd on
+          // the rare row where trial_end itself is missing but the status
+          // still says "trialing".
+          let trialEndMs: number | null = null;
+          let trialDaysOut: number | null = null;
+          if (trialing) {
+            trialEndMs =
+              typeof stripeSub.trial_end === "number"
+                ? stripeSub.trial_end * 1000
+                : periodEnd.getTime();
+            trialDaysOut = Math.round((trialEndMs - now) / DAY_MS);
+          }
+
           const discountList = stripeSub.discounts;
           const discounted = Array.isArray(discountList)
             ? discountList.length > 0
@@ -237,12 +393,30 @@ async function runCron(req: NextRequest) {
 
           const yearly = plan === "yearly" || plan === "pro_yearly";
 
-          // Pick the notice this subscription is due for, if any. Step-up
-          // wins when both could apply: the price change is the more
-          // important fact.
-          let due: "step_up" | "renewal" | null = null;
+          // Pick the notice this subscription is due for, if any. Trial-end
+          // wins over everything else: it applies to every Plus cadence,
+          // including yearly and weekly, and a trial about to end is the
+          // most time-sensitive of the three notices.
+          let due: "trial_end" | "step_up" | "renewal" | null = null;
           if (
-            stepUp &&
+            trialing &&
+            trialDaysOut !== null &&
+            trialDaysOut >= 0 &&
+            (trialLengthDays !== null && trialLengthDays > SHORT_TRIAL_MAX_DAYS
+              ? trialDaysOut <= STEP_UP_LEAD_DAYS + WINDOW_SLACK_DAYS
+              : trialDaysOut <= TRIAL_LEAD_DAYS)
+          ) {
+            due = "trial_end";
+          } else if (
+            // Plus stamps intro_step_up="true" on every new subscriber
+            // regardless of cadence (see startPlusCheckoutAction), so a
+            // trialing sub also carries flaggedStepUp. Without !trialing
+            // here, a brand-new weekly/monthly trial would match this
+            // branch on day one and send a premature "intro price ends"
+            // notice - a trialing sub belongs to the trial_end branch above
+            // only.
+            !trialing &&
+            (discounted || flaggedStepUp) &&
             !yearly &&
             daysOut <= STEP_UP_LEAD_DAYS + WINDOW_SLACK_DAYS &&
             daysOut >= 0
@@ -250,6 +424,7 @@ async function runCron(req: NextRequest) {
             due = "step_up";
           } else if (
             yearly &&
+            !trialing &&
             daysOut <= RENEWAL_LEAD_DAYS + WINDOW_SLACK_DAYS &&
             daysOut >= RENEWAL_LEAD_DAYS - WINDOW_SLACK_DAYS
           ) {
@@ -257,13 +432,27 @@ async function runCron(req: NextRequest) {
           }
           if (!due) return;
 
-          const terms = billingTerms(plan, stepUp);
+          // A renewal notice must always quote the standard recurring terms,
+          // even in the unlikely event a yearly sub carries a stray coupon
+          // that makes stepUp true: "membership renews" copy paired with
+          // intro/trial pricing would contradict its own title.
+          const terms = billingTerms(plan, due !== "renewal" && stepUp);
 
           // Dup guard keyed to the period: same url means this period was
           // already covered, so daily re-runs across the window are no-ops
           // and next period's new end date re-arms it. The pages ignore
-          // unknown query params, so the link still lands correctly.
-          const url = `${terms.cancelPath}?renewal=${sub.current_period_end.slice(0, 10)}`;
+          // unknown query params, so the link still lands correctly. A
+          // trial_end notice keys off the trial's own end date rather than
+          // current_period_end, since for a trialing sub those two happen to
+          // be the same date, but keying off the trial end directly is what
+          // actually re-arms the guard once the trial rolls into a normal
+          // billing period.
+          const trialEndDate = trialEndMs !== null ? new Date(trialEndMs) : periodEnd;
+          const renewalParam =
+            due === "trial_end"
+              ? trialEndDate.toISOString().slice(0, 10)
+              : sub.current_period_end.slice(0, 10);
+          const url = `${terms.cancelPath}?renewal=${renewalParam}`;
           const { data: existing } = await supabase
             .from("notifications")
             .select("id")
@@ -275,9 +464,11 @@ async function runCron(req: NextRequest) {
           if (existing) return;
 
           const title =
-            due === "step_up"
-              ? `Your ${terms.product} intro price ends on ${fmtDate(periodEnd)}`
-              : `Your ${terms.product} membership renews on ${fmtDate(periodEnd)}`;
+            due === "trial_end"
+              ? `Your ${terms.product} free trial ends on ${fmtDate(trialEndDate)}`
+              : due === "step_up"
+                ? `Your ${terms.product} intro price ends on ${fmtDate(periodEnd)}`
+                : `Your ${terms.product} membership renews on ${fmtDate(periodEnd)}`;
 
           // The body carries the two things the notice exists to convey: what
           // the next charge is, and how to stop it. `terms.recurring` is the
@@ -295,6 +486,95 @@ async function runCron(req: NextRequest) {
             // No SMS: a billing notice is something to keep and re-read, and
             // charging someone's phone plan to warn them about a charge is a
             // poor trade.
+            phone: null,
+          });
+          if (sent) notified += 1;
+        } catch {
+          // One bad row must not stop the rest of the batch.
+        }
+      })
+    );
+  }
+
+  // ANNUAL NOTICE pass (case 4): same chunking, same Stripe cancel-at-period-end
+  // check, and the same sendNotification path as the loop above, but its own
+  // due-test and its own dup guard, since this notice does not care where the
+  // subscriber is in their billing period, only whether they have had one
+  // this calendar year.
+  for (const batch of chunk(annualSubs, SEND_CHUNK)) {
+    await Promise.all(
+      batch.map(async (sub) => {
+        checked += 1;
+        try {
+          const plan = toPaidPlan(sub.plan);
+          if (!plan) return;
+
+          // Stripe is the authority on whether there is still an upcoming
+          // charge to remind about, same as the main loop above: a
+          // subscription already set to cancel gets nothing, and there is no
+          // "you'll be charged" claim left to make.
+          let stripeSub: any;
+          try {
+            stripeSub = await stripe.subscriptions.retrieve(
+              sub.stripe_subscription_id as string
+            );
+          } catch {
+            // Stripe unreachable for this one: skip it. The per-year backlog
+            // keeps this candidate in the pool until a later run succeeds.
+            return;
+          }
+          if (stripeSub.cancel_at_period_end || stripeSub.cancel_at) return;
+          // Belt and braces on top of the status.eq.active query filter:
+          // a trialing member has not agreed to a recurring charge yet, and
+          // case 1 (trial_end) is the notice for them, not this one.
+          if (stripeSub.status === "trialing") return;
+
+          // Past-trial, ongoing member: the same billingTerms() call every
+          // other billing surface uses for a member who is no longer
+          // trial-eligible, so the price and cancellation wording match
+          // everywhere they're stated.
+          const terms = billingTerms(plan, false);
+
+          // Dup guard keyed to the CALENDAR YEAR, not the period: this
+          // notice exists to satisfy AB 2863's once-a-year requirement
+          // regardless of cadence, so the guard re-arms on January 1 rather
+          // than at the next period end, which for a weekly or monthly plan
+          // would otherwise fire this notice every few weeks instead of once
+          // a year.
+          const url = `${terms.cancelPath}?annual=${year}`;
+          const { data: existing } = await supabase
+            .from("notifications")
+            .select("id")
+            .eq("user_id", sub.user_id)
+            .eq("kind", ANNUAL_NOTICE_KIND)
+            .eq("url", url)
+            .limit(1)
+            .maybeSingle();
+          if (existing) return;
+
+          const title = `Your ${terms.product} membership renews automatically`;
+
+          // `terms.recurring` is the same sentence shown before purchase, so
+          // this notice stays word-for-word consistent with the pre-checkout
+          // disclosure. It opens with "After that," because it is written to
+          // follow a "charged today" line; there is no such preceding line
+          // here, so strip that lead-in - the remainder starts with the
+          // amount and reads correctly on its own.
+          const recurringStandalone = terms.recurring.replace(
+            /^After that,\s*/i,
+            ""
+          );
+          const body = `${recurringStandalone} ${terms.cancel}`;
+
+          const sent = await sendNotification(supabase, {
+            userId: sub.user_id,
+            kind: ANNUAL_NOTICE_KIND,
+            title,
+            body,
+            url,
+            email: userById.get(sub.user_id)?.email ?? null,
+            // No SMS, same reasoning as the main loop: a billing notice is
+            // something to keep and re-read, not a text message.
             phone: null,
           });
           if (sent) notified += 1;

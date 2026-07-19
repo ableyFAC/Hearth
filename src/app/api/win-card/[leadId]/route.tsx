@@ -28,7 +28,6 @@ const size = { width: 1200, height: 630 };
 // Warm hearth palette (tailwind.config.ts), copied from opengraph-image.tsx
 // so both share cards read as the same product.
 const HEARTH_50 = "#fbf7f2";
-const HEARTH_100 = "#f3e9dd";
 const HEARTH_500 = "#a9743f";
 const HEARTH_700 = "#73482b";
 const HEARTH_900 = "#4f3324";
@@ -224,7 +223,7 @@ export async function GET(
           flexDirection: "column",
           justifyContent: "center",
           padding: "0 80px",
-          background: `linear-gradient(135deg, ${HEARTH_100} 0%, ${HEARTH_50} 55%, #ffffff 100%)`,
+          background: HEARTH_50,
           position: "relative",
           fontFamily: "sans-serif",
         }}

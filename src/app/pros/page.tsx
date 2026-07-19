@@ -141,8 +141,9 @@ export default async function ProsLanding({
 
   return (
     <main className="pb-16">
-      {/* Warm gradient band wraps header and hero */}
-      <div className="bg-gradient-to-b from-hearth-50 via-white to-white dark:from-hearth-900/40 dark:via-stone-900 dark:to-stone-900">
+      {/* Warm band wraps header and hero: a single flat fill, hearth-50 in
+          light and stone-900 in dark (matching the body), no gradient. */}
+      <div className="bg-hearth-50 dark:bg-stone-900">
         <div className="mx-auto max-w-3xl px-6 pt-6">
           <header className="flex items-center justify-between">
             <a

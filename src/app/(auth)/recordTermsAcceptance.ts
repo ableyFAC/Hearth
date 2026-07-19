@@ -32,6 +32,12 @@ export async function recordTermsAcceptance(
     return;
   }
 
+  const h = headers();
+  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  const userAgent = h.get("user-agent");
+
+  const admin = createAdminClient();
+
   // Prefer the server-verified session's own id over the caller-supplied
   // arg: this is a "use server" action, so a crafted call (forged from
   // outside the normal signup flow) could otherwise pass an arbitrary
@@ -40,7 +46,10 @@ export async function recordTermsAcceptance(
   //
   // Residual weak spot: when there is NO session yet (the signup-
   // propagation-lag case below), we still have to fall back to the passed
-  // arg, since there is nothing server-verified to check it against.
+  // arg, since there is nothing server-verified to check it against. That
+  // fallback is narrowed below: rate-limited, and only accepted for a real
+  // auth.users row created moments ago (i.e. an in-flight signup), not an
+  // arbitrary/forged id.
   const authClient = createClient();
   const {
     data: { user: sessionUser },
@@ -57,17 +66,57 @@ export async function recordTermsAcceptance(
       return;
     }
     verifiedUserId = sessionUser.id;
+  } else {
+    // No session yet - the browser's new session cookie hasn't propagated
+    // back to this server-side request. This is an unauthenticated call
+    // path, so it needs its own throttle (keyed on IP when available, since
+    // the userId itself is attacker-choosable and trivially rotated) plus a
+    // check that the id is not just well-formed but actually a very recent
+    // signup, not any arbitrary existing/forged account id.
+    const { data: allowed } = await admin.rpc("rate_limit_hit", {
+      p_bucket: `terms-fallback:${ip ?? userId}`,
+      p_limit: 10,
+      p_window_seconds: 3600,
+    });
+    if (allowed === false) {
+      console.error("recordTermsAcceptance: fallback rate limited", {
+        userId,
+        doc,
+        ip,
+      });
+      return;
+    }
+
+    const { data: lookup, error: lookupError } =
+      await admin.auth.admin.getUserById(userId);
+    if (lookupError || !lookup?.user) {
+      console.error("recordTermsAcceptance: fallback userId not found", {
+        userId,
+        doc,
+        lookupError,
+      });
+      return;
+    }
+    // Only trust this for a signup that is genuinely still in flight: the
+    // account must have been created moments ago. An older account here
+    // means this is not the propagation-lag case at all, so reject it
+    // rather than logging a consent record for it unverified.
+    const RECENT_SIGNUP_WINDOW_MS = 15 * 60 * 1000;
+    const createdAt = Date.parse(lookup.user.created_at ?? "");
+    if (
+      !Number.isFinite(createdAt) ||
+      Date.now() - createdAt > RECENT_SIGNUP_WINDOW_MS
+    ) {
+      console.error("recordTermsAcceptance: fallback userId not a recent signup", {
+        userId,
+        doc,
+        createdAt: lookup.user.created_at,
+      });
+      return;
+    }
+    verifiedUserId = lookup.user.id;
   }
-  // else: no session yet - the browser's new session cookie hasn't
-  // propagated back to this server-side request. Fall back to the passed
-  // arg (see module comment above); this is the one case where the id is
-  // not independently verified server-side.
 
-  const h = headers();
-  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
-  const userAgent = h.get("user-agent");
-
-  const admin = createAdminClient();
   const { error } = await admin.from("terms_acceptances").insert({
     user_id: verifiedUserId,
     doc,

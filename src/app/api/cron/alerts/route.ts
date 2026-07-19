@@ -23,6 +23,11 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const DEDUPE_WINDOW_MS = 4 * DAY_MS;
 const FETCH_TIMEOUT_MS = 4000;
 const MAX_PROPERTIES = 200; // cap the work a single run does
+// Each property costs two external fetches (geocode + forecast) at
+// FETCH_TIMEOUT_MS apiece, so a fully sequential run could take MAX_PROPERTIES
+// x 2 x FETCH_TIMEOUT_MS worst case - well past any serverless timeout. Keep
+// the fan-out bounded instead of unbounded Promise.all-ing the whole page.
+const SEND_CHUNK = 10;
 
 type WeatherAlert = {
   kind: "freeze" | "heat";
@@ -124,6 +129,12 @@ async function topWeatherAlert(
   return null;
 }
 
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 function isAuthorized(req: NextRequest): boolean {
   const expected = process.env.CRON_SECRET;
   if (!expected) return false;
@@ -200,39 +211,42 @@ async function runCron(req: NextRequest) {
 
   const since = new Date(Date.now() - DEDUPE_WINDOW_MS).toISOString();
 
-  for (const property of properties) {
-    try {
-      if (optedOut.has(property.user_id as string)) continue;
+  for (const batch of chunk(properties, SEND_CHUNK)) {
+    await Promise.all(
+      batch.map(async (property) => {
+        try {
+          if (optedOut.has(property.user_id as string)) return;
 
-      const alert = await topWeatherAlert(property.city, property.state);
-      if (!alert) continue;
+          const alert = await topWeatherAlert(property.city, property.state);
+          if (!alert) return;
 
-      // Dedupe: skip if the same kind of alert already went out to this user
-      // recently, so re-running the cron (or the same freeze/heat event
-      // walking closer day by day) doesn't spam a warning every run. The
-      // title is intentionally not matched: it changes every run for the
-      // same event (see header comment).
-      const { data: existing } = await supabase
-        .from("notifications")
-        .select("id")
-        .eq("user_id", property.user_id)
-        .eq("kind", alert.kind)
-        .gt("created_at", since)
-        .limit(1);
-      if (existing && existing.length > 0) continue;
+          // Dedupe: skip if the same kind of alert already went out to this
+          // user recently, so re-running the cron (or the same freeze/heat
+          // event walking closer day by day) doesn't spam a warning every
+          // run. The title is intentionally not matched: it changes every
+          // run for the same event (see header comment).
+          const { data: existing } = await supabase
+            .from("notifications")
+            .select("id")
+            .eq("user_id", property.user_id)
+            .eq("kind", alert.kind)
+            .gt("created_at", since)
+            .limit(1);
+          if (existing && existing.length > 0) return;
 
-      const { error: insertError } = await supabase.from("notifications").insert({
-        user_id: property.user_id as string,
-        kind: alert.kind,
-        title: alert.title,
-        body: alert.body,
-        url: "/dashboard",
-      });
-      if (!insertError) created += 1;
-    } catch {
-      // One property's failure shouldn't stop the rest of the run.
-      continue;
-    }
+          const { error: insertError } = await supabase.from("notifications").insert({
+            user_id: property.user_id as string,
+            kind: alert.kind,
+            title: alert.title,
+            body: alert.body,
+            url: "/dashboard",
+          });
+          if (!insertError) created += 1;
+        } catch {
+          // One property's failure shouldn't stop the rest of the batch.
+        }
+      })
+    );
   }
 
   return NextResponse.json({ created });

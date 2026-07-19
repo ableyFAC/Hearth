@@ -82,19 +82,35 @@ export default function LiveUnreadBadge({
     poll();
 
     // Realtime: a new message from the other role updates the badge instantly.
-    const channel = supabase
-      .channel(`unread-${role}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-          filter: `sender_role=eq.${OTHER[role]}`,
-        },
-        () => poll()
-      )
-      .subscribe();
+    // The topic is unique per mount, not just per role: supabase-js returns the
+    // SAME already-subscribed channel instance for a repeated topic, and a
+    // second .on() on an already-subscribed channel throws. That collision is
+    // reachable two ways - React dev StrictMode's mount-cleanup-remount (the
+    // cleanup's removeChannel is async, so the remount can win the race) and
+    // any layout that renders this badge twice (desktop nav + mobile nav) - so
+    // a random suffix isolates every instance instead of sharing one topic.
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      const topic = "unread-" + role + "-" + Math.random().toString(36).slice(2);
+      channel = supabase
+        .channel(topic)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "messages",
+            filter: `sender_role=eq.${OTHER[role]}`,
+          },
+          () => poll()
+        )
+        .subscribe();
+    } catch {
+      // Realtime is strictly best-effort: the poll/focus/interval paths below
+      // keep the badge working on their own, so a subscribe failure here must
+      // never crash the signed-in shell.
+      console.warn("LiveUnreadBadge: realtime subscription failed, falling back to polling");
+    }
 
     const onFocus = () => poll();
     window.addEventListener("focus", onFocus);
@@ -105,7 +121,14 @@ export default function LiveUnreadBadge({
     const t = setInterval(poll, 120000);
     return () => {
       active = false;
-      supabase.removeChannel(channel);
+      if (channel) {
+        try {
+          supabase.removeChannel(channel);
+        } catch {
+          // Best-effort cleanup: nothing to do if this fails, the channel is
+          // going away along with the component either way.
+        }
+      }
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("hearth:chat-seen", onSeen);
       clearInterval(t);

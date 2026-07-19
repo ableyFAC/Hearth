@@ -127,21 +127,43 @@ export default function NotificationBell() {
     }
     poll();
 
-    const channel = supabase
-      .channel("notifications-bell")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "notifications" },
-        () => active && poll()
-      )
-      .subscribe();
+    // The topic is unique per mount, not just fixed: supabase-js returns the
+    // SAME already-subscribed channel instance for a repeated topic, and a
+    // second .on() on an already-subscribed channel throws. That collision is
+    // reachable via React dev StrictMode's mount-cleanup-remount (the
+    // cleanup's removeChannel is async, so the remount can win the race), so
+    // a random suffix isolates every instance instead of sharing one topic.
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      const topic = "notifications-bell-" + Math.random().toString(36).slice(2);
+      channel = supabase
+        .channel(topic)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "notifications" },
+          () => active && poll()
+        )
+        .subscribe();
+    } catch {
+      // Realtime is strictly best-effort: the poll/focus paths below keep the
+      // bell working on their own, so a subscribe failure here must never
+      // crash the signed-in shell.
+      console.warn("NotificationBell: realtime subscription failed, falling back to polling");
+    }
 
     const onFocus = () => poll();
     window.addEventListener("focus", onFocus);
     const t = setInterval(poll, 30000);
     return () => {
       active = false;
-      supabase.removeChannel(channel);
+      if (channel) {
+        try {
+          supabase.removeChannel(channel);
+        } catch {
+          // Best-effort cleanup: nothing to do if this fails, the channel is
+          // going away along with the component either way.
+        }
+      }
       window.removeEventListener("focus", onFocus);
       clearInterval(t);
     };
