@@ -29,12 +29,9 @@ export default function GlobalError({
         }}
       >
         <div style={{ maxWidth: "28rem" }}>
-          <p style={{ fontSize: "32px", margin: 0 }} aria-hidden>
-            🏡
-          </p>
           <h1
             style={{
-              margin: "16px 0 0",
+              margin: 0,
               fontSize: "20px",
               fontWeight: 600,
             }}

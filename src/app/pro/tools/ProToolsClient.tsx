@@ -1,8 +1,17 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import type { LucideIcon } from "lucide-react";
+import {
+  ClipboardList,
+  ReceiptText,
+  Mail,
+  Star,
+  BadgeDollarSign,
+} from "lucide-react";
 import { JOB_CATEGORIES, labelFor } from "@/lib/constants";
 import type { ProPastJob } from "@/lib/database.types";
+import AiNotice from "@/components/AiNotice";
 import {
   deletePastJobAction,
   recordToolEditAction,
@@ -17,12 +26,12 @@ import {
 
 type Tool = "estimate" | "invoice" | "followup" | "review_response" | "overdue";
 
-const TABS: Array<{ id: Tool; icon: string; label: string }> = [
-  { id: "estimate", icon: "📋", label: "Estimate" },
-  { id: "invoice", icon: "🧾", label: "Invoice" },
-  { id: "followup", icon: "✉️", label: "Follow-up" },
-  { id: "review_response", icon: "⭐", label: "Review response" },
-  { id: "overdue", icon: "💸", label: "Invoice reminder" },
+const TABS: Array<{ id: Tool; icon: LucideIcon; label: string }> = [
+  { id: "estimate", icon: ClipboardList, label: "Estimate" },
+  { id: "invoice", icon: ReceiptText, label: "Invoice" },
+  { id: "followup", icon: Mail, label: "Follow-up" },
+  { id: "review_response", icon: Star, label: "Review response" },
+  { id: "overdue", icon: BadgeDollarSign, label: "Invoice reminder" },
 ];
 
 const SITUATIONS: Array<{ value: string; label: string }> = [
@@ -407,7 +416,7 @@ export default function ProToolsClient({
               tool === t.id ? "btn-primary" : "btn-secondary"
             }`}
           >
-            {t.icon} {t.label}
+            <t.icon className="h-4 w-4" aria-hidden="true" /> {t.label}
           </button>
         ))}
       </div>
@@ -440,7 +449,7 @@ export default function ProToolsClient({
                   <option value="">- pick one -</option>
                   {cats.map((c) => (
                     <option key={c.value} value={c.value}>
-                      {c.icon} {c.label}
+                      {c.label}
                     </option>
                   ))}
                 </select>
@@ -766,10 +775,7 @@ export default function ProToolsClient({
             rows={10}
             className="w-full whitespace-pre-wrap rounded-lg border border-stone-200 bg-stone-50 px-3 py-3 text-sm text-stone-700 focus:border-hearth-500 focus:outline-none focus:ring-1 focus:ring-hearth-500 dark:border-white/10 dark:bg-stone-900 dark:text-stone-100 dark:focus:border-hearth-400 dark:focus:ring-hearth-400"
           />
-          <p className="text-xs text-stone-500 dark:text-stone-400">
-            This is a starting point: read it over and edit anything before
-            you send or post it.
-          </p>
+          <AiNotice detail="This is a starting point: read it over and edit anything before you send or post it, because it goes out under your name." />
 
           {/* "Send to a lead" lives at the bottom of the draft, after the
               text and the Copy button, so the flow reads top to bottom: read

@@ -1267,9 +1267,10 @@ export default function HeroDemoPlayer() {
       if (capState && !seeking) {
         const cs = capState;
         const per = cs.durMs / cs.chunks.length;
-        // Small lead so each chunk lands WITH the voice, not a beat behind it
-        // (the first line read as slightly late without this).
-        const idx = Math.floor((cs.a.currentTime * 1000 + 150) / per);
+        // No lead: drive captions straight off the audio position so the words
+        // don't appear BEFORE the voice (the intro caption read as ahead of the
+        // audible line with the old +150ms lead).
+        const idx = Math.floor((cs.a.currentTime * 1000) / per);
         if (cs.a.ended || idx >= cs.chunks.length) {
           if (cs.lastIdx !== -1) {
             setCaption([]);
@@ -1718,15 +1719,20 @@ export default function HeroDemoPlayer() {
       if (titleEl) titleEl.textContent = "";
       // Type what's actually wrong, like a real person filling the form.
       clickOn("[data-x='jobTitleBox']", 200, {
-        onHit: () => typeInto("[data-x='jobTitle']", "Leaking kitchen faucet", 60),
+        // Type the whole title FIRST, then reach for the mouse: a real person
+        // types the problem, then picks the category and timing. Previously the
+        // cursor slid to the category pill mid-typing, which read as unnatural.
+        onHit: () =>
+          typeInto("[data-x='jobTitle']", "Leaking kitchen faucet", 60, () => {
+            clickOn("[data-pill='plumbing']", 200, {
+              onHit: () => q("[data-pill='plumbing']")?.classList.add(styles.on),
+            });
+            clickOn("[data-pill='week']", 200 + 1.2 * BEAT_MS, {
+              onHit: () => q("[data-pill='week']")?.classList.add(styles.on),
+            });
+          }),
       });
-      clickOn("[data-pill='plumbing']", 2.7 * BEAT_MS, {
-        onHit: () => q("[data-pill='plumbing']")?.classList.add(styles.on),
-      });
-      clickOn("[data-pill='week']", 4.2 * BEAT_MS, {
-        onHit: () => q("[data-pill='week']")?.classList.add(styles.on),
-      });
-      clickOn("[data-x='postBtn']", 7.2 * BEAT_MS, {
+      clickOn("[data-x='postBtn']", 7.8 * BEAT_MS, {
         onHit: () => {
           q("[data-x='toast']")?.classList.add(styles.show);
         },
@@ -2338,7 +2344,14 @@ export default function HeroDemoPlayer() {
         Hearth
       </span>
       <span className={styles.stepChip} data-x="stepChip"></span>
-      <span className={styles.midCta} data-x="midCta">hearth.app: free to start</span>
+      <a
+        href="/homeowner-signup"
+        className={styles.midCta}
+        data-x="midCta"
+        onClick={(e) => e.stopPropagation()}
+      >
+        Free to try, no card needed
+      </a>
 
       <div className={styles.deviceWrap} onClick={handleScreenClick}>
         <div className={styles.device} data-x="device">
@@ -2536,6 +2549,7 @@ export default function HeroDemoPlayer() {
                   <p className="mt-1 text-sm text-stone-500">
                     Home health score{" "}
                     <span className="align-middle text-2xl font-bold text-green-700" data-x="endScore">71</span>
+                    <span className="align-middle text-sm text-stone-400"> of 100</span>
                   </p>
                   <p className="text-xs text-stone-400">after one season of upkeep</p>
                   {/* A REAL link: the end card is a conversion surface, not a
@@ -2660,19 +2674,36 @@ export default function HeroDemoPlayer() {
           <span className={styles.playCircle} aria-hidden="true">
             <svg viewBox="0 0 20 20" fill="currentColor"><path d="M6 4.5v11l9-5.5-9-5.5z" /></svg>
           </span>
-          <span className={styles.posterLabel}>Watch someone use Hearth</span>
-          <span className={styles.posterSub}>From leak to booked pro</span>
+          <span className={styles.posterLabel}>From leak to booked pro</span>
+          <span className={styles.posterSub}>Watch someone use Hearth, 30 seconds</span>
           <span className={styles.durationBadge}>0:30</span>
         </button>
       )}
 
       {started && finished && (
-        <button type="button" className={styles.endOverlay} onClick={handlePlay} aria-label="Replay the demo">
-          <span className={styles.playCircle} aria-hidden="true">
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 10a6 6 0 1 1 2 4.5" /><path d="M4 15v-4h4" /></svg>
-          </span>
-          <span className={styles.replayLabel}>Watch again</span>
-        </button>
+        <div className={styles.endOverlay} onClick={(e) => e.stopPropagation()}>
+          <a
+            href="/homeowner-signup"
+            className="btn-primary"
+            onClick={(e) => e.stopPropagation()}
+          >
+            Get started free
+          </a>
+          <button
+            type="button"
+            className={styles.replayBtn}
+            onClick={(e) => {
+              e.stopPropagation();
+              handlePlay();
+            }}
+            aria-label="Replay the demo"
+          >
+            <span className={styles.playCircle} aria-hidden="true">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 10a6 6 0 1 1 2 4.5" /><path d="M4 15v-4h4" /></svg>
+            </span>
+            <span className={styles.replayLabel}>Watch again</span>
+          </button>
+        </div>
       )}
     </div>
 

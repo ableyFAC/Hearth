@@ -14,6 +14,12 @@ export const runtime = "nodejs";
 // at the paid vision model. ~4M chars ≈ 3MB; the client already downscales to
 // ~1024px JPEG, so real attachments are far smaller than this.
 const MAX_IMAGE_B64_CHARS = 4_000_000;
+// Bound the request itself so a caller can't push an unbounded history, giant
+// per-message text, or a pile of images at the paid model. Keep only the most
+// recent turns, cap each message's text, and attach at most a few images.
+const MAX_HISTORY_MESSAGES = 40;
+const MAX_TEXT_CHARS_PER_MSG = 8000;
+const MAX_IMAGES_PER_REQUEST = 4;
 
 export async function POST(req: NextRequest) {
   // Require a signed-in user before touching the paid model. Ask Hearth is an
@@ -37,8 +43,15 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const history = Array.isArray(body.messages) ? body.messages : null;
-  const question = typeof body.question === "string" ? body.question : "";
+  // Only keep the most recent turns so a caller can't send an unbounded
+  // history and blow up the paid request.
+  const history = Array.isArray(body.messages)
+    ? body.messages.slice(-MAX_HISTORY_MESSAGES)
+    : null;
+  const question =
+    typeof body.question === "string"
+      ? body.question.slice(0, MAX_TEXT_CHARS_PER_MSG)
+      : "";
   if (!history?.length && !question) {
     return NextResponse.json({ error: "No question." }, { status: 400 });
   }
@@ -177,6 +190,9 @@ export async function POST(req: NextRequest) {
     "Only use home details provided below; don't invent specifics.\n\n" +
     context;
 
+  // Count images across the whole request so we can stop attaching past the
+  // cap while still forwarding each message's text.
+  let imagesAttached = 0;
   const requestBody = JSON.stringify({
     systemInstruction: { parts: [{ text: system }] },
     contents: history
@@ -187,19 +203,24 @@ export async function POST(req: NextRequest) {
           )
           .map((m: any) => {
             const parts: any[] = [];
-            if (m.content && m.content.trim()) parts.push({ text: m.content });
+            if (m.content && m.content.trim())
+              parts.push({ text: m.content.slice(0, MAX_TEXT_CHARS_PER_MSG) });
             // A homeowner can attach a downscaled photo - send it to vision.
-            // Drop anything over the cap rather than forwarding a huge payload.
+            // Drop anything over the size cap, and stop once we've attached the
+            // max number of images for this request.
             if (
               typeof m.image === "string" &&
-              m.image.length <= MAX_IMAGE_B64_CHARS
-            )
+              m.image.length <= MAX_IMAGE_B64_CHARS &&
+              imagesAttached < MAX_IMAGES_PER_REQUEST
+            ) {
+              imagesAttached++;
               parts.push({
                 inlineData: {
                   mimeType: m.mime || "image/jpeg",
                   data: m.image,
                 },
               });
+            }
             if (parts.length === 0) parts.push({ text: "" });
             return {
               role: m.role === "assistant" ? "model" : "user",
@@ -263,6 +284,12 @@ export async function POST(req: NextRequest) {
       // answer; anything else was truncated or blocked, so keep the partial
       // and try the next model.
       if (answer && (!finishReason || finishReason === "STOP")) {
+        return NextResponse.json({ answer });
+      }
+      // A MAX_TOKENS finish means the model answered but ran out of output
+      // budget. Retrying the other models just re-truncates the same reply and
+      // bills the paid API 4x, so return the partial now instead of looping.
+      if (answer && finishReason === "MAX_TOKENS") {
         return NextResponse.json({ answer });
       }
       if (typeof answer === "string" && answer.length > bestAnswer.length) {

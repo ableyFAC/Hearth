@@ -76,7 +76,15 @@ async function verifyContractorLicense(
   // outcome === 'error': fields stays null, status is left exactly as-is.
 
   if (fields) {
-    const { error } = await (supabase.from("contractors") as any)
+    // 0078 revokes UPDATE on license_verified_status/_at/_verify_detail from
+    // `authenticated` (a contractor could otherwise self-forge a "verified"
+    // badge), so this write goes through the admin client instead of the
+    // user-scoped `supabase` param. Still safe: `fields` is derived entirely
+    // from the CSLB lookup above (never client input), and contractorId is
+    // always the caller's own contractor id, resolved by every caller via
+    // assertContractor()/getCurrentContractor(), never client-supplied.
+    const admin = createAdminClient();
+    const { error } = await (admin.from("contractors") as any)
       .update(fields)
       .eq("id", contractorId);
     if (error) {
@@ -90,57 +98,24 @@ async function verifyContractorLicense(
 // Resolve a referral code to a contractor id, or null. A code is another
 // pro's slug (0043) or the first 8 hex chars of their contractor id (or the
 // full id). Unknown, ambiguous, or malformed codes resolve to null: a bad
-// code must NEVER block onboarding. Casts are (as any) because slug and the
-// referral columns land via migrations 0043/0044 and aren't in the generated
-// types; if those migrations haven't run yet, every branch just returns null.
+// code must NEVER block onboarding. Delegated to the resolve_referral_code
+// RPC (0067): after that migration stripped column-level SELECT on
+// contractors, a direct .from("contractors") read of another pro's row would
+// be blocked by RLS, so the three lookups (full id, slug, 8-hex prefix) live
+// in one SECURITY DEFINER function instead.
 async function resolveReferralCode(
   supabase: ReturnType<typeof createClient>,
   raw: FormDataEntryValue | null
 ): Promise<string | null> {
-  const code = String(raw ?? "")
-    .trim()
-    .toLowerCase();
-  if (!code || code.length > 100) return null;
   try {
-    // Full contractor id.
-    if (
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
-        code
-      )
-    ) {
-      const { data } = await (supabase as any)
-        .from("contractors")
-        .select("id")
-        .eq("id", code)
-        .maybeSingle();
-      return data?.id ?? null;
-    }
-    // Slug (case-insensitive, matching 0043's lower(slug) uniqueness). The
-    // shape check keeps ilike wildcards out of the pattern.
-    if (/^[a-z0-9][a-z0-9-]*$/.test(code)) {
-      const { data } = await (supabase as any)
-        .from("contractors")
-        .select("id")
-        .ilike("slug", code)
-        .limit(1);
-      if (data?.[0]?.id) return data[0].id;
-    }
-    // 8-char id prefix. A uuid's first block is its first 8 hex chars and
-    // Postgres orders uuids bytewise, so the prefix match is a closed range.
-    if (/^[0-9a-f]{8}$/.test(code)) {
-      const { data } = await (supabase as any)
-        .from("contractors")
-        .select("id")
-        .gte("id", `${code}-0000-0000-0000-000000000000`)
-        .lte("id", `${code}-ffff-ffff-ffff-ffffffffffff`)
-        .limit(2);
-      const rows = data ?? [];
-      if (rows.length === 1) return rows[0].id;
-    }
+    const { data } = await supabase.rpc("resolve_referral_code", {
+      p_code: String(raw ?? ""),
+    });
+    return (data as string | null) ?? null;
   } catch {
     // Ignore silently: referral attribution is strictly best-effort.
+    return null;
   }
-  return null;
 }
 
 // Create (onboarding) or update (profile) the current user's contractor company.
@@ -180,6 +155,18 @@ export async function saveCompanyAction(formData: FormData) {
     serviceStateEntry !== null ? { service_state: serviceState } : {};
   const hasStateWrite = serviceStateEntry !== null;
 
+  // Orange County launch gate (0074). Same missing-column-safe pattern as
+  // service_state above: only overwrite when the submitting form actually
+  // carries the field. The onboarding checkbox is `required`, so a submit
+  // from that form always posts "true" here; a form that doesn't render the
+  // field at all (e.g. the profile edit form) posts null and must never wipe
+  // a stored value.
+  const ocEntry = formData.get("serves_orange_county");
+  const servesOrangeCounty = ocEntry !== null && String(ocEntry) === "true";
+  const ocWrite =
+    ocEntry !== null ? { serves_orange_county: servesOrangeCounty } : {};
+  const hasOcWrite = ocEntry !== null;
+
   const existing = await getCurrentContractor();
 
   if (existing) {
@@ -213,22 +200,34 @@ export async function saveCompanyAction(formData: FormData) {
       : {};
     let { error } = await supabase
       .from("contractors")
-      .update({ ...fields, ...stateWrite, ...licenseWrite } as any)
+      .update({ ...fields, ...stateWrite, ...ocWrite } as any)
       .eq("id", existing.id);
     // Same graceful missing-column retry as the insert path below: if 0046
-    // (or 0037/0055) hasn't run yet, save everything else rather than
-    // failing the whole form.
-    if (
-      error &&
-      (hasStateWrite || licenseChanged) &&
-      isMissingSchemaError(error)
-    ) {
+    // (or 0074) hasn't run yet, save everything else rather than failing the
+    // whole form.
+    if (error && (hasStateWrite || hasOcWrite) && isMissingSchemaError(error)) {
       ({ error } = await supabase
         .from("contractors")
         .update(fields)
         .eq("id", existing.id));
     }
     if (error) throw new Error(error.message);
+
+    // license_verified_status/_at/_verify_detail are trust columns 0078
+    // revokes UPDATE on for `authenticated` (self-forged "verified" badges),
+    // so this reset can't go through the user client above. Admin client,
+    // scoped to existing.id: the caller's own contractor, resolved by
+    // getCurrentContractor() at the top of this action, never client input.
+    if (licenseChanged) {
+      const admin = createAdminClient();
+      const { error: licenseError } = await admin
+        .from("contractors")
+        .update(licenseWrite as any)
+        .eq("id", existing.id);
+      if (licenseError && !isMissingSchemaError(licenseError)) {
+        throw new Error(licenseError.message);
+      }
+    }
 
     // Real CSLB check (0055), only when this save actually changed the
     // license number on file (first time, or a pre-verification typo fix: a
@@ -270,6 +269,35 @@ export async function saveCompanyAction(formData: FormData) {
     redirect("/pro/profile");
   }
 
+  // Orange County launch gate (0074), first-time company creation only. A pro
+  // who didn't check the box never gets a contractors row at all: instead
+  // they land on a waitlist so Hearth can reach out when it opens in their
+  // area. Best-effort insert (the unique index on lower(email), role means a
+  // resubmit is silently a no-op, not an error) - the reject must go through
+  // either way.
+  if (!servesOrangeCounty) {
+    try {
+      const waitlistEmail = (fields.contact_email || user.email || "").trim();
+      if (waitlistEmail) {
+        await (supabase as any).from("market_waitlist").insert({
+          email: waitlistEmail,
+          role: "pro",
+          state: serviceState,
+        });
+      }
+    } catch (err) {
+      console.error(
+        "market_waitlist insert failed:",
+        err instanceof Error ? err.message : err
+      );
+    }
+    setFlash(
+      "Hearth is matching pros in Orange County, CA only right now. We added you to the waitlist and will reach out when Hearth opens in your area.",
+      "error"
+    );
+    redirect("/pro/onboarding");
+  }
+
   // First-time setup. `vetted` is a matchability flag, not a trust claim:
   // true is what lets matching include the company, and nothing has actually
   // been vetted at signup. No homeowner-facing copy may call a pro "vetted"
@@ -296,22 +324,22 @@ export async function saveCompanyAction(formData: FormData) {
     ? { referred_by: referredBy, referred_attributed_at: new Date().toISOString() }
     : {};
 
-  // A supplied license number is only "on file", not checked: queue it as
-  // 'pending' so nothing downstream can claim a verification that never ran
-  // (0037). If a column doesn't exist yet (migration not run), retry
-  // without the extras so onboarding never breaks, same pattern as
-  // pro/help/actions. The retry is gated on the missing-column fingerprint
-  // specifically: retrying on a transient error would silently drop the
-  // pending verification flag (and referral attribution) on an insert that
-  // might succeed the second time.
-  let { error } = fields.license_number
-    ? await supabase
-        .from("contractors")
-        .insert({ ...base, ...referral, ...stateWrite, license_verified_status: "pending" } as any)
-    : await supabase
-        .from("contractors")
-        .insert({ ...base, ...referral, ...stateWrite } as any);
-  if (error && (fields.license_number || referredBy || hasStateWrite)) {
+  // license_verified_status is a trust column: 0078 revokes INSERT (as well
+  // as UPDATE) on it for `authenticated`, so it can no longer be set on this
+  // user-scoped insert (a brand-new pro could otherwise self-grant a
+  // 'verified' badge on the row they're creating). It's left out here
+  // entirely; the column's own default ('unverified', 0037) applies, and the
+  // 'pending' queue-up for a supplied license number is written separately
+  // below via the admin client, scoped to the row just created. If a column
+  // doesn't exist yet (migration not run), retry without the extras so
+  // onboarding never breaks, same pattern as pro/help/actions. The retry is
+  // gated on the missing-column fingerprint specifically: retrying on a
+  // transient error would silently drop referral attribution on an insert
+  // that might succeed the second time.
+  let { error } = await supabase
+    .from("contractors")
+    .insert({ ...base, ...referral, ...stateWrite } as any);
+  if (error && (referredBy || hasStateWrite)) {
     // isMissingSchemaError, not a hand-rolled regex: PostgREST reports a
     // missing INSERT column as PGRST204 "schema cache", which the old
     // pattern here missed, hard-500ing every new pro signup on a live DB
@@ -323,6 +351,30 @@ export async function saveCompanyAction(formData: FormData) {
     }
   }
   if (error) throw new Error(error.message);
+
+  // A supplied license number is only "on file", not checked: queue it as
+  // 'pending' (0037) so nothing downstream can claim a verification that
+  // never ran. license_verified_status is one of the trust columns 0078
+  // revokes INSERT/UPDATE on for `authenticated`, so this can't ride the
+  // insert above; write it via the admin client instead, scoped to
+  // newContractorId (generated at the top of this action, never
+  // client-supplied). Best-effort: a hiccup here leaves the safe
+  // 'unverified' default in place rather than blocking account creation,
+  // which already succeeded above; the CSLB check right below (CA only)
+  // will still run either way and can move status past 'unverified' itself.
+  if (fields.license_number) {
+    const admin = createAdminClient();
+    const { error: pendingError } = await admin
+      .from("contractors")
+      .update({ license_verified_status: "pending" })
+      .eq("id", newContractorId);
+    if (pendingError) {
+      console.error(
+        "contractors pending-status write failed:",
+        pendingError.message
+      );
+    }
+  }
 
   // Real CSLB check (0055) for a license number supplied at onboarding.
   // California companies only: CSLB is CA's registry, so any other state's
@@ -412,15 +464,32 @@ export async function verifyLicenseNowAction(formData: FormData) {
   const licenseChanged = licenseNumber !== stored;
   if (licenseChanged) {
     const { error } = await (supabase.from("contractors") as any)
+      .update({ license_number: licenseNumber })
+      .eq("id", contractor.id);
+    if (error) {
+      console.error("verifyLicenseNowAction: license save failed:", error.message);
+      setFlash("Couldn't save the corrected license number. Try again.", "error");
+      revalidatePath("/pro/profile");
+      return;
+    }
+
+    // license_verified_status/_at/_verify_detail are trust columns 0078
+    // revokes UPDATE on for `authenticated`; write via the admin client.
+    // Scoped to contractor.id: the caller's own contractor, from
+    // assertContractor() above, never client-supplied.
+    const admin = createAdminClient();
+    const { error: resetError } = await (admin.from("contractors") as any)
       .update({
-        license_number: licenseNumber,
         license_verified_status: "pending",
         license_verified_at: null,
         license_verify_detail: null,
       })
       .eq("id", contractor.id);
-    if (error) {
-      console.error("verifyLicenseNowAction: license save failed:", error.message);
+    if (resetError) {
+      console.error(
+        "verifyLicenseNowAction: license reset failed:",
+        resetError.message
+      );
       setFlash("Couldn't save the corrected license number. Try again.", "error");
       revalidatePath("/pro/profile");
       return;
@@ -529,8 +598,13 @@ export async function startBackgroundCheckAction(formData: FormData) {
     return;
   }
 
-  const supabase = createClient();
-  const { error } = await (supabase.from("contractors") as any)
+  // checkr_candidate_id/background_check_status are trust columns 0078
+  // revokes UPDATE on for `authenticated`; write via the admin client. The
+  // value comes from the Checkr candidate just created above (never client
+  // input), and the write is scoped to contractor.id: the caller's own
+  // contractor, from assertContractor() above.
+  const admin = createAdminClient();
+  const { error } = await (admin.from("contractors") as any)
     .update({
       checkr_candidate_id: result.candidateId,
       background_check_status: "invited",
@@ -611,6 +685,18 @@ export async function applyToJobAction(formData: FormData) {
   const contractor = await assertContractor();
   const leadId = String(formData.get("id"));
   const message = (formData.get("message") as string) || "";
+
+  // Orange County launch gate (0074), defense-in-depth: open_jobs_for_me()
+  // already hides jobs from a pro who hasn't confirmed Orange County, but a
+  // direct POST to this action (stale tab, replayed request) must be refused
+  // before any fee is spent, not just hidden from the board. assertContractor
+  // already loaded the full row via the admin client, so this is a read of
+  // data already in hand, not a second query.
+  if (!(contractor as any).serves_orange_county) {
+    setFlash("Hearth is Orange County only right now.", "error");
+    revalidatePath("/pro");
+    return;
+  }
 
   // Marketplace integrity: a pro with an active job for this homeowner in
   // this category already has them in Messages, so a second apply fee would

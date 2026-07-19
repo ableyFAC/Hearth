@@ -102,11 +102,32 @@ function notFound() {
 // and skip the logo entirely if we can't make it absolute. Copied verbatim
 // from src/app/api/win-card/[leadId]/route.tsx (a shared src/lib helper would
 // be the next step if a third card ever needs it).
+//
+// Defense in depth: savePublicPageAction (pro/profile/actions.ts) only ever
+// stores a Supabase Storage URL scoped to the owning contractor, but this
+// function's output is handed straight to fetch() below - a server-side
+// request driven by a value an authenticated pro controls. If a full
+// https:// value's origin isn't the Supabase Storage origin, treat it as
+// untrusted and drop the logo rather than fetch it; this is what actually
+// closes the SSRF, since the store-side check alone is one bug away from
+// letting an attacker-chosen host through to this fetch().
 function absoluteLogoUrl(value: string | null): string | null {
   if (!value) return null;
-  if (/^https?:\/\//i.test(value)) return value;
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!base) return null;
+  let storageOrigin: string;
+  try {
+    storageOrigin = new URL(base).origin;
+  } catch {
+    return null;
+  }
+  if (/^https?:\/\//i.test(value)) {
+    try {
+      return new URL(value).origin === storageOrigin ? value : null;
+    } catch {
+      return null;
+    }
+  }
   const path = value.replace(/^\/+/, "").replace(/^pro-logos\//, "");
   return `${base.replace(/\/+$/, "")}/storage/v1/object/public/pro-logos/${path}`;
 }

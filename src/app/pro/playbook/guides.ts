@@ -1,5 +1,20 @@
 // Playbook content: short, honest guides on how to win work on Hearth.
-// Plain data (no JSX) so the server page and the client accordion can share it.
+// Plain data (no JSX, no component references) so the server page can pass it
+// straight through as a prop to the client accordion. Icons are stored as
+// names, not lucide-react components: a live component reference is a
+// function, and functions can't cross the server -> client boundary as a
+// prop (see PlaybookGuide.tsx, which maps these names back to components on
+// the client side).
+export type PlaybookIconName =
+  | "Flag"
+  | "PenLine"
+  | "Timer"
+  | "Shield"
+  | "Hourglass"
+  | "Target"
+  | "DollarSign"
+  | "Repeat"
+  | "Users";
 
 export type PlaybookSection = {
   title: string;
@@ -11,7 +26,7 @@ export type PlaybookSection = {
 
 export type PlaybookGuideData = {
   id: string;
-  icon: string;
+  icon: PlaybookIconName;
   title: string;
   summary: string;
   sections: PlaybookSection[];
@@ -20,7 +35,7 @@ export type PlaybookGuideData = {
 export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
   {
     id: "first-win",
-    icon: "🏁",
+    icon: "Flag",
     title: "Win your first job on Hearth",
     summary: "The shortest path from a fresh wallet to a first win.",
     sections: [
@@ -58,7 +73,7 @@ export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
   },
   {
     id: "apply-message",
-    icon: "✍️",
+    icon: "PenLine",
     title: "Write an apply message homeowners answer",
     summary: "Their problem first, one line of proof, one concrete next step.",
     sections: [
@@ -94,14 +109,14 @@ export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
       {
         title: "Let the drafter start, then make it yours",
         body: [
-          "The ✨ Draft it for me button on any job writes a first pass from the posting and your company profile. Edit it before sending: one detail only you would know beats anything generated.",
+          "The Draft it for me button on any job writes a first pass from the posting and your company profile. Edit it before sending: one detail only you would know beats anything generated.",
         ],
       },
     ],
   },
   {
     id: "first-hour",
-    icon: "⏱️",
+    icon: "Timer",
     title: "Why the first hour matters",
     summary: "Most jobs are decided before the second pro even replies.",
     sections: [
@@ -136,7 +151,7 @@ export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
   },
   {
     id: "ghost-protection",
-    icon: "🛡️",
+    icon: "Shield",
     title: "How ghost protection works",
     summary: "If the homeowner never responds, your fee comes back on its own.",
     sections: [
@@ -168,7 +183,7 @@ export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
   },
   {
     id: "aging-deals",
-    icon: "⏳",
+    icon: "Hourglass",
     title: "How aging deals work",
     summary: "Older leads get cheaper automatically, but fresh ones close best.",
     sections: [
@@ -194,7 +209,7 @@ export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
   },
   {
     id: "spot-cap",
-    icon: "🎯",
+    icon: "Target",
     title: "How the 3-spot cap protects you",
     summary: "You're never one of thirty bids, at most one of three.",
     sections: [
@@ -220,7 +235,7 @@ export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
   },
   {
     id: "pricing",
-    icon: "💰",
+    icon: "DollarSign",
     title: "Price jobs so you win",
     summary: "Quote the work honestly and explain it; padding loses twice.",
     sections: [
@@ -255,7 +270,7 @@ export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
   },
   {
     id: "one-into-five",
-    icon: "🔁",
+    icon: "Repeat",
     title: "Turn one job into five",
     summary: "The cheapest lead you'll ever get is a customer you already have.",
     sections: [
@@ -287,7 +302,7 @@ export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
   },
   {
     id: "recommendation-threads",
-    icon: "🏘️",
+    icon: "Users",
     title: "Win the \"anyone know a good plumber?\" thread",
     summary:
       "Where a neighbor's recommendation turns into your next job, done the honest way.",

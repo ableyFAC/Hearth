@@ -14,11 +14,12 @@ import WinShareButton from "@/components/pro/WinShareButton";
 import ReviewShareRow from "@/components/pro/ReviewShareRow";
 import {
   labelFor,
-  iconFor,
   JOB_CATEGORIES,
   GHOST_PROTECTION_DAYS,
   COLD_START_FREE_ALERTS,
 } from "@/lib/constants";
+import CategoryIcon from "@/components/CategoryIcon";
+import { Lock } from "lucide-react";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -378,7 +379,11 @@ export default async function ProBusinessPage() {
                     {stats.categories.map((c) => (
                       <tr key={c.category}>
                         <td className="py-2 pr-3 font-medium text-stone-900 dark:text-stone-100">
-                          {iconFor(JOB_CATEGORIES, c.category)}{" "}
+                          <CategoryIcon
+                            list={JOB_CATEGORIES}
+                            value={c.category}
+                            className="mr-1 inline-block h-4 w-4 align-[-3px]"
+                          />
                           {labelFor(JOB_CATEGORIES, c.category)}
                         </td>
                         <td className="py-2 pr-3 text-right text-stone-600 dark:text-stone-300">
@@ -506,7 +511,7 @@ export default async function ProBusinessPage() {
                 </p>
                 <p className="mt-1 flex items-center justify-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
                   <span aria-hidden="true" className="icon-chip">
-                    🔒
+                    <Lock className="h-5 w-5" />
                   </span>
                   Included with Hearth Pro
                 </p>
@@ -521,7 +526,7 @@ export default async function ProBusinessPage() {
                 </p>
                 <p className="mt-1 flex items-center justify-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
                   <span aria-hidden="true" className="icon-chip">
-                    🔒
+                    <Lock className="h-5 w-5" />
                   </span>
                   Included with Hearth Pro
                 </p>
@@ -577,7 +582,7 @@ export default async function ProBusinessPage() {
                   <div>
                     <span className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
                       <span className="icon-chip">
-                        {iconFor(JOB_CATEGORIES, a.category)}
+                        <CategoryIcon list={JOB_CATEGORIES} value={a.category} />
                       </span>{" "}
                       {labelFor(JOB_CATEGORIES, a.category)}
                     </span>
@@ -629,7 +634,7 @@ export default async function ProBusinessPage() {
               >
                 <span className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
                   <span className="icon-chip">
-                    {iconFor(JOB_CATEGORIES, l.category)}
+                    <CategoryIcon list={JOB_CATEGORIES} value={l.category} />
                   </span>{" "}
                   {labelFor(JOB_CATEGORIES, l.category)}
                 </span>

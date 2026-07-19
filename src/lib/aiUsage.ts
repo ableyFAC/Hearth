@@ -8,40 +8,44 @@ const DAILY_LIMIT_FREE = 25;
 const DAILY_LIMIT_PLUS = 250;
 
 // Count one usage for this user today and report whether they are now over
-// their daily cap. Counted via the service-role client so it works regardless
-// of RLS, and tracked by calendar date (not a rolling window) so it resets
-// cleanly at midnight. Fails OPEN: a broken counter should never block the
-// homeowner from using a feature, so any error logs and lets the request
-// through uncounted.
+// their daily cap. Counted via the service-role client through the atomic
+// bump_ai_usage RPC (migration 0070), so parallel requests can't race each
+// other into overwriting the same row and fanning out past the cap.
+//
+// Fails CLOSED: if the counter is broken (e.g. the RPC or table is missing),
+// every AI route is a paid side door, so a broken counter must block rather
+// than silently grant unlimited access. It logs loudly and treats the caller
+// as over-limit. Migration 0070 MUST be applied before this code runs, or all
+// AI routes go dark.
 export async function countAiUsage(
   userId: string,
   isPlus: boolean
 ): Promise<{ overLimit: boolean }> {
   const dailyLimit = isPlus ? DAILY_LIMIT_PLUS : DAILY_LIMIT_FREE;
-  let usageCount = 1;
   try {
     const admin = createAdminClient();
-    const usageDate = new Date().toISOString().slice(0, 10);
-    // Supabase-js has no atomic "increment" helper, so read the current count
-    // for today and write it back one higher. A missed race under these
-    // routes' low traffic just undercounts by one, which is fine for an
-    // abuse cap.
-    const { data: existing } = await (admin as any)
-      .from("ai_usage")
-      .select("count")
-      .eq("user_id", userId)
-      .eq("usage_date", usageDate)
-      .maybeSingle();
-    usageCount = (existing?.count ?? 0) + 1;
-    await (admin as any)
-      .from("ai_usage")
-      .upsert(
-        { user_id: userId, usage_date: usageDate, count: usageCount },
-        { onConflict: "user_id,usage_date" }
-      );
+    const { data, error } = await admin.rpc("bump_ai_usage", {
+      p_user: userId,
+      p_delta: 1,
+    });
+    if (error) throw error;
+    return { overLimit: (data as number) > dailyLimit };
   } catch (err) {
-    console.error("ai_usage upsert failed", err);
-    usageCount = 0;
+    console.error("bump_ai_usage failed - failing CLOSED:", err);
+    return { overLimit: true };
   }
-  return { overLimit: usageCount > dailyLimit };
+}
+
+// Add N extra usages for this user today (e.g. a route that fans out to the
+// model more than once per request). Best-effort: it never throws and never
+// blocks the caller, since the gating decision is already made by
+// countAiUsage. Non-positive extras are a no-op.
+export async function addAiUsage(userId: string, extra: number): Promise<void> {
+  if (extra <= 0) return;
+  try {
+    const admin = createAdminClient();
+    await admin.rpc("bump_ai_usage", { p_user: userId, p_delta: extra });
+  } catch (err) {
+    console.error("addAiUsage failed:", err);
+  }
 }

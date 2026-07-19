@@ -54,7 +54,7 @@ export default function QrCodeCard({
       <img
         src={dataUrl}
         alt={`QR code linking to ${businessName} on Hearth`}
-        className="h-24 w-24 rounded-lg border border-stone-200 bg-white"
+        className="h-24 w-24 rounded-lg border border-stone-200 bg-white dark:border-white/10"
       />
       <div className="min-w-0">
         <p className="text-sm font-medium text-stone-900 dark:text-stone-100">Your QR code</p>

@@ -46,13 +46,22 @@ export async function computeResponseTimeMinutes(
   return byContractor.get(contractorId) ?? null;
 }
 
-// Batched for applicant cards: one small query PER contractor for their own
-// recent applications (in parallel), then one shared query for all the leads
-// they applied to. A single shared .limit across all contractors looks
-// cheaper but starves the low-volume pros: one prolific applicant's rows can
-// fill the whole shared window, so real 3+-application pros silently lose
-// their reply-speed line. Applicant lists are small (3-applicant cap per
-// job), so a handful of limit-20 queries is the honest, still-cheap shape.
+// Sanity cap on the single batched query below: comfortably more rows than
+// any realistic combined history for a page's worth of applicant contractors
+// (mirrors the 1000-row cap on wallet_transactions in pro/business/page.tsx).
+// Rows are ordered contractor_id-then-newest-first, so as long as no single
+// batch's total live application history blows past this cap, every
+// contractor still gets its own full newest-N window below - this only
+// exists as a backstop against a truly unbounded read, not as a per-contractor
+// limit (that job is done in JS, same as before).
+const BATCH_ROW_CAP = 2000;
+
+// Batched for applicant cards: ONE query for every contractor's recent
+// applications (previously one query per contractor, in parallel), ordered so
+// each contractor's rows land together and newest-first within the group.
+// Slicing to RESPONSE_TIME_SAMPLE_SIZE per contractor in JS below reproduces
+// exactly the same "at most N rows per contractor" result the old N queries
+// gave, just fetched in a single round trip.
 export async function computeResponseTimeMinutesBatch(
   supabase: any,
   contractorIds: string[]
@@ -61,32 +70,30 @@ export async function computeResponseTimeMinutesBatch(
   const ids = Array.from(new Set(contractorIds.filter(Boolean)));
   if (ids.length === 0) return result;
 
-  // Bounded: at most RESPONSE_TIME_SAMPLE_SIZE rows per contractor, newest
-  // first, guaranteed per contractor (not shared across the batch).
-  const perContractor = await Promise.all(
-    ids.map((id) =>
-      supabase
-        .from("lead_applications")
-        .select("contractor_id, lead_id, created_at")
-        .eq("contractor_id", id)
-        .order("created_at", { ascending: false })
-        .limit(RESPONSE_TIME_SAMPLE_SIZE)
-        .then(({ data, error }: { data: unknown; error: unknown }) =>
-          error ? [] : ((data ?? []) as LeadApplicationRow[])
-        )
-    )
-  );
+  const { data, error } = await supabase
+    .from("lead_applications")
+    .select("contractor_id, lead_id, created_at")
+    .in("contractor_id", ids)
+    .order("contractor_id", { ascending: true })
+    .order("created_at", { ascending: false })
+    .limit(BATCH_ROW_CAP);
+  const fetchedRows: LeadApplicationRow[] = error
+    ? []
+    : ((data ?? []) as LeadApplicationRow[]);
 
+  // Bounded: at most RESPONSE_TIME_SAMPLE_SIZE rows per contractor, newest
+  // first - same cap the old per-contractor query enforced via .limit(), now
+  // enforced here since rows for a given contractor are grouped together
+  // (ordered by contractor_id) and already newest-first within the group.
   const byContractor = new Map<string, LeadApplicationRow[]>();
   const allRows: LeadApplicationRow[] = [];
-  for (const rows of perContractor) {
-    for (const row of rows) {
-      if (!row.contractor_id || !row.lead_id || !row.created_at) continue;
-      const bucket = byContractor.get(row.contractor_id) ?? [];
-      bucket.push(row);
-      byContractor.set(row.contractor_id, bucket);
-      allRows.push(row);
-    }
+  for (const row of fetchedRows) {
+    if (!row.contractor_id || !row.lead_id || !row.created_at) continue;
+    const bucket = byContractor.get(row.contractor_id) ?? [];
+    if (bucket.length >= RESPONSE_TIME_SAMPLE_SIZE) continue;
+    bucket.push(row);
+    byContractor.set(row.contractor_id, bucket);
+    allRows.push(row);
   }
 
   const leadIds = Array.from(

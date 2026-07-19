@@ -17,6 +17,25 @@ body {
   @apply bg-hearth-50 text-stone-800 antialiased dark:bg-stone-900 dark:text-stone-200;
 }
 
+/* Below sm, both the homeowner and pro shells (Nav.tsx / ProNav.tsx, mirrored)
+   add a fixed bottom tab bar for primary navigation. A few floating
+   bottom-right widgets - the Ask Hearth dock (AskHearthDock.tsx), the new
+   message toast (NewMessageNotifier.tsx), and the lead chat dock
+   (ChatDock.tsx) - would otherwise sit on top of that bar's rightmost tab.
+   Nudge them up by the tab bar's height instead of overlapping it. Scoped to
+   the exact Tailwind class combination each widget's outer wrapper uses
+   (fixed + bottom-4 + right-4 + z-40/z-50), which no other fixed element in
+   the app shares, so this can't be more surgical without editing those
+   component files directly. */
+@media (max-width: 639px) {
+  .fixed.bottom-4.right-4.z-40,
+  .fixed.bottom-4.right-4.z-50 {
+    /* Tab bar content is 3rem tall (min-h-[48px]) plus its own
+       safe-area-inset-bottom padding on notched phones, plus a small gap. */
+    bottom: calc(3.5rem + env(safe-area-inset-bottom));
+  }
+}
+
 /* Shared form primitives so screens stay consistent without a component lib. */
 @layer components {
   .label {
@@ -38,11 +57,14 @@ body {
            dark:focus:border-hearth-400 dark:focus:ring-hearth-400;
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2
-           text-sm font-medium transition focus-visible:outline-none
-           focus-visible:ring-2 focus-visible:ring-hearth-500
-           focus-visible:ring-offset-1 active:scale-[0.98]
-           disabled:opacity-50 disabled:cursor-not-allowed
+    /* min-h-[44px] keeps every .btn at or above the 44px thumb minimum even
+       though px-4 py-2 + text-sm alone only reach ~36px tall; items-center
+       keeps label/icon content centered inside the taller box. */
+    @apply inline-flex min-h-[44px] items-center justify-center gap-2
+           rounded-lg px-4 py-2 text-sm font-medium transition
+           focus-visible:outline-none focus-visible:ring-2
+           focus-visible:ring-hearth-500 focus-visible:ring-offset-1
+           active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed
            dark:focus-visible:ring-hearth-400 dark:focus-visible:ring-offset-stone-900;
   }
   .btn-primary {

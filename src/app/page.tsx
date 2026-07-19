@@ -5,6 +5,7 @@ import { FOUNDER, FOUNDER_CREDIT } from "@/lib/constants";
 import Logo from "@/components/Logo";
 import HeroDemoPlayer from "@/components/HeroDemoPlayer";
 import ThemeToggle from "@/components/ThemeToggle";
+import { TrendingUp, Bell, MessageSquare, Wrench } from "lucide-react";
 
 // Root: route signed-in users into the app, everyone else to the marketing-lite
 // landing. Kept server-side so there's no flash of the wrong screen.
@@ -31,22 +32,22 @@ export default async function Home({
 
   const VALUE = [
     {
-      icon: "📈",
+      icon: TrendingUp,
       title: "No surprise repair bills",
       body: "See what may need replacing soon and how much to save each month. A big repair becomes a plan, not a panic.",
     },
     {
-      icon: "🔔",
+      icon: Bell,
       title: "Know before it breaks",
       body: "Alerts for storms, product recalls, and big things getting old, like your water heater. All tailored to your actual home.",
     },
     {
-      icon: "💬",
+      icon: MessageSquare,
       title: "Answers about your home",
       body: "Ask Hearth anything. It knows what's in your home, how old each thing is, and its history.",
     },
     {
-      icon: "🧰",
+      icon: Wrench,
       title: "The right pro, fast",
       body: "Reach a local pro the moment something breaks, with your home's details ready to send.",
     },
@@ -82,7 +83,7 @@ export default async function Home({
                 href="/pros"
                 className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:text-stone-300 dark:hover:border-hearth-400 dark:hover:text-hearth-300"
               >
-                🛠️ Hearth for Pros
+                Hearth for Pros
               </a>
             </div>
           </header>
@@ -178,7 +179,7 @@ export default async function Home({
           {VALUE.map((v) => (
             <div key={v.title} className="card">
               <div className="icon-chip" aria-hidden>
-                {v.icon}
+                <v.icon className="h-5 w-5" />
               </div>
               <h3 className="mt-3 font-semibold text-stone-900 dark:text-stone-100">{v.title}</h3>
               <p className="mt-1 text-sm leading-relaxed text-stone-600 dark:text-stone-400">{v.body}</p>
@@ -192,10 +193,7 @@ export default async function Home({
           src/lib/constants.ts and the copy falls back to an honest generic
           line when they're blank. */}
       <section className="mt-16 rounded-2xl bg-stone-900 px-6 py-8 dark:bg-stone-950 text-center sm:mt-24">
-        <div className="text-3xl" aria-hidden>
-          👋
-        </div>
-        <h2 className="mt-2 text-2xl font-semibold text-white [text-wrap:balance]">
+        <h2 className="text-2xl font-semibold text-white [text-wrap:balance]">
           {FOUNDER_CREDIT
             ? `Built by ${FOUNDER_CREDIT}`
             : "Built by homeowners in Orange County"}
@@ -310,8 +308,7 @@ export default async function Home({
           link. Outline button on purpose: the filled primary on this page is
           reserved for the homeowner CTAs. */}
       <section className="mt-16 rounded-2xl bg-stone-900 px-6 py-8 dark:bg-stone-950 text-center sm:mt-24">
-        <div className="text-3xl">🛠️</div>
-        <h3 className="mt-2 text-xl font-semibold text-white">
+        <h3 className="text-xl font-semibold text-white">
           You fix homes? Get the leads without the games.
         </h3>
         <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-stone-300">
@@ -418,6 +415,11 @@ export default async function Home({
                 <li>
                   <a href="/terms" className="hover:text-hearth-700 hover:underline dark:hover:text-hearth-300">
                     Terms
+                  </a>
+                </li>
+                <li>
+                  <a href="/ai-disclosure" className="hover:text-hearth-700 hover:underline dark:hover:text-hearth-300">
+                    How we use AI
                   </a>
                 </li>
                 {FOUNDER.email && (

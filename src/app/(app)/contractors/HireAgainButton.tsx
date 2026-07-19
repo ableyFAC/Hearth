@@ -59,7 +59,7 @@ export default function HireAgainButton({
                 >
                   {JOB_CATEGORIES.map((c) => (
                     <option key={c.value} value={c.value}>
-                      {c.icon} {c.label}
+                      {c.label}
                     </option>
                   ))}
                 </select>

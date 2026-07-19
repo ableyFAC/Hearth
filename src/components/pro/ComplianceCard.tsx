@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { complianceStatus, type ComplianceStatus } from "@/lib/proCompliance";
+import AiNotice from "@/components/AiNotice";
 
 type DocState = {
   expires: string | null;
@@ -180,7 +181,7 @@ function ComplianceRow({
           accept="image/*,.pdf"
           onChange={onPick}
           disabled={busy}
-          className="block text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-hearth-100 file:px-3 file:py-1.5 file:text-hearth-800 dark:text-stone-300"
+          className="block text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-hearth-100 file:px-3 file:py-1.5 file:text-hearth-800 dark:text-stone-300 dark:file:bg-hearth-900/40 dark:file:text-hearth-200"
         />
         {state.docPath && (
           <a
@@ -216,6 +217,13 @@ function ComplianceRow({
             Save date
           </button>
         </div>
+      )}
+
+      {/* The expiration date is read off the uploaded document by a model, so
+          it gets the same label as every other generated surface. Only shown
+          once there's a date on screen to doubt. */}
+      {showDateField && state.docPath && (
+        <AiNotice detail="The expiration date was read off your document by a model. Check it against the document and correct it above if it's wrong." />
       )}
 
       {busy && <p className="text-xs text-stone-500 dark:text-stone-400">Uploading, one moment.</p>}

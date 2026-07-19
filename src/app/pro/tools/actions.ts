@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentContractor } from "@/lib/contractor";
 import { setFlash } from "@/lib/flash";
 
@@ -79,6 +80,25 @@ export async function sendDraftToLeadAction(
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  // Cap chat sends per user with the same fixed-window limiter as
+  // onboarding's parcel lookup (migration 0068). Fails open on a DB hiccup:
+  // only an explicit `allowed === false` blocks, so a rate-limiter outage
+  // never stops a legit pro from reaching a homeowner.
+  if (user) {
+    const admin = createAdminClient();
+    const { data: allowed } = await admin.rpc("rate_limit_hit", {
+      p_bucket: `chat:${user.id}`,
+      p_limit: 30,
+      p_window_seconds: 60,
+    });
+    if (allowed === false) {
+      return {
+        ok: false,
+        error: "You're sending messages too quickly. Please wait a moment.",
+      };
+    }
+  }
 
   // The draft's plain text goes in untouched (it may be multi-line estimate
   // or invoice text); this is the exact insert shape every other message in

@@ -2,8 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
-import { labelFor, iconFor, JOB_CATEGORIES } from "@/lib/constants";
+import { labelFor, JOB_CATEGORIES } from "@/lib/constants";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
+import CategoryIcon from "@/components/CategoryIcon";
 import {
   updateClientDetailsAction,
   deleteClientAction,
@@ -180,7 +181,7 @@ export default async function ClientDetailPage({
           </h2>
           <p className="flex items-center gap-2 text-sm text-stone-700 dark:text-stone-300">
             <span className="icon-chip">
-              {iconFor(JOB_CATEGORIES, lead.category)}
+              <CategoryIcon list={JOB_CATEGORIES} value={lead.category} />
             </span>
             {labelFor(JOB_CATEGORIES, lead.category)}
           </p>

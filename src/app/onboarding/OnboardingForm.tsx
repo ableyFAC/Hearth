@@ -1,9 +1,18 @@
 "use client";
 
+import NoticeAtCollection from "@/components/NoticeAtCollection";
 import { useState } from "react";
 import { lookupParcelAction, claimPropertyAction } from "./actions";
 import type { ParcelFacts } from "@/lib/parcel";
 import { PROPERTY_TYPES } from "@/lib/constants";
+import { isOrangeCountyZip } from "@/lib/serviceArea";
+import { Hammer, Bell, FileText } from "lucide-react";
+
+// Must read the same as OC_ONLY_MESSAGE in ./actions.ts - kept in sync by
+// hand since a "use server" file can only export async functions, not a
+// shared string constant, to a client component like this one.
+const OC_ONLY_MESSAGE =
+  "Hearth is Orange County only right now. We added you to the waitlist and will email you the moment we expand to your area.";
 
 // A trimmed length floor for "this is actually an address," not just "this
 // field isn't literally empty." Browsers treat a single space as satisfying
@@ -42,6 +51,14 @@ export default function OnboardingForm({
     const z = zip.trim();
     if (!/^\d{5}(-\d{4})?$/.test(z)) {
       setError("Enter a valid 5-digit ZIP code.");
+      return;
+    }
+    // Fast client-side feedback for the launch restriction so an out-of-area
+    // ZIP never even reaches the server lookup. lookupParcelAction enforces
+    // the same check server-side (before its RentCast call) - that's the
+    // real gate, this is just quicker, kinder feedback.
+    if (!isOrangeCountyZip(z)) {
+      setError(OC_ONLY_MESSAGE);
       return;
     }
 
@@ -110,17 +127,17 @@ export default function OnboardingForm({
 
           <ul className="space-y-1.5 rounded-lg bg-hearth-50 p-3 text-sm text-hearth-800 dark:bg-hearth-900/40 dark:text-hearth-200">
             <li className="flex items-start gap-2">
-              <span aria-hidden="true">🛠️</span>
+              <Hammer className="h-4 w-4 shrink-0 translate-y-0.5" aria-hidden="true" />
               <span>Track every system and know what needs attention</span>
             </li>
             <li className="flex items-start gap-2">
-              <span aria-hidden="true">🔔</span>
+              <Bell className="h-4 w-4 shrink-0 translate-y-0.5" aria-hidden="true" />
               <span>
                 Proactive freeze, heat, and recall alerts for YOUR home
               </span>
             </li>
             <li className="flex items-start gap-2">
-              <span aria-hidden="true">📄</span>
+              <FileText className="h-4 w-4 shrink-0 translate-y-0.5" aria-hidden="true" />
               <span>
                 Scan a warranty or receipt and Hearth files it for you
               </span>
@@ -171,6 +188,16 @@ export default function OnboardingForm({
           <button className="btn-primary w-full" disabled={busy}>
             {busy ? "One moment…" : "Continue"}
           </button>
+          {/* Notice at collection. This is the screen where the address goes
+              in, and the address is what the parcel lookup turns into stored
+              latitude/longitude - precise geolocation, which the CPRA treats
+              as sensitive. It has to be disclosed here, not only in the
+              policy three clicks away. */}
+          <NoticeAtCollection
+            collects="Your home's street address and ZIP code, plus the public records we look up from them: year built, size, assessed value, and your home's coordinates."
+            purpose="build your home profile, plan your maintenance, and match you with pros who serve your area."
+            sensitive="Your home's coordinates are precise geolocation, which California treats as sensitive. We use them only to serve your area and localize your home alerts, never to track your device and never for advertising."
+          />
           {error && (
             <p
               role="alert"

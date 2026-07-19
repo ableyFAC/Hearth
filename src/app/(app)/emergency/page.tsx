@@ -37,7 +37,7 @@ export default async function EmergencyPage() {
       </div>
 
       <div className="space-y-3">
-        {FLOWS.map((flow) => (
+        {FLOWS.map(({ icon: _icon, ...flow }) => (
           <PanicCard
             key={flow.key}
             flow={flow}

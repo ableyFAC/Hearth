@@ -34,7 +34,7 @@ export default function NotificationPrefsForm({
               type="checkbox"
               name={c.key}
               defaultChecked={isOn(c.key)}
-              className="mt-1 h-5 w-5 shrink-0 rounded border-stone-300 text-hearth-600 focus:ring-hearth-500"
+              className="mt-1 h-5 w-5 shrink-0 rounded border-stone-300 text-hearth-600 focus:ring-hearth-500 dark:border-white/20"
             />
           </label>
         ))}

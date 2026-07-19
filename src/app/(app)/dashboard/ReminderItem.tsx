@@ -8,6 +8,7 @@ import {
 } from "./actions";
 import { useChecklist } from "@/components/ChecklistProvider";
 import { SYSTEM_TYPES } from "@/lib/constants";
+import { Wrench, type LucideIcon } from "lucide-react";
 
 const MONTHS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -73,8 +74,8 @@ function dueChip(
 
 // Best-effort icon for a reminder, matched from its title against the system
 // list (e.g. "Flush the water heater" -> the water heater icon). Falls back to
-// a generic tool icon when nothing matches, purely cosmetic.
-function iconForTitle(title: string): string {
+// a generic wrench icon when nothing matches, purely cosmetic.
+function iconForTitle(title: string): LucideIcon {
   const t = title.toLowerCase();
   for (const s of SYSTEM_TYPES) {
     const key = s.label.toLowerCase();
@@ -82,7 +83,7 @@ function iconForTitle(title: string): string {
       return s.icon;
     }
   }
-  return "🛠️";
+  return Wrench;
 }
 
 // A reminder row: click the checkbox to cross it out (click again to uncross).
@@ -172,8 +173,11 @@ export default function ReminderItem({
           >
             ✓
           </span>
-          <span className="shrink-0 text-base leading-none" aria-hidden>
-            {iconForTitle(title)}
+          <span className="shrink-0 text-stone-500 dark:text-stone-400" aria-hidden>
+            {(() => {
+              const Icon = iconForTitle(title);
+              return <Icon className="h-4 w-4" />;
+            })()}
           </span>
           <span
             className={`truncate text-sm ${

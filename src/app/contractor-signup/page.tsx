@@ -1,8 +1,10 @@
 "use client";
 
+import NoticeAtCollection from "@/components/NoticeAtCollection";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/safeNext";
+import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
 
 // Real per-user contractor sign-up. Creates a Supabase Auth account tagged with
 // role=contractor, then sends them to set up their company. If email
@@ -49,6 +51,11 @@ export default function ContractorSignUpPage({
   // swaps the form for the check-your-inbox panel below.
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Unchecked by default (Berman fix: pre-ticked consent boxes are void as an
+  // agreement to arbitrate/waive class claims in California). Required
+  // before submit; also re-checked in onSubmit, not just via `required`,
+  // since a crafted or programmatic submit can bypass HTML validation.
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   // Where the confirmation email's link should land: the auth callback
   // exchanges the code for a session, then follows next= to company setup
@@ -67,6 +74,13 @@ export default function ContractorSignUpPage({
 
     if (password.length < 6) {
       setError("Password must be at least 6 characters.");
+      return;
+    }
+
+    if (!agreedToTerms) {
+      setError(
+        "Please confirm you're at least 18 and agree to the Contractor Terms and Privacy Policy."
+      );
       return;
     }
 
@@ -93,6 +107,15 @@ export default function ContractorSignUpPage({
 
     // Confirmation OFF → session returned → go set up the company.
     if (data.session) {
+      // Best-effort audit-trail write; never block signup on it.
+      // TODO(legal): when email confirmation is ON, no session exists yet
+      // here and this never fires - /auth/callback (which exchanges the
+      // confirmation code for a session) should also call
+      // recordTermsAcceptance() once it has a userId, so a confirmed signup
+      // is covered too.
+      if (data.user) {
+        void recordTermsAcceptance(data.user.id, "pro_terms");
+      }
       window.location.href = `/pro/onboarding${onboardingQuery}`;
       return;
     }
@@ -138,8 +161,7 @@ export default function ContractorSignUpPage({
       <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
         <div className="card">
           <div className="mb-6 text-center">
-            <div className="text-3xl">📬</div>
-            <h1 className="mt-2 text-2xl font-semibold text-stone-900 dark:text-stone-100">
+            <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
               Check your inbox
             </h1>
             <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
@@ -199,8 +221,7 @@ export default function ContractorSignUpPage({
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
       <div className="card">
         <div className="mb-6 text-center">
-          <div className="text-3xl">🛠️</div>
-          <h1 className="mt-2 text-2xl font-semibold text-stone-900 dark:text-stone-100">
+          <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
             Join Hearth for Pros
           </h1>
           <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
@@ -241,20 +262,41 @@ export default function ContractorSignUpPage({
               required
             />
           </div>
+          {/* Unchecked-by-default, gated in onSubmit (Berman fix - a
+              pre-ticked or merely-decorative agreement line doesn't bind).
+              Also carries the 18+ age gate. Links to /pro-terms, not /terms:
+              the B2B contractor terms (src/app/pro-terms/page.tsx). */}
+          <label className="flex items-start gap-2 text-xs text-stone-500 dark:text-stone-400">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={agreedToTerms}
+              onChange={(e) => setAgreedToTerms(e.target.checked)}
+              required
+            />
+            <span>
+              I am at least 18 years old and I have read and agree to the{" "}
+              <a href="/pro-terms" className="text-hearth-700 hover:underline dark:text-hearth-300">
+                Contractor Terms
+              </a>{" "}
+              and{" "}
+              <a href="/privacy" className="text-hearth-700 hover:underline dark:text-hearth-300">
+                Privacy Policy
+              </a>
+              .
+            </span>
+          </label>
+          {/* Notice at collection - a separate obligation from the checkbox
+              above, shown at the point of collection directly under the
+              Privacy Policy link. Collapsed by default so it stays tidy. */}
+          <NoticeAtCollection
+            collects="Your name, email address, and password."
+            purpose="create and secure your account, sign you in, and contact you about leads."
+            sensitive="Your password is sensitive information. It's stored only as a scrambled hash that we can't reverse, and it's used for nothing but signing you in."
+          />
           <button className="btn-primary w-full" disabled={busy}>
             {busy ? "Creating account…" : "Sign up"}
           </button>
-          <p className="text-center text-xs text-stone-500 dark:text-stone-400">
-            By creating an account you agree to the{" "}
-            <a href="/terms" className="text-hearth-700 hover:underline dark:text-hearth-300">
-              Terms
-            </a>{" "}
-            and{" "}
-            <a href="/privacy" className="text-hearth-700 hover:underline dark:text-hearth-300">
-              Privacy Policy
-            </a>
-            .
-          </p>
         </form>
 
         {error && (

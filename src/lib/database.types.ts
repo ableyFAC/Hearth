@@ -72,6 +72,11 @@ export interface Database {
           full_name: string | null;
           notification_prefs: { [key: string]: boolean } | null;
           free_quote_used_at: string | null;
+          // TCPA SMS consent (migration 0073): sms_consent_at only moves
+          // forward on a false -> true transition (see
+          // src/app/(app)/account/actions.ts saveAccountAction).
+          sms_consent: boolean;
+          sms_consent_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -81,6 +86,8 @@ export interface Database {
           full_name?: string | null;
           notification_prefs?: { [key: string]: boolean } | null;
           free_quote_used_at?: string | null;
+          sms_consent?: boolean;
+          sms_consent_at?: string | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["users"]["Insert"]>;
@@ -922,6 +929,76 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["invoices"]["Insert"]>;
         Relationships: [];
       };
+      terms_acceptances: {
+        Row: {
+          id: string;
+          user_id: string;
+          doc: string;
+          version: string;
+          accepted_at: string;
+          ip: string | null;
+          user_agent: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          doc: string;
+          version: string;
+          accepted_at?: string;
+          ip?: string | null;
+          user_agent?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["terms_acceptances"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      promo_claims: {
+        Row: {
+          user_id: string;
+          promo_key: string;
+          claimed_at: string;
+          ref: string | null;
+        };
+        Insert: {
+          user_id: string;
+          promo_key: string;
+          claimed_at?: string;
+          ref?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["promo_claims"]["Insert"]>;
+        Relationships: [];
+      };
+      rate_limits: {
+        Row: {
+          bucket: string;
+          window_start: string;
+          count: number;
+        };
+        Insert: {
+          bucket: string;
+          window_start: string;
+          count?: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["rate_limits"]["Insert"]>;
+        Relationships: [];
+      };
+      parcel_cache: {
+        Row: {
+          cache_key: string;
+          facts: Json;
+          source: string;
+          fetched_at: string;
+        };
+        Insert: {
+          cache_key: string;
+          facts: Json;
+          source: string;
+          fetched_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["parcel_cache"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: {
       lead_previews: {
@@ -937,6 +1014,10 @@ export interface Database {
       };
     };
     Functions: {
+      bump_ai_usage: {
+        Args: { p_user: string; p_delta?: number };
+        Returns: number;
+      };
       owns_property: {
         Args: { p_property_id: string };
         Returns: boolean;
@@ -983,6 +1064,22 @@ export interface Database {
       };
       ghost_refund_application: {
         Args: { p_application: string };
+        Returns: boolean;
+      };
+      resolve_referral_code: {
+        Args: { p_code: string };
+        Returns: string | null;
+      };
+      rate_limit_hit: {
+        Args: { p_bucket: string; p_limit: number; p_window_seconds: number };
+        Returns: boolean;
+      };
+      claim_promo: {
+        Args: { p_user: string; p_key: string; p_ref?: string | null };
+        Returns: boolean;
+      };
+      has_claimed_promo: {
+        Args: { p_key: string };
         Returns: boolean;
       };
     };

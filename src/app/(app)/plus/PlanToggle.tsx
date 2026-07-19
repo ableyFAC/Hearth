@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { startPlusCheckoutAction } from "./actions";
+import AutoRenewalTerms from "@/components/AutoRenewalTerms";
+import { PLUS_PLAN } from "@/lib/constants";
 
 const PLANS = {
-  monthly: { label: "Monthly", price: "$4.99/mo" },
-  yearly: { label: "Yearly", price: "$39.99/yr" },
+  monthly: { label: "Monthly", price: `$${PLUS_PLAN.monthly}/mo` },
+  yearly: { label: "Yearly", price: `$${PLUS_PLAN.yearly}/yr` },
 } as const;
 
 // Monthly / yearly toggle for the Plus pricing card. Monthly gives the first
@@ -68,29 +70,39 @@ export default function PlanToggle({
             </p>
           )}
           <p className="text-4xl font-semibold text-stone-900 dark:text-stone-100">
-            $4.99
+            ${PLUS_PLAN.monthly}
             <span className="text-base font-normal text-stone-500 dark:text-stone-400">/mo</span>
           </p>
           <p className="text-xs text-stone-500 dark:text-stone-400">
             {trialEligible
-              ? "after your free month. Cancel anytime."
-              : "billed monthly. Cancel anytime."}
+              ? `after your free ${PLUS_PLAN.trialDays} days, then every month until you cancel.`
+              : "billed monthly until you cancel."}
           </p>
         </div>
       ) : (
         <div className="space-y-0.5">
           <p className="text-4xl font-semibold text-stone-900 dark:text-stone-100">
-            $39.99
+            ${PLUS_PLAN.yearly}
             <span className="text-base font-normal text-stone-500 dark:text-stone-400">/yr</span>
           </p>
           <p className="text-xs text-stone-500 dark:text-stone-400">
-            about $3.33/mo, save 33% vs monthly
+            about ${(PLUS_PLAN.yearly / 12).toFixed(2)}/mo, save 33% vs
+            monthly, billed yearly until you cancel
           </p>
         </div>
       )}
 
-      <form action={startPlusCheckoutAction} className="space-y-2">
+      {/* The recurring terms sit INSIDE the checkout form, immediately above
+          the button that starts the charge, so the disclosure and the act of
+          consent are in visual proximity (see AutoRenewalTerms). The yearly
+          plan never carries the free month, so introEligible is monthly-only
+          and mirrors the signal startPlusCheckoutAction actually uses. */}
+      <form action={startPlusCheckoutAction} className="space-y-3">
         <input type="hidden" name="plan" value={plan} />
+        <AutoRenewalTerms
+          plan={plan}
+          introEligible={plan === "monthly" && trialEligible}
+        />
         <button className="btn-primary w-full">
           {plan === "monthly"
             ? trialEligible
@@ -98,7 +110,13 @@ export default function PlanToggle({
               : "Subscribe to monthly"
             : "Get a year of Plus"}
         </button>
-        <p className="text-xs text-stone-500 dark:text-stone-400">Cancel anytime. No commitment.</p>
+        {/* Restates the cancellation right at the point of consent. The
+            button label is the affirmative act; this line makes clear what is
+            being agreed to. */}
+        <p className="text-xs text-stone-500 dark:text-stone-400">
+          By continuing you agree to the automatic renewal terms above. Cancel
+          anytime. No commitment.
+        </p>
       </form>
     </div>
   );

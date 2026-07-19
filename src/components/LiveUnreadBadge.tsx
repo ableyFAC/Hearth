@@ -5,7 +5,12 @@ import { createClient } from "@/lib/supabase/client";
 
 // Loads the unread-message count on the client (after render) so it never
 // blocks page navigation. A realtime subscription bumps the badge the instant a
-// message arrives from the other side; a 30s poll and a focus refresh back it up.
+// message arrives from the other side; that's the primary path. The poll below
+// is just a safety net for missed/dropped realtime events (e.g. a channel that
+// silently disconnects), so it runs on a slow 2-minute cadence rather than
+// duplicating what realtime already does every 30s. A focus refresh and the
+// "hearth:chat-seen" event both re-poll immediately for the cases that matter
+// most (tab regains focus, user just opened a conversation).
 const SEEN_COOKIE: Record<string, string> = {
   homeowner: "hearth_ho_chat_seen",
   contractor: "hearth_chat_seen",
@@ -97,7 +102,7 @@ export default function LiveUnreadBadge({
     // so the badge clears immediately instead of lingering until the next poll.
     const onSeen = () => poll();
     window.addEventListener("hearth:chat-seen", onSeen);
-    const t = setInterval(poll, 30000);
+    const t = setInterval(poll, 120000);
     return () => {
       active = false;
       supabase.removeChannel(channel);

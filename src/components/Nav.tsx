@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Home, AlertTriangle, Briefcase, MessageCircle } from "lucide-react";
 import Logo from "@/components/Logo";
 import HomeSwitcher from "@/components/HomeSwitcher";
 import NavLinks from "@/components/NavLinks";
@@ -20,13 +21,24 @@ export default function Nav({
   hasPlus: boolean;
 }) {
   const LINKS = [
-    { href: "/dashboard", label: "Home" },
-    { href: "/issues", label: "Issues" },
-    { href: "/contractors", label: "Post a Job" },
-    { href: "/chats", label: "Messages", liveBadge: "homeowner" as const },
+    { href: "/dashboard", label: "Home", icon: Home },
+    { href: "/issues", label: "Issues", icon: AlertTriangle },
+    {
+      href: "/contractors",
+      label: "Post a Job",
+      shortLabel: "Post",
+      icon: Briefcase,
+    },
+    {
+      href: "/chats",
+      label: "Messages",
+      liveBadge: "homeowner" as const,
+      icon: MessageCircle,
+    },
   ];
 
   return (
+    <>
     <header className="sticky top-0 z-30 border-b border-stone-200/70 bg-white/80 backdrop-blur dark:border-white/10 dark:bg-stone-900/80">
       <div className="mx-auto flex max-w-5xl flex-col gap-3 px-6 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
@@ -41,17 +53,13 @@ export default function Nav({
           <HomeSwitcher homes={homes} activeId={activeId} />
         </div>
         <div className="flex items-center gap-1">
-          <div className="relative min-w-0">
+          {/* Primary destinations. Desktop/tablet (sm and up) keep this exact
+              top strip, unchanged. Below sm it is hidden and the same links
+              render as the fixed bottom tab bar further down. */}
+          <div className="relative hidden min-w-0 sm:block">
             <nav className="-mx-1 flex items-center gap-1 overflow-x-auto px-1">
               <NavLinks links={LINKS} />
             </nav>
-            {/* Scroll hint, mobile only: the strip can clip its last tab
-                ("Messages" and its badge), so fade the right edge to show
-                there's more to swipe. */}
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-white to-transparent sm:hidden dark:from-stone-900"
-            />
           </div>
           {/* Home-page destinations + Plus tools. Lives outside the
               overflow-x-auto nav strip so its dropdown isn't clipped. */}
@@ -93,11 +101,26 @@ export default function Nav({
               { href: "/account/household", label: "Household" },
               { href: "/account/notifications", label: "Notifications" },
               { href: "/account/security", label: "Account security" },
+              { href: "/account/privacy", label: "Your privacy rights" },
               { href: "/account/help", label: "Help" },
             ]}
           />
         </div>
       </div>
     </header>
+    {/* Phone-only bottom tab bar: the same primary destinations as the top
+        strip above, laid out like a native app so nothing needs horizontal
+        scrolling on a narrow viewport. Hidden from sm up, where the top
+        strip already handles this. Kept to <=48px tall so it fits inside
+        the pb-24 bottom padding AppLayout's <main> already reserves below
+        sm for the floating Ask Hearth dock; globals.css also nudges that
+        dock and the toast notifier above this bar on the same breakpoint. */}
+    <nav
+      aria-label="Primary"
+      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-stone-200/70 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden dark:border-white/10 dark:bg-stone-900/95"
+    >
+      <NavLinks links={LINKS} variant="bottom" />
+    </nav>
+    </>
   );
 }

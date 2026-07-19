@@ -248,7 +248,6 @@ export default async function LearnPage() {
     return {
       systemType: t.value,
       label: t.label,
-      icon: t.icon,
       category: CATEGORY[t.value] ?? "Other",
       summary: SUMMARY[t.value] ?? "",
       lifespan: DEFAULT_LIFESPANS[t.value] ?? "varies",

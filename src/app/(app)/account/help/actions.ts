@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { setFlash } from "@/lib/flash";
 
 // Save a homeowner's support message so the team can read and reply. The
@@ -16,6 +17,24 @@ export async function saveSupportMessageAction(formData: FormData) {
   // message that staff later read, so don't accept anonymous writes.
   if (!user) {
     setFlash("Please sign in to contact support.", "error");
+    return;
+  }
+
+  // Cap support submissions per user with the same fixed-window limiter as
+  // onboarding's parcel lookup (migration 0068). Fails open on a DB hiccup:
+  // only an explicit `allowed === false` blocks, so a rate-limiter outage
+  // never stops a legit homeowner from reaching support.
+  const admin = createAdminClient();
+  const { data: allowed } = await admin.rpc("rate_limit_hit", {
+    p_bucket: `support:${user.id}`,
+    p_limit: 5,
+    p_window_seconds: 3600,
+  });
+  if (allowed === false) {
+    setFlash(
+      "You've sent several messages already. Please wait a bit before sending another.",
+      "error"
+    );
     return;
   }
 

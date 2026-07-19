@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { ReceiptText } from "lucide-react";
 import { JOB_CATEGORIES } from "@/lib/constants";
+import AiNotice from "@/components/AiNotice";
 
 type Verdict = "fair" | "high" | "low" | "unclear";
 
@@ -247,7 +249,7 @@ export default function QuoteAnalyzer({
               }`}
               aria-disabled={loading}
             >
-              <span className="text-2xl">🧾</span>
+              <ReceiptText className="h-8 w-8 text-stone-400 dark:text-stone-500" aria-hidden="true" />
               <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
                 {preview ? "Use a different photo" : "Take or upload a photo of the quote"}
               </span>
@@ -297,7 +299,7 @@ export default function QuoteAnalyzer({
             <option value="">- not sure -</option>
             {JOB_CATEGORIES.map((c) => (
               <option key={c.value} value={c.value}>
-                {c.icon} {c.label}
+                {c.label}
               </option>
             ))}
           </select>
@@ -337,11 +339,9 @@ export default function QuoteAnalyzer({
           <p className="text-sm text-stone-700 dark:text-stone-300">{result.summary}</p>
 
           {/* Same honest caveat Ask Hearth carries under its answers: this is an
-              AI read, not a professional appraisal. */}
-          <p className="text-xs text-stone-600 dark:text-stone-400">
-            Hearth&apos;s read is an AI estimate. Confirm with a licensed pro
-            before you decide.
-          </p>
+              AI read, not a professional appraisal. Shared component so the
+              wording can't drift from the other AI surfaces. */}
+          <AiNotice detail="This whole read, including the verdict and the total, came from the model. Confirm with a licensed pro before you decide." />
 
           {/* Honesty about homeowner edits: we don't re-run the model, so we
               annotate instead of pretending the verdict recomputed itself. */}

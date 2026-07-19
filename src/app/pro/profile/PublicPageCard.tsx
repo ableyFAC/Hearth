@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Image as ImageIcon, PenLine, FileText, Contact, Star } from "lucide-react";
 import { savePublicPageAction } from "./actions";
 import LogoUpload from "./LogoUpload";
 import QrCodeCard from "./QrCodeCard";
@@ -283,18 +284,31 @@ export default function PublicPageCard({
             Your basic page is live for every pro. Members can dress it up:
           </p>
           <ul className="space-y-1.5 text-sm text-stone-600 dark:text-stone-300">
-            <li>🖼️ Your logo at the top of the page</li>
-            <li>✍️ An about section in your own words</li>
-            <li>
-              📄 A &quot;license and insurance on file&quot; badge once you
-              save those details in a private vault
+            <li className="flex items-start gap-2">
+              <ImageIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>Your logo at the top of the page</span>
             </li>
-            <li>
-              📇 A share card image and ready-to-post caption for social media
+            <li className="flex items-start gap-2">
+              <PenLine className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>An about section in your own words</span>
             </li>
-            <li>
-              ⭐ An embeddable rating widget for your own website, showing your
-              full Hearth rating and review count
+            <li className="flex items-start gap-2">
+              <FileText className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>
+                A &quot;license and insurance on file&quot; badge once you save
+                those details in a private vault
+              </span>
+            </li>
+            <li className="flex items-start gap-2">
+              <Contact className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>A share card image and ready-to-post caption for social media</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <Star className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>
+                An embeddable rating widget for your own website, showing your
+                full Hearth rating and review count
+              </span>
             </li>
           </ul>
           <p className="text-xs text-stone-500 dark:text-stone-400">

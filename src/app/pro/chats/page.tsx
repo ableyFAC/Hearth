@@ -4,8 +4,9 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
-import { labelFor, iconFor, JOB_CATEGORIES } from "@/lib/constants";
+import { labelFor, JOB_CATEGORIES } from "@/lib/constants";
 import LeadChat from "@/components/LeadChat";
+import CategoryIcon from "@/components/CategoryIcon";
 import MarkChatSeen from "@/components/MarkChatSeen";
 import {
   sendQuoteAction,
@@ -164,7 +165,7 @@ export default async function ProChatsPage({
                         </span>
                       ) : (
                         <span className="shrink-0 text-xs text-stone-500 dark:text-stone-400">
-                          {iconFor(JOB_CATEGORIES, l.category)}
+                          <CategoryIcon list={JOB_CATEGORIES} value={l.category} className="h-4 w-4" />
                         </span>
                       )}
                     </div>
@@ -176,7 +177,7 @@ export default async function ProChatsPage({
                       {last
                         ? `${last.sender_role === "contractor" ? "You: " : ""}${
                             last.body.startsWith("[img]")
-                              ? "📷 Photo"
+                              ? "Photo"
                               : last.body
                           }`
                         : labelFor(JOB_CATEGORIES, l.category)}

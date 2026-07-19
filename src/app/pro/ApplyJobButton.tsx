@@ -145,7 +145,7 @@ export default function ApplyJobButton({
   return (
     <form
       action={applyToJobAction}
-      className="space-y-2 rounded-lg border border-stone-200 bg-stone-50 p-3"
+      className="space-y-2 rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-white/10 dark:bg-stone-900"
     >
       <input type="hidden" name="id" value={leadId} />
       <div className="flex flex-wrap gap-1.5">
@@ -154,7 +154,7 @@ export default function ApplyJobButton({
             key={t.label}
             type="button"
             onClick={() => useTemplate(t.text)}
-            className="chip border border-stone-200 bg-white text-stone-600 hover:border-hearth-300 hover:text-hearth-700"
+            className="chip border border-stone-200 bg-white text-stone-600 hover:border-hearth-300 hover:text-hearth-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-hearth-400 dark:hover:text-hearth-300"
           >
             {t.label}
           </button>
@@ -176,7 +176,7 @@ export default function ApplyJobButton({
           disabled={drafting}
           className="text-xs font-medium text-hearth-700 hover:underline disabled:opacity-50"
         >
-          {drafting ? "Drafting..." : "✨ Draft it for me"}
+          {drafting ? "Drafting..." : "Draft it for me"}
         </button>
       </div>
       {/* Matches the app's toast styling (see Toaster.tsx) so this reads as an
@@ -187,20 +187,20 @@ export default function ApplyJobButton({
       {draftError && (
         <div
           role="alert"
-          className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-800"
+          className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-800 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-300"
         >
           <span className="flex-1">{draftError}</span>
           <button
             type="button"
             onClick={() => setDraftError(null)}
             aria-label="Dismiss"
-            className="shrink-0 text-red-400 hover:text-red-600"
+            className="shrink-0 text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
           >
             ✕
           </button>
         </div>
       )}
-      <p className="text-xs text-stone-500">
+      <p className="text-xs text-stone-500 dark:text-stone-400">
         Applying charges the {fee} lead fee from your wallet. If the homeowner
         never responds and no one is picked, ghost protection returns it after{" "}
         {GHOST_PROTECTION_DAYS} days. For licensed pros, the first-application

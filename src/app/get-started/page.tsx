@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getRole } from "@/lib/contractor";
 import { safeNextPath } from "@/lib/safeNext";
+import { Home, Hammer } from "lucide-react";
 
 export const metadata: Metadata = {
   // The root layout's title template appends "| Hearth"; don't repeat it here.
@@ -57,7 +58,7 @@ export default async function GetStarted({
           href={`/homeowner-signup${nextQuery}`}
           className="flex flex-col items-center justify-center rounded-2xl border border-stone-200 bg-white px-6 py-12 shadow-sm transition hover:border-hearth-400 hover:shadow-md dark:border-white/10 dark:bg-stone-800"
         >
-          <div className="text-4xl">🏡</div>
+          <Home className="h-9 w-9 text-hearth-700 dark:text-hearth-400" aria-hidden="true" />
           <div className="mt-4 text-lg font-medium text-stone-900 dark:text-stone-100">
             I&apos;m a homeowner
           </div>
@@ -70,7 +71,7 @@ export default async function GetStarted({
           href={`/contractor-signup${nextQuery}`}
           className="flex flex-col items-center justify-center rounded-2xl border border-stone-200 bg-white px-6 py-12 shadow-sm transition hover:border-hearth-400 hover:shadow-md dark:border-white/10 dark:bg-stone-800"
         >
-          <div className="text-4xl">🛠️</div>
+          <Hammer className="h-9 w-9 text-hearth-700 dark:text-hearth-400" aria-hidden="true" />
           <div className="mt-4 text-lg font-medium text-stone-900 dark:text-stone-100">
             I&apos;m a contractor
           </div>

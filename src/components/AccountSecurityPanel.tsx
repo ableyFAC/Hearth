@@ -53,7 +53,7 @@ export default function AccountSecurityPanel({
   updatePasswordAction,
   signOutOthersAction,
   deleteAccountAction,
-  founderEmail,
+  privacyHref,
 }: {
   // The address the person signs in with today, shown so they know what
   // they're changing from.
@@ -62,9 +62,9 @@ export default function AccountSecurityPanel({
   updatePasswordAction: Action;
   signOutOthersAction: PlainAction;
   deleteAccountAction: Action;
-  // Monitored support inbox for the data-export request. Empty string hides
-  // the row entirely rather than showing a dead mailto.
-  founderEmail: string;
+  // This side's privacy-rights page. Homeowners and pros have separate routes
+  // (the (app) layout bounces pros out of /account), so the link is a prop.
+  privacyHref: string;
 }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
@@ -73,20 +73,20 @@ export default function AccountSecurityPanel({
       {/* Sign-in email. Changing it is a security action (it moves where
           recovery links go), so it lives here, not on Edit profile. */}
       <div className="card p-6">
-        <div className="flex items-center gap-2 border-b border-stone-100 pb-4">
-          <svg viewBox="0 0 24 24" className="h-5 w-5 text-stone-800" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <div className="flex items-center gap-2 border-b border-stone-100 pb-4 dark:border-white/10">
+          <svg viewBox="0 0 24 24" className="h-5 w-5 text-stone-800 dark:text-stone-400" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             {mailIcon}
           </svg>
-          <h2 className="text-base font-semibold text-stone-900">
+          <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">
             Sign-in email
           </h2>
         </div>
 
         <form action={updateEmailAction} className="mt-5 max-w-md space-y-4">
           {email && (
-            <p className="text-sm text-stone-600">
+            <p className="text-sm text-stone-600 dark:text-stone-300">
               You currently sign in as{" "}
-              <span className="font-medium text-stone-900">{email}</span>.
+              <span className="font-medium text-stone-900 dark:text-stone-100">{email}</span>.
             </p>
           )}
           <div>
@@ -102,15 +102,12 @@ export default function AccountSecurityPanel({
                 required
               />
             </div>
-            <p className="mt-1 text-xs text-stone-500">
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
               We send a confirmation link to the new address. Nothing changes
               until you click it.
             </p>
           </div>
-          <button
-            type="submit"
-            className="inline-flex items-center gap-2 rounded-lg bg-stone-500 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-600"
-          >
+          <button type="submit" className="btn-primary">
             Update Email
           </button>
         </form>
@@ -118,9 +115,9 @@ export default function AccountSecurityPanel({
 
       {/* Password */}
       <div className="card p-6">
-        <div className="flex items-center gap-2 border-b border-stone-100 pb-4">
-          <LockIcon className="h-5 w-5 text-stone-800" />
-          <h2 className="text-base font-semibold text-stone-900">Password</h2>
+        <div className="flex items-center gap-2 border-b border-stone-100 pb-4 dark:border-white/10">
+          <LockIcon className="h-5 w-5 text-stone-800 dark:text-stone-400" />
+          <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">Password</h2>
         </div>
 
         <form action={updatePasswordAction} className="mt-5 max-w-md space-y-4">
@@ -169,10 +166,7 @@ export default function AccountSecurityPanel({
             </div>
           </div>
 
-          <button
-            type="submit"
-            className="inline-flex items-center gap-2 rounded-lg bg-stone-500 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-600"
-          >
+          <button type="submit" className="btn-primary">
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
               <path d="M17 21v-8H7v8M7 3v5h8" />
@@ -187,10 +181,10 @@ export default function AccountSecurityPanel({
       <div className="card p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-semibold text-stone-900">
+            <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
               Sign out of other devices
             </p>
-            <p className="mt-0.5 text-sm text-stone-500">
+            <p className="mt-0.5 text-sm text-stone-500 dark:text-stone-400">
               Left yourself signed in somewhere, or see activity you don't
               recognize? This ends every session except this one.
             </p>
@@ -203,29 +197,34 @@ export default function AccountSecurityPanel({
         </div>
       </div>
 
-      {/* Data export. Honest: there's no automatic export yet, so this is a
-          request to a real inbox rather than a button that pretends. */}
-      {founderEmail && (
-        <div className="card p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-stone-900">
-                Export your data
-              </p>
-              <p className="mt-0.5 text-sm text-stone-500">
-                Automatic export isn't built yet. Email us and we'll send you
-                a copy of everything we hold for your account.
-              </p>
-            </div>
-            <a
-              href={`mailto:${founderEmail}?subject=${encodeURIComponent("Please export my Hearth data")}`}
-              className="btn-secondary whitespace-nowrap"
-            >
-              Request an export
-            </a>
+      {/* Data export. A real download now: /api/privacy/export builds the
+          file from the caller's own session, so being signed in IS the
+          verification and there's nothing to wait for. Plain <a download>
+          rather than a form, because the route streams a file back instead of
+          redirecting. */}
+      <div className="card p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+              Export your data
+            </p>
+            <p className="mt-0.5 text-sm text-stone-500 dark:text-stone-400">
+              Download everything we hold for your account as a JSON file.{" "}
+              <a href={privacyHref} className="font-medium text-hearth-700 hover:underline dark:text-hearth-300">
+                Your privacy rights
+              </a>{" "}
+              explains what&apos;s in it.
+            </p>
           </div>
+          <a
+            href="/api/privacy/export"
+            download
+            className="btn-secondary whitespace-nowrap"
+          >
+            Download my data
+          </a>
         </div>
-      )}
+      </div>
 
       {/* Account deletion. No "Danger Zone" caption, per design direction. */}
       <div className="card p-6">

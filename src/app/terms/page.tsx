@@ -1,3 +1,4 @@
+import { LegalContact } from "@/components/LegalContact";
 import type { Metadata } from "next";
 
 // Public top-level page, same pattern as src/app/fountain-valley/page.tsx:
@@ -6,6 +7,7 @@ import type { Metadata } from "next";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
 
 export const metadata: Metadata = {
   // The root layout's title template appends "| Hearth"; don't repeat it here.
@@ -34,6 +36,29 @@ export default function TermsPage() {
       </p>
 
       <div className="mt-8 space-y-8 text-stone-700 dark:text-stone-300">
+        {/* TODO(legal): attorney review required — change-of-terms notice mechanics (Douglas v. Talk America, 9th Cir. 2007 requires actual notice, not just posting, for material changes). */}
+        <section>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+            Changes to these terms
+          </h2>
+          <p className="mt-2 leading-relaxed">
+            We may update these terms as Hearth changes. For a material
+            change, we&apos;ll give you actual notice, such as an email to the
+            address on your account or a notice inside the app, before the
+            change takes effect, and we&apos;ll update the &quot;Last
+            updated&quot; date above. Continuing to use Hearth after a
+            material change takes effect means you accept it. We may make
+            non-material changes, like clarifications or fixing a typo,
+            without separate notice.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            If a change affects the Disputes and arbitration section below,
+            you get a fresh 30-day window to opt out of arbitration, measured
+            from when we give you notice of that change, on the same terms as
+            the opt-out described there.
+          </p>
+        </section>
+
         <section>
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             What Hearth is
@@ -44,6 +69,46 @@ export default function TermsPage() {
             contractor, does not perform the work, and does not guarantee the
             quality, safety, timeliness, or price of any job. Contractors are
             independent businesses, not Hearth employees or agents.
+          </p>
+        </section>
+
+        {/* TODO(legal): attorney review required — assumption-of-risk / release for contractor work; confirm enforceability limits (e.g., Cal. Civ. Code 1668) on releasing gross negligence or statutory claims. */}
+        <section>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+            Contractor work happens at your home
+          </h2>
+          <p className="mt-2 leading-relaxed">
+            Work you book through Hearth is between you and an independent
+            contractor. Hearth doesn&apos;t employ, supervise, or control that
+            contractor, and doesn&apos;t direct how the work gets done. Home
+            improvement and repair work carries inherent risks, including
+            property damage and physical injury, that exist independent of
+            anything Hearth does.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            To the extent the law allows, you release Hearth from claims
+            arising out of a contractor&apos;s work or conduct, including
+            property damage, injury, delay, or a job done poorly. That
+            release doesn&apos;t cover Hearth&apos;s own gross negligence,
+            recklessness, or willful misconduct, and it doesn&apos;t release
+            the contractor&apos;s own conduct, which is between you and them.
+          </p>
+        </section>
+
+        {/* TODO(legal): attorney review required — user-to-user release scope; must not purport to waive bodily-injury claims between users. */}
+        <section>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+            Disputes between users
+          </h2>
+          <p className="mt-2 rounded-md border border-stone-300 bg-stone-50 p-4 font-semibold leading-relaxed text-stone-900 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100">
+            To the extent the law allows, if you have a dispute with another
+            Hearth user (for example, over property or a wallet balance)
+            arising out of your use of Hearth, you release Hearth from claims
+            related to that dispute, except claims arising from Hearth&apos;s
+            own gross negligence, recklessness, or willful misconduct. This
+            release does not waive, and does not apply to, any claim for
+            bodily injury between users; those claims aren&apos;t released by
+            these terms.
           </p>
         </section>
 
@@ -103,6 +168,59 @@ export default function TermsPage() {
           </p>
         </section>
 
+        {/* TODO(legal): attorney review required — user-generated content, license grant, and indemnity. */}
+        <section>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+            Content you upload
+          </h2>
+          <p className="mt-2 leading-relaxed">
+            You keep ownership of everything you upload to Hearth: photos of
+            your home, job descriptions, documents, messages, reviews, and
+            anything else. It stays yours.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            To actually run the service, we need your permission to use it.
+            By uploading, you grant Hearth a non-exclusive, worldwide,
+            royalty-free license to host, store, copy, reformat, and display
+            your content, and to share it with the people the feature is meant
+            to reach (for example, showing your job photos to contractors you
+            invite to bid, or publishing a review you chose to post). That
+            license exists only to operate, secure, and improve Hearth, and it
+            ends when you delete the content or your account, except for
+            copies we&apos;re required to keep in backups or for legal reasons,
+            and except where someone else already relied on it (a published
+            review, or a photo already sent to a contractor).
+          </p>
+          <p className="mt-3 leading-relaxed">
+            You&apos;re telling us you have the right to upload what you
+            upload. Don&apos;t upload someone else&apos;s copyrighted photos,
+            trademarks, or private information without permission, and
+            don&apos;t upload anything illegal, deceptive, or that
+            you&apos;re contractually barred from sharing.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            We don&apos;t review content before it goes up. We may remove or
+            restrict any content, at any time, if we believe it violates these
+            terms or the law, but we&apos;re not obligated to monitor, and
+            we&apos;re not responsible for content other users post. Content
+            from other users is theirs, not ours, and we don&apos;t endorse
+            it. {/* TODO(legal): attorney review required — confirm this tracks the Section 230 and DMCA safe-harbor posture we intend to rely on. */}
+          </p>
+          <p className="mt-3 leading-relaxed">
+            If someone brings a claim against Hearth because of something you
+            uploaded, you agree to defend, indemnify, and hold Hearth harmless
+            from that claim, including reasonable attorneys&apos; fees. This
+            covers your content only, not our own conduct.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            Think content on Hearth infringes your copyright? Use our{" "}
+            <a href="/dmca" className="text-hearth-700 hover:underline dark:text-hearth-300">
+              DMCA takedown process
+            </a>
+            .
+          </p>
+        </section>
+
         <section>
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Account termination
@@ -114,13 +232,252 @@ export default function TermsPage() {
           </p>
         </section>
 
+        {/* TODO(legal): attorney review required — arbitration, class waiver, opt-out, and mass-arbitration terms. Enforceability turns on state law and on the AAA Consumer Rules in effect at filing. */}
         <section>
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-            Governing law
+            Disputes and arbitration
           </h2>
           <p className="mt-2 leading-relaxed">
+            Read this section carefully. It changes how disputes between you
+            and Hearth get resolved: most of them go to an individual
+            arbitrator instead of a judge or jury, and not to a class action.
+            It binds both of us equally. You can opt out within 30 days, and
+            opting out costs you nothing else.
+          </p>
+
+          <h3 className="mt-5 font-semibold text-stone-900 dark:text-stone-100">
+            First, let&apos;s just try to fix it
+          </h3>
+          <p className="mt-2 leading-relaxed">
+            Before either of us starts an arbitration, the side with the
+            complaint sends the other a written notice describing the problem
+            and what would resolve it. Send yours to{" "}
+            <LegalContact />
+            . {/* TODO(legal): confirm the notice-of-dispute address and whether a mailing address must also be accepted. */}
+            We&apos;ll do the same for you, at the email on your account. Both
+            sides then have 30 days to work it out in good faith. Only after
+            those 30 days can either side file. This step is required of
+            Hearth too, not just you, and any deadline to file is paused while
+            it runs.
+          </p>
+
+          <h3 className="mt-5 font-semibold text-stone-900 dark:text-stone-100">
+            Binding individual arbitration
+          </h3>
+          <p className="mt-2 leading-relaxed">
+            {/* TODO(legal): attorney review required — delegation clause (arbitrator decides arbitrability, except a challenge aimed specifically at this delegation sentence goes to court; Rent-A-Center v. Jackson, 2010). */}
+            If we can&apos;t resolve it informally, you and Hearth each agree
+            that the dispute will be settled by binding individual
+            arbitration, not in court. This covers disputes about these terms,
+            your account, fees and wallet balances, Ask Hearth, content, and
+            your use of Hearth generally, whatever the legal theory. The
+            arbitration is administered by the American Arbitration
+            Association under its Consumer Arbitration Rules, in effect when
+            the claim is filed. The Federal Arbitration Act governs whether
+            this section is enforceable. The arbitrator decides the merits,
+            and also decides questions about whether this arbitration
+            agreement itself is valid, applicable, or enforceable. The one
+            exception: a challenge aimed specifically at this delegation
+            sentence, not at the arbitration agreement as a whole, goes to a
+            court, not the arbitrator.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            AAA&apos;s consumer fee schedule caps what a consumer pays to
+            file. Small cases are usually decided on the documents, and you can
+            ask for a hearing by phone or video, or in person near where you
+            live. The arbitrator can award you anything a court could have,
+            and the award is final and enforceable in court.
+          </p>
+
+          <h3 className="mt-5 font-semibold text-stone-900 dark:text-stone-100">
+            What is not covered
+          </h3>
+          <p className="mt-2 leading-relaxed">
+            Two carve-outs, and both run in both directions:
+          </p>
+          <ul className="mt-3 list-disc space-y-2 pl-5 leading-relaxed">
+            <li>
+              <strong className="font-semibold text-stone-900 dark:text-stone-100">
+                Small claims.
+              </strong>{" "}
+              Either of us can bring a qualifying claim in small claims court
+              instead, as long as it stays there and stays individual.
+            </li>
+            <li>
+              <strong className="font-semibold text-stone-900 dark:text-stone-100">
+                Injunctions for IP and abuse.
+              </strong>{" "}
+              Either of us can go to court for an injunction or other
+              equitable relief over misuse of intellectual property, or over
+              unauthorized access to, scraping of, or abuse of the service.
+            </li>
+          </ul>
+
+          <h3 className="mt-5 font-semibold text-stone-900 dark:text-stone-100">
+            No class actions
+          </h3>
+          <p className="mt-2 leading-relaxed">
+            Claims are brought individually. Neither you nor Hearth may bring
+            a class, collective, consolidated, or representative action, and
+            the arbitrator may not preside over one or award relief to anyone
+            who isn&apos;t a party. Arbitrations can&apos;t be joined without
+            everyone&apos;s consent.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            If a court finds this class-action waiver unenforceable as to a
+            particular claim, then that claim, and only that claim, leaves
+            arbitration and goes to court. Everything else stays in
+            arbitration.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            {/* TODO(legal): attorney review required — public injunctive relief carve-out (McGill v. Citibank, Cal. 2017); confirm against the chosen governing law and venue below. */}
+            A claim for public injunctive relief (relief whose primary
+            purpose is stopping unlawful conduct that threatens the general
+            public, not obtaining relief for you individually) is not subject
+            to this arbitration agreement. That claim proceeds in the court
+            named in Governing law and venue below, even while the rest of
+            your dispute proceeds in arbitration.
+          </p>
+
+          {/* TODO(legal): batching clause removed — rely on AAA's Mass Arbitration Supplementary Rules by default (Heckman v. Live Nation, 9th Cir. 2024). */}
+
+          <h3 className="mt-5 font-semibold text-stone-900 dark:text-stone-100">
+            How to opt out
+          </h3>
+          <p className="mt-2 leading-relaxed">
+            You can opt out of this entire arbitration section. You have 30
+            days from whichever is later: the day you first accept these
+            terms, or the day we tell you we&apos;ve changed this section.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            To opt out, send us a written notice that says you&apos;re opting
+            out of arbitration and includes your name, the email address on
+            your Hearth account, and your signature. Email it to{" "}
+            <LegalContact subject="Arbitration opt-out" />{" "}
+            or mail it to{" "}
+            {/* TODO(legal): opt-out mailing address — insert the registered entity name and full mailing address for arbitration opt-out notices. */}
+            <span className="text-stone-500 dark:text-stone-400">
+              [mailing address to be provided]
+            </span>
+            . {/* TODO(legal): confirm the opt-out email address is monitored and retained; a missed opt-out is treated as no opt-out. */}
+          </p>
+          <p className="mt-3 leading-relaxed">
+            That&apos;s all it takes. Opting out doesn&apos;t affect your
+            account, your pricing, or anything else in these terms, and we
+            won&apos;t treat you differently for it. If you opt out, disputes
+            go to court under the governing law and venue below.
+          </p>
+
+          <h3 className="mt-5 font-semibold text-stone-900 dark:text-stone-100">
+            Survival
+          </h3>
+          <p className="mt-2 leading-relaxed">
+            This section survives the end of your account and of these terms.
+          </p>
+        </section>
+
+        {/* TODO(legal): attorney review required — limitation of liability, including the liability cap and the mandatory carve-out for fraud, willful injury, and violations of law (Cal. Civ. Code 1668). */}
+        <section>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+            Limitation of liability
+          </h2>
+          <p className="mt-2 leading-relaxed">
+            To the extent the law allows, Hearth isn&apos;t liable for
+            indirect, incidental, consequential, special, exemplary, or
+            punitive damages, or for lost profits, lost data, or loss of
+            goodwill, even if we were told those losses were possible.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            Also to the extent the law allows, Hearth&apos;s total liability
+            for any claim arising out of your use of Hearth is capped at{" "}
+            <span className="text-stone-500 dark:text-stone-400">
+              [the greater of $100 or the fees you paid Hearth in the 12
+              months before the claim arose; TODO(legal): business decision]
+            </span>
+            .
+          </p>
+          <p className="mt-3 leading-relaxed">
+            Nothing in this section limits Hearth&apos;s liability for its own
+            fraud, for willfully injuring you, or for violating the law in a
+            way California law (Civil Code section 1668) doesn&apos;t let us
+            limit. If a court finds any part of this section unenforceable as
+            to a particular claim, only that part is limited or removed for
+            that claim, and the rest of this section still applies.
+          </p>
+        </section>
+
+        {/* TODO(legal): attorney review required — warranty disclaimers (UCC 2-316 conspicuousness requirement for excluding implied warranties). */}
+        <section>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+            Warranty disclaimers
+          </h2>
+          <p className="mt-2 font-semibold uppercase leading-relaxed text-stone-900 dark:text-stone-100">
+            Hearth provides the service on an &quot;as is&quot; and &quot;as
+            available&quot; basis, and disclaims all implied warranties,
+            including the implied warranties of merchantability, fitness for
+            a particular purpose, and non-infringement.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            That doesn&apos;t mean nothing is promised: it means we&apos;re
+            not promising the service will be uninterrupted, error-free, or
+            fully secure, and that answers from Ask Hearth, including cost
+            estimates and diagnoses from photos, may be inaccurate or
+            incomplete. Some states don&apos;t allow the exclusion of implied
+            warranties, so parts of this section may not apply to you.
+          </p>
+        </section>
+
+        {/* TODO(legal): attorney review required — severability. */}
+        <section>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+            Severability
+          </h2>
+          <p className="mt-2 leading-relaxed">
+            If any part of these terms is found unenforceable or invalid,
+            that part is limited or removed to the minimum extent necessary,
+            and the rest of these terms stays in full effect. The Disputes
+            and arbitration section above has its own, narrower severability
+            rule for what happens if a piece of the arbitration agreement
+            itself is found unenforceable; where the two overlap, that
+            narrower rule controls for arbitration questions.
+          </p>
+        </section>
+
+        {/* TODO(legal): attorney review required — governing law and venue. */}
+        <section>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+            Governing law and venue
+          </h2>
+          <p className="mt-2 leading-relaxed">
+            {/* TODO(legal): governing law — California is carried over from the
+                previous version of this page, not a fresh choice. Counsel should
+                confirm it against the entity's state of formation and principal
+                place of business. Note California's McGill rule interacts with
+                the public-injunctive-relief handling in the arbitration section
+                above; if this state changes, revisit that clause too. */}
             These terms are governed by the laws of the State of California,
-            without regard to conflict-of-law rules.
+            without regard to conflict-of-law rules, except that the Federal
+            Arbitration Act governs the arbitration section above.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            {/* TODO(legal): venue — California is inferred from the governing-law
+                choice above, but the specific county was never chosen. Counsel
+                should set the county (normally the entity's principal place of
+                business) and name the specific state and federal courts. */}
+            For any dispute that isn&apos;t going to arbitration, you and
+            Hearth agree the case belongs in the state and federal courts
+            located in{" "}
+            <span className="text-stone-500 dark:text-stone-400">
+              California [county to be confirmed]
+            </span>
+            , and we each consent to those courts&apos; jurisdiction. Nothing
+            here takes away a right you have under the consumer-protection law
+            of the state you live in, where that law says it can&apos;t be
+            waived.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            {/* TODO(legal): "Hearth LLC" is a PLACEHOLDER — the entity is NOT yet formed. Replace with the real registered entity name once the LLC exists. */}
+            &quot;Hearth&quot; in these terms means Hearth LLC.
           </p>
         </section>
 

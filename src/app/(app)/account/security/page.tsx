@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { getUserProfile } from "@/lib/user";
 import { getUser } from "@/lib/auth";
-import { FOUNDER } from "@/lib/constants";
 import AccountSecurityPanel from "@/components/AccountSecurityPanel";
 import {
   updateEmailAction,
@@ -34,7 +33,7 @@ export default async function AccountSecurityPage() {
         updatePasswordAction={updatePasswordAction}
         signOutOthersAction={signOutOthersAction}
         deleteAccountAction={deleteAccountAction}
-        founderEmail={FOUNDER.email}
+        privacyHref="/account/privacy"
       />
     </div>
   );

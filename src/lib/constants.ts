@@ -1,5 +1,75 @@
 // Shared option lists. Keep these in sync with the CHECK comments in the schema.
 
+import type { LucideIcon } from "lucide-react";
+import {
+  Home,
+  Wind,
+  ShowerHead,
+  Zap,
+  Wrench,
+  AppWindow,
+  Building2,
+  Plug,
+  CloudRain,
+  Layers,
+  DoorOpen,
+  Trees,
+  Route,
+  Droplet,
+  Toilet,
+  Fence as FenceIcon,
+  HelpCircle,
+  Hammer,
+  Leaf,
+  SprayCan,
+  Paintbrush,
+  Search,
+  Bug,
+  HardHat,
+  ChefHat,
+  Bath,
+  MoveVertical,
+  Grid3x3,
+  Sun,
+  Thermometer,
+  Camera,
+  Boxes,
+  Blocks,
+} from "lucide-react";
+
+// One icon per category value, shared across every list below that uses the
+// same value (e.g. "roof" gets the same icon in SYSTEM_TYPES and
+// SERVICE_CATEGORIES). Keeping this in one map means a category always reads
+// the same everywhere it appears.
+const CATEGORY_ICONS: Record<string, LucideIcon> = {
+  roof: Home,
+  hvac: Wind,
+  water_heater: ShowerHead,
+  electrical_panel: Zap,
+  plumbing: Wrench,
+  windows: AppWindow,
+  foundation: Building2,
+  appliance: Plug,
+  gutters: CloudRain,
+  siding: Layers,
+  garage_door: DoorOpen,
+  deck: Trees,
+  driveway: Route,
+  sump_pump: Droplet,
+  sewer_line: Toilet,
+  fence: FenceIcon,
+  electrical: Zap,
+  structural: Building2,
+  other: HelpCircle,
+  remodeling: Hammer,
+  landscaping: Leaf,
+  cleaning: SprayCan,
+  painting: Paintbrush,
+  home_inspection: Search,
+  pest: Bug,
+  handyman: HardHat,
+};
+
 // =============================================================================
 // COLD START: launch-phase liquidity levers.
 //
@@ -35,6 +105,13 @@ export const FOUNDER = {
   // help page needs an account, so signed-out visitors need SOME reachable
   // channel. Real, monitored inbox; if it ever goes unmonitored, blank it
   // out and the pages simply show no contact link rather than a dead one.
+  //
+  // TODO(legal): this is the founder's PERSONAL inbox, chosen as the contact
+  // for now. It also becomes the published contact on the legal pages
+  // (/privacy, /terms, /ai-disclosure) via LegalContact, which means the
+  // arbitration opt-out and dispute-notice deadlines run against it. Two
+  // lawyers flagged routing legal notices to a personal Gmail as an
+  // operational risk; move to a monitored business inbox before launch.
   email: "landenchu2000@gmail.com",
 };
 
@@ -50,22 +127,22 @@ export const FOUNDER_CREDIT = FOUNDER_NAMES.length
   : "";
 
 export const SYSTEM_TYPES = [
-  { value: "roof", label: "Roof", icon: "🏠" },
-  { value: "hvac", label: "HVAC", icon: "❄️" },
-  { value: "water_heater", label: "Water heater", icon: "🚿" },
-  { value: "electrical_panel", label: "Electrical panel", icon: "⚡" },
-  { value: "plumbing", label: "Plumbing", icon: "🚰" },
-  { value: "windows", label: "Windows", icon: "🪟" },
-  { value: "foundation", label: "Foundation", icon: "🧱" },
-  { value: "appliance", label: "Major appliance", icon: "🔌" },
-  { value: "gutters", label: "Gutters", icon: "🌧️" },
-  { value: "siding", label: "Siding", icon: "🪵" },
-  { value: "garage_door", label: "Garage door", icon: "🚪" },
-  { value: "deck", label: "Deck / patio", icon: "🌳" },
-  { value: "driveway", label: "Driveway", icon: "🛣️" },
-  { value: "sump_pump", label: "Sump pump", icon: "💧" },
-  { value: "sewer_line", label: "Sewer / septic", icon: "🚽" },
-  { value: "fence", label: "Fence", icon: "🧱" },
+  { value: "roof", label: "Roof", icon: CATEGORY_ICONS.roof },
+  { value: "hvac", label: "HVAC", icon: CATEGORY_ICONS.hvac },
+  { value: "water_heater", label: "Water heater", icon: CATEGORY_ICONS.water_heater },
+  { value: "electrical_panel", label: "Electrical panel", icon: CATEGORY_ICONS.electrical_panel },
+  { value: "plumbing", label: "Plumbing", icon: CATEGORY_ICONS.plumbing },
+  { value: "windows", label: "Windows", icon: CATEGORY_ICONS.windows },
+  { value: "foundation", label: "Foundation", icon: CATEGORY_ICONS.foundation },
+  { value: "appliance", label: "Major appliance", icon: CATEGORY_ICONS.appliance },
+  { value: "gutters", label: "Gutters", icon: CATEGORY_ICONS.gutters },
+  { value: "siding", label: "Siding", icon: CATEGORY_ICONS.siding },
+  { value: "garage_door", label: "Garage door", icon: CATEGORY_ICONS.garage_door },
+  { value: "deck", label: "Deck / patio", icon: CATEGORY_ICONS.deck },
+  { value: "driveway", label: "Driveway", icon: CATEGORY_ICONS.driveway },
+  { value: "sump_pump", label: "Sump pump", icon: CATEGORY_ICONS.sump_pump },
+  { value: "sewer_line", label: "Sewer / septic", icon: CATEGORY_ICONS.sewer_line },
+  { value: "fence", label: "Fence", icon: CATEGORY_ICONS.fence },
 ] as const;
 
 // Marker text the auto-seeded starter inventory used to use as a per-system
@@ -77,12 +154,12 @@ export const STARTER_SYSTEM_NOTE =
 // Home-problem categories for the issue tracker (home-health side). These are
 // things that go *wrong* with a house, not every service a pro offers.
 export const ISSUE_CATEGORIES = [
-  { value: "roof", label: "Roof", icon: "🏠" },
-  { value: "plumbing", label: "Plumbing", icon: "🚰" },
-  { value: "electrical", label: "Electrical", icon: "⚡" },
-  { value: "hvac", label: "HVAC", icon: "❄️" },
-  { value: "structural", label: "Structural", icon: "🧱" },
-  { value: "other", label: "Other", icon: "🔧" },
+  { value: "roof", label: "Roof", icon: CATEGORY_ICONS.roof },
+  { value: "plumbing", label: "Plumbing", icon: CATEGORY_ICONS.plumbing },
+  { value: "electrical", label: "Electrical", icon: CATEGORY_ICONS.electrical },
+  { value: "hvac", label: "HVAC", icon: CATEGORY_ICONS.hvac },
+  { value: "structural", label: "Structural", icon: CATEGORY_ICONS.structural },
+  { value: "other", label: "Other", icon: CATEGORY_ICONS.other },
 ] as const;
 
 // Canonical service categories a contractor advertises and a homeowner can post
@@ -91,27 +168,27 @@ export const ISSUE_CATEGORIES = [
 // sides have to draw from this same list. (Custom "Other" services are handled
 // separately as free text.)
 export const SERVICE_CATEGORIES = [
-  { value: "roof", label: "Roof", icon: "🏠" },
-  { value: "plumbing", label: "Plumbing", icon: "🚰" },
-  { value: "electrical", label: "Electrical", icon: "⚡" },
-  { value: "hvac", label: "HVAC", icon: "❄️" },
-  { value: "structural", label: "Structural", icon: "🧱" },
-  { value: "remodeling", label: "Remodeling", icon: "🛠️" },
-  { value: "landscaping", label: "Landscaping", icon: "🌿" },
-  { value: "cleaning", label: "Cleaning", icon: "🧽" },
-  { value: "windows", label: "Windows", icon: "🪟" },
-  { value: "painting", label: "Painting", icon: "🎨" },
-  { value: "home_inspection", label: "Home inspection", icon: "🔍" },
-  { value: "pest", label: "Pest & termite control", icon: "🐜" },
-  { value: "garage_door", label: "Garage door", icon: "🚪" },
-  { value: "handyman", label: "Handyman", icon: "🧰" },
+  { value: "roof", label: "Roof", icon: CATEGORY_ICONS.roof },
+  { value: "plumbing", label: "Plumbing", icon: CATEGORY_ICONS.plumbing },
+  { value: "electrical", label: "Electrical", icon: CATEGORY_ICONS.electrical },
+  { value: "hvac", label: "HVAC", icon: CATEGORY_ICONS.hvac },
+  { value: "structural", label: "Structural", icon: CATEGORY_ICONS.structural },
+  { value: "remodeling", label: "Remodeling", icon: CATEGORY_ICONS.remodeling },
+  { value: "landscaping", label: "Landscaping", icon: CATEGORY_ICONS.landscaping },
+  { value: "cleaning", label: "Cleaning", icon: CATEGORY_ICONS.cleaning },
+  { value: "windows", label: "Windows", icon: CATEGORY_ICONS.windows },
+  { value: "painting", label: "Painting", icon: CATEGORY_ICONS.painting },
+  { value: "home_inspection", label: "Home inspection", icon: CATEGORY_ICONS.home_inspection },
+  { value: "pest", label: "Pest & termite control", icon: CATEGORY_ICONS.pest },
+  { value: "garage_door", label: "Garage door", icon: CATEGORY_ICONS.garage_door },
+  { value: "handyman", label: "Handyman", icon: CATEGORY_ICONS.handyman },
 ] as const;
 
 // Every value a job's category can take, for labels/icons when displaying a
 // posted job (the canonical services plus the catch-all "Other" bucket).
 export const JOB_CATEGORIES = [
   ...SERVICE_CATEGORIES,
-  { value: "other", label: "Other", icon: "🔧" },
+  { value: "other", label: "Other", icon: CATEGORY_ICONS.other },
 ] as const;
 
 // Per-category "what to shoot" lists shown next to the photo picker when a
@@ -205,28 +282,28 @@ export function photoTipsFor(category: string): string[] {
 // Popular remodel / improvement projects we surface as recommendations.
 // `category` maps each project to the contractor category used for matching.
 export const REMODEL_PROJECTS = [
-  { label: "Kitchen remodel", icon: "🍳", category: "remodeling" },
-  { label: "Bathroom remodel", icon: "🛁", category: "remodeling" },
-  { label: "Window replacement", icon: "🪟", category: "windows" },
-  { label: "Stairs & railings", icon: "🪜", category: "structural" },
-  { label: "Flooring", icon: "🪵", category: "remodeling" },
-  { label: "Deck / patio", icon: "🌳", category: "structural" },
-  { label: "Interior painting", icon: "🎨", category: "painting" },
-  { label: "Garage door", icon: "🚪", category: "garage_door" },
-  { label: "Roof replacement", icon: "🏠", category: "roof" },
-  { label: "Panel upgrade", icon: "⚡", category: "electrical" },
-  { label: "HVAC install", icon: "❄️", category: "hvac" },
-  { label: "Water heater", icon: "🚿", category: "plumbing" },
-  { label: "Solar panels", icon: "🔆", category: "electrical" },
-  { label: "Fencing", icon: "🧱", category: "landscaping" },
-  { label: "Landscaping", icon: "🌿", category: "landscaping" },
-  { label: "Driveway / concrete", icon: "🛣️", category: "structural" },
-  { label: "Siding", icon: "🪵", category: "structural" },
-  { label: "Gutter installation", icon: "🌧️", category: "roof" },
-  { label: "Insulation", icon: "🧊", category: "remodeling" },
-  { label: "Basement finishing", icon: "🪜", category: "remodeling" },
-  { label: "Smart home / security", icon: "📹", category: "electrical" },
-  { label: "Drywall repair", icon: "🧱", category: "remodeling" },
+  { label: "Kitchen remodel", icon: ChefHat, category: "remodeling" },
+  { label: "Bathroom remodel", icon: Bath, category: "remodeling" },
+  { label: "Window replacement", icon: AppWindow, category: "windows" },
+  { label: "Stairs & railings", icon: MoveVertical, category: "structural" },
+  { label: "Flooring", icon: Grid3x3, category: "remodeling" },
+  { label: "Deck / patio", icon: Trees, category: "structural" },
+  { label: "Interior painting", icon: Paintbrush, category: "painting" },
+  { label: "Garage door", icon: DoorOpen, category: "garage_door" },
+  { label: "Roof replacement", icon: Home, category: "roof" },
+  { label: "Panel upgrade", icon: Zap, category: "electrical" },
+  { label: "HVAC install", icon: Wind, category: "hvac" },
+  { label: "Water heater", icon: ShowerHead, category: "plumbing" },
+  { label: "Solar panels", icon: Sun, category: "electrical" },
+  { label: "Fencing", icon: FenceIcon, category: "landscaping" },
+  { label: "Landscaping", icon: Leaf, category: "landscaping" },
+  { label: "Driveway / concrete", icon: Route, category: "structural" },
+  { label: "Siding", icon: Layers, category: "structural" },
+  { label: "Gutter installation", icon: CloudRain, category: "roof" },
+  { label: "Insulation", icon: Thermometer, category: "remodeling" },
+  { label: "Basement finishing", icon: Boxes, category: "remodeling" },
+  { label: "Smart home / security", icon: Camera, category: "electrical" },
+  { label: "Drywall repair", icon: Blocks, category: "remodeling" },
 ] as const;
 
 export const SEVERITIES = [
@@ -314,6 +391,21 @@ export const PRO_PLAN = {
   // never an invented list price.
   yearly: 239.88,
   introFirstMonth: 9.99,
+} as const;
+
+// Hearth Plus membership (homeowner side) pricing, USD. Same role PRO_PLAN
+// plays for the contractor side: the ONE place the homeowner prices live, so
+// the /plus page, the checkout action, the auto-renewal disclosure in
+// src/lib/billingTerms.ts, and the renewal-reminder cron can never quote a
+// price the card isn't actually charged. First-time monthly subscribers get a
+// free first month (a 30-day Stripe trial); yearly carries no trial because
+// it is already discounted.
+export const PLUS_PLAN = {
+  monthly: 4.99,
+  // 33% off monthly x 12 ($59.88), about $3.33/mo. Always compare against
+  // monthly x 12 in copy, never an invented list price.
+  yearly: 39.99,
+  trialDays: 30,
 } as const;
 
 // Extra percentage points a Pro member earns on top of the deposit-bonus tier
@@ -561,11 +653,11 @@ export function labelFor(
 }
 
 export function iconFor(
-  list: readonly { value: string; icon?: string }[],
+  list: readonly { value: string; icon?: LucideIcon }[],
   value: string | null | undefined
-): string {
-  if (!value) return "";
-  return list.find((o) => o.value === value)?.icon ?? "";
+): LucideIcon | null {
+  if (!value) return null;
+  return list.find((o) => o.value === value)?.icon ?? null;
 }
 
 // Short seasonal maintenance checklist, shown on Home for the current season.

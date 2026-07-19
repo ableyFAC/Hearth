@@ -82,3 +82,22 @@ export const getProactiveGreeting = cache(
     }
   }
 );
+
+// The pro's open-jobs board (category-matched, not yet applied), used by
+// src/app/pro/layout.tsx to build the pro copilot's opening line ("N open
+// leads matching your trades"). Cached per request so the layout's own read
+// doesn't cost a second round trip if something else in the same request
+// calls this exact helper. Note: src/app/pro/page.tsx currently makes its own
+// separate `open_jobs_for_me` RPC call (for the actual leads board, not the
+// greeting) rather than going through this helper - that file is outside this
+// lane, but switching it to call getOpenJobsForMe() too would collapse both
+// calls into one per request.
+export const getOpenJobsForMe = cache(async (): Promise<any[]> => {
+  try {
+    const supabase = createClient();
+    const { data } = await (supabase as any).rpc("open_jobs_for_me");
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+});

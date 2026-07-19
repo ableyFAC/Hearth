@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
+import type { HomeSystem } from "@/lib/database.types";
 import IssueForm from "./IssueForm";
 import IssueRow from "./IssueRow";
 
@@ -10,10 +11,18 @@ export default async function IssuesPage() {
   const [{ data: issues }, { data: systems }] = await Promise.all([
     supabase
       .from("issues")
-      .select("*")
+      // Everything IssueRow reads (id/category/severity/description/status/
+      // converted_to_lead) - drops property_id and created_at, unused here
+      // (ordering happens server-side via .order() below, no select needed).
+      .select("id, category, severity, description, status, converted_to_lead")
       .eq("property_id", property.id)
       .order("created_at", { ascending: false }),
-    supabase.from("home_systems").select("*").eq("property_id", property.id),
+    supabase
+      .from("home_systems")
+      // IssueForm only reads id/system_type/material_or_model for its
+      // "related system" dropdown.
+      .select("id, system_type, material_or_model")
+      .eq("property_id", property.id),
   ]);
 
   const open = (issues ?? []).filter((i) => i.status === "open");
@@ -30,7 +39,13 @@ export default async function IssuesPage() {
         </div>
       </div>
 
-      <IssueForm propertyId={property.id} systems={systems ?? []} />
+      {/* IssueForm's declared prop is the full HomeSystem[] shape, but it only
+          reads id/system_type/material_or_model - all present in the trimmed
+          select above. Safe cast, no behavior change. */}
+      <IssueForm
+        propertyId={property.id}
+        systems={(systems ?? []) as unknown as HomeSystem[]}
+      />
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Open</h2>
@@ -42,7 +57,7 @@ export default async function IssuesPage() {
           </ul>
         ) : (
           <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400">
-            No open issues. 🎉
+            No open issues.
           </p>
         )}
       </section>

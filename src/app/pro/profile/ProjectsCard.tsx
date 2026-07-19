@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { JOB_CATEGORIES, labelFor, iconFor } from "@/lib/constants";
+import { JOB_CATEGORIES, labelFor } from "@/lib/constants";
 import { saveProjectAction, deleteProjectAction } from "./project-actions";
 import ProjectPhotoManager from "./ProjectPhotoManager";
+import CategoryIcon from "@/components/CategoryIcon";
 
 // "Projects" tab: the pro's portfolio of completed work, shown on their
 // public page (/p/<id>) in a section of its own, separate from reviews.
@@ -94,10 +95,15 @@ export default function ProjectsCard({
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-medium text-stone-900 dark:text-stone-100">{p.title}</p>
-                    <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-                      {p.category
-                        ? `${iconFor(JOB_CATEGORIES, p.category)} ${labelFor(JOB_CATEGORIES, p.category)}`
-                        : "No category"}
+                    <p className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-stone-500 dark:text-stone-400">
+                      {p.category ? (
+                        <span className="inline-flex items-center gap-1">
+                          <CategoryIcon list={JOB_CATEGORIES} value={p.category} className="h-3.5 w-3.5" />
+                          {labelFor(JOB_CATEGORIES, p.category)}
+                        </span>
+                      ) : (
+                        "No category"
+                      )}
                       {p.months ? ` · ${p.months}` : ""}
                       {" · "}
                       {p.photos.length} photo{p.photos.length === 1 ? "" : "s"}
@@ -232,7 +238,7 @@ function ProjectForm({
             <option value="">No category</option>
             {JOB_CATEGORIES.map((c) => (
               <option key={c.value} value={c.value}>
-                {c.icon} {c.label}
+                {c.label}
               </option>
             ))}
           </select>

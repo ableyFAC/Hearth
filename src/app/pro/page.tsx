@@ -3,13 +3,14 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor, getRole } from "@/lib/contractor";
 import {
   labelFor,
-  iconFor,
   JOB_CATEGORIES,
   TIMING_OPTIONS,
   BUDGET_RANGES,
   MAX_APPLICANTS_PER_JOB,
   COLD_START_FREE_ALERTS,
 } from "@/lib/constants";
+import CategoryIcon from "@/components/CategoryIcon";
+import { Check } from "lucide-react";
 import Link from "next/link";
 import OpenChatButton from "@/components/OpenChatButton";
 import ChatDrawer from "@/components/ChatDrawer";
@@ -102,7 +103,9 @@ export default async function ProDashboard({
       (supabase as any).rpc("my_applications"),
       supabase
         .from("contractor_leads")
-        .select("*")
+        .select(
+          "id, status, category, issue_severity, issue_description, homeowner_name, homeowner_email, homeowner_phone, property_address, created_at"
+        )
         .eq("contractor_id", contractor.id)
         .order("created_at", { ascending: false }),
     ]);
@@ -375,7 +378,7 @@ export default async function ProDashboard({
             </p>
             <ul className="mx-auto mt-4 max-w-md space-y-2 text-left text-sm">
               <li className="flex items-start gap-2 text-stone-600">
-                <span aria-hidden>✔️</span>
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-hearth-600" aria-hidden="true" />
                 <span>
                   Make your page worth picking:{" "}
                   <Link
@@ -390,7 +393,7 @@ export default async function ProDashboard({
               </li>
               {apps.length === 0 && (
                 <li className="flex items-start gap-2 text-stone-600">
-                  <span aria-hidden>✔️</span>
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-hearth-600" aria-hidden="true" />
                   <span>
                     Not chosen on your first application? The fee comes back
                     as lead credit, spendable on any lead, and it expires
@@ -410,7 +413,7 @@ export default async function ProDashboard({
                   The membership upsell version returns when the flag flips. */}
               {COLD_START_FREE_ALERTS ? (
                 <li className="flex items-start gap-2 text-stone-600">
-                  <span aria-hidden>✔️</span>
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-hearth-600" aria-hidden="true" />
                   <span>
                     You&apos;ll be alerted the moment a job posts in your
                     trades, so you never check an empty board.
@@ -419,7 +422,7 @@ export default async function ProDashboard({
               ) : (
                 !isProMember && (
                   <li className="flex items-start gap-2 text-stone-600">
-                    <span aria-hidden>✔️</span>
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-hearth-600" aria-hidden="true" />
                     <span>
                       <Link
                         href="/pro/plus"
@@ -458,13 +461,11 @@ export default async function ProDashboard({
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="flex items-center gap-2 font-medium text-stone-900">
                       <span className="icon-chip">
-                        {iconFor(JOB_CATEGORIES, j.category)}
+                        <CategoryIcon list={JOB_CATEGORIES} value={j.category} />
                       </span>{" "}
                       {labelFor(JOB_CATEGORIES, j.category)}
-                      {/* Locality: the city arrives once open_jobs_for_me
-                          returns it (its migration lives outside this file);
-                          until then the guard just hides it. Pros price a
-                          lead by where it is. */}
+                      {/* Locality: open_jobs_for_me (0074) returns the
+                          property city. Pros price a lead by where it is. */}
                       {j.city ? (
                         <span className="font-normal text-stone-500">
                           in {j.city}
@@ -536,6 +537,17 @@ export default async function ProDashboard({
                       )}
                     </div>
                   )}
+
+                  {/* Applicant count: shown on every card so a pro can judge
+                      competition before paying the apply fee, not just once
+                      the cap is already hit. */}
+                  <p
+                    className={`text-xs font-semibold ${
+                      full ? "text-red-600" : "text-stone-500"
+                    }`}
+                  >
+                    {spots} of {MAX_APPLICANTS_PER_JOB} spots taken
+                  </p>
 
                   {conflict ? (
                     // No apply button: the pro already has this homeowner in
@@ -627,7 +639,7 @@ export default async function ProDashboard({
                 <div>
                   <span className="flex items-center gap-2 font-medium text-stone-900">
                     <span className="icon-chip">
-                      {iconFor(JOB_CATEGORIES, a.category)}
+                      <CategoryIcon list={JOB_CATEGORIES} value={a.category} />
                     </span>{" "}
                     {labelFor(JOB_CATEGORIES, a.category)}
                   </span>
@@ -666,7 +678,7 @@ export default async function ProDashboard({
               >
                 <span className="flex items-center gap-2 font-medium text-stone-700">
                   <span className="icon-chip">
-                    {iconFor(JOB_CATEGORIES, a.category)}
+                    <CategoryIcon list={JOB_CATEGORIES} value={a.category} />
                   </span>{" "}
                   {labelFor(JOB_CATEGORIES, a.category)}
                 </span>
@@ -689,7 +701,7 @@ function AssignedJobCard({ l }: { l: any }) {
       <div className="flex flex-wrap items-center gap-2">
         <span className="flex items-center gap-2 font-medium text-stone-900">
           <span className="icon-chip">
-            {iconFor(JOB_CATEGORIES, l.category)}
+            <CategoryIcon list={JOB_CATEGORIES} value={l.category} />
           </span>{" "}
           {labelFor(JOB_CATEGORIES, l.category)}
         </span>
@@ -731,7 +743,7 @@ function AssignedJobCard({ l }: { l: any }) {
         <OpenChatButton
           leadId={l.id}
           name={l.homeowner_name || "Homeowner"}
-          label="💬 Message"
+          label="Message"
         />
         <JobStatusSelect id={l.id} status={l.status} />
       </div>

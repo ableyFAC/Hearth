@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import type { LucideIcon } from "lucide-react";
+import { ClipboardList, ReceiptText, Mail, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { hasProPlan } from "@/lib/subscription";
@@ -11,19 +13,19 @@ import ProToolsClient from "./ProToolsClient";
 // else gets a clear look at what's inside and a path to /pro/plus. Lead access
 // is never involved here: this is perks-only surface.
 
-const TOOLS: Array<{ icon: string; title: string; body: string }> = [
+const TOOLS: Array<{ icon: LucideIcon; title: string; body: string }> = [
   {
-    icon: "📋",
+    icon: ClipboardList,
     title: "Estimate builder",
     body: "Describe the job in your own words and get back a clean written estimate: scope, line items, and terms, ready to send.",
   },
   {
-    icon: "🧾",
+    icon: ReceiptText,
     title: "Invoice writer",
     body: "Turn 'replaced the water heater, $1,450' into professional invoice text with a work summary and payment note.",
   },
   {
-    icon: "✉️",
+    icon: Mail,
     title: "Follow-up writer",
     body: "The message you keep meaning to send: nudge a quiet quote, ask a happy customer for a review, or check in on past work.",
   },
@@ -51,7 +53,7 @@ export default async function ProToolsPage() {
         <div className="rounded-xl border border-hearth-200 bg-hearth-50 p-4 text-center ring-1 ring-hearth-200 dark:border-hearth-800 dark:bg-hearth-900/40 dark:ring-hearth-800">
           <div className="mb-2 flex justify-center">
             <span aria-hidden="true" className="icon-chip">
-              🔒
+              <Lock className="h-5 w-5" />
             </span>
           </div>
           <p className="text-sm font-medium text-hearth-800 dark:text-hearth-200">
@@ -71,12 +73,14 @@ export default async function ProToolsPage() {
           {TOOLS.map((t) => (
             <div key={t.title} className="card">
               <div className="flex items-start gap-3">
-                <div className="icon-chip">{t.icon}</div>
+                <div className="icon-chip">
+                  <t.icon className="h-5 w-5" aria-hidden="true" />
+                </div>
                 <div>
                   <h2 className="font-semibold text-stone-900 dark:text-stone-100">
                     {t.title}{" "}
-                    <span className="chip ml-1 border border-stone-200 bg-stone-50 text-stone-500 dark:border-white/10 dark:bg-stone-800 dark:text-stone-400">
-                      🔒 Members
+                    <span className="chip ml-1 inline-flex items-center gap-1 border border-stone-200 bg-stone-50 text-stone-500 dark:border-white/10 dark:bg-stone-800 dark:text-stone-400">
+                      <Lock className="h-3 w-3" aria-hidden="true" /> Members
                     </span>
                   </h2>
                   <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">{t.body}</p>

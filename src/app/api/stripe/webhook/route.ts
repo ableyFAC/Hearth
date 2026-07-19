@@ -3,6 +3,16 @@ import { stripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PRO_DEPOSIT_BOOST_PTS } from "@/lib/constants";
 import { isMissingSchemaError } from "@/lib/dbErrors";
+import { sendNotification } from "@/lib/notify";
+import { isLiveProPlanRow } from "@/lib/subscription";
+import {
+  billingTerms,
+  billingTermsText,
+  type PaidPlan,
+} from "@/lib/billingTerms";
+
+// Notification kind for the post-purchase auto-renewal acknowledgment.
+const ACK_KIND = "renewal_acknowledgment";
 
 // Stripe needs the raw body + Node runtime to verify the signature.
 export const runtime = "nodejs";
@@ -211,6 +221,133 @@ function invoiceLineInterval(invoice: any): "year" | "month" | null {
   return prorated;
 }
 
+// Post-purchase acknowledgment. California's Automatic Renewal Law requires
+// the buyer to receive the automatic renewal terms, the cancellation policy,
+// and how to cancel, "in a manner that is capable of being retained"
+// (Bus. & Prof. Code 17602(a)(3)). The welcome screens show this too, but a
+// screen is not retainable: this is the copy that lands in an inbox and the
+// notification list, and it is the only acknowledgment that knows what Stripe
+// actually billed.
+//
+// The text comes from the same billingTerms source as the pre-checkout
+// disclosure, so the promise made before payment and the record sent after it
+// cannot drift apart.
+//
+// Idempotency uses the once-per-key-forever pattern the crons use: the Stripe
+// subscription id rides in the notification url, so a redelivered
+// checkout.session.completed is a no-op while a genuine resubscribe (a new
+// subscription id) still gets its own acknowledgment. Both pages ignore
+// unknown query params, so the link still lands correctly.
+//
+// Best-effort throughout: a failed acknowledgment must never 500 the webhook
+// and cost someone a paid membership. It is logged loudly instead, because a
+// missing acknowledgment is a compliance gap, not a cosmetic one.
+async function sendRenewalAcknowledgment(
+  admin: any,
+  userId: string,
+  plan: PaidPlan,
+  introEligible: boolean,
+  subscriptionId: string
+): Promise<void> {
+  try {
+    const terms = billingTerms(plan, introEligible);
+    const url = `${terms.cancelPath}?ack=${subscriptionId}`;
+
+    const { data: existing } = await admin
+      .from("notifications")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("kind", ACK_KIND)
+      .eq("url", url)
+      .limit(1)
+      .maybeSingle();
+    if (existing) return;
+
+    const { data: user } = await admin
+      .from("users")
+      .select("email")
+      .eq("id", userId)
+      .maybeSingle();
+
+    await sendNotification(admin, {
+      userId,
+      kind: ACK_KIND,
+      title: `Your ${terms.product} subscription: renewal and cancellation terms`,
+      body: billingTermsText(plan, introEligible),
+      url,
+      email: user?.email ?? null,
+      // Deliberately no phone: this is a document to keep, not an alert.
+      phone: null,
+    });
+  } catch (err) {
+    console.error("renewal acknowledgment failed:", err);
+  }
+}
+
+// True when the subscription's current period is running on a discount, i.e.
+// the Hearth Pro intro month. Read off the subscription rather than the plan
+// name because the intro is a one-time coupon that can silently fail to apply
+// (see proIntroCouponId): if it didn't apply, there is no step-up to disclose
+// and the acknowledgment must not claim one. `discounts` is the newer Stripe
+// shape, `discount` the older singular one - read whichever is present.
+function hasIntroDiscount(subscription: any): boolean {
+  const list = subscription?.discounts;
+  if (Array.isArray(list)) return list.length > 0;
+  return Boolean(list ?? subscription?.discount);
+}
+
+// Release a reserved-but-never-spent Pro intro-price claim (the
+// promo_claims row for 'pro_intro_monthly') so an abandoned checkout doesn't
+// permanently cost the user their one intro. Called from two spots below: an
+// expired checkout session (the user never finished paying) and a
+// subscription that lands on canceled/incomplete_expired without ever having
+// gone active/trialing (the payment itself failed or was abandoned mid-flow -
+// a declined card, a closed 3-D Secure tab).
+//
+// Guarded on both ends. The callers only invoke this when the specific thing
+// they're looking at (intro_reserved on the session, intro_step_up on the
+// subscription - both stamped by startProCheckoutAction at checkout
+// creation) shows THIS attempt is the one holding the reservation. This
+// function then re-confirms no LIVE pro subscription exists for the user
+// before deleting anything, so a user who won the promo_claims race in one
+// tab while a second, concurrent tab's session independently expires never
+// has their genuinely-in-use intro clawed back - that second tab's session
+// never won the reservation in the first place (claim_promo's PK made sure
+// of that), so its intro_reserved is "false" and its expiry never even calls
+// this function. Best-effort throughout: a failure here just means the user
+// has to contact support to get their intro back, never a blocked checkout.
+async function releaseIntroReservationIfUnused(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string
+): Promise<void> {
+  try {
+    const { data: rows } = await (admin as any)
+      .from("subscriptions")
+      .select("plan, status, current_period_end")
+      .eq("user_id", userId)
+      .like("plan", "pro_%");
+    const stillLive = ((rows as any[]) ?? []).some((row) =>
+      isLiveProPlanRow(row)
+    );
+    if (stillLive) return;
+
+    const { error } = await admin
+      .from("promo_claims")
+      .delete()
+      .eq("user_id", userId)
+      .eq("promo_key", "pro_intro_monthly");
+    if (error) {
+      console.error(
+        "promo_claims rollback failed for",
+        userId,
+        error.message ?? error
+      );
+    }
+  } catch (err) {
+    console.error("promo_claims rollback threw for", userId, err);
+  }
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.text();
   const sig = req.headers.get("stripe-signature") ?? "";
@@ -304,6 +441,42 @@ export async function POST(req: NextRequest) {
         // The credit is a perk, the subscription is not: log and continue.
         console.error("grant_membership_credit failed:", err);
       }
+
+      // Retainable acknowledgment of the auto-renewal terms. The step-up
+      // signal is the discount actually on the subscription, never the plan
+      // name, so a coupon that failed to apply can't produce an
+      // acknowledgment promising an intro price that was never charged.
+      await sendRenewalAcknowledgment(
+        admin,
+        meta.user_id,
+        interval === "yearly" || meta.plan === "pro_yearly"
+          ? "pro_yearly"
+          : "pro_monthly",
+        hasIntroDiscount(subscription),
+        subscription.id
+      );
+
+      // Record the one-time intro claim so it can never be farmed again, even
+      // if this canceled subscription's row is later pruned (migration 0071).
+      // Gated on the SAME signal the acknowledgment uses - the discount
+      // actually on the subscription, never our own checkout intent - so a
+      // coupon that silently failed to apply doesn't burn the user's one
+      // intro. Best-effort: never 500 over the ledger; the !existing check in
+      // the checkout action still holds meanwhile.
+      if (hasIntroDiscount(subscription)) {
+        const { error } = await admin.rpc("claim_promo", {
+          p_user: meta.user_id,
+          p_key: "pro_intro_monthly",
+          p_ref: subscription.id,
+        });
+        if (error) {
+          console.error(
+            "claim_promo(pro_intro_monthly) FAILED - intro may be repeatable for",
+            meta.user_id,
+            error.message ?? error
+          );
+        }
+      }
     }
 
     if (meta.type === "plus_subscription" && meta.user_id && session.subscription) {
@@ -334,6 +507,39 @@ export async function POST(req: NextRequest) {
         );
         return NextResponse.json({ error: "subscription upsert failed" }, { status: 500 });
       }
+
+      // Retainable acknowledgment of the auto-renewal terms. The free first
+      // month is a Stripe trial, so "trialing" is the step-up signal here.
+      await sendRenewalAcknowledgment(
+        admin,
+        meta.user_id,
+        planFromItems(subscription) === "yearly" || meta.plan === "yearly" ? "yearly" : "monthly",
+        subscription.status === "trialing",
+        subscription.id
+      );
+    }
+  }
+
+  // Abandoned Pro checkout: the user opened Stripe Checkout - and
+  // startProCheckoutAction's reservation logic won the promo_claims race and
+  // attached the intro coupon to this session - but never finished paying
+  // (declined card, closed the tab, walked away). Stripe expires the session
+  // on its own (24h by default) rather than ever completing it. Release the
+  // reservation so the user still has their one intro to spend on a real
+  // attempt later. Gated on `intro_reserved`, the flag startProCheckoutAction
+  // stamps on the session ONLY when it actually won the reservation - a
+  // session that lost the race (full price, no coupon) has nothing to
+  // release, and this is a no-op for it.
+  if (event.type === "checkout.session.expired") {
+    const session = event.data.object as any;
+    const meta = session.metadata ?? {};
+    if (
+      meta.type === "pro_subscription" &&
+      meta.user_id &&
+      meta.intro_reserved === "true"
+    ) {
+      const admin = createAdminClient();
+      await releaseIntroReservationIfUnused(admin, meta.user_id);
     }
   }
 
@@ -384,19 +590,50 @@ export async function POST(req: NextRequest) {
     // Only the two standard names are re-derived from the interval (that's
     // how a plan switch lands); any other pro_ plan name is preserved as-is
     // rather than being normalized to pro_monthly/pro_yearly.
+    //
+    // The row is also read here for the intro-reservation rollback below
+    // (status, user_id), so it's fetched whenever the plan can't be derived
+    // from the interval alone OR the subscription just landed on a status the
+    // rollback cares about - not only when `interval` is present.
     let plan: string | null = interval;
-    if (interval) {
+    if (interval || status === "canceled" || status === "incomplete_expired") {
       const { data: existing } = await (admin as any)
         .from("subscriptions")
-        .select("plan")
+        .select("plan, status, user_id")
         .eq("stripe_subscription_id", subscription.id)
         .maybeSingle();
       const existingPlan: string | null = existing?.plan ?? null;
-      if (existingPlan?.startsWith("pro_")) {
+      if (interval && existingPlan?.startsWith("pro_")) {
         plan =
           existingPlan === "pro_monthly" || existingPlan === "pro_yearly"
             ? `pro_${interval}`
             : existingPlan;
+      }
+
+      // Rollback: this subscription is landing on canceled or
+      // incomplete_expired WITHOUT ever having gone active/trialing - i.e.
+      // the payment failed or was abandoned mid-flow (declined card, closed
+      // 3-D Secure tab), not a real cancellation of a used membership.
+      // incomplete_expired is unambiguous by itself: Stripe only reaches it
+      // from "incomplete", 23h after creation, having never billed a cent.
+      // "canceled" is ambiguous in general - it's also the terminal state of
+      // a subscription that WAS billed and later canceled - so it only
+      // qualifies here when the row's own previously-stored status was still
+      // "incomplete" (i.e. it never went live before being canceled).
+      // intro_step_up on the Stripe subscription (stamped at checkout
+      // creation by startProCheckoutAction) confirms this specific
+      // subscription actually won the promo reservation, so an ordinary
+      // full-price subscription never triggers a needless lookup or delete.
+      const neverWentLive =
+        status === "incomplete_expired" ||
+        (status === "canceled" && existing?.status === "incomplete");
+      if (
+        existingPlan?.startsWith("pro_") &&
+        existing?.user_id &&
+        neverWentLive &&
+        subscription.metadata?.intro_step_up === "true"
+      ) {
+        await releaseIntroReservationIfUnused(admin, existing.user_id);
       }
     }
     await (admin as any)

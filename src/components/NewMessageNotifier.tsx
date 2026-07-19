@@ -84,7 +84,13 @@ export default function NewMessageNotifier({
     }
 
     poll();
-    const interval = setInterval(poll, 20000);
+    // 45s: this component has no realtime subscription of its own (it's the
+    // sole mechanism for the "new message" toast), so it can't be backed off
+    // as far as the realtime-covered pollers below. The query itself is
+    // already cheap (scoped columns, gt(created_at), limit 5), so slowing the
+    // cadence from 20s is the lever here; toasts still land within 45s worst
+    // case, same as before just less chatty against the DB.
+    const interval = setInterval(poll, 45000);
     return () => {
       active = false;
       clearInterval(interval);
@@ -103,7 +109,7 @@ export default function NewMessageNotifier({
           onClick={() => dismiss(t.id)}
           className="block w-72 rounded-xl border border-stone-200 bg-white p-3 shadow-pop transition hover:border-hearth-300 dark:border-white/10 dark:bg-stone-800 dark:hover:border-hearth-400"
         >
-          <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">💬 {t.name}</p>
+          <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">{t.name}</p>
           <p className="truncate text-xs text-stone-500 dark:text-stone-400">{t.body}</p>
         </Link>
       ))}

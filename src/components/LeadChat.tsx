@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Image as ImageIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { censor } from "@/lib/censor";
 import { extractQuote, formatUSD, dollarsToCents, formatUSDCents } from "@/lib/quotes";
@@ -87,8 +88,12 @@ const isImageBody = (b: string) =>
   b.startsWith(IMG_PREFIX) && isSafeStorageUrl(imageUrl(b));
 
 // Messaging thread for a lead. Both the homeowner and the assigned contractor
-// see the same thread (RLS enforces only those two can read/post). Polls every
-// few seconds so the other side's replies show up without a refresh.
+// see the same thread (RLS enforces only those two can read/post). New
+// messages, quotes, and invoices arrive over the realtime channel below; the
+// poll is a slower safety net for that (dropped/missed realtime events) plus
+// the only refresh path for reactions and read receipts, which aren't on the
+// realtime channel. Coming back to the tab (visibilitychange) also re-loads
+// immediately, so "Seen" and reactions still catch up fast in the common case.
 //
 // `embedded` renders the thread always-open and full-height (no toggle button),
 // for use as the right-hand pane of the /pro/chats inbox.
@@ -241,8 +246,10 @@ export default function LeadChat({
       .then(({ data }) => (uidRef.current = data.user?.id ?? null));
     load();
 
-    // Realtime: push new messages instantly (requires Realtime enabled on the
-    // `messages` table in Supabase). The slow poll stays as a safety net.
+    // Realtime: push new messages, quote changes, and invoice changes
+    // instantly (requires Realtime enabled on those tables in Supabase). It
+    // does not cover message_reactions or lead_reads (read receipts), so the
+    // poll below still does real work for those, just on a slower cadence.
     const channel = supabase
       .channel(`lead-${leadId}`)
       .on(
@@ -277,7 +284,7 @@ export default function LeadChat({
       )
       .subscribe();
 
-    const t = setInterval(load, 15000);
+    const t = setInterval(load, 45000);
     // Coming back to the tab marks the thread read right away (load() skips
     // the read-receipt write while the document is hidden).
     const onVisible = () => {
@@ -883,7 +890,7 @@ export default function LeadChat({
         onClick={() => setOpen(true)}
         className="text-sm font-medium text-hearth-700 hover:underline"
       >
-        💬 Messages{messages.length ? ` (${messages.length})` : ""}
+        Messages{messages.length ? ` (${messages.length})` : ""}
       </button>
     );
   }
@@ -1159,7 +1166,7 @@ export default function LeadChat({
 
                   {quote != null && (
                     <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-hearth-50 px-2 py-0.5 text-[10px] font-semibold text-hearth-700 dark:bg-hearth-900/40 dark:text-hearth-300">
-                      💵 Quoted {formatUSD(quote)}
+                      Quoted {formatUSD(quote)}
                     </span>
                   )}
 
@@ -1279,7 +1286,7 @@ export default function LeadChat({
                     <button
                       type="button"
                       onClick={() => removeQuoteRow(idx)}
-                      className="text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
+                      className="-m-2 p-2 text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
                       aria-label="Remove line item"
                     >
                       ✕
@@ -1304,7 +1311,7 @@ export default function LeadChat({
               />
               {hasUnlabeledAmount && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">
-                  ⚠️ Every line item with an amount needs a label, or it will
+                  Every line item with an amount needs a label, or it will
                   not be part of the quote.
                 </p>
               )}
@@ -1363,7 +1370,7 @@ export default function LeadChat({
                     <button
                       type="button"
                       onClick={() => removeInvoiceRow(idx)}
-                      className="text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
+                      className="-m-2 p-2 text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
                       aria-label="Remove line item"
                     >
                       ✕
@@ -1380,7 +1387,7 @@ export default function LeadChat({
               </button>
               {hasUnlabeledInvoiceAmount && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">
-                  ⚠️ Every line item with an amount needs a description, or it
+                  Every line item with an amount needs a description, or it
                   will not be part of the invoice.
                 </p>
               )}
@@ -1418,7 +1425,7 @@ export default function LeadChat({
                   onClick={() => setShowQuoteForm(true)}
                   className="text-sm font-medium text-hearth-700 hover:underline"
                 >
-                  💵 Send a quote
+                  Send a quote
                 </button>
               )}
               {createInvoiceAction && (
@@ -1427,7 +1434,7 @@ export default function LeadChat({
                   onClick={openInvoiceForm}
                   className="text-sm font-medium text-hearth-700 hover:underline"
                 >
-                  🧾 Create invoice from this chat
+                  Create invoice from this chat
                 </button>
               )}
             </div>
@@ -1452,7 +1459,7 @@ export default function LeadChat({
               <button
                 type="button"
                 onClick={() => setReplyingTo(null)}
-                className="ml-2 text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-300"
+                className="-m-2 p-2 text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-300"
               >
                 ✕
               </button>
@@ -1461,9 +1468,9 @@ export default function LeadChat({
           <form onSubmit={send} className="flex gap-2">
             <label
               title="Send a photo"
-              className="flex cursor-pointer items-center rounded-lg border border-stone-200 px-3 text-lg text-stone-500 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-hearth-300"
+              className="flex cursor-pointer items-center rounded-lg border border-stone-200 px-3 text-stone-500 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-hearth-300"
             >
-              🖼
+              <ImageIcon className="h-5 w-5" aria-hidden="true" />
               <input
                 type="file"
                 accept="image/*"
@@ -1492,7 +1499,7 @@ export default function LeadChat({
           </form>
           {filtered && (
             <p className="text-xs text-amber-600 dark:text-amber-400">
-              ⚠️ Your message was filtered to keep the chat respectful.
+              Your message was filtered to keep the chat respectful.
             </p>
           )}
         </div>
@@ -1536,7 +1543,7 @@ export default function LeadChat({
             onClick={() => setReporting(true)}
             className="text-xs text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
           >
-            ⚠ Report chat
+            Report chat
           </button>
         )}
       </div>

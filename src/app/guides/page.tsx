@@ -1,46 +1,47 @@
 import type { Metadata } from "next";
+import { Droplet, Thermometer, Wrench, CalendarDays, ClipboardList } from "lucide-react";
 
 // Index for the public guide pages. Kept as a plain list: this section is
 // meant to stay small and good rather than grow into thin programmatic pages.
 const GUIDES = [
   {
     href: "/guides/water-heater-replacement-cost",
-    icon: "💧",
+    icon: Droplet,
     title: "Water heater replacement cost",
     blurb:
       "Typical national price range, what drives it up or down, and when a repair is the smarter call.",
   },
   {
     href: "/guides/hvac-replacement-cost",
-    icon: "🌡️",
+    icon: Thermometer,
     title: "HVAC replacement cost",
     blurb:
       "Typical national price range for a new heating and cooling system, and how to tell if yours can be repaired instead.",
   },
   {
     href: "/guides/slab-leak-signs",
-    icon: "🚰",
+    icon: Wrench,
     title: "Slab leak signs",
     blurb:
       "How to spot a slab leak early, why older Orange County homes are prone to them, and what the repair options look like.",
   },
   {
     href: "/guides/home-maintenance-schedule",
-    icon: "🗓️",
+    icon: CalendarDays,
     title: "Home maintenance schedule",
     blurb:
       "How often to actually change filters, flush the water heater, service the AC, and clean the gutters.",
   },
   {
     href: "/guides/is-my-contractor-quote-fair",
-    icon: "📋",
+    icon: ClipboardList,
     title: "Is my contractor's quote fair?",
     blurb:
       "How to read a quote line by line, red flags to watch for, and what a fair bidding process looks like.",
   },
   {
     href: "/guides/socal-home-maintenance-calendar",
-    icon: "📅",
+    icon: CalendarDays,
     title: "SoCal home maintenance calendar",
     blurb:
       "A month-by-month calendar for coastal Southern California: AC strain, termite swarm season, Santa Ana wind prep, and first-rain checks.",
@@ -74,7 +75,7 @@ export default function GuidesIndex() {
             >
               <div className="flex items-start gap-3">
                 <span className="icon-chip" aria-hidden>
-                  {g.icon}
+                  <g.icon className="h-5 w-5" />
                 </span>
                 <div>
                   <h2 className="font-semibold text-stone-900 dark:text-stone-100">{g.title}</h2>

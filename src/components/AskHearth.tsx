@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { logIssueFromChat, setReminderFromChat } from "@/lib/ask-actions";
 import VoiceButton from "@/components/VoiceButton";
 import Markdown from "@/components/Markdown";
+import AiNotice from "@/components/AiNotice";
 import { track } from "@/lib/analytics";
 
 type Msg = {
@@ -227,7 +228,7 @@ function LogAndPostButton({ job, issue }: { job: Job; issue: any }) {
       }}
       className="btn-primary px-3 py-1.5 text-xs"
     >
-      {busy ? "…" : "📋 Log & post this job"}
+      {busy ? "…" : "Log & post this job"}
     </button>
   );
 }
@@ -268,7 +269,7 @@ function MessageActions({
           )}
           {issue && (
             <ActionButton
-              label="✅ Log to home record"
+              label="Log to home record"
               doneLabel="✓ Logged to home record"
               onApply={() => logIssueFromChat(issue)}
             />
@@ -277,7 +278,7 @@ function MessageActions({
       )}
       {reminder && (
         <ActionButton
-          label="🔔 Set a reminder"
+          label="Set a reminder"
           doneLabel="✓ Reminder set"
           onApply={() => setReminderFromChat(reminder)}
         />
@@ -330,7 +331,7 @@ function prune(msgs: Msg[], retention: Retention): Msg[] {
 }
 const DEFAULT_GREETING =
   "Hi, I'm Hearth. If you have any questions about your home, feel free to ask.";
-const DEFAULT_HEADING_TITLE = "✨ Ask Hearth";
+const DEFAULT_HEADING_TITLE = "Ask Hearth";
 const DEFAULT_HEADING_SUBTITLE =
   "Your home assistant. Answers use your systems, ages, and any issues.";
 const DEFAULT_DISCLAIMER =
@@ -676,7 +677,7 @@ export default function AskHearth({
                   type="button"
                   onClick={() => submit(opt)}
                   disabled={loading}
-                  className="rounded-full border border-hearth-300 bg-white px-3 py-1 text-xs font-medium text-hearth-800 hover:bg-hearth-50 disabled:opacity-50 dark:border-hearth-800 dark:bg-stone-800 dark:text-hearth-200 dark:hover:bg-stone-700"
+                  className="rounded-full border border-hearth-300 bg-white px-3 py-2 text-xs font-medium text-hearth-800 hover:bg-hearth-50 disabled:opacity-50 dark:border-hearth-800 dark:bg-stone-800 dark:text-hearth-200 dark:hover:bg-stone-700"
                 >
                   {opt}
                 </button>
@@ -685,7 +686,7 @@ export default function AskHearth({
             <button
               type="button"
               onClick={() => inputRef.current?.focus()}
-              className="rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-medium text-stone-500 hover:bg-stone-50 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400 dark:hover:bg-stone-600"
+              className="rounded-full border border-stone-200 bg-white px-3 py-2 text-xs font-medium text-stone-500 hover:bg-stone-50 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400 dark:hover:bg-stone-600"
             >
               Other (type)
             </button>
@@ -699,13 +700,13 @@ export default function AskHearth({
   // depends on `fill` (see below) - kept as one element so the two views
   // can't drift on wording or options.
   const retentionControl = (
-    <p className="text-[11px] text-stone-500 dark:text-stone-400">
+    <p className="text-xs text-stone-500 dark:text-stone-400">
       {retention === "never" ? "Chats are kept " : "Chats clear after "}
       <select
         value={retention}
         onChange={(e) => changeRetention(e.target.value as Retention)}
         aria-label="How long chats are kept"
-        className="cursor-pointer appearance-none border-0 bg-transparent p-0 text-[11px] text-stone-500 underline decoration-dotted hover:text-stone-600 focus:outline-none dark:text-stone-400 dark:hover:text-stone-300"
+        className="cursor-pointer appearance-none rounded border-0 bg-transparent px-1 py-1.5 text-xs text-stone-500 underline decoration-dotted hover:text-stone-600 focus:outline-none dark:text-stone-400 dark:hover:text-stone-300"
       >
         <option value="24h">24 hours</option>
         <option value="2w">2 weeks</option>
@@ -789,7 +790,10 @@ export default function AskHearth({
           {fill ? "Send" : "Ask"}
         </button>
       </form>
-      <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">{disclaimer}</p>
+      {/* One shared AI label across every generated surface, carrying the
+          per-surface caveat as its `detail` so this is a single line of fine
+          print rather than two stacked paragraphs. */}
+      <AiNotice detail={disclaimer} size="xxs" className="mt-1" />
       {/* In the dock (fill), this control moves to the header instead - */}
       {/* down here it sat below the whole conversation, off-screen until */}
       {/* scrolled to. The compact card has no such scroll, so it stays put. */}

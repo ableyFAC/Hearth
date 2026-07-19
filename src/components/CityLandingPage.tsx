@@ -1,5 +1,7 @@
 import GuideCta from "@/components/GuideCta";
+import Logo from "@/components/Logo";
 import { createClient } from "@/lib/supabase/server";
+import { ClipboardList, MessageSquare, Wrench, Gift } from "lucide-react";
 
 // Shared shell for the two city landing pages (src/app/fountain-valley,
 // src/app/huntington-beach): same structure and same value-prop cards, only
@@ -21,22 +23,22 @@ import { createClient } from "@/lib/supabase/server";
 
 const VALUE = [
   {
-    icon: "📋",
+    icon: ClipboardList,
     title: "A maintenance plan built around your home",
     body: "Hearth turns your home's age, systems, and history into a plan of what to check and when, not a generic checklist.",
   },
   {
-    icon: "💬",
+    icon: MessageSquare,
     title: "Ask Hearth anything about your house",
     body: "Get answers about your systems, their ages, and what's likely to need attention next, any time.",
   },
   {
-    icon: "🧰",
+    icon: Wrench,
     title: "Local pros, no bidding war",
     body: "Pros are license-checked against the CSLB when a license is on file, and jobs cap at 3 applying pros, so you compare a short list instead of sorting through a pile of quotes.",
   },
   {
-    icon: "🆓",
+    icon: Gift,
     title: "Free to start",
     body: "Free for your first home, no card needed.",
   },
@@ -102,19 +104,19 @@ export default async function CityLandingPage({
           href="/"
           className="flex items-center gap-2 font-semibold text-stone-900 dark:text-stone-100"
         >
-          <span aria-hidden>🏡</span> Hearth
+          <Logo className="h-6 w-6 text-hearth-700 dark:text-hearth-400" /> Hearth
         </a>
         {user ? (
           <a
             href="/dashboard"
-            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700 dark:border-stone-600 dark:text-stone-300 dark:hover:text-hearth-300"
+            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:text-stone-300 dark:hover:text-hearth-300"
           >
             Open your dashboard
           </a>
         ) : (
           <a
             href="/get-started"
-            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700 dark:border-stone-600 dark:text-stone-300 dark:hover:text-hearth-300"
+            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:text-stone-300 dark:hover:text-hearth-300"
           >
             Get started free
           </a>
@@ -154,7 +156,7 @@ export default async function CityLandingPage({
             {VALUE.map((v) => (
               <div key={v.title} className="card">
                 <div className="icon-chip" aria-hidden>
-                  {v.icon}
+                  <v.icon className="h-5 w-5" />
                 </div>
                 <h3 className="mt-3 font-semibold text-stone-900 dark:text-stone-100">
                   {v.title}
@@ -188,8 +190,8 @@ export default async function CityLandingPage({
       </main>
 
       <footer className="mx-auto max-w-2xl border-t border-stone-200 px-6 py-6 text-center dark:border-white/10">
-        <p className="text-xs text-stone-500 dark:text-stone-400">
-          🏡 Hearth · Your home, looked after
+        <p className="inline-flex w-full items-center justify-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
+          <Logo className="h-4 w-4 text-hearth-700 dark:text-hearth-400" /> Hearth · Your home, looked after
         </p>
         <p className="mt-2 text-xs">
           <a

@@ -1,7 +1,35 @@
 "use client";
 
 import { useId, useState } from "react";
-import type { PlaybookGuideData } from "./guides";
+import {
+  Flag,
+  PenLine,
+  Timer,
+  Shield,
+  Hourglass,
+  Target,
+  DollarSign,
+  Repeat,
+  Users,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import type { PlaybookGuideData, PlaybookIconName } from "./guides";
+
+// guides.ts stores icons as names, not component references, so the data can
+// be passed from the server page into this client component as a plain,
+// serializable prop. This map resolves the name back to a component here,
+// entirely on the client.
+const ICONS: Record<PlaybookIconName, LucideIcon> = {
+  Flag,
+  PenLine,
+  Timer,
+  Shield,
+  Hourglass,
+  Target,
+  DollarSign,
+  Repeat,
+  Users,
+};
 
 // One expandable playbook card, mirroring the homeowner LearnGuide chrome:
 // title + summary always visible, and once opened each section is its own
@@ -12,6 +40,7 @@ export default function PlaybookGuide({ guide }: { guide: PlaybookGuideData }) {
   // The first section starts open so an expanded card is never a wall of
   // closed rows.
   const [openSection, setOpenSection] = useState(0);
+  const Icon = ICONS[guide.icon];
 
   return (
     <li className="card">
@@ -22,8 +51,9 @@ export default function PlaybookGuide({ guide }: { guide: PlaybookGuideData }) {
         aria-controls={panelId}
         className="flex w-full items-center justify-between gap-2 text-left font-medium text-stone-900 dark:text-stone-100"
       >
-        <span>
-          {guide.icon} {guide.title}
+        <span className="flex items-center gap-2">
+          <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+          {guide.title}
         </span>
         <span
           className={`shrink-0 text-lg text-stone-500 transition-transform duration-200 dark:text-stone-400 ${

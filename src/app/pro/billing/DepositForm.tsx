@@ -71,7 +71,7 @@ export default function DepositForm({
 
       {/* The terms come BEFORE any amount is picked: a pro should know
           deposits don't come back before choosing how much to put in. */}
-      <p className="text-xs text-stone-500">
+      <p className="text-xs text-stone-500 dark:text-stone-400">
         Deposits are non-refundable and can only be spent on leads. Bonus credit
         is promotional, has no cash value, and expires 60 days after it&apos;s
         added. Lead prices vary by service.
@@ -93,8 +93,8 @@ export default function DepositForm({
               }}
               className={`rounded-lg border px-3 py-1.5 text-sm ${
                 active
-                  ? "border-hearth-500 bg-hearth-50 text-hearth-800"
-                  : "border-stone-200 text-stone-600 hover:border-hearth-300"
+                  ? "border-hearth-500 bg-hearth-50 text-hearth-800 dark:border-hearth-400 dark:bg-hearth-900/40 dark:text-hearth-200"
+                  : "border-stone-200 text-stone-600 hover:border-hearth-300 dark:border-white/10 dark:text-stone-300 dark:hover:border-hearth-400"
               }`}
             >
               ${p}
@@ -104,7 +104,7 @@ export default function DepositForm({
         <button
           type="button"
           onClick={() => inputRef.current?.focus()}
-          className="rounded-lg border border-dashed border-stone-300 px-3 py-1.5 text-sm text-stone-500 hover:border-hearth-300"
+          className="rounded-lg border border-dashed border-stone-300 px-3 py-1.5 text-sm text-stone-500 hover:border-hearth-300 dark:text-stone-400"
         >
           Custom
         </button>
@@ -113,7 +113,7 @@ export default function DepositForm({
       <div>
         <label className="label">Deposit amount</label>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-stone-500">$</span>
+          <span className="text-stone-500 dark:text-stone-400">$</span>
           <input
             ref={inputRef}
             type="number"
@@ -126,12 +126,12 @@ export default function DepositForm({
             className="input max-w-[120px]"
           />
           {bonus > 0 && (
-            <span className="text-sm font-semibold text-green-600">
+            <span className="text-sm font-semibold text-green-600 dark:text-green-400">
               + ${bonusDollars.toFixed(2)} bonus
             </span>
           )}
         </div>
-        <p className="mt-1 text-[11px] text-stone-500">
+        <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
           Any amount from $5.{" "}
           {boostPts > 0
             ? `Every deposit earns +${boostPts}% as a Pro member, tiers stack on top`
@@ -140,7 +140,7 @@ export default function DepositForm({
         </p>
       </div>
 
-      <label className="flex items-center gap-2 text-xs text-stone-600">
+      <label className="flex items-center gap-2 text-xs text-stone-600 dark:text-stone-300">
         <input
           type="checkbox"
           checked={agreed}

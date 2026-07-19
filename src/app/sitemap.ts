@@ -2,8 +2,10 @@ import type { MetadataRoute } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 // Sitemap for crawlers: the public landing pages, the two city landing pages
-// (src/app/fountain-valley, src/app/huntington-beach), the Privacy/Terms
-// pages (src/app/privacy, src/app/terms), the public guide pages
+// (src/app/fountain-valley, src/app/huntington-beach), the Privacy/Terms/DMCA
+// pages (src/app/privacy, src/app/terms, src/app/pro-terms, src/app/dmca),
+// the AI disclosure
+// (src/app/ai-disclosure), the public guide pages
 // (src/app/guides/..., anon-readable, see the middleware allowlist), plus
 // every pro's public page (/p/..., anon-readable by design). The contractors
 // table is NOT publicly readable, so the list comes from the service-role
@@ -54,6 +56,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
     {
       url: `${SITE_URL}/terms`,
+      changeFrequency: "monthly",
+      priority: 0.3,
+    },
+    {
+      url: `${SITE_URL}/pro-terms`,
+      changeFrequency: "monthly",
+      priority: 0.3,
+    },
+    {
+      url: `${SITE_URL}/ai-disclosure`,
+      changeFrequency: "monthly",
+      priority: 0.3,
+    },
+    {
+      url: `${SITE_URL}/dmca`,
       changeFrequency: "monthly",
       priority: 0.3,
     },

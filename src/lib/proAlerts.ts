@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/notify";
 import { isMissingSchemaError } from "@/lib/dbErrors";
+import { redactContact } from "@/lib/redact";
 import {
   labelFor,
   JOB_CATEGORIES,
@@ -55,6 +56,25 @@ export async function alertProsForNewLead(
 
     const admin = createAdminClient();
 
+    // COLD START: the same null-safe state predicate the JS filter below
+    // applies, computed once up front so it can be pushed into the query
+    // itself instead of pulling every category match nationwide just to
+    // throw most of them away in JS.
+    const propState =
+      COLD_START_FREE_ALERTS
+        ? (lead.property_state ?? "").trim().toUpperCase()
+        : "";
+    // Only a clean two-letter code is safe to splice into the raw .or()
+    // filter string below (same reasoning as the category regex check
+    // above: unvalidated text landing in PostgREST filter grammar can break
+    // or redefine the filter). service_state itself is only ever written as
+    // NULL or /^[A-Z]{2}$/ (see pro/actions.ts), so this also guarantees an
+    // exact-match .eq behaves identically to the JS comparison it stands in
+    // for. Anything else (property.state wasn't a clean code) just skips the
+    // server-side narrowing - the unchanged JS filter below still runs on
+    // the full category-matched set, so behavior stays identical either way.
+    const propStateForQuery = /^[A-Z]{2}$/.test(propState) ? propState : "";
+
     // Pros whose services cover this job. Null categories means "takes
     // anything", matching how open_jobs_for_me() treats them. service_state is
     // fetched for the cold-start locality check, but the column ships in
@@ -73,14 +93,29 @@ export async function alertProsForNewLead(
     };
     let contractors: ContractorRow[] = [];
     {
-      const res = await (admin as any)
+      let query = (admin as any)
         .from("contractors")
         .select("user_id, contact_phone, service_state")
         .not("user_id", "is", null)
-        .or(`categories.is.null,categories.cs.{${lead.category}}`)
-        .limit(1000);
+        .or(`categories.is.null,categories.cs.{${lead.category}}`);
+      // Server-side version of the COLD_START state filter below (the
+      // membership path applies no state filter, same as before, so this
+      // only ever runs alongside COLD_START_FREE_ALERTS). Only narrows the
+      // result set - the unchanged JS filter further down still re-checks
+      // every row, so this can only ever be a superset-safe prefilter, never
+      // a source of a different outcome.
+      if (propStateForQuery) {
+        query = query.or(
+          `service_state.is.null,service_state.eq.${propStateForQuery}`
+        );
+      }
+      const res = await query.limit(1000);
       if (res.error) {
         if (!isMissingSchemaError(res.error)) throw res.error;
+        // Retry without service_state entirely: the column may not exist yet
+        // (pre-0046 database), so neither selecting it nor filtering on it is
+        // safe here. Every pro's state is treated as unknown, which the
+        // null-safe rule already includes.
         const retry = await admin
           .from("contractors")
           .select("user_id, contact_phone")
@@ -110,7 +145,6 @@ export async function alertProsForNewLead(
     // property's state exist and differ. Missing data never hides anyone.
     // (The membership path keeps its original behavior: no state filter.)
     if (COLD_START_FREE_ALERTS) {
-      const propState = (lead.property_state ?? "").trim().toUpperCase();
       contractors = contractors.filter((c) => {
         const svcState = (c.service_state ?? "").trim().toUpperCase();
         return !svcState || !propState || svcState === propState;
@@ -178,7 +212,10 @@ export async function alertProsForNewLead(
     const timingLabel = lead.timing
       ? labelFor(TIMING_OPTIONS, lead.timing)
       : null;
-    const description = (lead.issue_description ?? "").trim();
+    // Belt-and-suspenders: postJobAction already stores a redacted
+    // description, but redact again here so this snippet is scrubbed of
+    // contact info even if a future caller passes an unredacted description.
+    const description = redactContact((lead.issue_description ?? "").trim());
     const snippet =
       description.length > 120 ? `${description.slice(0, 117)}...` : description;
     // Honest urgency: homeowners overwhelmingly go with the first pro to

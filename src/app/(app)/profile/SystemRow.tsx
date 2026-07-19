@@ -10,7 +10,6 @@ import {
 import { imgSrc } from "@/lib/storage";
 import {
   labelFor,
-  iconFor,
   SYSTEM_TYPES,
   ISSUE_CATEGORIES,
   STARTER_SYSTEM_NOTE,
@@ -18,6 +17,7 @@ import {
   tipForSystem,
   materialLabel,
 } from "@/lib/constants";
+import CategoryIcon from "@/components/CategoryIcon";
 import type { HomeSystem } from "@/lib/database.types";
 import { updateSystemAction, deleteSystemAction } from "./actions";
 import PhotoUpload from "@/components/PhotoUpload";
@@ -156,7 +156,11 @@ export default function SystemRow({
             can't be nested inside another form). */}
         <div className="flex items-center justify-between gap-2">
           <p className="font-medium text-stone-900 dark:text-stone-100">
-            {iconFor(SYSTEM_TYPES, s.system_type)}{" "}
+            <CategoryIcon
+              list={SYSTEM_TYPES}
+              value={s.system_type}
+              className="mr-1 inline-block h-4 w-4 align-[-3px]"
+            />
             {labelFor(SYSTEM_TYPES, s.system_type)}
           </p>
           <form action={deleteSystemAction}>
@@ -314,7 +318,11 @@ export default function SystemRow({
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium text-stone-900 dark:text-stone-100">
-            {iconFor(SYSTEM_TYPES, s.system_type)}{" "}
+            <CategoryIcon
+              list={SYSTEM_TYPES}
+              value={s.system_type}
+              className="mr-1 inline-block h-4 w-4 align-[-3px]"
+            />
             {labelFor(SYSTEM_TYPES, s.system_type)}
           </span>
           {/* One status badge. Must-do overrides the age-based stage, so a
@@ -329,7 +337,7 @@ export default function SystemRow({
             }`}
           >
             {mustDo
-              ? "🚨 Must do"
+              ? "Must do"
               : estimatedDue
                 ? "Check soon (estimated)"
                 : (STAGE_LABEL[h.stage] ?? h.stage)}
@@ -426,7 +434,7 @@ export default function SystemRow({
                   : "text-stone-500 dark:text-stone-400"
             }`}
           >
-            ⚠ You reported a{" "}
+            You reported a{" "}
             {labelFor(ISSUE_CATEGORIES, openIssue.category)} issue
             {openIssue.description ? `: ${openIssue.description}` : ""}.
           </p>

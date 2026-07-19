@@ -8,6 +8,7 @@ import {
   ISSUE_CATEGORIES,
 } from "@/lib/constants";
 import AskHearth from "@/components/AskHearth";
+import { FileText, Bell, type LucideIcon } from "lucide-react";
 
 // Pages the search can jump to, each with a few keywords so a homeowner does
 // not have to know the exact page name.
@@ -19,11 +20,17 @@ const ROUTES = [
   { label: "Documents", href: "/documents", keywords: ["document", "warranty", "manual", "receipt", "vault", "paperwork", "label"] },
   { label: "Learn", href: "/learn", keywords: ["learn", "guide", "how", "maintenance", "tips"] },
   { label: "Account security", href: "/account/security", keywords: ["password", "security", "account", "delete", "email"] },
+  { label: "Your privacy rights", href: "/account/privacy", keywords: ["privacy", "data", "export", "download", "ccpa", "delete", "rights", "california"] },
   { label: "Notifications", href: "/account/notifications", keywords: ["notification", "notifications", "alerts", "preferences", "email"] },
   { label: "Help", href: "/account/help", keywords: ["help", "support", "contact", "faq", "question"] },
 ];
 
-type Result = { label: string; sub?: string; href: string; icon?: string };
+type Result = {
+  label: string;
+  sub?: string;
+  href: string;
+  icon?: LucideIcon | null;
+};
 
 export default async function SearchPage({
   searchParams,
@@ -94,7 +101,7 @@ export default async function SearchPage({
         label: d.title ?? "Home document",
         sub: [d.brand, d.model].filter(Boolean).join(" ") || undefined,
         href: "/documents",
-        icon: d.system_type ? iconFor(SYSTEM_TYPES, d.system_type) : "📄",
+        icon: d.system_type ? iconFor(SYSTEM_TYPES, d.system_type) : FileText,
       }));
 
     issues = (issueRes.data ?? [])
@@ -108,7 +115,7 @@ export default async function SearchPage({
 
     reminders = (taskRes.data ?? [])
       .filter((t) => has(t.title))
-      .map((t) => ({ label: t.title, href: "/dashboard", icon: "🔔" }));
+      .map((t) => ({ label: t.title, href: "/dashboard", icon: Bell }));
   }
 
   const groups = [
@@ -161,7 +168,11 @@ export default async function SearchPage({
                   href={r.href}
                   className="flex items-center gap-3 px-4 py-3 hover:bg-hearth-50 dark:hover:bg-stone-700"
                 >
-                  {r.icon && <span className="text-lg">{r.icon}</span>}
+                  {r.icon && (
+                    <span className="text-stone-500 dark:text-stone-400">
+                      <r.icon className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                  )}
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium text-stone-900 dark:text-stone-100">
                       {r.label}

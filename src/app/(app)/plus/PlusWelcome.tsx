@@ -2,9 +2,21 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import {
+  PartyPopper,
+  TrendingUp,
+  Search,
+  ClipboardList,
+  CalendarDays,
+  Home,
+  Bell,
+  type LucideIcon,
+} from "lucide-react";
+import AutoRenewalTerms from "@/components/AutoRenewalTerms";
+import type { PaidPlan } from "@/lib/billingTerms";
 
 type Step = {
-  emoji: string;
+  icon: LucideIcon;
   title: string;
   benefit: string;
   href?: string;
@@ -13,12 +25,12 @@ type Step = {
 
 const STEPS: Step[] = [
   {
-    emoji: "🎉",
+    icon: PartyPopper,
     title: "You're on Hearth Plus",
     benefit: "Here's everything you just unlocked.",
   },
   {
-    emoji: "📈",
+    icon: TrendingUp,
     title: "Cost forecast",
     benefit:
       "See what will need replacing and how much to set aside each month.",
@@ -26,21 +38,21 @@ const STEPS: Step[] = [
     cta: "Try it",
   },
   {
-    emoji: "🔍",
+    icon: Search,
     title: "Quote analyzer",
     benefit: "Snap a contractor's quote and check if the price is fair.",
     href: "/quote-check",
     cta: "Try it",
   },
   {
-    emoji: "📋",
+    icon: ClipboardList,
     title: "Home report",
     benefit: "A shareable record of your home for insurance and resale.",
     href: "/home-report",
     cta: "Try it",
   },
   {
-    emoji: "🗓️",
+    icon: CalendarDays,
     title: "Maintenance plan",
     benefit:
       "A maintenance plan built for your home, a few tasks at a time so it never piles up.",
@@ -48,13 +60,13 @@ const STEPS: Step[] = [
     cta: "Try it",
   },
   {
-    emoji: "🏠",
+    icon: Home,
     title: "Up to 5 homes, unlimited jobs",
     benefit:
       "Track every property and post as many jobs as you need, matched first.",
   },
   {
-    emoji: "🔔",
+    icon: Bell,
     title: "Every proactive alert",
     benefit:
       "Storms, recalls, and aging systems, before they become emergencies.",
@@ -64,7 +76,24 @@ const STEPS: Step[] = [
 // Animated stepped tour shown right after checkout, off the ?welcome=1 flag.
 // Client-side so Next/Back/dots can advance instantly with no round trip.
 // Each step re-mounts on `key={step}` so the fade/slide-in transition replays.
-export default function PlusWelcome() {
+//
+// The tour also carries the post-purchase acknowledgment California requires
+// (Bus. & Prof. Code 17602(a)(3)): the renewal terms, the cancellation policy,
+// and how to cancel. It sits on the LAST step rather than the first so it is
+// the thing still on screen when the celebration ends, and it never competes
+// with the confirmation itself.
+//
+// `plan` is undefined until the Stripe webhook writes the subscription row,
+// which races this screen. When that happens the block degrades to the parts
+// that are true regardless (how to cancel) and points at the emailed
+// acknowledgment, which the webhook sends with the exact billed terms.
+export default function PlusWelcome({
+  plan,
+  introEligible = false,
+}: {
+  plan?: PaidPlan;
+  introEligible?: boolean;
+}) {
   const [step, setStep] = useState(0);
   const [visible, setVisible] = useState(false);
   const last = step === STEPS.length - 1;
@@ -90,9 +119,9 @@ export default function PlusWelcome() {
         }`}
       >
         <div
-          className={`text-6xl ${step === 0 ? "motion-safe:animate-bounce" : ""}`}
+          className={`flex justify-center text-hearth-600 dark:text-hearth-400 ${step === 0 ? "motion-safe:animate-bounce" : ""}`}
         >
-          {current.emoji}
+          <current.icon className="h-16 w-16" aria-hidden="true" />
         </div>
         <div>
           <h1 className="text-3xl font-semibold text-stone-900 dark:text-stone-100">
@@ -154,10 +183,36 @@ export default function PlusWelcome() {
       </div>
 
       {last && (
-        <p className="text-xs text-stone-500 dark:text-stone-400">
-          If a Plus feature still looks locked, give it a minute to sync, then
-          refresh.
-        </p>
+        <div className="space-y-3">
+          {plan ? (
+            <AutoRenewalTerms
+              plan={plan}
+              introEligible={introEligible}
+              variant="acknowledgment"
+            />
+          ) : (
+            <div className="rounded-xl border border-stone-200 bg-stone-50 p-3 text-left dark:border-white/10 dark:bg-stone-900">
+              <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                Your Hearth Plus renewal terms
+              </p>
+              <p className="mt-2 text-xs text-stone-600 dark:text-stone-300">
+                Hearth Plus renews automatically until you cancel. Your
+                confirmation email lists the exact amount and renewal date.
+                Cancel anytime from{" "}
+                <Link href="/plus" className="underline">
+                  your membership page
+                </Link>{" "}
+                using the &quot;Cancel membership&quot; button. Cancelling takes
+                effect at the end of the period you have already paid for, and
+                there is nothing to call or email.
+              </p>
+            </div>
+          )}
+          <p className="text-xs text-stone-500 dark:text-stone-400">
+            If a Plus feature still looks locked, give it a minute to sync, then
+            refresh.
+          </p>
+        </div>
       )}
     </div>
   );

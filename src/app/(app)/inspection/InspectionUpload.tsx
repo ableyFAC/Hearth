@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { SYSTEM_TYPES, ISSUE_CATEGORIES, labelFor, iconFor } from "@/lib/constants";
+import { Search } from "lucide-react";
+import { SYSTEM_TYPES, ISSUE_CATEGORIES, labelFor } from "@/lib/constants";
 import { saveInspectionFindingsAction } from "./actions";
+import AiNotice from "@/components/AiNotice";
+import CategoryIcon from "@/components/CategoryIcon";
 
 type Mode = "photo" | "text";
 
@@ -230,6 +233,10 @@ export default function InspectionUpload() {
           </p>
         )}
 
+        {/* Sits above the checkboxes on purpose: the checkboxes ARE the human
+            review step, so the label needs to be read before them. */}
+        <AiNotice detail="A model read your report, so it can miss things or read a number wrong. Uncheck anything that's off, nothing is saved to your home until you confirm." />
+
         {result.systems.length > 0 && (
           <div>
             <h3 className="mb-2 text-sm font-medium text-stone-900 dark:text-stone-100">
@@ -255,7 +262,11 @@ export default function InspectionUpload() {
                   />
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-stone-800 dark:text-stone-200">
-                      {iconFor(SYSTEM_TYPES, s.system_type)}{" "}
+                      <CategoryIcon
+                        list={SYSTEM_TYPES}
+                        value={s.system_type}
+                        className="mr-1 inline-block h-4 w-4 align-[-3px]"
+                      />
                       {labelFor(SYSTEM_TYPES, s.system_type)}
                       {s.condition_rating ? (
                         <span className="ml-2 text-xs font-normal text-stone-500 dark:text-stone-400">
@@ -304,7 +315,11 @@ export default function InspectionUpload() {
                   />
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-stone-800 dark:text-stone-200">
-                      {iconFor(ISSUE_CATEGORIES, iss.category)}{" "}
+                      <CategoryIcon
+                        list={ISSUE_CATEGORIES}
+                        value={iss.category}
+                        className="mr-1 inline-block h-4 w-4 align-[-3px]"
+                      />
                       {labelFor(ISSUE_CATEGORIES, iss.category)}
                       <span
                         className={`ml-2 rounded-full border px-2 py-0.5 text-xs font-normal ${
@@ -331,7 +346,7 @@ export default function InspectionUpload() {
           </p>
         )}
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
         <div className="flex gap-3">
           <button type="button" className="btn-secondary" onClick={startOver}>
@@ -373,7 +388,7 @@ export default function InspectionUpload() {
       {mode === "photo" ? (
         <div>
           <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-stone-200 px-4 py-8 text-center hover:border-hearth-300 hover:bg-hearth-50 dark:border-stone-700 dark:hover:bg-hearth-900/30">
-            <span className="text-2xl">🔍</span>
+            <Search className="h-8 w-8 text-stone-400 dark:text-stone-500" aria-hidden="true" />
             <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
               {previews.length ? "Add more pages" : "Upload photos of the inspection report"}
             </span>
@@ -424,7 +439,7 @@ export default function InspectionUpload() {
         </div>
       )}
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
       <button
         type="button"

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Footprints, X } from "lucide-react";
 
 const DISMISS_KEY = "hearth_walkthrough_nudge_dismissed_at";
 const REAPPEAR_MS = 14 * 24 * 60 * 60 * 1000;
@@ -40,7 +41,9 @@ export default function WalkthroughNudge({ count }: { count: number }) {
 
   return (
     <div className="flex items-start gap-3 rounded-xl border border-hearth-200 bg-hearth-50 p-4 dark:border-hearth-800/40 dark:bg-hearth-900/30">
-      <span className="icon-chip text-xl shrink-0">🚶</span>
+      <span className="icon-chip shrink-0">
+        <Footprints className="h-5 w-5" aria-hidden="true" />
+      </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm text-stone-800 dark:text-stone-200">
           Confirm your home&apos;s details, each one makes your answers and
@@ -57,9 +60,9 @@ export default function WalkthroughNudge({ count }: { count: number }) {
         type="button"
         onClick={dismiss}
         aria-label="Dismiss"
-        className="shrink-0 text-hearth-400 hover:text-hearth-700 dark:text-hearth-500 dark:hover:text-hearth-300"
+        className="shrink-0 -m-2 p-2 text-hearth-400 hover:text-hearth-700 dark:text-hearth-500 dark:hover:text-hearth-300"
       >
-        ✕
+        <X className="h-4 w-4" aria-hidden="true" />
       </button>
     </div>
   );

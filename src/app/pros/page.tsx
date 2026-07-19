@@ -10,6 +10,16 @@ import {
 } from "@/lib/constants";
 import { AGING_LEAD_TIERS } from "@/lib/leadPricing";
 import Logo from "@/components/Logo";
+import {
+  Tag,
+  MousePointerClick,
+  Hourglass,
+  Zap,
+  Ban,
+  Globe,
+  CalendarDays,
+  Contact,
+} from "lucide-react";
 
 // Inline check mark. Emoji checks (✔️/✅) render differently per OS; one SVG
 // keeps every check on this page identical. Color comes from text-green-700
@@ -82,22 +92,22 @@ export default async function ProsLanding({
 
   const PROMISES = [
     {
-      icon: "🏷️",
+      icon: <Tag className="h-5 w-5" />,
       title: "The price is on the job card",
       body: "Every open job shows its fee before you pay a cent. No blind bidding, no mystery invoices.",
     },
     {
-      icon: "👆",
+      icon: <MousePointerClick className="h-5 w-5" />,
       title: "You only pay when you apply",
       body: "Browse everything for free. Your wallet is only charged for the jobs you choose to go after.",
     },
     {
-      icon: "⏳",
+      icon: <Hourglass className="h-5 w-5" />,
       title: "Older jobs get cheaper",
       body: "Jobs that sit unclaimed are automatically marked down 15-30%, so patient pros get real deals.",
     },
     {
-      icon: "⚡",
+      icon: <Zap className="h-5 w-5" />,
       // COLD START: while COLD_START_FREE_ALERTS is on, every pro gets these
       // alerts free, worded the same as the perk on /pro/plus so the two
       // pages never contradict each other. Title flips with the flag so it
@@ -117,7 +127,7 @@ export default async function ProsLanding({
       body: "We check your CSLB number against the state's public database and show homeowners a verified badge on your profile. Free, no membership needed.",
     },
     {
-      icon: "🚫",
+      icon: <Ban className="h-5 w-5" />,
       title: "No subscription required",
       body: "Load your wallet with deposits from $5 and pay per application. An optional Pro membership adds perks like bonus credit and an AI back office, but it never changes which jobs you can see or apply to.",
     },
@@ -147,15 +157,12 @@ export default async function ProsLanding({
               href="/"
               className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:text-stone-300 dark:hover:border-hearth-400 dark:hover:text-hearth-300"
             >
-              🏠 For Homeowners
+              For Homeowners
             </a>
           </header>
 
           {/* Hero */}
           <div className="mt-14 flex flex-col items-center pb-4 text-center">
-            <div className="mb-4 text-4xl" aria-hidden>
-              🛠️
-            </div>
             <h1 className="max-w-2xl text-5xl font-semibold tracking-tight text-stone-900 sm:text-6xl dark:text-stone-100">
               Leads without the games
             </h1>
@@ -186,10 +193,7 @@ export default async function ProsLanding({
           competitor keeps. */}
       <div className="mt-14 grid gap-4 sm:grid-cols-2">
         <section className="rounded-2xl border border-hearth-200 bg-hearth-50 p-6 text-center shadow-sm dark:border-hearth-900 dark:bg-hearth-900/20">
-          <div className="text-3xl" aria-hidden>
-            👻
-          </div>
-          <h2 className="mt-2 text-xl font-semibold text-stone-900 dark:text-stone-100">
+          <h2 className="text-xl font-semibold text-stone-900 dark:text-stone-100">
             Ghost protection: if the lead is dead, you get your fee back.
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-stone-600 dark:text-stone-400">
@@ -199,10 +203,7 @@ export default async function ProsLanding({
           </p>
         </section>
         <section className="rounded-2xl border border-hearth-200 bg-hearth-50 p-6 text-center shadow-sm dark:border-hearth-900 dark:bg-hearth-900/20">
-          <div className="text-3xl" aria-hidden>
-            🎟️
-          </div>
-          <h2 className="mt-2 text-xl font-semibold text-stone-900 dark:text-stone-100">
+          <h2 className="text-xl font-semibold text-stone-900 dark:text-stone-100">
             Your first application is protected.
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-stone-600 dark:text-stone-400">
@@ -216,10 +217,7 @@ export default async function ProsLanding({
           src/lib/constants.ts; until they're filled in, this stays honest and
           generic instead of showing a placeholder name. */}
       <section className="mt-6 rounded-2xl bg-stone-900 px-6 py-8 text-center dark:bg-stone-950 dark:border dark:border-white/10">
-        <div className="text-3xl" aria-hidden>
-          👋
-        </div>
-        <h2 className="mt-2 text-xl font-semibold text-white">
+        <h2 className="text-xl font-semibold text-white">
           Who&apos;s behind this
         </h2>
         <p className="mx-auto mt-2 max-w-md text-sm text-stone-300">
@@ -302,7 +300,7 @@ export default async function ProsLanding({
         <div className="mx-auto mt-6 grid max-w-2xl gap-4 sm:grid-cols-2">
           <div className="card">
             <div className="icon-chip" aria-hidden>
-              🌐
+              <Globe className="h-5 w-5" />
             </div>
             <h3 className="mt-3 font-semibold text-stone-900 dark:text-stone-100">
               A free public profile page
@@ -328,7 +326,7 @@ export default async function ProsLanding({
           </div>
           <div className="card">
             <div className="icon-chip" aria-hidden>
-              📅
+              <CalendarDays className="h-5 w-5" />
             </div>
             <h3 className="mt-3 font-semibold text-stone-900 dark:text-stone-100">
               A compliance calendar
@@ -340,7 +338,7 @@ export default async function ProsLanding({
           </div>
           <div className="card">
             <div className="icon-chip" aria-hidden>
-              📇
+              <Contact className="h-5 w-5" />
             </div>
             <h3 className="mt-3 font-semibold text-stone-900 dark:text-stone-100">
               A simple CRM

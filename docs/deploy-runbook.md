@@ -53,9 +53,16 @@ Resend free + UptimeRobot free = ~$45/mo + Stripe's 2.9% + 30c per charge.
    automatic.
 9. Stripe webhook (live): endpoint https://yourdomain/api/stripe/webhook
    subscribing to exactly: checkout.session.completed,
-   customer.subscription.updated, customer.subscription.deleted,
-   invoice.payment_succeeded. Put its whsec_ into STRIPE_WEBHOOK_SECRET and
-   REDEPLOY (env changes need one).
+   checkout.session.expired, customer.subscription.updated,
+   customer.subscription.deleted, invoice.payment_succeeded. (The code also
+   handles checkout.session.async_payment_succeeded/failed for the ACH
+   deposit flow - add those two if ACH/delayed payment methods are enabled.)
+   checkout.session.expired specifically is required for the Pro intro-price
+   reservation rollback (src/app/api/stripe/webhook/route.ts) to ever fire:
+   without it, a user who abandons checkout after reserving the $9.99 intro
+   coupon never gets that reservation released, and permanently loses their
+   one intro price. Put its whsec_ into STRIPE_WEBHOOK_SECRET and REDEPLOY
+   (env changes need one).
 10. Smoke test: anon pages incl sitemap (URLs must show the real domain);
     real homeowner + contractor signups (emails arrive, links land on the
     domain); post a lead end to end; OWNER buys Plus with a real card ($4.99,
@@ -86,6 +93,64 @@ filename pairs into unique slots WITHOUT changing fresh-install apply order
 grants; do this in its own reviewed session), then
 `supabase migration list --linked` + `migration repair --status applied` for
 everything the live DB already has.
+
+## Backups, RTO/RPO & disaster recovery
+
+**RPO (recovery point objective).** Supabase Pro includes daily backups only:
+up to ~24h of potential data loss, since that is the gap between snapshots.
+Point-in-Time Recovery (PITR) is a paid add-on (needs at least the Small
+compute add-on) that replays WAL continuously instead of snapshotting once a
+day, cutting RPO from a day to minutes. This project is on Pro's default
+daily-backup RPO today. Enable the PITR add-on before real money starts
+moving through Stripe: a corrupted DB or bad migration the week after launch
+is exactly the scenario PITR protects against, and a once-a-day snapshot
+would not. Sources: https://supabase.com/docs/guides/platform/backups and
+https://supabase.com/docs/guides/platform/manage-your-usage/point-in-time-recovery
+
+**RTO (recovery time objective).** Restores are a manual operation, started
+from the Supabase dashboard (or via Supabase support if the dashboard restore
+fails), not an automatic failover. Small databases can restore in minutes;
+larger databases or PITR restores can take 15-30+ minutes or more, and the
+project is inaccessible for the duration with no committed SLA on restore
+time. Budget hours when planning around an incident, not minutes, and know
+there is no automated failover on a single hosted project: recovery means
+someone deliberately clicking restore and waiting.
+
+**Migration hand-apply risk (the real DR exposure here, not a burning
+building).** Per `handoff.md`, migrations 0062-0066 were hand-pasted into the
+Supabase SQL editor because no CLI link / DB password exists yet, so there is
+no rollback and no reliable record of exactly what ran against the live
+database. Compounding this, `supabase/migrations/` currently has duplicate
+numbering: 0019, 0020, and 0021 each exist twice
+(`0019_documents_vault.sql` / `0019_security_hardening.sql`,
+`0020_notification_prefs.sql` / `0020_lower_bonus_threshold.sql`,
+`0021_support_messages.sql` / `0021_private_storage.sql`). Until this is
+fixed, the migrations folder is not a clean, replayable history against a
+fresh database, and a `supabase db push` baseline would collide on those
+filenames today. Mitigation, in order:
+1. Finish adopting the `supabase db push` CLI workflow (`npm run db:push`
+   already exists) so the SQL editor stops being the apply path, per the
+   "Future migrations" section above.
+2. Resolve the duplicate 0019/0020/0021 numbering in its own reviewed
+   session (order-sensitive, see above), then `supabase migration list
+   --linked` + `migration repair --status applied` to reconcile with what
+   the live DB already has.
+3. Keep migrations from 0067 onward idempotent (`if not exists`,
+   `create or replace`, guarded `create policy`) so a partial or
+   accidentally double-applied migration stays recoverable without manual
+   surgery.
+
+**If the DB is lost, checklist:**
+- Schema of record is the ordered `supabase/migrations/*.sql` files; until
+  the duplicate-numbering fix above lands, treat that ordering as
+  best-effort, not authoritative.
+- Storage objects (uploaded files, photos) are NOT part of the Postgres
+  backup. Supabase Storage needs its own backup/export plan, separate from
+  DB PITR.
+- Stripe is the source of truth for payments. If wallet balances are in
+  doubt after a restore, they can be partially reconstructed from the
+  `wallet_transactions` table plus Stripe's event log/dashboard rather than
+  trusted from a stale Postgres snapshot alone.
 
 ## Weekly 5-minute health check
 UptimeRobot red? Vercel cron runs all green? Stripe webhook failed

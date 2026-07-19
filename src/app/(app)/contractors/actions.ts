@@ -17,6 +17,7 @@ import { setFlash } from "@/lib/flash";
 import { hasPlus } from "@/lib/subscription";
 import { alertProsForNewLead } from "@/lib/proAlerts";
 import { isMissingSchemaError } from "@/lib/dbErrors";
+import { redactContact } from "@/lib/redact";
 
 // Photo URLs come from our own upload component (PhotoUpload), so anything
 // oversized is not a real URL; drop it quietly instead of storing a broken
@@ -39,6 +40,27 @@ export async function postJobAction(formData: FormData) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/signin");
+
+  // Abuse gate: a post fans out up to ~250 pro notification writes (and, once
+  // COLD_START_FREE_POSTING/COLD_START_FREE_ALERTS flip real providers on, up
+  // to 200 real SMS/email sends) per submission, and posting is currently free
+  // and uncapped during cold start (the open-job-count cap below is skipped
+  // entirely while COLD_START_FREE_POSTING is on). Without a limiter here, a
+  // looped/scripted poster could spam every matched pro at will. Fixed-window
+  // limiter (migration 0068), same pattern as onboarding's parcel lookup and
+  // account/help's support message. Fails open on a DB hiccup: only an
+  // explicit `allowed === false` blocks, so a rate-limiter outage never stops
+  // a legit homeowner from posting.
+  const admin = createAdminClient();
+  const { data: allowed } = await admin.rpc("rate_limit_hit", {
+    p_bucket: `post:${user.id}`,
+    p_limit: 8,
+    p_window_seconds: 3600,
+  });
+  if (allowed === false) {
+    setFlash("You're posting jobs too quickly, please wait a bit.", "error");
+    redirect("/contractors");
+  }
 
   const category = formData.get("category") as string;
   const issueId = (formData.get("issue_id") as string) || null;
@@ -112,6 +134,15 @@ export async function postJobAction(formData: FormData) {
     const query = keep.toString();
     redirect(query ? `/contractors?${query}` : "/contractors");
   }
+
+  // Scrub contact info out of the description before it's stored anywhere:
+  // pros pay to apply through the marketplace, and a homeowner's "call me at
+  // ..." dropped into the free-text field would let a pro take the job
+  // off-platform before ever paying to apply. The 20-character check above
+  // ran on the real text (so a description that's mostly a phone number still
+  // has to carry enough real content), but everything stored on the lead, fed
+  // to the carrier issue, and pushed to pro alerts uses the redacted version.
+  issueDescription = issueDescription ? redactContact(issueDescription) : issueDescription;
 
   const address = [property.address_line1, property.city, property.state]
     .filter(Boolean)
@@ -296,7 +327,6 @@ export async function postJobAction(formData: FormData) {
   // it's still open and worth racing other applicants for. Best-effort only:
   // a notification hiccup should never break the homeowner's post.
   try {
-    const admin = createAdminClient();
     const { data: matches } = await admin
       .from("contractors")
       .select("user_id")
@@ -304,15 +334,23 @@ export async function postJobAction(formData: FormData) {
       .contains("categories", [category])
       .limit(50);
     const categoryLabel = labelFor(JOB_CATEGORIES, category);
-    for (const match of matches ?? []) {
-      if (!match.user_id || alertedPros.has(match.user_id)) continue;
-      await admin.from("notifications").insert({
-        user_id: match.user_id,
-        kind: "new_lead",
-        title: `New ${categoryLabel} job posted nearby`,
-        body: "A homeowner just posted a job. Apply before other pros do.",
-        url: "/pro",
-      });
+    // Collect rows and send a single batched insert instead of awaiting one
+    // insert per matched pro sequentially: up to 50 round-trips in series was
+    // adding latency to the post and amplifying it per-post.
+    const rows = (matches ?? []).flatMap((match) => {
+      if (!match.user_id || alertedPros.has(match.user_id)) return [];
+      return [
+        {
+          user_id: match.user_id,
+          kind: "new_lead",
+          title: `New ${categoryLabel} job posted nearby`,
+          body: "A homeowner just posted a job. Apply before other pros do.",
+          url: "/pro",
+        },
+      ];
+    });
+    if (rows.length) {
+      await admin.from("notifications").insert(rows);
     }
   } catch {
     // Notifications are a nice-to-have here, not part of the posting flow.
@@ -401,13 +439,20 @@ export async function updateJobAction(formData: FormData) {
     }
   }
 
+  // Scrub contact info out of the description before it's stored, mirroring
+  // postJobAction: pros pay to apply through the marketplace, and a "call me
+  // at ..." dropped into an edit would let a pro take the job off-platform
+  // before ever paying to apply. The 20-character floor above ran on the raw
+  // text; only the stored value is redacted.
+  const redactedMessage = message ? redactContact(message) : message;
+
   const { error } = await supabase
     .from("contractor_leads")
     .update({
       category,
       payout_amount: leadFeeFor(category),
       timing,
-      issue_description: message,
+      issue_description: redactedMessage,
       homeowner_name: homeownerName,
       homeowner_email: homeownerEmail,
       homeowner_phone: homeownerPhone,

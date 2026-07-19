@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Mic } from "lucide-react";
 
 // A mic button that dictates into the Ask Hearth box. Two modes:
 //
@@ -375,7 +376,7 @@ export default function VoiceButton({
             : "border-stone-200 text-stone-500 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-hearth-300"
         }`}
       >
-        🎙
+        <Mic className="h-5 w-5" aria-hidden="true" />
       </button>
     </span>
   );

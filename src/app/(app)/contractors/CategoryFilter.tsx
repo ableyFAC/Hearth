@@ -36,18 +36,18 @@ export default function CategoryFilter({
         <optgroup label="Services">
           {SERVICE_CATEGORIES.map((c) => (
             <option key={c.value} value={c.value}>
-              {c.icon} {c.label}
+              {c.label}
             </option>
           ))}
         </optgroup>
         <optgroup label="Popular projects">
           {REMODEL_PROJECTS.map((p) => (
             <option key={p.label} value={p.category}>
-              {p.icon} {p.label}
+              {p.label}
             </option>
           ))}
         </optgroup>
-        <option value="other">🔧 Other (describe it)</option>
+        <option value="other">Other (describe it)</option>
       </select>
       {value === "other" && (
         <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">

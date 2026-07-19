@@ -4,13 +4,13 @@ import { getActiveProperty } from "@/lib/property";
 import { hasPlus } from "@/lib/subscription";
 import {
   labelFor,
-  iconFor,
   SYSTEM_TYPES,
   ISSUE_CATEGORIES,
   categoryForSystem,
 } from "@/lib/constants";
 import { assessSystem } from "@/lib/health";
 import PrintButton from "@/components/PrintButton";
+import CategoryIcon from "@/components/CategoryIcon";
 import SystemRow from "../profile/SystemRow";
 import SystemForm from "../profile/SystemForm";
 import MaintenanceHistoryForm from "./MaintenanceHistoryForm";
@@ -79,6 +79,13 @@ export default async function HomeReportPage() {
     // Reads the exact same home_systems rows the home page reads and writes
     // (no snapshot copy), so an edit made here or there shows up everywhere:
     // dashboard tiles, forecast, maintenance plan.
+    //
+    // Kept as select(*) on purpose - see the matching comment in
+    // dashboard/page.tsx. filter_size/filter_interval_months (migration
+    // 0042) aren't in the generated Database type, so Supabase's typed
+    // client rejects an explicit select string naming them (compile error),
+    // and every other column here is genuinely read downstream, so trimming
+    // would save zero bytes anyway.
     supabase
       .from("home_systems")
       .select("*")
@@ -86,7 +93,10 @@ export default async function HomeReportPage() {
       .order("system_type", { ascending: true }),
     supabase
       .from("documents")
-      .select("id, title, doc_type, brand, model, install_year, warranty_expires, uploaded_at")
+      // brand/model/install_year were being fetched but this page never
+      // reads them (only title, doc_type, warranty_expires, uploaded_at are
+      // used below) - dropped.
+      .select("id, title, doc_type, warranty_expires, uploaded_at")
       .eq("property_id", property.id)
       .order("uploaded_at", { ascending: false }),
     // select("*") rather than a fixed column list, so optional history columns
@@ -257,7 +267,11 @@ export default async function HomeReportPage() {
                   return (
                     <tr key={s.id} className="border-b border-stone-100">
                       <td className="py-2 pr-3 text-stone-800">
-                        {iconFor(SYSTEM_TYPES, s.system_type)}{" "}
+                        <CategoryIcon
+                          list={SYSTEM_TYPES}
+                          value={s.system_type}
+                          className="mr-1 inline-block h-4 w-4 align-[-3px]"
+                        />
                         {labelFor(SYSTEM_TYPES, s.system_type)}
                       </td>
                       <td className="py-2 pr-3 text-stone-600">

@@ -4,7 +4,7 @@
 export default function OpenChatButton({
   leadId,
   name,
-  label = "💬 Message",
+  label = "Message",
 }: {
   leadId: string;
   name: string;

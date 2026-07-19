@@ -6,8 +6,8 @@ import {
   ISSUE_CATEGORIES,
   SEVERITIES,
   labelFor,
-  iconFor,
 } from "@/lib/constants";
+import CategoryIcon from "@/components/CategoryIcon";
 import {
   updateIssueAction,
   checkResolveIssueAction,
@@ -152,7 +152,11 @@ export default function IssueRow({
                   resolved ? "text-stone-500 line-through dark:text-stone-400" : "text-stone-900 dark:text-stone-100"
                 }`}
               >
-                {iconFor(ISSUE_CATEGORIES, issue.category)}{" "}
+                <CategoryIcon
+                  list={ISSUE_CATEGORIES}
+                  value={issue.category}
+                  className="mr-1 inline-block h-4 w-4 align-[-3px]"
+                />
                 {labelFor(ISSUE_CATEGORIES, issue.category)}
               </span>
               <span

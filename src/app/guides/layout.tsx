@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import Logo from "@/components/Logo";
 
 // Shared shell for the public /guides pages: informational content meant to
 // be indexed and read by anonymous search visitors (see the middleware
@@ -29,19 +30,19 @@ export default async function GuidesLayout({
           href="/"
           className="flex items-center gap-2 font-semibold text-stone-900 dark:text-stone-100"
         >
-          <span aria-hidden>🏡</span> Hearth
+          <Logo className="h-6 w-6 text-hearth-700 dark:text-hearth-400" /> Hearth
         </a>
         {user ? (
           <a
             href="/dashboard"
-            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700 dark:border-stone-600 dark:text-stone-300 dark:hover:text-hearth-300"
+            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:text-stone-300 dark:hover:text-hearth-300"
           >
             Open your dashboard
           </a>
         ) : (
           <a
             href="/get-started"
-            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700 dark:border-stone-600 dark:text-stone-300 dark:hover:text-hearth-300"
+            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:text-stone-300 dark:hover:text-hearth-300"
           >
             Get started free
           </a>
@@ -51,8 +52,8 @@ export default async function GuidesLayout({
       {children}
 
       <footer className="mx-auto mt-16 max-w-2xl border-t border-stone-200 px-6 py-6 text-center dark:border-white/10">
-        <p className="text-xs text-stone-500 dark:text-stone-400">
-          🏡 Hearth · Your home, looked after
+        <p className="inline-flex w-full items-center justify-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
+          <Logo className="h-4 w-4 text-hearth-700 dark:text-hearth-400" /> Hearth · Your home, looked after
         </p>
         <p className="mt-2 text-xs">
           <a

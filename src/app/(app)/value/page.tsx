@@ -6,6 +6,7 @@ import {
   calculateEquity,
 } from "@/lib/homeValue";
 import ValueForm from "./ValueForm";
+import ValueAutoFetch from "./ValueAutoFetch";
 
 function money(n: number): string {
   return `${n < 0 ? "-" : ""}$${Math.round(Math.abs(n)).toLocaleString()}`;
@@ -25,16 +26,19 @@ function moneyShort(n: number): string {
 export default async function ValuePage() {
   const property = (await getActiveProperty())!;
 
-  // purchase_price and mortgage_balance are new columns from migration 0029
-  // that are not yet in src/lib/database.types.ts, so they are read off the
-  // row with a cast rather than widening the generated types by hand. If the
+  // purchase_price, mortgage_balance, and market_value/_low/_high are new
+  // columns (migrations 0029 and 0066) that are not yet in
+  // src/lib/database.types.ts, so they are read off the row with a cast
+  // rather than widening the generated types by hand. If the relevant
   // migration has not run yet in this database, these just come back
-  // undefined and the page shows the setup form, exactly like "not set yet".
+  // undefined and the page degrades exactly like "not set yet".
   const raw = property as any;
   const purchasePrice: number | null =
     typeof raw.purchase_price === "number" ? raw.purchase_price : null;
   const mortgageBalance: number | null =
     typeof raw.mortgage_balance === "number" ? raw.mortgage_balance : null;
+  const marketValue: number | null =
+    typeof raw.market_value === "number" ? raw.market_value : null;
 
   // purchase_date already exists on properties (since migration 0001); only
   // the year matters here, so it is stored as YYYY-01-01 and parsed back out.
@@ -43,27 +47,42 @@ export default async function ValuePage() {
     : null;
 
   const currentYear = new Date().getFullYear();
-  const hasData = purchasePrice != null && purchaseYear != null;
+  const hasPurchaseData = purchasePrice != null && purchaseYear != null;
   const region = stateName(property.state);
 
-  const estimatedValue = hasData
+  // The stored RentCast AVM (fetched lazily below, or already on file from
+  // onboarding) is the better number when we have it: it reflects actual
+  // recent comparable sales rather than a statewide average trend. Fall back
+  // to the purchase-price model only when no AVM has landed yet.
+  const usingMarketValue = marketValue != null;
+  const estimatedValue = usingMarketValue
+    ? marketValue
+    : hasPurchaseData
     ? estimateHomeValue(purchasePrice!, purchaseYear!, property.state, currentYear)
     : null;
+
   const appreciationGained =
-    hasData && estimatedValue != null ? estimatedValue - purchasePrice! : null;
+    hasPurchaseData && estimatedValue != null ? estimatedValue - purchasePrice! : null;
   const equity =
-    hasData && estimatedValue != null
-      ? calculateEquity(estimatedValue, mortgageBalance)
-      : null;
-  const timeline =
-    hasData
-      ? estimateValueTimeline(purchasePrice!, purchaseYear!, property.state, currentYear)
-      : [];
+    estimatedValue != null ? calculateEquity(estimatedValue, mortgageBalance) : null;
+  // The timeline chart models the purchase-price trend year by year; it only
+  // makes sense once we have a purchase price and year to start from, whether
+  // or not the headline number above is coming from the AVM instead.
+  const timeline = hasPurchaseData
+    ? estimateValueTimeline(purchasePrice!, purchaseYear!, property.state, currentYear)
+    : [];
   // Tallest bar in the chart, computed once rather than per bar.
   const timelineMax = Math.max(...timeline.map((x) => x.value), 1);
 
+  // Trigger the lazy AVM fetch only when there's nothing on file yet and we
+  // have an address to look up. The component itself does the fetch + router
+  // refresh client-side, off this render.
+  const needsFetch =
+    marketValue == null && !!property.address_line1 && !!property.zip;
+
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
+      <ValueAutoFetch needsFetch={needsFetch} propertyId={property.id} />
       <header className="mb-1">
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
           Home value &amp; equity
@@ -71,11 +90,14 @@ export default async function ValuePage() {
       </header>
       <p className="mb-5 text-sm text-stone-500 dark:text-stone-400">
         A running estimate of what your home is worth today and how much of
-        it you actually own, based on statewide price trends since you bought
-        it.
+        it you actually own, based on{" "}
+        {usingMarketValue
+          ? "recent sales data near you"
+          : "statewide price trends since you bought it"}
+        .
       </p>
 
-      {!hasData && (
+      {!hasPurchaseData && !usingMarketValue && (
         <div className="space-y-4">
           <div className="card space-y-2 text-center">
             <p className="text-sm text-stone-600 dark:text-stone-300">
@@ -94,7 +116,7 @@ export default async function ValuePage() {
         </div>
       )}
 
-      {hasData && estimatedValue != null && (
+      {estimatedValue != null && (
         <>
           <div className="card-hero space-y-2 text-center">
             <p className="stat-label">Estimated value today</p>
@@ -104,29 +126,38 @@ export default async function ValuePage() {
                 Estimate
               </span>
             </p>
-            <p className="text-xs text-hearth-700 dark:text-hearth-300">
-              Bought for {money(purchasePrice!)} in {purchaseYear}
-              {appreciationGained != null && appreciationGained !== 0 && (
-                <>
-                  {" "}
-                  &middot;{" "}
-                  <span
-                    className={
-                      appreciationGained > 0
-                        ? "font-medium text-green-700"
-                        : "font-medium text-red-600"
-                    }
-                  >
-                    {appreciationGained > 0 ? "▲ up" : "▼ down"}{" "}
-                    {money(appreciationGained)} since then
-                  </span>
-                </>
-              )}
-            </p>
+            {hasPurchaseData ? (
+              <p className="text-xs text-hearth-700 dark:text-hearth-300">
+                Bought for {money(purchasePrice!)} in {purchaseYear}
+                {appreciationGained != null && appreciationGained !== 0 && (
+                  <>
+                    {" "}
+                    &middot;{" "}
+                    <span
+                      className={
+                        appreciationGained > 0
+                          ? "font-medium text-green-700 dark:text-green-400"
+                          : "font-medium text-red-600 dark:text-red-400"
+                      }
+                    >
+                      {appreciationGained > 0 ? "▲ up" : "▼ down"}{" "}
+                      {money(appreciationGained)} since then
+                    </span>
+                  </>
+                )}
+              </p>
+            ) : (
+              <p className="text-xs text-hearth-700 dark:text-hearth-300">
+                Add what you paid to see how much you&apos;ve gained since you
+                bought it.
+              </p>
+            )}
             <p className="text-xs text-hearth-600 dark:text-hearth-400">
-              Ballpark based on{" "}
-              {region ? `statewide ${region} price trends` : "statewide price trends"},
-              not your neighborhood.
+              {usingMarketValue
+                ? "Based on recent comparable sales near you, not a full appraisal."
+                : region
+                ? `Ballpark based on statewide ${region} price trends, not your neighborhood.`
+                : "Ballpark based on statewide price trends, not your neighborhood."}
             </p>
           </div>
 
@@ -134,7 +165,7 @@ export default async function ValuePage() {
             <p className="stat-label">Home equity</p>
             <p
               className={`stat-number text-2xl ${
-                equity != null && equity < 0 ? "text-red-600" : ""
+                equity != null && equity < 0 ? "text-red-600 dark:text-red-400" : ""
               }`}
             >
               {equity != null ? money(equity) : "-"}
@@ -148,7 +179,16 @@ export default async function ValuePage() {
             </p>
           </div>
 
-          {timeline.length > 1 && (
+          {!hasPurchaseData && (
+            <div className="card mt-6 space-y-2 text-center">
+              <p className="text-sm text-stone-600 dark:text-stone-300">
+                Add what you paid and the year you bought your home to also
+                see your appreciation over time and a full value timeline.
+              </p>
+            </div>
+          )}
+
+          {hasPurchaseData && timeline.length > 1 && (
             <div className="card mt-6 space-y-3">
               <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
                 Estimated value over time
@@ -208,11 +248,9 @@ export default async function ValuePage() {
           </div>
 
           <p className="mt-6 text-xs text-stone-500 dark:text-stone-400">
-            This is an estimate based on statewide average price trends, not
-            an appraisal. Your home&apos;s real value depends on its
-            condition, upgrades, and what is actually selling nearby right
-            now. For a number you can rely on to sell, refinance, or dispute
-            taxes, talk to a local real estate agent or licensed appraiser.
+            {usingMarketValue
+              ? "This is an automated estimate based on recent comparable sales, not an appraisal. Your home's real value depends on its condition, upgrades, and what is actually selling nearby right now. For a number you can rely on to sell, refinance, or dispute taxes, talk to a local real estate agent or licensed appraiser."
+              : "This is an estimate based on statewide average price trends, not an appraisal. Your home's real value depends on its condition, upgrades, and what is actually selling nearby right now. For a number you can rely on to sell, refinance, or dispute taxes, talk to a local real estate agent or licensed appraiser."}
           </p>
         </>
       )}

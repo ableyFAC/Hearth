@@ -269,7 +269,7 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
                 <option value="">- none -</option>
                 {SYSTEM_TYPES.map((sys) => (
                   <option key={sys.value} value={sys.value}>
-                    {sys.icon} {sys.label}
+                    {sys.label}
                   </option>
                 ))}
               </select>

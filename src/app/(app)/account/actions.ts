@@ -6,6 +6,9 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as createJsClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { setFlash } from "@/lib/flash";
+import { stripe } from "@/lib/stripe";
+import { eraseUserData, type EraseSummary } from "@/lib/privacy";
+import { isMissingSchemaError } from "@/lib/dbErrors";
 
 // Update the current homeowner's identity details: name + phone live in the
 // public.users row. Email and password are security concerns and are handled
@@ -20,17 +23,52 @@ export async function saveAccountAction(formData: FormData) {
 
   const full_name = (formData.get("full_name") as string)?.trim() || "";
   const phone = (formData.get("phone") as string)?.trim() || null;
+  // Checkboxes only appear in FormData when checked, and an unset browser
+  // value defaults to "on" - so absence means false, same as the DB default.
+  const sms_consent = formData.get("sms_consent") === "on";
 
   if (!full_name) {
     setFlash("Please enter your name.", "error");
     redirect("/account");
   }
 
-  // Name + phone - the public profile row (best effort).
-  const { error: profileError } = await supabase
+  // Read the current consent flag first: sms_consent_at should only move
+  // forward on a false -> true transition (a fresh grant), never on a save
+  // that leaves consent already-true untouched, and never on a revocation -
+  // that would erase the record of when consent was originally given (TCPA -
+  // see src/lib/notify.ts). Best effort: if migration 0073 hasn't reached
+  // this database yet the select 42703s, `current` stays null, and
+  // priorConsent just defaults to false - harmless, since the update below
+  // degrades the exact same way.
+  const { data: current } = await supabase
     .from("users")
-    .update({ full_name, phone })
+    .select("sms_consent")
+    .eq("id", user.id)
+    .maybeSingle();
+  const priorConsent = current?.sms_consent === true;
+
+  const consentFields: { sms_consent: boolean; sms_consent_at?: string } = {
+    sms_consent,
+  };
+  if (sms_consent && !priorConsent) {
+    consentFields.sms_consent_at = new Date().toISOString();
+  }
+
+  // Name + phone + SMS consent - the public profile row (best effort). On
+  // the missing-column fingerprint (migration 0073 not yet applied to this
+  // database) retry without the consent fields so saving the account never
+  // breaks. Same pattern as the contractor_leads insert in
+  // src/app/(app)/contractors/actions.ts.
+  let { error: profileError } = await supabase
+    .from("users")
+    .update({ full_name, phone, ...consentFields })
     .eq("id", user.id);
+  if (profileError && isMissingSchemaError(profileError)) {
+    ({ error: profileError } = await supabase
+      .from("users")
+      .update({ full_name, phone })
+      .eq("id", user.id));
+  }
   if (profileError) throw new Error(profileError.message);
 
   // Mirror the name into auth metadata too. This is what the toolbar reads, so
@@ -156,12 +194,22 @@ export async function signOutOthersAction() {
   redirect("/account/security");
 }
 
-// Permanently delete the signed-in homeowner's account. Uses the service role
-// to remove the auth user (cascading to their public.users row and the homes /
-// systems keyed to it), then clears the session. Requires re-entering the
-// current password first (same bar as updatePasswordAction) so a hijacked /
-// shared session - or a stray click - can't destroy the account with no proof
-// of identity.
+// Permanently delete the signed-in homeowner's account, and everything of
+// theirs that a plain auth-user delete would leave behind.
+//
+// eraseUserData() runs FIRST and does the work the FK cascade can't: it
+// removes their uploaded files from Storage (no FK or trigger reaches those)
+// and deletes the rows whose user reference is ON DELETE SET NULL rather than
+// CASCADE - support messages, assistant questions, sent messages, reports -
+// each of which keeps personal information in the row itself, so a nulled id
+// would not de-identify them. Only then do we delete the auth user, which
+// cascades their public.users row and the homes / systems keyed to it.
+//
+// This is the CCPA right-to-delete path (Cal. Civ. Code 1798.105), so it has
+// to actually be complete. Requires re-entering the current password first
+// (same bar as updatePasswordAction) so a hijacked / shared session - or a
+// stray click - can't destroy the account with no proof of identity; that
+// re-auth is also the request verification the regulation asks for.
 export async function deleteAccountAction(formData: FormData) {
   const supabase = createClient();
   const {
@@ -191,6 +239,62 @@ export async function deleteAccountAction(formData: FormData) {
   }
 
   const admin = createAdminClient();
+
+  // Cancel any live Stripe subscription BEFORE deleting the account.
+  // subscriptions.user_id is ON DELETE CASCADE (0022), so deleting the auth
+  // user drops the row while the card keeps getting billed forever - and the
+  // ex-user has no account left to cancel from. If a cancel fails we abort the
+  // whole deletion rather than strand a paying subscription with no way out.
+  const { data: subs } = await admin
+    .from("subscriptions")
+    .select("stripe_subscription_id, status")
+    .eq("user_id", user.id);
+  for (const sub of subs ?? []) {
+    if (!sub.stripe_subscription_id || sub.status === "canceled") continue;
+    try {
+      await stripe.subscriptions.cancel(sub.stripe_subscription_id);
+    } catch {
+      setFlash(
+        "We couldn't cancel your subscription, so we didn't delete your account. Please try again.",
+        "error"
+      );
+      redirect("/account");
+    }
+  }
+
+  // Purge storage objects and the set-null leftovers before the cascade runs.
+  // Best effort: if this throws we still delete the account rather than
+  // stranding someone who asked to leave, but we don't claim it was clean.
+  // A partial purge is logged (there is no audit-log table yet) so the 45-day
+  // response record has something to reconstruct what was and wasn't removed.
+  let summary: EraseSummary | null = null;
+  try {
+    summary = await eraseUserData(user.id);
+  } catch (err) {
+    console.error("eraseUserData threw for", user.id, err);
+  }
+  if (summary && summary.failed.length) {
+    console.error(
+      "eraseUserData partial purge for",
+      user.id,
+      "- not removed:",
+      summary.failed
+    );
+  }
+  // A homeowner can also have a contractor listing. contractors.user_id is ON
+  // DELETE SET NULL (0005): if its delete failed the whole company record
+  // would be orphaned forever once the auth user is gone. Abort before
+  // deleteUser rather than leave that behind - same guard as the pro delete
+  // path (src/app/pro/profile/actions.ts).
+  if (summary?.contractorDeleteFailed) {
+    console.error("eraseUserData contractor delete failed for", user.id);
+    setFlash(
+      "Couldn't fully delete your account. Please try again.",
+      "error"
+    );
+    redirect("/account");
+  }
+
   const { error } = await admin.auth.admin.deleteUser(user.id);
   if (error) {
     setFlash(error.message, "error");

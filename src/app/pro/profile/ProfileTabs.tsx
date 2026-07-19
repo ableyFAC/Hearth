@@ -12,7 +12,6 @@ import {
   signOutOthersAction,
   deleteAccountAction,
 } from "./actions";
-import { FOUNDER } from "@/lib/constants";
 import type { Contractor } from "@/lib/database.types";
 
 const TABS = [
@@ -113,7 +112,7 @@ export default function ProfileTabs({
           updatePasswordAction={updatePasswordAction}
           signOutOthersAction={signOutOthersAction}
           deleteAccountAction={deleteAccountAction}
-          founderEmail={FOUNDER.email}
+          privacyHref="/pro/privacy"
         />
       )}
     </div>

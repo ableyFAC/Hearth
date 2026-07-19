@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import AiNotice from "@/components/AiNotice";
 
 // The "give me a head start" button on the "looks high" state. Plus members
 // get a Gemini-drafted appeal letter they can adapt and file themselves; free
@@ -92,7 +93,7 @@ export default function AppealLetter({ isPlus }: { isPlus: boolean }) {
         </button>
       )}
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
       {letter && (
         <div className="space-y-2">
@@ -114,12 +115,7 @@ export default function AppealLetter({ isPlus }: { isPlus: boolean }) {
               {loading ? "Drafting..." : "Draft again"}
             </button>
           </div>
-          <p className="text-xs text-stone-500 dark:text-stone-400">
-            This is a starting point, not legal or tax advice. Read it
-            closely, correct anything that doesn&apos;t match your situation,
-            and add the details only you have before you send it. Appeals are
-            not guaranteed to succeed.
-          </p>
+          <AiNotice detail="It is a starting point, not legal or tax advice: correct anything that doesn't match your situation and add the details only you have before you send it. Appeals are not guaranteed to succeed." />
         </div>
       )}
     </div>

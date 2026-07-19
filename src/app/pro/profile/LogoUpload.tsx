@@ -85,7 +85,7 @@ export default function LogoUpload({
           type="file"
           accept="image/*"
           onChange={onPick}
-          className="block w-full text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-hearth-100 file:px-3 file:py-1.5 file:text-hearth-800 dark:text-stone-300"
+          className="block w-full text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-hearth-100 file:px-3 file:py-1.5 file:text-hearth-800 dark:text-stone-300 dark:file:bg-hearth-900/40 dark:file:text-hearth-200"
         />
       </div>
       {busy && <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">Uploading…</p>}

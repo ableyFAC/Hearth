@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import type { LucideIcon } from "lucide-react";
+import { FLOWS } from "./content";
 
 export type PrepKey = "water_shutoff" | "gas_shutoff" | "breaker_panel";
 
 export type PanicFlow = {
   key: string;
-  emoji: string;
+  icon: LucideIcon;
   title: string;
   subtitle: string;
   category: string;
@@ -17,6 +19,17 @@ export type PanicFlow = {
   prepKey?: PrepKey;
 };
 
+// The Server Component page can't pass `icon` (a LucideIcon, i.e. a function)
+// down as a prop, that crashes with "Functions cannot be passed directly to
+// Client Components". So this client component receives everything BUT the
+// icon, and resolves the icon itself from FLOWS (a plain, directive-free
+// module it can safely import on its own).
+export type SerializablePanicFlow = Omit<PanicFlow, "icon">;
+
+const ICON_BY_KEY: Record<string, LucideIcon> = Object.fromEntries(
+  FLOWS.map((f) => [f.key, f.icon])
+);
+
 // One panic flow: a big tappable card that expands into short, numbered steps.
 // Closed by default so the page reads as a few calm choices, not a wall of text.
 export default function PanicCard({
@@ -24,11 +37,12 @@ export default function PanicCard({
   prepPhotoSrc,
   prepNote,
 }: {
-  flow: PanicFlow;
+  flow: SerializablePanicFlow;
   prepPhotoSrc: string | null;
   prepNote: string | null;
 }) {
   const [open, setOpen] = useState(false);
+  const Icon = ICON_BY_KEY[flow.key] ?? null;
 
   const ctaHref =
     `/contractors?category=${encodeURIComponent(flow.category)}` +
@@ -43,14 +57,14 @@ export default function PanicCard({
         aria-expanded={open}
         className="flex w-full items-center gap-3 px-5 py-4 text-left"
       >
-        <span className="text-2xl" aria-hidden="true">
-          {flow.emoji}
-        </span>
+        {Icon && (
+          <Icon className="h-6 w-6 shrink-0 text-hearth-600 dark:text-hearth-400" aria-hidden="true" />
+        )}
         <span className="flex-1">
           <span className="block font-semibold text-stone-900 dark:text-stone-100">{flow.title}</span>
           <span className="block text-sm text-stone-500 dark:text-stone-400">{flow.subtitle}</span>
         </span>
-        <span className="text-sm font-medium text-hearth-700">
+        <span className="text-sm font-medium text-hearth-700 dark:text-hearth-300">
           {open ? "Hide steps" : "See steps"}
         </span>
       </button>

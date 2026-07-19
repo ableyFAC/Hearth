@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Camera } from "lucide-react";
 
 // A phone-only "Take photo" affordance that sits NEXT TO an existing gallery
 // picker, never instead of it. capture="environment" makes mobile browsers
@@ -46,7 +47,7 @@ export default function TakePhotoButton({
         disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"
       } ${className}`}
     >
-      <span aria-hidden="true">📷</span>
+      <Camera className="mr-1.5 inline-block h-4 w-4" aria-hidden="true" />
       {label}
       <input
         type="file"

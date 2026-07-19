@@ -1,9 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { hasPlus } from "@/lib/subscription";
-import { labelFor, iconFor, SYSTEM_TYPES } from "@/lib/constants";
+import { labelFor, SYSTEM_TYPES } from "@/lib/constants";
 import { stateName } from "@/lib/forecast";
 import DocumentUpload from "@/components/DocumentUpload";
+import CategoryIcon from "@/components/CategoryIcon";
+import { FileText } from "lucide-react";
 import { imgSrc } from "@/lib/storage";
 import {
   applyDocumentToTwinAction,
@@ -131,7 +133,9 @@ export default async function DocumentsPage() {
         {!docsError && list.length === 0 && (
           <div className="rounded-xl border border-dashed border-stone-300 px-4 py-8 text-center dark:border-stone-700">
             <div className="flex justify-center">
-              <span className="icon-chip">📄</span>
+              <span className="icon-chip">
+                <FileText className="h-5 w-5" aria-hidden="true" />
+              </span>
             </div>
             <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
               No documents yet. Add your first one above.
@@ -159,7 +163,11 @@ export default async function DocumentsPage() {
               className="flex gap-3 rounded-xl border border-stone-200 bg-white p-4 dark:border-white/10 dark:bg-stone-800"
             >
               <div className="icon-chip">
-                {d.system_type ? iconFor(SYSTEM_TYPES, d.system_type) : "📄"}
+                {d.system_type ? (
+                  <CategoryIcon list={SYSTEM_TYPES} value={d.system_type} />
+                ) : (
+                  <FileText className="h-5 w-5" aria-hidden="true" />
+                )}
               </div>
 
               <div className="min-w-0 flex-1">

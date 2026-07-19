@@ -3,10 +3,17 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { stripe } from "@/lib/stripe";
+import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth";
 import { getCurrentContractor } from "@/lib/contractor";
-import { getSubscription, getProSubscription } from "@/lib/subscription";
+import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  getSubscription,
+  getProSubscription,
+  hasClaimedPromo,
+} from "@/lib/subscription";
 import { PRO_PLAN } from "@/lib/constants";
+import { billingTermsText } from "@/lib/billingTerms";
 import { setFlash } from "@/lib/flash";
 
 const siteUrl = () =>
@@ -51,7 +58,18 @@ export async function startProCheckoutAction(formData: FormData) {
   const plan =
     (formData.get("plan") as string) === "yearly" ? "pro_yearly" : "pro_monthly";
 
-  const user = await getUser();
+  // Deliberately NOT src/lib/auth.ts's getUser(): that helper trusts
+  // getSession(), which reads the user id straight off the (unverified)
+  // cookie. user.id below feeds an admin-client claim_promo call (burns a
+  // one-per-user intro reservation) and the Stripe session's
+  // metadata.user_id (which the webhook trusts via the admin client to
+  // attribute the resulting subscription), so a cookie-edited id would let
+  // an attacker burn a victim's intro claim or misattribute a subscription.
+  // supabase.auth.getUser() re-checks the id against Supabase's auth server.
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) redirect("/signin");
 
   // Membership is a contractor perk bundle, so only a set-up company can buy
@@ -127,27 +145,144 @@ export async function startProCheckoutAction(formData: FormData) {
   // for the first month via a one-time coupon, then full price. Yearly is
   // already discounted, so no intro offer there. A coupon hiccup quietly
   // falls back to full price rather than blocking the checkout.
-  const introOffer = plan === "pro_monthly" && !existing;
+  //
+  // RESERVE the promo before Stripe ever sees a discount - don't just check
+  // it. The old code here read `!existing && !hasClaimedPromo(...)`, but both
+  // of those only reflect state the webhook writes AFTER a checkout
+  // completes. Two checkouts opened back-to-back (two tabs, a replay script)
+  // both read "not claimed yet", both got the coupon, and both eventually
+  // triggered the wallet credit (idempotent per INVOICE, but N concurrent
+  // subscriptions mint N distinct invoice ids) - net: pay $9.99xN, collect
+  // $10xN in spendable credit.
+  //
+  // The fix: atomically claim the promo_claims row (user_id, promo_key) HERE,
+  // synchronously, before the Stripe session is created. promo_claims' PK is
+  // (user_id, promo_key) (migration 0071), so claim_promo()'s
+  // "on conflict do nothing ... return found" makes a second concurrent call
+  // for the same user return false - only ONE of N racing requests can ever
+  // win the reservation; every other one falls straight through to full
+  // price, no coupon attached. claim_promo is service_role-only (revoked
+  // from authenticated/anon in 0071 on purpose), hence the admin client.
+  //
+  // A reservation that's never spent - checkout abandoned, tab closed,
+  // payment declined - is released by the webhook (checkout.session.expired
+  // for an abandoned session; customer.subscription.{updated,deleted}
+  // landing on canceled/incomplete_expired for a subscription that never
+  // actually went live) so a legit user who bails on checkout keeps their one
+  // intro to spend on a later, real attempt. `intro_reserved` in the session
+  // metadata below is how the webhook recognizes which specific attempt
+  // holds the reservation.
+  //
+  // The two original guards still run first, as cheap pre-checks that skip
+  // the Stripe coupon lookup + RPC entirely when we already know the answer:
+  // `!existing` off the current subscriptions row, and
+  // `!hasClaimedPromo(...)`, the lifecycle-independent ledger check that
+  // still holds if a canceled row is ever pruned. Neither is what actually
+  // enforces one-per-user anymore - claim_promo's primary key is - but
+  // keeping both avoids regressing anyone the 0071 backfill missed.
   let discounts: Array<{ coupon: string }> | undefined;
-  if (introOffer) {
+  let claimedIntro = false;
+  if (
+    plan === "pro_monthly" &&
+    !existing &&
+    !(await hasClaimedPromo("pro_intro_monthly"))
+  ) {
     const coupon = await proIntroCouponId();
-    if (coupon) discounts = [{ coupon }];
+    if (coupon) {
+      const admin = createAdminClient();
+      try {
+        const { data, error } = await admin.rpc("claim_promo", {
+          p_user: user.id,
+          p_key: "pro_intro_monthly",
+          p_ref: "pro_checkout_reservation",
+        });
+        if (error) {
+          console.error(
+            "claim_promo reservation failed - no intro discount:",
+            error.message ?? error
+          );
+        } else if (data === true) {
+          claimedIntro = true;
+          discounts = [{ coupon }];
+        }
+        // data === false: a concurrent checkout already won the reservation
+        // for this user. Fall through to full price - do NOT attach the
+        // coupon, and do NOT touch promo_claims (it's the other attempt's).
+      } catch (err) {
+        console.error(
+          "claim_promo reservation threw - no intro discount:",
+          err
+        );
+      }
+    }
   }
 
-  const session = await stripe.checkout.sessions.create({
-    mode: "subscription",
-    line_items: [lineItem],
-    discounts,
-    customer: customerId ?? undefined,
-    customer_email: customerId ? undefined : user.email ?? undefined,
-    metadata: {
-      type: "pro_subscription",
-      user_id: user.id,
-      plan,
-    },
-    success_url: `${siteUrl()}/pro/plus?welcome=1`,
-    cancel_url: `${siteUrl()}/pro/plus`,
-  });
+  // Consent record, mirroring startPlusCheckoutAction: the exact disclosure
+  // text the buyer saw, stored on the Stripe session so California's
+  // record-keeping requirement (Bus. & Prof. Code 17602(b)(2)) is satisfied
+  // without a new table. Keyed off `discounts` rather than `introOffer`, so a
+  // coupon that quietly failed to apply is never papered over with step-up
+  // copy the invoice won't match. Metadata values cap at 500 characters.
+  const consentTerms = billingTermsText(plan, Boolean(discounts)).slice(0, 500);
+
+  let session: Awaited<ReturnType<typeof stripe.checkout.sessions.create>>;
+  try {
+    session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      line_items: [lineItem],
+      discounts,
+      // Stamp the step-up on the SUBSCRIPTION, not just the session. A
+      // duration:"once" coupon is consumed by the first invoice and Stripe
+      // detaches it, so by the time the renewal-reminders cron looks (days
+      // before the intro month ends) the discount may already be gone and the
+      // step-up would be invisible. This flag is the durable record that the
+      // next charge is higher than the last, and the cron reads it. It also
+      // doubles as the webhook's signal (on customer.subscription.updated /
+      // deleted) that THIS subscription is the one holding the promo
+      // reservation, for the abandoned-payment rollback.
+      subscription_data: {
+        metadata: { intro_step_up: discounts ? "true" : "false" },
+      },
+      customer: customerId ?? undefined,
+      customer_email: customerId ? undefined : user.email ?? undefined,
+      metadata: {
+        type: "pro_subscription",
+        user_id: user.id,
+        plan,
+        consent_terms: consentTerms,
+        consent_at: new Date().toISOString(),
+        // Session-level twin of intro_step_up above, for the OTHER half of
+        // the rollback: checkout.session.expired. An abandoned checkout never
+        // produces a subscription at all, so the webhook has nothing but this
+        // session's own metadata to check when deciding whether to release
+        // the reservation.
+        intro_reserved: claimedIntro ? "true" : "false",
+      },
+      success_url: `${siteUrl()}/pro/plus?welcome=1`,
+      cancel_url: `${siteUrl()}/pro/plus`,
+    });
+  } catch (err) {
+    // The reservation above already wrote to promo_claims. If Stripe itself
+    // failed to create the session, no checkout.session.expired event will
+    // EVER fire for it - there's no session to expire - so the webhook's
+    // rollback path can't reach this case. Release the reservation here,
+    // inline, so a Stripe hiccup doesn't cost the user their one intro price.
+    if (claimedIntro) {
+      const admin = createAdminClient();
+      const { error } = await admin
+        .from("promo_claims")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("promo_key", "pro_intro_monthly");
+      if (error) {
+        console.error(
+          "promo_claims release after failed session create failed:",
+          error.message ?? error
+        );
+      }
+    }
+    throw err;
+  }
 
   if (session.url) redirect(session.url);
   redirect("/pro/plus");

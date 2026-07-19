@@ -64,8 +64,25 @@ export default async function PlusPage({
 
   // One-time celebration right after checkout. Shown off the ?welcome=1 flag so
   // it appears even if the Stripe webhook hasn't synced the subscription yet.
+  // When the row HAS landed, the acknowledgment on the last step can state the
+  // real plan; when it hasn't, PlusWelcome falls back to the cancellation
+  // terms plus a pointer to the emailed acknowledgment. "trialing" is what the
+  // free first month looks like in Stripe, so it is the step-up signal here.
   if (searchParams.welcome === "1") {
-    return <PlusWelcome />;
+    return (
+      <PlusWelcome
+        plan={
+          sub?.status === "canceled"
+            ? undefined
+            : sub?.plan === "yearly"
+            ? "yearly"
+            : sub?.plan === "monthly"
+            ? "monthly"
+            : undefined
+        }
+        introEligible={sub?.status === "trialing"}
+      />
+    );
   }
 
   if (plus) {
@@ -186,6 +203,55 @@ export default async function PlusPage({
             ))}
           </ul>
         </div>
+      </div>
+    );
+  }
+
+  // A subscription that Stripe still considers live but that hasPlus() reads
+  // as not-entitled (past_due, unpaid, incomplete: the card failed and Stripe
+  // is retrying) used to fall straight through to the marketing pitch below,
+  // leaving someone whose card is ACTIVELY being retried with no way to stop
+  // the charges except email. That is exactly the "simple mechanism to stop
+  // recurring charges" ROSCA requires (15 U.S.C. 8403(3)), so the cancel and
+  // billing controls stay reachable whenever a cancellable subscription
+  // exists, entitled or not. Canceled rows fall through: there is nothing
+  // left to stop.
+  if (sub?.stripe_subscription_id && sub.status !== "canceled") {
+    return (
+      <div className="mx-auto max-w-2xl space-y-6">
+        <div className="text-center">
+          <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
+            Hearth Plus
+          </h1>
+        </div>
+        <div className="card space-y-4 text-center">
+          <p className="text-sm text-stone-600 dark:text-stone-300">
+            We couldn&apos;t take your last Hearth Plus payment, so your Plus
+            features are paused while your bank and Stripe sort it out. Update
+            your payment method to switch them back on, or cancel so nothing
+            further is charged.
+          </p>
+          <form action={manageBillingAction}>
+            <button className="btn-primary">Update payment method</button>
+          </form>
+          <div className="border-t border-stone-100 pt-4 dark:border-white/10">
+            <form action={cancelMembershipAction}>
+              <ConfirmSubmit
+                subtle
+                label="Cancel membership"
+                note="Your membership stops renewing and nothing further is charged. Cancel?"
+                yesLabel="Yes, cancel my membership"
+              />
+            </form>
+          </div>
+        </div>
+        <p className="text-center text-xs text-stone-500 dark:text-stone-400">
+          Questions?{" "}
+          <Link href="/account/help" className="hover:underline">
+            Visit help
+          </Link>
+          .
+        </p>
       </div>
     );
   }

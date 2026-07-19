@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { cache } from "react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { JOB_CATEGORIES, labelFor, iconFor } from "@/lib/constants";
+import { JOB_CATEGORIES, labelFor } from "@/lib/constants";
+import CategoryIcon from "@/components/CategoryIcon";
+import Logo from "@/components/Logo";
 
 // Public, shareable business page for a pro: /p/<contractor_id> or, once
 // migration 0043 lands, /p/<slug>. No account needed. Data comes from the
@@ -198,10 +200,7 @@ function NotReadyCard() {
       <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-white/10 dark:bg-stone-800">
         <div className="h-20 bg-gradient-to-br from-hearth-100 via-hearth-50 to-stone-100 dark:from-hearth-900/40 dark:via-stone-800 dark:to-stone-800" />
         <div className="px-6 pb-8 pt-2">
-          <p className="text-3xl" aria-hidden>
-            🏡
-          </p>
-          <h1 className="mt-3 text-xl font-semibold text-stone-900 dark:text-stone-100">
+          <h1 className="text-xl font-semibold text-stone-900 dark:text-stone-100">
             This page is not ready yet
           </h1>
           <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
@@ -404,7 +403,12 @@ export default async function PublicProPage({
                   key={c}
                   className="rounded-full border border-stone-200 bg-stone-50 px-2.5 py-0.5 text-xs font-medium text-stone-600 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300"
                 >
-                  {iconFor(JOB_CATEGORIES, c)} {labelFor(JOB_CATEGORIES, c)}
+                  <CategoryIcon
+                    list={JOB_CATEGORIES}
+                    value={c}
+                    className="mr-1 inline-block h-3.5 w-3.5 align-[-2px]"
+                  />
+                  {labelFor(JOB_CATEGORIES, c)}
                 </span>
               ))}
             </div>
@@ -471,10 +475,13 @@ export default async function PublicProPage({
                         {p.title}
                       </p>
                       {(p.category || p.months) && (
-                        <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-                          {p.category
-                            ? `${iconFor(JOB_CATEGORIES, p.category)} ${labelFor(JOB_CATEGORIES, p.category)}`
-                            : ""}
+                        <p className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-stone-500 dark:text-stone-400">
+                          {p.category && (
+                            <span className="inline-flex items-center gap-1">
+                              <CategoryIcon list={JOB_CATEGORIES} value={p.category} className="h-3.5 w-3.5" />
+                              {labelFor(JOB_CATEGORIES, p.category)}
+                            </span>
+                          )}
                           {p.category && p.months ? " · " : ""}
                           {p.months ?? ""}
                         </p>
@@ -528,8 +535,11 @@ export default async function PublicProPage({
       </div>
 
       <p className="mt-6 text-center text-sm text-stone-500 dark:text-stone-400">
-        <a href="/pros" className="hover:text-hearth-700 hover:underline dark:hover:text-hearth-300">
-          <span aria-hidden>🏡</span> Powered by Hearth
+        <a
+          href="/pros"
+          className="inline-flex items-center gap-1.5 hover:text-hearth-700 hover:underline dark:hover:text-hearth-300"
+        >
+          <Logo className="h-4 w-4" /> Powered by Hearth
         </a>
       </p>
     </main>

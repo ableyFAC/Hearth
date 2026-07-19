@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Snowflake, Thermometer, AlertTriangle, type LucideIcon } from "lucide-react";
 
 type Alert = {
   kind: "freeze" | "heat" | "recall";
@@ -9,10 +10,16 @@ type Alert = {
   url?: string;
 };
 
-const ICON: Record<Alert["kind"], string> = {
-  freeze: "🥶",
-  heat: "🥵",
-  recall: "🚨",
+const ICON: Record<Alert["kind"], LucideIcon> = {
+  freeze: Snowflake,
+  heat: Thermometer,
+  recall: AlertTriangle,
+};
+
+const ICON_STYLE: Record<Alert["kind"], string> = {
+  freeze: "text-amber-600 dark:text-amber-400",
+  heat: "text-amber-600 dark:text-amber-400",
+  recall: "text-red-600 dark:text-red-400",
 };
 
 // Proactive, time- and home-specific alerts (weather + safety recalls) fetched
@@ -47,7 +54,9 @@ export default function HomeAlerts() {
   return (
     <section className="space-y-2">
       <ul className="space-y-2">
-        {shown.map((a, i) => (
+        {shown.map((a, i) => {
+          const Icon = ICON[a.kind];
+          return (
           <li
             key={i}
             className={`flex items-start gap-2 rounded-lg border p-3 text-sm ${
@@ -56,7 +65,7 @@ export default function HomeAlerts() {
                 : "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40"
             }`}
           >
-            <span className="shrink-0">{ICON[a.kind]}</span>
+            <Icon className={`h-5 w-5 shrink-0 ${ICON_STYLE[a.kind]}`} aria-hidden="true" />
             <div>
               <p className="font-medium text-stone-900 dark:text-stone-100">{a.title}</p>
               <p className="mt-0.5 text-stone-600 dark:text-stone-300">{a.detail}</p>
@@ -72,7 +81,8 @@ export default function HomeAlerts() {
               )}
             </div>
           </li>
-        ))}
+          );
+        })}
       </ul>
       {alerts.length > 3 && !expanded && (
         <button

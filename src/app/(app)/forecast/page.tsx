@@ -10,12 +10,12 @@ import {
 } from "@/lib/energy";
 import {
   labelFor,
-  iconFor,
   SYSTEM_TYPES,
   categoryForSystem,
   seasonForMonth,
 } from "@/lib/constants";
 import AskHearthPlanButton from "./AskHearthPlanButton";
+import CategoryIcon from "@/components/CategoryIcon";
 
 function money(n: number): string {
   return `$${Math.round(n).toLocaleString()}`;
@@ -40,6 +40,12 @@ export default async function ForecastPage() {
   // Same "open issues" query the Home page runs, so a resolved issue drops
   // out here on the very next load too - no separate flag to keep in sync.
   const [{ data: systems }, { data: issues }] = await Promise.all([
+    // home_systems: kept as select(*) on purpose - see the matching comment
+    // in dashboard/page.tsx. filter_size/filter_interval_months (migration
+    // 0042) aren't in the generated Database type, so Supabase's typed client
+    // rejects an explicit select string naming them (compile error), and
+    // every other column here is genuinely read downstream, so trimming
+    // would save zero bytes anyway.
     supabase
       .from("home_systems")
       .select("*")
@@ -47,7 +53,10 @@ export default async function ForecastPage() {
       .order("created_at", { ascending: true }),
     supabase
       .from("issues")
-      .select("*")
+      // buildForecast's openIssues param is OpenIssueLite (Pick<Issue, "id" |
+      // "system_id" | "category" | "severity" | "description">) - exactly
+      // this column list, so no cast needed on the call below.
+      .select("id, system_id, category, severity, description")
       .eq("property_id", property.id)
       .eq("status", "open")
       .order("created_at", { ascending: false }),
@@ -189,7 +198,7 @@ export default async function ForecastPage() {
                   >
                     <div className="flex items-start gap-2">
                       <span className="icon-chip">
-                        {iconFor(SYSTEM_TYPES, item.system_type)}
+                        <CategoryIcon list={SYSTEM_TYPES} value={item.system_type} />
                       </span>
                       <div>
                         <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
@@ -316,7 +325,7 @@ export default async function ForecastPage() {
                 >
                   <div className="flex items-center gap-3">
                     <span className="icon-chip">
-                      {iconFor(SYSTEM_TYPES, item.system_type)}
+                      <CategoryIcon list={SYSTEM_TYPES} value={item.system_type} />
                     </span>
                     <div>
                       <p className="text-sm font-medium text-stone-900 dark:text-stone-100">

@@ -5,7 +5,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { stripe } from "@/lib/stripe";
 import { getUser } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 import { getSubscription, getProSubscription } from "@/lib/subscription";
+import { billingTermsText } from "@/lib/billingTerms";
+import { PLUS_PLAN } from "@/lib/constants";
 import { setFlash } from "@/lib/flash";
 
 const siteUrl = () =>
@@ -18,7 +21,17 @@ const siteUrl = () =>
 export async function startPlusCheckoutAction(formData: FormData) {
   const plan = (formData.get("plan") as string) === "yearly" ? "yearly" : "monthly";
 
-  const user = await getUser();
+  // Deliberately NOT src/lib/auth.ts's getUser(): that helper trusts
+  // getSession(), which reads the user id straight off the (unverified)
+  // cookie. user.id below is written into the Stripe session's
+  // metadata.user_id, which the webhook trusts via the admin client to
+  // attribute the resulting subscription, so a cookie-edited id would let an
+  // attacker misattribute a subscription to a victim. supabase.auth.getUser()
+  // re-checks the id against Supabase's auth server.
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) redirect("/signin");
 
   const priceId =
@@ -32,7 +45,9 @@ export async function startPlusCheckoutAction(formData: FormData) {
         quantity: 1,
         price_data: {
           currency: "usd",
-          unit_amount: plan === "yearly" ? 3999 : 499,
+          unit_amount: Math.round(
+            (plan === "yearly" ? PLUS_PLAN.yearly : PLUS_PLAN.monthly) * 100
+          ),
           recurring: { interval: plan === "yearly" ? ("year" as const) : ("month" as const) },
           product_data: { name: "Hearth Plus" },
         },
@@ -84,16 +99,37 @@ export async function startPlusCheckoutAction(formData: FormData) {
   // 30-day trial). Yearly is already discounted, so no trial there.
   const freeTrial = plan === "monthly" && !existing;
 
+  // Consent record. California's Automatic Renewal Law requires keeping proof
+  // of what the subscriber agreed to (Bus. & Prof. Code 17602(b)(2): at least
+  // three years, or one year after termination, whichever is longer). Stripe
+  // retains session metadata for the life of the account, so writing the
+  // exact disclosure text the buyer saw - built from the same billingTerms
+  // source the pre-checkout block renders - makes the record retrievable
+  // without a new table. `introEligible` here is the SAME signal that decides
+  // the trial two lines up, so the stored terms always match what was billed.
+  // Metadata values cap at 500 characters; the slice keeps a long disclosure
+  // from failing the whole checkout.
+  const consentTerms = billingTermsText(plan, freeTrial).slice(0, 500);
+
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
     line_items: [lineItem],
-    subscription_data: freeTrial ? { trial_period_days: 30 } : undefined,
+    // The step-up flag mirrors the Pro side so the renewal-reminders cron has
+    // one signal to read for both memberships. Plus's free month is a Stripe
+    // trial, which stays visible on the subscription, but the flag costs
+    // nothing and keeps the two flows from diverging.
+    subscription_data: {
+      ...(freeTrial ? { trial_period_days: PLUS_PLAN.trialDays } : {}),
+      metadata: { intro_step_up: freeTrial ? "true" : "false" },
+    },
     customer: customerId ?? undefined,
     customer_email: customerId ? undefined : user.email ?? undefined,
     metadata: {
       type: "plus_subscription",
       user_id: user.id,
       plan,
+      consent_terms: consentTerms,
+      consent_at: new Date().toISOString(),
     },
     success_url: `${siteUrl()}/plus?welcome=1`,
     cancel_url: `${siteUrl()}/plus`,

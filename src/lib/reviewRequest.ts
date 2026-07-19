@@ -53,10 +53,11 @@ export async function requestReviewForWonLead(input: {
     if (existing) return;
 
     // Contact details so the email/SMS channels fire too once their provider
-    // env vars are set (they stay dormant until then).
+    // env vars are set (they stay dormant until then). sms_consent gates the
+    // SMS channel specifically (TCPA - see src/lib/notify.ts).
     const { data: owner } = await admin
       .from("users")
-      .select("email, phone")
+      .select("email, phone, sms_consent")
       .eq("id", ownerId)
       .maybeSingle();
 
@@ -69,6 +70,7 @@ export async function requestReviewForWonLead(input: {
       url,
       email: owner?.email ?? null,
       phone: owner?.phone ?? null,
+      smsConsent: owner?.sms_consent === true,
     });
   } catch (err) {
     console.error(

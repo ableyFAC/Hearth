@@ -72,7 +72,7 @@ export default function SystemCaptureCard({
   const [saving, startSave] = useTransition();
 
   const name = labelFor(SYSTEM_TYPES, system.system_type);
-  const icon = iconFor(SYSTEM_TYPES, system.system_type);
+  const Icon = iconFor(SYSTEM_TYPES, system.system_type);
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const input = e.target;
@@ -160,7 +160,7 @@ export default function SystemCaptureCard({
     return (
       <li className="card space-y-1 border-green-200 bg-green-50/60 dark:border-green-900 dark:bg-green-950/30">
         <p className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
-          <span>{icon}</span> {name}
+          {Icon && <Icon className="h-4 w-4" aria-hidden="true" />} {name}
           <span className="chip bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-200">✓ Confirmed</span>
         </p>
         <p className="text-sm text-green-800 dark:text-green-200">
@@ -173,7 +173,7 @@ export default function SystemCaptureCard({
   return (
     <li className="card space-y-3">
       <p className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
-        <span>{icon}</span> {name}
+        {Icon && <Icon className="h-4 w-4" aria-hidden="true" />} {name}
         <span className="chip bg-stone-100 text-stone-500 dark:bg-stone-700 dark:text-stone-400">Estimated</span>
       </p>
 

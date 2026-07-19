@@ -3,11 +3,11 @@
 import { useMemo, useState } from "react";
 import LearnGuide from "./LearnGuide";
 import { requestTopicAction } from "./actions";
+import { SYSTEM_TYPES } from "@/lib/constants";
 
 export type GuideData = {
   systemType: string;
   label: string;
-  icon: string;
   category: string;
   summary: string;
   lifespan: number | string;
@@ -98,7 +98,7 @@ export default function LearnGuides({ guides }: { guides: GuideData[] }) {
               key={g.systemType}
               systemType={g.systemType}
               label={g.label}
-              icon={g.icon}
+              icon={SYSTEM_TYPES.find((t) => t.value === g.systemType)?.icon ?? null}
               summary={g.summary}
               lifespan={g.lifespan}
               statusLabel={g.statusLabel}

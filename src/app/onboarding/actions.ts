@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { ACTIVE_HOME_COOKIE, getProperties } from "@/lib/property";
 import { lookupParcel, type ParcelFacts } from "@/lib/parcel";
 import { DEFAULT_LIFESPANS } from "@/lib/health";
@@ -11,6 +12,13 @@ import { hasPlus } from "@/lib/subscription";
 import { setFlash } from "@/lib/flash";
 import { safeNextPath } from "@/lib/safeNext";
 import { isMissingSchemaError } from "@/lib/dbErrors";
+import { isOrangeCountyZip } from "@/lib/serviceArea";
+
+// The one message shown by every OC-only gate (this file's two checks, plus
+// the fast client-side copy in OnboardingForm.tsx) - kept as a single
+// constant so the wording can never drift between them.
+const OC_ONLY_MESSAGE =
+  "Hearth is Orange County only right now. We added you to the waitlist and will email you the moment we expand to your area.";
 
 // Systems virtually every home has, auto-added so the owner doesn't start from
 // a blank inventory. Install years are ESTIMATED from the build year; real
@@ -39,12 +47,40 @@ export async function lookupParcelAction(
   street: string,
   zip: string
 ): Promise<ParcelFacts> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Please sign in to look up your address.");
+
   if (street.trim().length < MIN_ADDRESS_LENGTH) {
     throw new Error("Enter your home's street address to continue.");
   }
   if (!/^\d{5}(-\d{4})?$/.test(zip.trim())) {
     throw new Error("Enter a valid 5-digit ZIP code.");
   }
+  // Launch-restriction gate: checked before the rate limiter/RentCast call
+  // below so an out-of-area address never spends a billed RentCast lookup.
+  // No waitlist insert here - claimPropertyAction (the step that actually
+  // commits the user to an address) is where that happens.
+  if (!isOrangeCountyZip(zip.trim())) {
+    throw new Error(OC_ONLY_MESSAGE);
+  }
+
+  // Each lookup can make up to 2 billed RentCast calls, so gate abuse per user
+  // with a fixed-window limiter (migration 0068). A DB hiccup here fails open:
+  // onboarding must never break on the rate limiter, so only an explicit
+  // `allowed === false` blocks.
+  const admin = createAdminClient();
+  const { data: allowed } = await admin.rpc("rate_limit_hit", {
+    p_bucket: `parcel:${user.id}`,
+    p_limit: 10,
+    p_window_seconds: 3600,
+  });
+  if (allowed === false) {
+    throw new Error("Too many address lookups. Please try again in a bit.");
+  }
+
   return lookupParcel(street.trim(), zip.trim());
 }
 
@@ -79,6 +115,24 @@ export async function claimPropertyAction(formData: FormData) {
   const addressLine1 = ((formData.get("address_line1") as string) ?? "").trim();
   if (addressLine1.length < MIN_ADDRESS_LENGTH) {
     throw new Error("Enter your home's address before claiming it.");
+  }
+
+  // Launch-restriction gate: the authoritative one, since this is the step
+  // that actually commits the address to a claimed home. Best-effort log the
+  // lead to the waitlist (migration 0074) before rejecting - a failed insert
+  // (e.g. live DB hasn't run 0074 yet) must never block the message itself
+  // from being shown, so it's swallowed rather than surfaced.
+  const claimZip = ((formData.get("zip") as string) ?? "").trim().slice(0, 5);
+  if (!isOrangeCountyZip(claimZip)) {
+    try {
+      const admin = createAdminClient();
+      await (admin as any)
+        .from("market_waitlist")
+        .insert({ role: "homeowner", zip: claimZip });
+    } catch {
+      // Best-effort only - see comment above.
+    }
+    throw new Error(OC_ONLY_MESSAGE);
   }
 
   const num = (key: string) => {

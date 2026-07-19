@@ -12,9 +12,9 @@ import {
   TIMING_OPTIONS,
   BUDGET_RANGES,
   labelFor,
-  iconFor,
   COLD_START_FREE_POSTING,
 } from "@/lib/constants";
+import CategoryIcon from "@/components/CategoryIcon";
 import { hasPlus } from "@/lib/subscription";
 import {
   postJobAction,
@@ -76,7 +76,7 @@ export default async function ContractorsPage({
   const { data: leadsData } = await supabase
     .from("contractor_leads")
     .select(
-      "*, contractors(name, rating, review_count, service_area, license_number, contact_phone, contact_email)"
+      "id, category, issue_description, issue_id, contractor_id, status, timing, created_at, contractors(name, rating, review_count, service_area, license_number, contact_phone, contact_email)"
     )
     .eq("property_id", property.id)
     .order("created_at", { ascending: false });
@@ -144,7 +144,9 @@ export default async function ContractorsPage({
   if (leadIds.length) {
     const { data: apps } = await (supabase as any)
       .from("lead_applications")
-      .select("*, contractors(name, rating, review_count, service_area, license_number)")
+      .select(
+        "id, lead_id, contractor_id, message, created_at, contractors(name, rating, review_count, service_area, license_number)"
+      )
       .in("lead_id", leadIds)
       .order("created_at", { ascending: true });
     for (const a of (apps ?? []) as any[]) {
@@ -257,7 +259,7 @@ export default async function ContractorsPage({
           fadeMs={4500}
           className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200"
         >
-          ✅ Job posted. Matching pros can now apply, and we&apos;ll notify you
+          Job posted. Matching pros can now apply, and we&apos;ll notify you
           the moment one does. Honest note: Hearth is still new in some areas,
           so if applications are slow it&apos;s our pro coverage catching up,
           not a problem with your post.
@@ -280,7 +282,11 @@ export default async function ContractorsPage({
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <span className="font-medium text-stone-900 dark:text-stone-100">
-                        {iconFor(JOB_CATEGORIES, l.category)}{" "}
+                        <CategoryIcon
+                          list={JOB_CATEGORIES}
+                          value={l.category}
+                          className="mr-1 inline-block h-4 w-4 align-[-3px]"
+                        />
                         {labelFor(JOB_CATEGORIES, l.category)}
                       </span>
                       {l.issue_description && (

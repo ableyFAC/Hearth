@@ -39,8 +39,7 @@ export default async function OnboardingPage({
       return (
         <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center px-6 py-12">
           <div className="mb-6 text-center">
-            <div className="text-3xl">🏡</div>
-            <h1 className="mt-2 text-2xl font-semibold text-stone-900 dark:text-stone-100">
+            <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
               Add another home
             </h1>
           </div>
@@ -70,8 +69,7 @@ export default async function OnboardingPage({
   return (
     <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center px-6 py-12">
       <div className="mb-6 text-center">
-        <div className="text-3xl">🏡</div>
-        <h1 className="mt-2 text-2xl font-semibold text-stone-900 dark:text-stone-100">
+        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
           {isFirst ? "Let's set up your home" : "Add another home"}
         </h1>
         {!isFirst && (

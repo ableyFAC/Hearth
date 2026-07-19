@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { startProCheckoutAction } from "./actions";
+import AutoRenewalTerms from "@/components/AutoRenewalTerms";
 import { PRO_PLAN } from "@/lib/constants";
 
 const PLANS = {
@@ -93,15 +94,25 @@ export default function ProPlanToggle() {
         </div>
       )}
 
-      <form action={startProCheckoutAction} className="space-y-2">
+      {/* The recurring terms sit INSIDE the checkout form, immediately above
+          the button that starts the charge, so the disclosure and the act of
+          consent are in visual proximity (see AutoRenewalTerms). This toggle
+          always offers the intro month on monthly, matching the coupon
+          startProCheckoutAction applies; yearly carries no intro discount. */}
+      <form action={startProCheckoutAction} className="space-y-3">
         <input type="hidden" name="plan" value={plan} />
+        <AutoRenewalTerms
+          plan={plan === "monthly" ? "pro_monthly" : "pro_yearly"}
+          introEligible={plan === "monthly"}
+        />
         <button className="btn-primary w-full">
           {plan === "monthly"
             ? `Start for $${PRO_PLAN.introFirstMonth}`
             : "Get a year of Pro"}
         </button>
         <p className="text-xs text-stone-500 dark:text-stone-400">
-          Cancel anytime. Your lead access never changes either way.
+          By continuing you agree to the automatic renewal terms above. Cancel
+          anytime. Your lead access never changes either way.
         </p>
       </form>
     </div>

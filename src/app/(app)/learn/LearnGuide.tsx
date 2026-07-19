@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
+import type { LucideIcon } from "lucide-react";
 
 // An interactive maintenance-basics card: shows the owner's actual system status
 // inline, a short summary that's always visible, checkable upkeep steps
@@ -10,7 +11,7 @@ import { useEffect, useId, useState } from "react";
 export default function LearnGuide({
   systemType,
   label,
-  icon,
+  icon: Icon,
   summary,
   lifespan,
   statusLabel,
@@ -21,7 +22,7 @@ export default function LearnGuide({
 }: {
   systemType: string;
   label: string;
-  icon: string;
+  icon: LucideIcon | null;
   summary: string;
   lifespan: number | string;
   statusLabel?: string;
@@ -71,8 +72,9 @@ export default function LearnGuide({
         className="flex w-full items-center justify-between gap-2 text-left font-medium text-stone-900 dark:text-stone-100"
       >
         <span className="flex flex-wrap items-center gap-2">
-          <span>
-            {icon} {label}
+          <span className="inline-flex items-center gap-1">
+            {Icon && <Icon className="h-4 w-4" aria-hidden="true" />}
+            {label}
           </span>
           {statusLabel && (
             <span
@@ -147,7 +149,7 @@ export default function LearnGuide({
               tabIndex={open ? 0 : -1}
               className="btn-primary px-3 py-1.5 text-xs"
             >
-              ✨ Ask Hearth about this
+              Ask Hearth about this
             </button>
             <button
               type="button"

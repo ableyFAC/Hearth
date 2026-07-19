@@ -26,6 +26,27 @@ function fail(message: string): never {
   redirect("/pro/profile");
 }
 
+// True only if `raw` is a URL whose origin exactly matches Supabase Storage
+// AND whose path is a public object under `pathPrefix`. Parsed with new
+// URL() rather than a substring check: a substring check like
+// `url.includes("/pro-logos/<id>/projects/")` is defeated by e.g.
+// "https://evil.com/x?y=/pro-logos/<id>/projects/" (the substring is
+// present, but the host is attacker-controlled). Same helper and reasoning
+// as isOwnedStoragePath in pro/profile/actions.ts - kept as a local copy so
+// this file doesn't reach into a sibling server action module.
+function isOwnedStoragePath(raw: string, pathPrefix: string): boolean {
+  if (!raw) return false;
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base) return false;
+  try {
+    const url = new URL(raw);
+    const storageOrigin = new URL(base).origin;
+    return url.origin === storageOrigin && url.pathname.startsWith(pathPrefix);
+  } catch {
+    return false;
+  }
+}
+
 // Create a new project or update an existing one (hidden project_id decides).
 // Photos are saved as the full current set: the form submits every photo it
 // shows (kept + newly uploaded), so the rows are replaced wholesale.
@@ -66,13 +87,15 @@ export async function saveProjectAction(formData: FormData) {
   // Photos: paired hidden inputs in document order, so index i of photo_urls
   // matches index i of photo_befores. Only URLs inside THIS contractor's
   // projects/ folder of the pro-logos bucket are accepted, so rows can't be
-  // pointed at arbitrary images.
+  // pointed at arbitrary images (these URLs are rendered, not fetched
+  // server-side, but the same strict check is used for consistency and to
+  // rule out any future SSRF-shaped consumer).
   const urls = formData.getAll("photo_urls").map((v) => String(v));
   const befores = formData.getAll("photo_befores").map((v) => String(v));
-  const prefix = `/pro-logos/${contractor.id}/projects/`;
+  const prefix = `/storage/v1/object/public/pro-logos/${contractor.id}/projects/`;
   const photos = urls
     .map((url, i) => ({ url, is_before: befores[i] === "1" }))
-    .filter((p) => p.url.includes(prefix));
+    .filter((p) => isOwnedStoragePath(p.url, prefix));
   if (photos.length > MAX_PHOTOS_PER_PROJECT) {
     fail(`A project can have up to ${MAX_PHOTOS_PER_PROJECT} photos.`);
   }

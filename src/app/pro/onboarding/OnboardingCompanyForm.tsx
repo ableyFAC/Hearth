@@ -1,5 +1,6 @@
 "use client";
 
+import { Hammer } from "lucide-react";
 import { saveCompanyAction } from "../actions";
 import CategoryPicker from "../CategoryPicker";
 import FieldIcon from "../FieldIcon";
@@ -24,7 +25,9 @@ export default function OnboardingCompanyForm({
     >
       {/* White header, matching the contractor signup card */}
       <div className="px-6 pt-8 text-center">
-        <div className="text-3xl">🛠️</div>
+        <div className="flex justify-center">
+          <Hammer className="h-8 w-8 text-hearth-700 dark:text-hearth-400" aria-hidden="true" />
+        </div>
         <h1 className="mt-2 text-2xl font-semibold text-stone-900 dark:text-stone-100">
           Set up your company
         </h1>
@@ -131,6 +134,24 @@ export default function OnboardingCompanyForm({
                 </div>
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                   Your job board only shows homeowner jobs in this state.
+                </p>
+              </div>
+
+              <div>
+                <label className="flex items-start gap-2 text-sm text-stone-700 dark:text-stone-300">
+                  <input
+                    type="checkbox"
+                    name="serves_orange_county"
+                    value="true"
+                    required
+                    className="mt-0.5 h-4 w-4 rounded border-stone-300 text-hearth-600 focus:ring-hearth-500 dark:border-white/20"
+                  />
+                  <span>
+                    I serve homes in Orange County, California.
+                  </span>
+                </label>
+                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                  Hearth is currently matching pros in Orange County, CA only.
                 </p>
               </div>
 

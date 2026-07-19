@@ -15,7 +15,6 @@ import {
   REMODEL_PROJECTS,
   categoryForSystem,
   labelFor,
-  iconFor,
   SYSTEM_TYPES,
   ISSUE_CATEGORIES,
   SEASONAL_TASKS,
@@ -31,11 +30,21 @@ import ChecklistProvider from "@/components/ChecklistProvider";
 import ReminderItem from "./ReminderItem";
 import WalkthroughNudge from "./WalkthroughNudge";
 import HomeAlerts from "@/components/HomeAlerts";
+import CategoryIcon from "@/components/CategoryIcon";
+import {
+  Home,
+  TrendingUp,
+  Search,
+  ClipboardList,
+  FileText,
+  CalendarDays,
+} from "lucide-react";
 import { estimateHomeValue, calculateEquity } from "@/lib/homeValue";
 import {
   estimateSeasonalEnergyCost,
   estimateUpgradeSavings,
 } from "@/lib/energy";
+import type { Issue } from "@/lib/database.types";
 
 export default async function HomePage({
   searchParams,
@@ -57,6 +66,15 @@ export default async function HomePage({
     { data: jobs },
     { data: docs },
   ] = await Promise.all([
+    // home_systems: kept as select(*) on purpose. SystemRow's edit form
+    // reads filter_size/filter_interval_months (migration 0042 columns that
+    // were never added to database.types.ts), and Supabase's typed client
+    // rejects any explicit select string that names a column absent from the
+    // generated Database type (compile error), so those two columns cannot
+    // be spelled out without regenerating types. Every other home_systems
+    // column here IS actually read downstream (SystemRow/SystemForm/
+    // health.ts), so an explicit list would be zero-byte-savings anyway -
+    // select(*) is both correct and no slower.
     supabase
       .from("home_systems")
       .select("*")
@@ -64,13 +82,21 @@ export default async function HomePage({
       .order("created_at", { ascending: true }),
     supabase
       .from("issues")
-      .select("*")
+      // Only what scoreBreakdown/openIssueFor/the briefing loop below read
+      // (severity, category, description) plus the ids needed to match a
+      // system - drops property_id/status/converted_to_lead/created_at, which
+      // nothing on this page touches (status is already pinned to "open" by
+      // the filter above).
+      .select("id, system_id, category, severity, description")
       .eq("property_id", property.id)
       .eq("status", "open")
       .order("created_at", { ascending: false }),
     supabase
       .from("maintenance_tasks")
-      .select("*")
+      // Only what the reminders list/grouping/ReminderItem read - drops
+      // property_id, system_id, recurrence, reminded_upcoming_at,
+      // reminded_overdue_at, none of which this page uses.
+      .select("id, title, due_date, status, completed_at, created_at")
       .eq("property_id", property.id)
       .in("status", ["open", "done"])
       .order("due_date", { ascending: true }),
@@ -115,7 +141,13 @@ export default async function HomePage({
   // Systems whose details are still an onboarding estimate (migration 0056:
   // confirmed_at null), powering the "walk your home" entry points below.
   const unconfirmedCount = sys.filter((s) => !s.confirmed_at).length;
-  const { score, lines: scoreLines } = scoreBreakdown(sys, openIssues);
+  // scoreBreakdown's declared param is the full Issue[] shape (health.ts, out
+  // of lane), but it only ever reads .severity/.category - both present in
+  // the trimmed select above. Safe cast, no behavior change.
+  const { score, lines: scoreLines } = scoreBreakdown(
+    sys,
+    openIssues as unknown as Issue[]
+  );
   const band = scoreBand(score);
   // More than half the systems are still onboarding estimates: label the
   // score "Estimated" and soften the band line, so a guess never reads as a
@@ -180,7 +212,7 @@ export default async function HomePage({
   // the same way the systems list is - open issues first (urgent on top), then
   // systems past/near their life, then aging ones, with a seasonal nudge to
   // round it out. Each item carries a prefilled action so it's one tap to act.
-  type Brief = { text: string; href: string | null; cta: string };
+  type Brief = { text: string; href: string | null; cta: string; urgent?: boolean };
   const briefing: Brief[] = [];
   const seenCat = new Set<string>();
 
@@ -198,14 +230,13 @@ export default async function HomePage({
       `Need help with a ${name} issue.` +
       (i.description ? ` ${i.description}` : "");
     briefing.push({
-      text:
-        (i.severity === "urgent" ? "⚠️ Urgent. " : "") +
-        `Your ${name.toLowerCase()} issue needs attention.`,
+      text: `Your ${name.toLowerCase()} issue needs attention.`,
       href:
         `/contractors?category=${i.category}` +
         `&desc=${encodeURIComponent(desc)}` +
         (i.severity === "urgent" ? "&timing=asap" : ""),
       cta: "Find a pro",
+      urgent: i.severity === "urgent",
     });
     seenCat.add(i.category);
   }
@@ -251,7 +282,7 @@ export default async function HomePage({
   // rather than repeating one of its tasks verbatim in the briefing.
   if (briefing.length === 0) {
     briefing.push({
-      text: "Nothing urgent right now. Knock out this month's seasonal tasks below. ✅",
+      text: "Nothing urgent right now. Knock out this month's seasonal tasks below.",
       href: null,
       cta: "",
     });
@@ -427,7 +458,7 @@ export default async function HomePage({
             {sys.length > 0 ? (
               <>
                 <p className="font-medium text-stone-900 dark:text-stone-100">
-                  🎉 Your home is claimed.
+                  Your home is claimed.
                 </p>
                 <p className="mt-1 text-sm text-hearth-800 dark:text-hearth-200">
                   We started {sys.length} system
@@ -440,7 +471,11 @@ export default async function HomePage({
                       key={s.id}
                       className="chip border border-hearth-200 bg-white text-stone-700 dark:border-hearth-800 dark:bg-stone-800 dark:text-stone-300"
                     >
-                      {iconFor(SYSTEM_TYPES, s.system_type)}{" "}
+                      <CategoryIcon
+                        list={SYSTEM_TYPES}
+                        value={s.system_type}
+                        className="mr-1 inline-block h-3.5 w-3.5 align-[-2px]"
+                      />
                       {labelFor(SYSTEM_TYPES, s.system_type)}
                     </li>
                   ))}
@@ -454,7 +489,7 @@ export default async function HomePage({
               </>
             ) : (
               <p className="text-sm text-hearth-800 dark:text-hearth-200">
-                🎉 Your home is claimed. Add your systems below. It&apos;s what
+                Your home is claimed. Add your systems below. It&apos;s what
                 powers your maintenance reminders and your Home Health Score.
               </p>
             )}
@@ -465,7 +500,7 @@ export default async function HomePage({
       {/* Property header */}
       <section>
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
-          🏡 {property.address_line1}
+          {property.address_line1}
           {property.city ? `, ${property.city}` : ""}
         </h1>
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
@@ -517,7 +552,7 @@ export default async function HomePage({
                 </li>
               ))}
               {scoreLines.length === 0 && (
-                <li className="opacity-80">No deductions. Everything looks healthy. 🎉</li>
+                <li className="opacity-80">No deductions. Everything looks healthy.</li>
               )}
             </ul>
             {unconfirmedCount > 0 && (
@@ -675,12 +710,16 @@ export default async function HomePage({
         <div className="card space-y-3">
           <div className="rounded-lg bg-hearth-50 p-3 dark:bg-hearth-900/30">
             <p className="text-xs font-semibold uppercase tracking-wide text-hearth-700 dark:text-hearth-300">
-              ✨ Hearth&apos;s briefing
+              Hearth&apos;s briefing
             </p>
             <ul className="mt-1.5 space-y-1.5">
               {briefing.map((b, i) => (
                 <li key={i} className="text-sm text-stone-900 dark:text-stone-100">
-                  <span className="text-hearth-700 dark:text-hearth-300">•</span> {b.text}
+                  <span className="text-hearth-700 dark:text-hearth-300">•</span>{" "}
+                  {b.urgent && (
+                    <span className="chip-danger mr-1 py-0 align-middle">Urgent</span>
+                  )}
+                  {b.text}
                   {b.href && (
                     <Link
                       href={b.href}
@@ -723,7 +762,7 @@ export default async function HomePage({
             {remindersTotal > 0 && remindersDone === remindersTotal && (
               <div className="chip-ok mt-3 flex flex-col items-start gap-2 rounded-lg p-3 motion-safe:animate-fade-slide-up sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm">
-                  🎉 All caught up. Your home thanks you.
+                  All caught up. Your home thanks you.
                 </p>
                 {plus ? (
                   <form action={generateMaintenancePlanAction}>
@@ -835,7 +874,11 @@ export default async function HomePage({
                     >
                       <span className="flex min-w-0 items-center gap-2 text-sm text-stone-800 dark:text-stone-200">
                         <span>
-                          {w.system_type ? iconFor(SYSTEM_TYPES, w.system_type) : "📄"}
+                          {w.system_type ? (
+                            <CategoryIcon list={SYSTEM_TYPES} value={w.system_type} className="h-4 w-4" />
+                          ) : (
+                            <FileText className="h-4 w-4" aria-hidden="true" />
+                          )}
                         </span>
                         <span className="truncate">{w.title ?? "Home document"}</span>
                       </span>
@@ -870,7 +913,7 @@ export default async function HomePage({
         <div className="card flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <span className="icon-chip text-xl">
-              🗓️
+              <CalendarDays className="h-5 w-5" aria-hidden="true" />
             </span>
             <div>
               <h3 className="font-medium text-stone-900 dark:text-stone-100">
@@ -917,19 +960,19 @@ export default async function HomePage({
           {[
             {
               href: plus ? "/forecast" : "/plus?reason=forecast",
-              icon: "📈",
+              icon: TrendingUp,
               title: "Cost forecast",
               desc: "See what will need replacing and the amount to set aside each month.",
             },
             {
               href: plus ? "/quote-check" : "/plus?reason=quote",
-              icon: "🔍",
+              icon: Search,
               title: "Quote analyzer",
               desc: "Snap a contractor's quote and check whether the price is fair.",
             },
             {
               href: plus ? "/home-report" : "/plus?reason=report",
-              icon: "📋",
+              icon: ClipboardList,
               title: "Home report",
               desc: "A shareable record of your home for insurance and resale.",
             },
@@ -939,7 +982,9 @@ export default async function HomePage({
               href={t.href}
               className="card-link"
             >
-              <p className="icon-chip">{t.icon}</p>
+              <p className="icon-chip">
+                <t.icon className="h-5 w-5" aria-hidden="true" />
+              </p>
               <p className="mt-1 font-medium text-stone-900 dark:text-stone-100">
                 {t.title}
                 {!plus && (
@@ -987,7 +1032,9 @@ export default async function HomePage({
         ) : (
           <div className="rounded-xl border border-dashed border-stone-300 p-6 text-center dark:border-stone-700">
             <div className="flex justify-center">
-              <span className="icon-chip">🏠</span>
+              <span className="icon-chip">
+                <Home className="h-5 w-5" aria-hidden="true" />
+              </span>
             </div>
             <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
               No systems yet. Add your roof, HVAC, and water heater first. Those
@@ -1031,14 +1078,15 @@ export default async function HomePage({
               href={`/contractors?category=${p.category}`}
               className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-hearth-500 dark:hover:text-hearth-300"
             >
-              {p.icon} {p.label}
+              <p.icon className="mr-1 inline-block h-3.5 w-3.5 align-[-2px]" aria-hidden="true" />
+              {p.label}
             </Link>
           ))}
           <Link
             href="/contractors?category=other"
             className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-hearth-500 dark:hover:text-hearth-300"
           >
-            🔧 Other
+            Other
           </Link>
         </div>
       </section>

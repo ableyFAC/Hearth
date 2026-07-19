@@ -11,6 +11,15 @@ import type { Database } from "@/lib/database.types";
 //   RESEND_FROM    - a verified sender, e.g. "Hearth <hello@yourdomain.com>"
 // To activate SMS: create a Twilio account (twilio.com) and set
 //   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER
+//
+// TCPA gate: SMS is a strictly opt-in channel (statutory damages of $500-1500
+// PER TEXT for sending without consent, per user_id.sms_consent - migration
+// 0073). sendSms requires smsConsent === true in addition to the env vars and
+// a phone number; any other value (undefined, false, null) is treated as "no
+// consent on file" and the text is skipped. Callers must read sms_consent off
+// the users row themselves and pass it through - this module never queries
+// the DB for it, so a caller that forgets to pass it simply gets no SMS
+// rather than an accidental send.
 
 export type NotificationInput = {
   userId: string;
@@ -22,6 +31,9 @@ export type NotificationInput = {
   // provider env vars above are set.
   email?: string | null;
   phone?: string | null;
+  // Must be exactly `true` (the caller's users.sms_consent value) for the SMS
+  // channel to fire at all. See the TCPA gate note above.
+  smsConsent?: boolean | null;
 };
 
 // Returns true if the in-app notification was written. Email / SMS delivery
@@ -72,13 +84,17 @@ async function sendEmail(input: NotificationInput): Promise<void> {
   }
 }
 
-// SMS via the Twilio REST API. Dormant until the TWILIO_* env vars are set.
+// SMS via the Twilio REST API. Dormant until the TWILIO_* env vars are set -
+// and, separately, until the recipient has opted in (TCPA gate: see the note
+// atop this file). Both gates must pass; either alone is not enough.
 async function sendSms(input: NotificationInput): Promise<void> {
   const sid = process.env.TWILIO_ACCOUNT_SID;
   const token = process.env.TWILIO_AUTH_TOKEN;
   const from = process.env.TWILIO_FROM_NUMBER;
   if (!sid || !token || !from || !input.phone) return;
+  if (input.smsConsent !== true) return;
   try {
+    const body = input.body ? `${input.title} ${input.body}` : input.title;
     await fetch(
       `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
       {
@@ -92,7 +108,10 @@ async function sendSms(input: NotificationInput): Promise<void> {
         body: new URLSearchParams({
           To: input.phone,
           From: from,
-          Body: input.body ? `${input.title} ${input.body}` : input.title,
+          // "Reply STOP to opt out." is appended to every SMS (never the
+          // email body) so each text carries its own opt-out instruction,
+          // independent of whatever the inbound STOP webhook also does.
+          Body: `${body} Reply STOP to opt out.`,
         }),
       }
     );

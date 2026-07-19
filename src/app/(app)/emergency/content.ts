@@ -1,3 +1,4 @@
+import { Droplet, Wind, Snowflake, Zap, Toilet, ShowerHead } from "lucide-react";
 import type { PanicFlow, PrepKey } from "./PanicCard";
 
 // Six panic flows for the /emergency page. Short sentences, imperative, most
@@ -7,7 +8,7 @@ import type { PanicFlow, PrepKey } from "./PanicCard";
 export const FLOWS: PanicFlow[] = [
   {
     key: "burst_pipe",
-    emoji: "\u{1F4A7}",
+    icon: Droplet,
     title: "Burst pipe or water everywhere",
     subtitle: "Stop the water first, then deal with the mess.",
     category: "plumbing",
@@ -23,7 +24,7 @@ export const FLOWS: PanicFlow[] = [
   },
   {
     key: "gas_smell",
-    emoji: "\u{1F32C}️",
+    icon: Wind,
     title: "You smell gas",
     subtitle: "Leave first. Everything else can wait.",
     category: "plumbing",
@@ -39,7 +40,7 @@ export const FLOWS: PanicFlow[] = [
   },
   {
     key: "no_heat",
-    emoji: "\u{1F976}",
+    icon: Snowflake,
     title: "No heat in winter",
     subtitle: "Check the easy stuff first.",
     category: "hvac",
@@ -55,7 +56,7 @@ export const FLOWS: PanicFlow[] = [
   },
   {
     key: "power_out",
-    emoji: "⚡",
+    icon: Zap,
     title: "Power out or breaker keeps tripping",
     subtitle: "Check the panel before you assume the worst.",
     category: "electrical",
@@ -71,7 +72,7 @@ export const FLOWS: PanicFlow[] = [
   },
   {
     key: "sewage_backup",
-    emoji: "\u{1F6BD}",
+    icon: Toilet,
     title: "Sewage backup or overflowing toilet",
     subtitle: "Stop using water, then protect yourself.",
     category: "plumbing",
@@ -86,7 +87,7 @@ export const FLOWS: PanicFlow[] = [
   },
   {
     key: "water_heater",
-    emoji: "\u{1F6BF}",
+    icon: ShowerHead,
     title: "Water heater leaking or dead",
     subtitle: "Cut the water and the fuel, then deal with the puddle.",
     category: "plumbing",

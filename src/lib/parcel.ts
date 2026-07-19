@@ -2,14 +2,17 @@
 // records source so onboarding can skip re-typing what public records already
 // know. The wired source is RentCast (https://www.rentcast.io/api): public
 // tax-assessor and county-record data behind a simple JSON API with a free
-// tier (50 lookups/month), which fits launch scale - each lookup now makes up
-// to 2 calls (the property record and the AVM market value), so budget
-// accordingly. Enable it by setting RENTCAST_API_KEY in the environment;
+// tier (50 lookups/month), which fits launch scale - each lookup makes a
+// single call (the property record only). Enable it by setting
+// RENTCAST_API_KEY in the environment;
 // without a key, lookupParcel() never invents facts: it only echoes back the
 // street and ZIP the homeowner typed and leaves everything it doesn't
 // actually know (city, state, year built, sqft, beds/baths, lot size,
 // property type, and everything else below) null for them to fill in or
 // skip.
+
+import { createAdminClient } from "@/lib/supabase/admin";
+import type { Json } from "@/lib/database.types";
 
 export interface ParcelFacts {
   parcel_id: string | null;
@@ -47,32 +50,72 @@ export async function lookupParcel(
   street: string,
   zip: string
 ): Promise<ParcelFacts> {
+  // A successful RentCast lookup bills one call, so serve a fresh cached
+  // result (migration 0069) instead of re-billing the same address. The key
+  // normalizes whitespace/case on the street and takes the 5-digit ZIP so
+  // "123  Main St" / "123 main st" hit the same row. All cache I/O below is
+  // wrapped so any error degrades to "just call RentCast": the cache must
+  // never break onboarding. parcel.ts is server-only, so the admin client is
+  // safe here.
+  const cacheKey =
+    street.trim().replace(/\s+/g, " ").toLowerCase() + "|" + zip.trim().slice(0, 5);
+  const admin = createAdminClient();
+
+  try {
+    const { data: row } = await admin
+      .from("parcel_cache")
+      .select("facts, source, fetched_at")
+      .eq("cache_key", cacheKey)
+      .maybeSingle();
+    if (row) {
+      // Fresh = a real record inside 30 days, or a "nothing found" miss inside
+      // 1 day (so a newly-listed / recently-recorded parcel gets re-checked
+      // soon rather than staying blank for a month).
+      const ageMs = Date.now() - new Date(row.fetched_at).getTime();
+      const fresh =
+        (row.source === "rentcast" && ageMs < 30 * 24 * 60 * 60 * 1000) ||
+        (row.source === "none" && ageMs < 24 * 60 * 60 * 1000);
+      if (fresh) return row.facts as unknown as ParcelFacts;
+    }
+  } catch (err) {
+    console.error("Parcel cache read failed:", err);
+  }
+
+  const facts = await fetchParcelFacts(street, zip);
+
+  try {
+    // Cache the "none" result too: a miss is worth remembering for a day so a
+    // retype of the same unknown address doesn't re-bill RentCast.
+    await admin.from("parcel_cache").upsert(
+      {
+        cache_key: cacheKey,
+        facts: facts as unknown as Json,
+        source: facts.source,
+        fetched_at: new Date().toISOString(),
+      },
+      { onConflict: "cache_key" }
+    );
+  } catch (err) {
+    console.error("Parcel cache write failed:", err);
+  }
+
+  return facts;
+}
+
+// The actual RentCast lookup, unchanged from the original lookupParcel body.
+// Split out so lookupParcel can wrap it in the read-through cache above.
+async function fetchParcelFacts(
+  street: string,
+  zip: string
+): Promise<ParcelFacts> {
   const key = process.env.RENTCAST_API_KEY;
   if (key) {
     try {
-      const [record, avm] = await Promise.all([
-        fetchFromRentcast(street.trim(), zip.trim(), key),
-        fetchAvmValue(`${street.trim()}, ${zip.trim()}`, key),
-      ]);
-      if (record) {
-        return {
-          ...record,
-          market_value: avm.market_value,
-          market_value_low: avm.market_value_low,
-          market_value_high: avm.market_value_high,
-        };
-      }
-      // No property record, but the AVM call may still have succeeded:
-      // degrade gracefully by folding whatever it found into the blank
-      // facts rather than throwing the whole lookup away.
-      if (avm.market_value !== null) {
-        return {
-          ...blankFacts(street, zip),
-          market_value: avm.market_value,
-          market_value_low: avm.market_value_low,
-          market_value_high: avm.market_value_high,
-        };
-      }
+      // Single call: the property record only. The AVM market-value lookup
+      // was removed, so market_value fields stay null (home value can be
+      // entered manually later on the value page).
+      const record = await fetchFromRentcast(street.trim(), zip.trim(), key);
+      if (record) return record;
     } catch (err) {
       console.error("RentCast lookup failed:", err);
     }
@@ -296,47 +339,120 @@ async function fetchFromRentcast(
   }
 }
 
-// Fetches RentCast's automated market valuation from /v1/avm/value. Same
-// timeout/error-handling shape as fetchFromRentcast, but this one must NEVER
-// throw or return null - a miss just means all-null fields, since the caller
-// always folds this result into a ParcelFacts (either the record's or
-// blankFacts's) rather than branching on failure.
-async function fetchAvmValue(
-  address: string,
-  apiKey: string
-): Promise<{
+// The AVM market-value lookup (/v1/avm/value) was removed from onboarding so
+// it makes a single RentCast call for the property record only. market_value
+// fields stay null there; the /value page fetches the AVM lazily instead (see
+// lookupMarketValue below), only once per property and only for someone who
+// actually opens the page, rather than billing every signup.
+
+export interface MarketValueFacts {
   market_value: number | null;
   market_value_low: number | null;
   market_value_high: number | null;
-}> {
-  const blank = { market_value: null, market_value_low: null, market_value_high: null };
+}
+
+const BLANK_MARKET_VALUE: MarketValueFacts = {
+  market_value: null,
+  market_value_low: null,
+  market_value_high: null,
+};
+
+// Lazy AVM (estimated market value) lookup for the /value page. Mirrors
+// lookupParcel's read-through cache (same parcel_cache table, same 30-day
+// freshness for a real hit / 1-day freshness for a miss) so opening /value
+// repeatedly, or multiple household members on the same property, doesn't
+// re-bill RentCast. The cache key gets an "|avm" suffix so it never collides
+// with lookupParcel's property-record cache row for the same address.
+export async function lookupMarketValue(
+  street: string,
+  zip: string
+): Promise<MarketValueFacts> {
+  const cacheKey =
+    street.trim().replace(/\s+/g, " ").toLowerCase() +
+    "|" +
+    zip.trim().slice(0, 5) +
+    "|avm";
+  const admin = createAdminClient();
+
+  try {
+    const { data: row } = await admin
+      .from("parcel_cache")
+      .select("facts, source, fetched_at")
+      .eq("cache_key", cacheKey)
+      .maybeSingle();
+    if (row) {
+      const ageMs = Date.now() - new Date(row.fetched_at).getTime();
+      const fresh =
+        (row.source === "rentcast" && ageMs < 30 * 24 * 60 * 60 * 1000) ||
+        (row.source === "none" && ageMs < 24 * 60 * 60 * 1000);
+      if (fresh) return row.facts as unknown as MarketValueFacts;
+    }
+  } catch (err) {
+    console.error("Market value cache read failed:", err);
+  }
+
+  const facts = await fetchMarketValueFacts(street, zip);
+
+  try {
+    // Cache a miss too (source "none"), same reasoning as lookupParcel: a
+    // retype/reload of the same address within a day shouldn't re-bill.
+    await admin.from("parcel_cache").upsert(
+      {
+        cache_key: cacheKey,
+        facts: facts as unknown as Json,
+        source: facts.market_value != null ? "rentcast" : "none",
+        fetched_at: new Date().toISOString(),
+      },
+      { onConflict: "cache_key" }
+    );
+  } catch (err) {
+    console.error("Market value cache write failed:", err);
+  }
+
+  return facts;
+}
+
+// The actual RentCast AVM call. Never throws: no key, a non-ok response, a
+// timeout, or an unrecognized response shape all degrade to all-null so the
+// /value page just falls back to its existing purchase-price estimate.
+async function fetchMarketValueFacts(
+  street: string,
+  zip: string
+): Promise<MarketValueFacts> {
+  const key = process.env.RENTCAST_API_KEY;
+  if (!key) return BLANK_MARKET_VALUE;
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8_000);
   try {
+    const address = `${street}, ${zip}`;
     const url = `https://api.rentcast.io/v1/avm/value?address=${encodeURIComponent(address)}`;
     const res = await fetch(url, {
-      headers: { "X-Api-Key": apiKey, Accept: "application/json" },
+      headers: { "X-Api-Key": key, Accept: "application/json" },
       signal: controller.signal,
     });
     if (!res.ok) {
-      console.error(`RentCast returned HTTP ${res.status} for AVM value lookup`);
-      return blank;
+      console.error(`RentCast returned HTTP ${res.status} for AVM lookup`);
+      return BLANK_MARKET_VALUE;
     }
     const body: unknown = await res.json();
-    if (!body || typeof body !== "object") return blank;
-    const avm = body as {
+    if (!body || typeof body !== "object") return BLANK_MARKET_VALUE;
+    const rec = body as {
       price?: number;
       priceRangeLow?: number;
       priceRangeHigh?: number;
     };
+    if (typeof rec.price !== "number") return BLANK_MARKET_VALUE;
     return {
-      market_value: typeof avm.price === "number" ? avm.price : null,
-      market_value_low: typeof avm.priceRangeLow === "number" ? avm.priceRangeLow : null,
-      market_value_high: typeof avm.priceRangeHigh === "number" ? avm.priceRangeHigh : null,
+      market_value: rec.price,
+      market_value_low:
+        typeof rec.priceRangeLow === "number" ? rec.priceRangeLow : null,
+      market_value_high:
+        typeof rec.priceRangeHigh === "number" ? rec.priceRangeHigh : null,
     };
   } catch {
-    // AbortError (timeout), DNS/network failure: never block onboarding.
-    return blank;
+    // AbortError (timeout), DNS/network failure: degrade to null, never throw.
+    return BLANK_MARKET_VALUE;
   } finally {
     clearTimeout(timeout);
   }

@@ -84,13 +84,27 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/fountain-valley/") ||
     path === "/huntington-beach" ||
     path.startsWith("/huntington-beach/") ||
-    // Privacy policy + Terms of Service (src/app/privacy, src/app/terms):
-    // legally need to be readable by anyone, logged in or not, same reasoning
-    // as the guide and city pages above.
+    // Privacy policy + Terms of Service + DMCA policy (src/app/privacy,
+    // src/app/terms, src/app/dmca): legally need to be readable by anyone,
+    // logged in or not, same reasoning as the guide and city pages above. The
+    // DMCA page in particular is where a copyright owner with no Hearth
+    // account finds the designated agent, so it must never bounce to /signin.
     path === "/privacy" ||
     path.startsWith("/privacy/") ||
     path === "/terms" ||
     path.startsWith("/terms/") ||
+    // Contractor B2B terms (src/app/pro-terms): same reasoning as /terms
+    // above - linked from the contractor sign-up checkbox, which a signed-out
+    // visitor must be able to open before they have an account.
+    path === "/pro-terms" ||
+    path.startsWith("/pro-terms/") ||
+    // AI disclosure (src/app/ai-disclosure): same reasoning as privacy/terms.
+    // It is ALSO linked from the inline AI label inside the signed-in app
+    // (src/components/AiNotice.tsx), so it has to resolve either way.
+    path === "/ai-disclosure" ||
+    path.startsWith("/ai-disclosure/") ||
+    path === "/dmca" ||
+    path.startsWith("/dmca/") ||
     // SEO endpoints (src/app/sitemap.ts, robots.ts): crawlers have no
     // session, and a 307 to /signin here would hide the whole site from them.
     path === "/sitemap.xml" ||
@@ -117,7 +131,12 @@ export async function updateSession(request: NextRequest) {
     // Checkr webhook (0057): same reasoning as Stripe above - authenticates
     // via X-Checkr-Signature, not a user session, and a 307 here would read
     // as a failed delivery, so background check results would never land.
-    path.startsWith("/api/checkr/webhook");
+    path.startsWith("/api/checkr/webhook") ||
+    // Twilio inbound SMS webhook: authenticates via Twilio's request
+    // signature, not a user session, same reasoning as the Stripe/Checkr
+    // webhooks above - a 307 here would read as a failed delivery and drop
+    // inbound texts (e.g. SMS opt-out/STOP handling) silently.
+    path === "/api/twilio/inbound";
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

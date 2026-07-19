@@ -1,11 +1,47 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentContractor, getRole } from "@/lib/contractor";
-import { createClient } from "@/lib/supabase/server";
 import Logo from "@/components/Logo";
 import ProNav from "@/components/ProNav";
 import NewMessageNotifier from "@/components/NewMessageNotifier";
 import AskHearthDock from "@/components/AskHearthDock";
+import { getOpenJobsForMe } from "@/lib/greeting";
+
+// A warm one-liner for the pro copilot dock. If we can cheaply see how many
+// open leads match their trades, reference it; otherwise fall back to a
+// friendly generic. Wrapped so it can never throw and break the shell.
+// Rendered inside a Suspense boundary below so the open_jobs_for_me RPC never
+// blocks the rest of the shell from streaming - like the homeowner side's
+// proactive greeting, this only feeds the dock's opening line, and the dock
+// stays closed (so unread by the user) until clicked.
+async function ProAskHearthDock({ contractorName }: { contractorName: string }) {
+  let proGreeting = `Hi ${contractorName}. Ask me about winning leads, pricing a bid, your license badge, or growing your business.`;
+  try {
+    const openJobs = await getOpenJobsForMe();
+    const openCount = openJobs.length;
+    if (openCount > 0) {
+      proGreeting = `Hi ${contractorName}. There ${
+        openCount === 1 ? "is" : "are"
+      } ${openCount} open ${
+        openCount === 1 ? "lead" : "leads"
+      } matching your trades right now. Ask me how to win them, price a bid, or grow your business.`;
+    }
+  } catch {
+    /* keep the generic greeting */
+  }
+
+  return (
+    <AskHearthDock
+      endpoint="/api/pro-ask"
+      storageKeyBase="hearth_pro_ask_chat"
+      retentionKeyBase="hearth_pro_ask_retention"
+      headingTitle="Ask Hearth for Pros"
+      headingSubtitle="Your business copilot"
+      greeting={proGreeting}
+    />
+  );
+}
 
 // Pro shell. Auth is enforced by middleware; company-setup is enforced per-page
 // (so /pro/onboarding itself doesn't get caught in a redirect loop).
@@ -42,25 +78,6 @@ export default async function ProLayout({
     );
   }
 
-  // A warm one-liner for the pro copilot dock. If we can cheaply see how many
-  // open leads match their trades, reference it; otherwise fall back to a
-  // friendly generic. Wrapped so it can never throw and break the shell.
-  let proGreeting = `Hi ${contractor.name}. Ask me about winning leads, pricing a bid, your license badge, or growing your business.`;
-  try {
-    const supabase = createClient();
-    const { data: openJobs } = await (supabase as any).rpc("open_jobs_for_me");
-    const openCount = Array.isArray(openJobs) ? openJobs.length : 0;
-    if (openCount > 0) {
-      proGreeting = `Hi ${contractor.name}. There ${
-        openCount === 1 ? "is" : "are"
-      } ${openCount} open ${
-        openCount === 1 ? "lead" : "leads"
-      } matching your trades right now. Ask me how to win them, price a bid, or grow your business.`;
-    }
-  } catch {
-    /* keep the generic greeting */
-  }
-
   return (
     <div className="min-h-screen">
       <ProNav company={contractor.name} />
@@ -75,14 +92,9 @@ export default async function ProLayout({
           Help
         </Link>
       </footer>
-      <AskHearthDock
-        endpoint="/api/pro-ask"
-        storageKeyBase="hearth_pro_ask_chat"
-        retentionKeyBase="hearth_pro_ask_retention"
-        headingTitle="✨ Ask Hearth for Pros"
-        headingSubtitle="Your business copilot"
-        greeting={proGreeting}
-      />
+      <Suspense fallback={null}>
+        <ProAskHearthDock contractorName={contractor.name} />
+      </Suspense>
       <NewMessageNotifier role="contractor" />
     </div>
   );

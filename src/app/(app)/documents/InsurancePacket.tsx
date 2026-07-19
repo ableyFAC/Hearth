@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import AiNotice from "@/components/AiNotice";
 
 // The "give me a head start on shopping" button on the Home insurance card.
 // Plus members get a Gemini-built requote packet: a plain-language summary of
@@ -118,12 +119,7 @@ export default function InsurancePacket({ isPlus }: { isPlus: boolean }) {
               {loading ? "Building..." : "Build again"}
             </button>
           </div>
-          <p className="text-xs text-stone-500 dark:text-stone-400">
-            This is a starting point, not insurance advice, and requoting is
-            never guaranteed to save money. Read it closely, correct anything
-            that doesn&apos;t match your home, and add the details only you
-            have before you share it.
-          </p>
+          <AiNotice detail="It is a starting point, not insurance advice, and requoting is never guaranteed to save money: correct anything that doesn't match your home and add the details only you have before you share it." />
         </div>
       )}
     </div>

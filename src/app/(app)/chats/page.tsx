@@ -4,9 +4,10 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
-import { labelFor, iconFor, JOB_CATEGORIES } from "@/lib/constants";
+import { labelFor, JOB_CATEGORIES } from "@/lib/constants";
 import { extractQuote, formatUSDCents } from "@/lib/quotes";
 import LeadChat from "@/components/LeadChat";
+import CategoryIcon from "@/components/CategoryIcon";
 import MarkChatSeen from "@/components/MarkChatSeen";
 import MarkChatsSeen from "@/components/MarkChatsSeen";
 import AskHearth from "@/components/AskHearth";
@@ -76,9 +77,15 @@ export default async function HomeownerChatsPage({
 
   // The homeowner's conversations are jobs where they've PICKED a pro. Open
   // postings with no chosen pro yet aren't chats - there's no one to message.
+  //
+  // contractor_leads has grown wide (budget/CRM/invoicing/wallet columns from
+  // later migrations) but this page only ever reads id/category/
+  // contractor_id/created_at plus the joined contractor name - everything
+  // else (status, payout_amount, homeowner_*, issue_*, timing, paid, paid_at,
+  // budget_range, property_id, ...) is unused here.
   const { data: leads } = await supabase
     .from("contractor_leads")
-    .select("*, contractors(name)")
+    .select("id, category, contractor_id, created_at, contractors(name)")
     .eq("property_id", property.id)
     .not("contractor_id", "is", null)
     .order("created_at", { ascending: false });
@@ -96,11 +103,25 @@ export default async function HomeownerChatsPage({
   // never got one.
   const quoteByLead = new Map<string, number>();
   if (ids.length) {
+    // Previously unbounded: this pulled EVERY message ever sent across every
+    // one of the owner's leads just to read off the newest one per lead (plus
+    // the newest contractor price as a fallback below). A per-lead "give me
+    // just the newest row" query needs a DISTINCT ON / lateral-join view or
+    // RPC, which is out of lane for a page-level fix - see the note below.
+    // Ordered created_at desc + a generous cap bounds the worst case (a user
+    // with many long-running conversations) without truncating the realistic
+    // case (a handful of leads, each with well under a thousand messages).
+    // IDEAL FIX (cross-lane, needs a DB view/RPC): a
+    // `select distinct on (lead_id) ...` view, or an RPC that returns one row
+    // per lead_id ordered by created_at desc, so this is correct at any scale
+    // instead of "generous enough in practice."
+    const MESSAGES_SCAN_LIMIT = 2000;
     const { data: msgs } = await supabase
       .from("messages")
       .select("lead_id, body, created_at, sender_role")
       .in("lead_id", ids)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(MESSAGES_SCAN_LIMIT);
     for (const m of msgs ?? []) {
       if (!lastByLead.has(m.lead_id)) lastByLead.set(m.lead_id, m);
       // Messages are newest first, so the first contractor price we see per lead
@@ -122,12 +143,16 @@ export default async function HomeownerChatsPage({
     // Withdrawn quotes are excluded: the pro retracted that price, so it is
     // not their standing offer. Declined ones still count as the last price
     // the pro actually stated.
+    // Same unbounded-fan-out shape as the messages query above, but far lower
+    // volume in practice (one row per quote sent, not per chat message);
+    // bounded for the same reason and with the same ideal-fix note.
     const { data: structuredQuotes } = await supabase
       .from("lead_quotes")
       .select("lead_id, total_cents, created_at")
       .in("lead_id", ids)
       .neq("status", "withdrawn")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(MESSAGES_SCAN_LIMIT);
     const latestStructured = new Set<string>();
     for (const q of structuredQuotes ?? []) {
       if (latestStructured.has(q.lead_id)) continue;
@@ -179,7 +204,7 @@ export default async function HomeownerChatsPage({
   if (!askSelected && !selected && searchParams.lead) {
     const { data: crossHomeLead } = await supabase
       .from("contractor_leads")
-      .select("*, contractors(name)")
+      .select("id, category, contractor_id, created_at, contractors(name)")
       .eq("id", searchParams.lead)
       .not("contractor_id", "is", null)
       .maybeSingle();
@@ -274,7 +299,7 @@ export default async function HomeownerChatsPage({
               }`}
             >
               <span className="truncate font-medium text-stone-900 dark:text-stone-100">
-                ✨ Ask Hearth
+                Ask Hearth
               </span>
               <p className="truncate text-xs text-stone-500 dark:text-stone-400">
                 Your home assistant
@@ -314,7 +339,7 @@ export default async function HomeownerChatsPage({
                         </span>
                       ) : (
                         <span className="shrink-0 text-xs text-stone-500 dark:text-stone-400">
-                          {iconFor(JOB_CATEGORIES, l.category)}
+                          <CategoryIcon list={JOB_CATEGORIES} value={l.category} className="h-4 w-4" />
                         </span>
                       )}
                     </div>
@@ -326,7 +351,7 @@ export default async function HomeownerChatsPage({
                       {last
                         ? `${last.sender_role === "homeowner" ? "You: " : ""}${
                             last.body.startsWith("[img]")
-                              ? "📷 Photo"
+                              ? "Photo"
                               : last.body
                           }`
                         : labelFor(JOB_CATEGORIES, l.category)}

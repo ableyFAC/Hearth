@@ -3,7 +3,24 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import AskHearth from "@/components/AskHearth";
+import dynamic from "next/dynamic";
+import { Sparkles } from "lucide-react";
+
+// The AskHearth chat body (Markdown renderer, voice input, full conversation
+// logic) is heavy and was previously bundled into every page via this dock.
+// Loading it lazily keeps it out of the initial bundle; it's only fetched
+// once the dock is actually opened (or a pending question opens it), which is
+// exactly when it's needed. ssr:false is fine here: this is a client-only
+// floating widget with no content that needs to exist in the server-rendered
+// HTML, and the file is already "use client".
+const AskHearth = dynamic(() => import("@/components/AskHearth"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full items-center justify-center text-sm text-stone-500 dark:text-stone-400">
+      Loading…
+    </div>
+  ),
+});
 
 // A floating Ask Hearth widget pinned to the bottom-right. Always available; a
 // little tab that opens into the full, scrollable conversation.
@@ -12,7 +29,7 @@ export default function AskHearthDock({
   endpoint,
   storageKeyBase,
   retentionKeyBase,
-  headingTitle = "✨ Ask Hearth",
+  headingTitle = "Ask Hearth",
   headingSubtitle,
 }: {
   greeting?: string;
@@ -107,7 +124,7 @@ export default function AskHearthDock({
               type="button"
               onClick={close}
               title="Close"
-              className="leading-none hover:text-red-600 dark:hover:text-red-400"
+              className="-m-2 p-2 leading-none hover:text-red-600 dark:hover:text-red-400"
             >
               ✕
             </button>
@@ -133,7 +150,7 @@ export default function AskHearthDock({
           className="flex h-12 w-12 items-center justify-center rounded-full bg-hearth-600 text-lg font-semibold text-white shadow-pop hover:bg-hearth-700 sm:h-auto sm:w-auto sm:px-4 sm:py-3 sm:text-sm"
         >
           <span aria-hidden="true" className="sm:hidden">
-            ✨
+            <Sparkles className="h-5 w-5" />
           </span>
           <span className="sr-only sm:not-sr-only">{headingTitle}</span>
         </button>

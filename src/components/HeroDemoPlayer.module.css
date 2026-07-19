@@ -34,10 +34,10 @@
 .shell:fullscreen .device,
 .shell:-webkit-full-screen .device,
 .shellMax .device {
-  /* Width-driven, up to a generous desktop ceiling: on a 1920px-wide PC
-     screen this lands at 1800px (94vw would be 1804.8px, so the 1800px
-     cap is what actually governs), not some disconnected small box. */
-  max-width: min(94vw, 1800px);
+  /* Width-driven, up to a full-HD desktop ceiling: on a 1920px-wide PC
+     screen the device fills the full 1920px so the demo renders at true
+     1080p (1920 x 1080), not a disconnected smaller box. */
+  max-width: min(100vw, 1920px);
 }
 .shell:fullscreen .deviceScreen,
 .shell:-webkit-full-screen .deviceScreen,
@@ -56,13 +56,12 @@
      Second term: the device's own capped width times 9/16, i.e. a true
      16:9 surface at that width.
      Worked example at 1920x1080 (exactly 16:9, so the outer .box already
-     fills the whole screen with zero letterbox): device width caps at
-     1800px; term 1 = 1080 - 120 = 960px; term 2 = 1800 * 9/16 = 1012.5px;
-     the min is 960px. Screen renders at roughly 1790 x 960, a ~1.87:1
-     landscape surface fully filling the room (vs. the old formula's
-     885.6px tall result, which under-filled the frame) - close to true
-     16:9, with any residual gap absorbed by the intentional letterbox. */
-  height: min(calc(100vh - 120px), calc(min(94vw, 1800px) * 9 / 16));
+     fills the whole screen with zero letterbox): device width fills the
+     full 1920px; term 1 = 1080 - 120 = 960px; term 2 = 1920 * 9/16 = 1080px;
+     the min is 960px. Screen renders at roughly 1920 x 960, close to true
+     16:9 at full-HD width, with any residual gap absorbed by the intentional
+     letterbox. */
+  height: min(calc(100vh - 120px), calc(min(100vw, 1920px) * 9 / 16));
 }
 .shell:-webkit-full-screen {
   background: #000;
@@ -209,8 +208,9 @@
   transform: translateY(6px);
   transition: opacity 240ms ease, transform 240ms ease;
   pointer-events: none;
+  text-decoration: none;
 }
-.midCta.show { opacity: 1; transform: none; }
+.midCta.show { opacity: 1; transform: none; pointer-events: auto; cursor: pointer; }
 
 /* ---------- Device ---------- */
 .deviceWrap {
@@ -974,4 +974,17 @@
   font-family: var(--serif);
   font-size: 0.85rem;
   color: var(--room-ink);
+}
+/* Secondary "watch again" control inside the finished-state overlay, stacked
+   under the primary signup CTA so a fully-watched viewer always has a live
+   next step, not just a replay loop. */
+.replayBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
 }

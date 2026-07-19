@@ -1,10 +1,13 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import type { LucideIcon } from "lucide-react";
+import { Bot, Clock, Star, FileText, Tag, BarChart3 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor, getRole } from "@/lib/contractor";
 import { hasProPlan } from "@/lib/subscription";
-import { labelFor, iconFor, JOB_CATEGORIES, PRO_PLAN } from "@/lib/constants";
+import { labelFor, JOB_CATEGORIES, PRO_PLAN } from "@/lib/constants";
 import ClientRow from "./ClientRow";
+import CategoryIcon from "@/components/CategoryIcon";
 import { addClientAction, trackLeadAction } from "./actions";
 
 // The premium CRM upgrades a Hearth Pro membership adds on top of the free
@@ -12,13 +15,13 @@ import { addClientAction, trackLeadAction } from "./actions";
 // may appear here. Tapping a card sends a non-member to /pro/plus, and a
 // member to the real tool (via `href`).
 const PRO_CRM_FEATURES: Array<{
-  icon: string;
+  icon: LucideIcon;
   title: string;
   body: string;
   href?: string;
 }> = [
   {
-    icon: "🤖",
+    icon: Bot,
     title: "AI back office",
     body: "Draft estimates, invoices, and follow-up messages in seconds, so evenings go back to being evenings.",
     href: "/pro/tools",
@@ -27,12 +30,12 @@ const PRO_CRM_FEATURES: Array<{
 
 // On our roadmap for the CRM, clearly labeled as planned. Nothing in this
 // list exists in the app yet, and nothing here is sold as if it does.
-const PLANNED_CRM_FEATURES: Array<{ icon: string; label: string }> = [
-  { icon: "⏰", label: "Automated follow-up reminders" },
-  { icon: "⭐", label: "Automated review requests when you win a job" },
-  { icon: "📝", label: "Saved quote and estimate templates" },
-  { icon: "🏷️", label: "Customer tags and filtering" },
-  { icon: "📊", label: "Pipeline analytics and CSV export" },
+const PLANNED_CRM_FEATURES: Array<{ icon: LucideIcon; label: string }> = [
+  { icon: Clock, label: "Automated follow-up reminders" },
+  { icon: Star, label: "Automated review requests when you win a job" },
+  { icon: FileText, label: "Saved quote and estimate templates" },
+  { icon: Tag, label: "Customer tags and filtering" },
+  { icon: BarChart3, label: "Pipeline analytics and CSV export" },
 ];
 
 const STAGES: { value: string; label: string }[] = [
@@ -275,7 +278,7 @@ export default async function ProCrmPage({
                   <div>
                     <span className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
                       <span className="icon-chip">
-                        {iconFor(JOB_CATEGORIES, l.category)}
+                        <CategoryIcon list={JOB_CATEGORIES} value={l.category} />
                       </span>{" "}
                       {suggestedName}
                     </span>
@@ -382,7 +385,9 @@ export default async function ProCrmPage({
                 className="card group ring-1 ring-transparent transition hover:ring-hearth-300 dark:hover:ring-hearth-400"
               >
                 <div className="flex items-center justify-between">
-                  <span className="icon-chip">{f.icon}</span>
+                  <span className="icon-chip">
+                    <f.icon className="h-5 w-5" aria-hidden="true" />
+                  </span>
                   {!member && (
                     <span className="chip bg-hearth-100 text-hearth-800 dark:bg-hearth-900 dark:text-hearth-200">
                       Pro
@@ -412,7 +417,7 @@ export default async function ProCrmPage({
                 key={f.label}
                 className="flex items-start gap-2 text-sm text-stone-600 dark:text-stone-300"
               >
-                <span className="mt-0.5">{f.icon}</span>
+                <f.icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                 <span>{f.label}</span>
               </li>
             ))}

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { labelFor, iconFor, JOB_CATEGORIES } from "@/lib/constants";
+import { labelFor, JOB_CATEGORIES } from "@/lib/constants";
+import CategoryIcon from "@/components/CategoryIcon";
+import { MapPin, Lock } from "lucide-react";
 
 const SEVERITY_STYLE: Record<string, string> = {
   low: "border-stone-200 bg-stone-50 text-stone-600 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300",
@@ -22,8 +24,7 @@ export default async function PreviewPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
       <div className="text-center">
-        <div className="text-3xl">🛠️</div>
-        <h1 className="mt-2 text-2xl font-semibold text-stone-900 dark:text-stone-100">
+        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
           Available leads near you
         </h1>
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
@@ -46,7 +47,11 @@ export default async function PreviewPage() {
             <div key={l.id} className="card space-y-2">
               <div className="flex items-center gap-2">
                 <span className="font-medium text-stone-900 dark:text-stone-100">
-                  {iconFor(JOB_CATEGORIES, l.category)}{" "}
+                  <CategoryIcon
+                    list={JOB_CATEGORIES}
+                    value={l.category}
+                    className="mr-1 inline-block h-4 w-4 align-[-3px]"
+                  />
                   {labelFor(JOB_CATEGORIES, l.category)}
                 </span>
                 {l.severity && (
@@ -62,12 +67,14 @@ export default async function PreviewPage() {
                   </span>
                 )}
               </div>
-              <p className="text-sm text-stone-600 dark:text-stone-400">
-                📍 {l.area || "Your area"}
+              <p className="flex items-center gap-1 text-sm text-stone-600 dark:text-stone-400">
+                <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                {l.area || "Your area"}
               </p>
               {/* Locked contact */}
               <div className="flex items-center gap-2 rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-500 dark:bg-stone-800 dark:text-stone-400">
-                🔒 Homeowner contact -{" "}
+                <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                Homeowner contact -{" "}
                 <Link href="/contractor-signup" className="text-hearth-700 hover:underline dark:text-hearth-300">
                   sign up to unlock
                 </Link>

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { setFlash } from "@/lib/flash";
+import { lookupMarketValue } from "@/lib/parcel";
 
 // Saves (or updates) what the owner paid, the year they bought, and what they
 // still owe. purchase_price and mortgage_balance are new columns from
@@ -88,4 +89,53 @@ export async function saveHomeValueAction(
   revalidatePath("/value");
   revalidatePath("/dashboard");
   return { ok: true };
+}
+
+// Lazily fetches and stores the RentCast AVM (estimated market value) for the
+// active property, the first time someone actually opens /value, instead of
+// billing every signup for a number most people never look at. Called by the
+// ValueAutoFetch client component on mount; the property-record lookup in
+// parcel.ts's lookupParcel is untouched.
+//
+// market_value/_low/_high are new columns from migration 0066 that are not
+// yet in src/lib/database.types.ts, so the update payload is cast to any,
+// same pattern as saveHomeValueAction above.
+export async function fetchAndSaveMarketValueAction(): Promise<{ ok: boolean }> {
+  try {
+    const property = await getActiveProperty();
+    if (!property) return { ok: false };
+
+    const raw = property as any;
+    // Already have a value on file (from onboarding's own AVM call, an
+    // earlier /value visit, or a re-billing-avoidance cache hit elsewhere):
+    // no-op rather than re-fetching.
+    if (typeof raw.market_value === "number") return { ok: true };
+
+    // address_line1/zip are pre-existing typed columns, no cast needed.
+    const street = property.address_line1 || null;
+    const zip = property.zip || null;
+    if (!street || !zip) return { ok: false };
+
+    const facts = await lookupMarketValue(street, zip);
+    if (facts.market_value == null) return { ok: false };
+
+    const supabase = createClient();
+    const { error } = await (supabase.from("properties") as any)
+      .update({
+        market_value: facts.market_value,
+        market_value_low: facts.market_value_low,
+        market_value_high: facts.market_value_high,
+      })
+      .eq("id", property.id);
+    if (error) throw error;
+
+    revalidatePath("/value");
+    revalidatePath("/dashboard");
+    return { ok: true };
+  } catch (err) {
+    // Fail soft: a lookup or write hiccup should never surface as a 500 on a
+    // background fetch the owner didn't explicitly ask for.
+    console.error("fetchAndSaveMarketValueAction failed:", err);
+    return { ok: false };
+  }
 }

@@ -85,7 +85,7 @@ export default function PrepPhotoUpload({
         className="block w-full text-xs text-stone-500 file:mr-2 file:rounded-md file:border-0 file:bg-hearth-100 file:px-2 file:py-1 file:text-hearth-800 dark:text-stone-400 dark:file:bg-hearth-900 dark:file:text-hearth-300"
       />
       {busy && <p className="text-xs text-stone-500 dark:text-stone-400">Uploading…</p>}
-      {err && <p className="text-xs text-amber-600">{err}</p>}
+      {err && <p className="text-xs text-amber-600 dark:text-amber-400">{err}</p>}
       <textarea
         name="note"
         defaultValue={initialNote}
