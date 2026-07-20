@@ -11,6 +11,11 @@ export const runtime = "nodejs";
 const MAX_IMAGE_B64_CHARS = 14_000_000;
 // Cap the number of pages a single report can submit in one call.
 const MAX_IMAGES = 12;
+// Cap the incoming base64 PDF at ~20MB of binary (base64 is ~4/3 the raw
+// size). Gemini reads a whole report PDF natively, so a homeowner can send the
+// 60-page file an inspector hands over instead of photographing every page,
+// but a single call still can't push an unbounded payload at the model.
+const MAX_PDF_B64_CHARS = 28_000_000;
 
 // Read an existing home inspection report (photos of its pages, pasted text,
 // or both) and propose the systems and issues it describes, so an owner who
@@ -18,7 +23,8 @@ const MAX_IMAGES = 12;
 // the "feed the AI" half of the inspection feature: structured JSON, not
 // prose, straight into the shape home_systems and issues expect.
 //
-// Input:  { images?: string[] (base64, no data: prefix), text?: string }
+// Input:  { images?: string[] (base64, no data: prefix), pdf?: string (base64
+//           of an application/pdf, no data: prefix), text?: string }
 // Output: { result: { summary, systems: [{ system_type, condition_rating,
 //           install_year, notes }], issues: [{ category, severity,
 //           description }] } | null, reason? }
@@ -86,11 +92,12 @@ export async function POST(req: NextRequest) {
   const images: string[] = Array.isArray(body.images)
     ? body.images.filter((v: unknown): v is string => typeof v === "string" && v.length > 0)
     : [];
+  const pdf = typeof body.pdf === "string" && body.pdf.length > 0 ? body.pdf : "";
   const text = typeof body.text === "string" ? body.text.trim() : "";
 
-  if (!images.length && !text) {
+  if (!images.length && !pdf && !text) {
     return NextResponse.json(
-      { error: "Add a photo of the report or paste its text." },
+      { error: "Add a photo or PDF of the report, or paste its text." },
       { status: 400 }
     );
   }
@@ -102,6 +109,12 @@ export async function POST(req: NextRequest) {
   }
   if (images.some((img) => img.length > MAX_IMAGE_B64_CHARS)) {
     return NextResponse.json({ error: "One of those images is too large." }, { status: 413 });
+  }
+  if (pdf.length > MAX_PDF_B64_CHARS) {
+    return NextResponse.json(
+      { error: "That PDF is too large (max 20MB). Try the photos or paste option instead." },
+      { status: 413 }
+    );
   }
 
   // Same per-user daily cap as /api/ask (same ai_usage table and limits), so
@@ -115,7 +128,7 @@ export async function POST(req: NextRequest) {
 
   const today = new Date().toISOString().slice(0, 10);
   const instruction =
-    "You are reading a home inspection report a homeowner is adding to their records. It may be given as one or more photos of the report's pages, as pasted text, or both. " +
+    "You are reading a home inspection report a homeowner is adding to their records. It may be given as one or more photos of the report's pages, as a PDF of the report, as pasted text, or as a combination of these. " +
     "Read all of it and pull out two kinds of findings. " +
     "First, systems: any major home system or component the report describes with enough detail to judge its condition, such as the roof, HVAC, water heater, electrical panel, plumbing, windows, foundation, a major appliance, gutters, siding, garage door, deck or patio, driveway, sump pump, sewer or septic line, or fence. For each one, choose the single system_type code that best matches what the report describes. Set condition_rating on a 1 to 5 scale by translating the inspector's own language: good or excellent means 4 or 5, fair, serviceable, or adequate means 3, poor, deficient, or marginal means 2, and safety hazard, failed, or needs immediate replacement means 1. Include install_year only if the report states or clearly implies it, as a 4-digit year. Write notes as one short plain sentence summarizing what the inspector said about that system. " +
     "Second, issues: any specific problem, defect, or safety concern the report calls out, whether or not it is tied to one of the systems above. For each one, choose the category that fits best: roof, plumbing, electrical, hvac, structural, or other. Set severity to low, medium, or urgent based on how the inspector frames it: a safety hazard or something needing immediate attention is urgent, a real but non-emergency defect is medium, and a minor or cosmetic note is low. Write description as one clear plain sentence describing the problem. " +
@@ -129,6 +142,13 @@ export async function POST(req: NextRequest) {
   ];
   for (const img of images) {
     userParts.push({ inlineData: { mimeType: "image/jpeg", data: img } });
+  }
+  // Gemini reads a PDF's pages natively, including a scan-only report with no
+  // text layer (it falls back to vision). A corrupt or encrypted file simply
+  // yields no usable response and drops through to the "failed" path below,
+  // where the client shows the plain "couldn't read that PDF" message.
+  if (pdf) {
+    userParts.push({ inlineData: { mimeType: "application/pdf", data: pdf } });
   }
   if (text) {
     userParts.push({ text: `The homeowner also provided this text:\n\n${text}` });

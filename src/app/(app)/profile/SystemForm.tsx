@@ -60,6 +60,27 @@ export default function SystemForm({ propertyId }: { propertyId: string }) {
           <label className="label">{materialLabel(systemType)} (optional)</label>
           <MaterialSelect key={systemType} systemType={systemType} />
         </div>
+        {/* Exact model + capacity: brand dropdown above is a starting point,
+            but DIY owners want the real numbers off the data plate. Both are
+            optional free text (migration 0102). */}
+        <div>
+          <label className="label">Model number (optional)</label>
+          <input
+            name="model_number"
+            className="input"
+            placeholder="XE50T10H45U0"
+            maxLength={60}
+          />
+        </div>
+        <div>
+          <label className="label">Capacity / size (optional)</label>
+          <input
+            name="capacity"
+            className="input"
+            placeholder="50 gal / 3 ton / 200 sq ft"
+            maxLength={60}
+          />
+        </div>
         <div>
           <label className="label">Install year</label>
           <input name="install_year" type="number" className="input" placeholder="2015" />

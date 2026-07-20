@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { hasPlus } from "@/lib/subscription";
 import { generateMaintenancePlanAction } from "./actions";
+import SubmitButton from "@/components/SubmitButton";
 import {
   scoreBreakdown,
   scoreBand,
@@ -55,10 +56,11 @@ export default async function HomePage({
   // "View my plan" lands here with ?plan=open so the collapsed task groups
   // start expanded, making the click visibly do something.
   const planOpen = searchParams.plan === "open";
-  const property = await getActiveProperty();
+  // getActiveProperty and hasPlus don't depend on each other - run them
+  // together instead of stacking two round trips before the redirect check.
+  const [property, plus] = await Promise.all([getActiveProperty(), hasPlus()]);
   if (!property) redirect("/onboarding");
   const supabase = createClient();
-  const plus = await hasPlus();
 
   const [
     { data: systems },
@@ -129,6 +131,29 @@ export default async function HomePage({
   const hasOpenPlan = (tasks ?? []).some(
     (t) => t.status === "open" && planTitleSet.has(t.title)
   );
+
+  // Non-Plus homeowners get exactly one free plan build as a taste of Plus,
+  // tracked the same way the free quote check is (users.free_plan_used_at,
+  // migration 0099). freePlanCredit is true only while that credit is unused,
+  // so the CTA can offer the real build once, then revert to the Plus pitch.
+  let freePlanCredit = false;
+  if (!plus) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const { data: creditRow, error: creditErr } = await supabase
+        .from("users")
+        .select("free_plan_used_at")
+        .eq("id", user.id)
+        .maybeSingle();
+      // FAIL OPEN if the column isn't live yet (migration 0099 not run): a
+      // homeowner must never be told the free build is used when it never was.
+      freePlanCredit = creditErr
+        ? true
+        : !!creditRow && creditRow.free_plan_used_at === null;
+    }
+  }
 
   // Group system photos by system id so each row can show its own thumbnails.
   const photosBySystem = new Map<string, string[]>();
@@ -509,6 +534,21 @@ export default async function HomePage({
           {property.address_line1}
           {property.city ? `, ${property.city}` : ""}
         </h1>
+        {/* Quiet trust signal: only when the ownership check actually matched
+            (migration 0093). Same green chip-ok tone and same wording spirit as
+            the pro-side "Ownership verified" badge, so the semantics read the
+            same on both ends. No chip at all when unverified - nothing to nag
+            about, since a mismatch is expected and harmless. */}
+        {property.ownership_status === "verified" && (
+          <p className="mt-2">
+            <span
+              className="chip-ok"
+              title="The name on your account matches the county assessor's public owner-of-record for this address. It's a soft trust signal we show pros, not proof of ownership."
+            >
+              Matches county records
+            </span>
+          </p>
+        )}
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           Built {property.year_built ?? "-"} · {property.sqft ?? "-"} sqft ·{" "}
           {property.beds ?? "-"} bd / {property.baths ?? "-"} ba
@@ -772,9 +812,12 @@ export default async function HomePage({
                 </p>
                 {plus ? (
                   <form action={generateMaintenancePlanAction}>
-                    <button className="text-sm font-medium hover:underline">
+                    <SubmitButton
+                      className="text-sm font-medium hover:underline disabled:opacity-60"
+                      pendingLabel="Planning…"
+                    >
                       Plan my next round →
-                    </button>
+                    </SubmitButton>
                   </form>
                 ) : (
                   <Link
@@ -941,15 +984,36 @@ export default async function HomePage({
               </Link>
             ) : (
               <form action={generateMaintenancePlanAction}>
-                <button className="btn-primary whitespace-nowrap">
+                <SubmitButton
+                  className="btn-primary whitespace-nowrap"
+                  pendingLabel="Building…"
+                >
                   Build my plan
-                </button>
+                </SubmitButton>
               </form>
             )
+          ) : freePlanCredit ? (
+            // First build is a real, free taste of Plus (deterministic, no AI
+            // cost). The note keeps the promise honest: rebuilding to keep the
+            // plan fresh is the Plus part.
+            <div className="flex flex-col gap-1.5 sm:max-w-xs sm:items-end sm:text-right">
+              <form action={generateMaintenancePlanAction}>
+                <SubmitButton
+                  className="btn-primary w-full whitespace-nowrap sm:w-auto"
+                  pendingLabel="Building…"
+                >
+                  Build my plan
+                </SubmitButton>
+              </form>
+              <p className="text-xs text-stone-500 dark:text-stone-400">
+                Your first plan build is free. Keeping it fresh as your home
+                changes is a Plus thing.
+              </p>
+            </div>
           ) : (
-            // A paywall door, not a free action: labeled with the Plus chip
-            // and styled secondary so the filled-primary look stays reserved
-            // for buttons that do the thing right away.
+            // Free build already used: a paywall door, not a free action.
+            // Labeled with the Plus chip and styled secondary so the filled-
+            // primary look stays reserved for buttons that act right away.
             <Link
               href="/plus?reason=plan"
               className="btn-secondary whitespace-nowrap text-center"
@@ -1057,9 +1121,12 @@ export default async function HomePage({
               ].map((q) => (
                 <form key={q.type} action={addSystemFormAction}>
                   <input type="hidden" name="system_type" value={q.type} />
-                  <button className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-600 dark:hover:text-stone-300">
+                  <SubmitButton
+                    className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-bark-500 hover:text-bark-700 disabled:opacity-60 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-600 dark:hover:text-stone-300"
+                    pendingLabel="Adding…"
+                  >
                     {q.label}
-                  </button>
+                  </SubmitButton>
                 </form>
               ))}
             </div>

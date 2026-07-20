@@ -122,6 +122,44 @@ export function replacementInfoFor(systemType: string): ReplacementInfo | null {
   return REPLACEMENT_INFO[systemType] ?? null;
 }
 
+// Maps a job/service category to the home system Hearth keeps a national
+// replacement range for. Same shape as quoteAnalysis.ts's own baseline map:
+// categories with no clean system match (structural, remodeling, landscaping,
+// cleaning, painting, home_inspection, pest, handyman, other) are left out on
+// purpose, so a job in one of those keeps the neutral budget default.
+const CATEGORY_TO_SYSTEM: Record<string, string> = {
+  roof: "roof",
+  hvac: "hvac",
+  plumbing: "plumbing",
+  windows: "windows",
+  electrical: "electrical_panel",
+  garage_door: "garage_door",
+};
+
+// The rough budget band (a BUDGET_RANGES value from constants.ts) that best
+// fits the middle of a category's national replacement range, or null when we
+// have no range for that category. Used to pre-fill the post-a-job budget
+// dropdown when the job arrives tied to a known system, so the owner starts
+// from a sane bracket instead of "Prefer not to say". A starting point they
+// can freely change, never a fixed number: real repairs cost less than a full
+// replacement. The returned strings MUST stay in sync with BUDGET_RANGES.
+export function budgetBracketForCategory(
+  category: string | null | undefined
+): string | null {
+  if (!category) return null;
+  const systemType = CATEGORY_TO_SYSTEM[category];
+  const info = systemType ? REPLACEMENT_INFO[systemType] : null;
+  if (!info) return null;
+  const mid = (info.low + info.high) / 2;
+  if (mid < 500) return "under-500";
+  if (mid < 1500) return "500-1500";
+  if (mid < 5000) return "1500-5000";
+  if (mid < 15000) return "5000-15000";
+  if (mid < 25000) return "15000-25000";
+  if (mid < 50000) return "25000-50000";
+  return "50000-plus";
+}
+
 export type LifeStage = "healthy" | "aging" | "due" | "unknown";
 
 export interface SystemHealth {

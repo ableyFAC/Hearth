@@ -1,6 +1,42 @@
 "use client";
 
 import { useState } from "react";
+import { useFormStatus } from "react-dom";
+
+// Both armed-state buttons, split into their own component because
+// useFormStatus only reports the status of the nearest enclosing <form> and
+// must be called from a component rendered inside it, not from ConfirmSubmit
+// itself (which is the same component tree but the hook still needs its own
+// function component below the <form> boundary). Rendering Yes AND Cancel
+// from here, sharing one hook call, is what lets Cancel disable while
+// pending too: without that, tapping Yes then Cancel makes the UI snap back
+// to idle while the server action (cancel membership, remove a household
+// member, delete a client...) is still running underneath - a lie about
+// what's actually happening.
+function ConfirmSubmitButtons({
+  yesLabel,
+  onCancel,
+}: {
+  yesLabel: string;
+  onCancel: () => void;
+}) {
+  const { pending } = useFormStatus();
+  return (
+    <>
+      <button type="submit" className="btn-primary" disabled={pending}>
+        {pending ? `${yesLabel}…` : yesLabel}
+      </button>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="btn-secondary"
+        disabled={pending}
+      >
+        Cancel
+      </button>
+    </>
+  );
+}
 
 // A two-step submit for the Change plan forms: the first tap arms it, then a
 // small inline "Are you sure?" with Yes/Cancel actually submits. Keeps a plan
@@ -43,16 +79,7 @@ export default function ConfirmSubmit({
     <div className="space-y-2">
       <p className="text-sm text-stone-600 dark:text-stone-300">{note}</p>
       <div className="flex items-center justify-center gap-2">
-        <button type="submit" className="btn-primary">
-          {yesLabel}
-        </button>
-        <button
-          type="button"
-          onClick={() => setArmed(false)}
-          className="btn-secondary"
-        >
-          Cancel
-        </button>
+        <ConfirmSubmitButtons yesLabel={yesLabel} onCancel={() => setArmed(false)} />
       </div>
     </div>
   );

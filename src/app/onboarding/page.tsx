@@ -16,7 +16,7 @@ import OnboardingForm from "./OnboardingForm";
 export default async function OnboardingPage({
   searchParams,
 }: {
-  searchParams?: { next?: string };
+  searchParams?: { next?: string; ref?: string };
 }) {
   // Contractors belong in /pro - don't let them create a homeowner property.
   if (await isContractor()) redirect("/pro");
@@ -37,6 +37,16 @@ export default async function OnboardingPage({
   const next = safeNextPath(
     typeof searchParams?.next === "string" ? searchParams.next : null
   );
+
+  // ?ref=: the inviter's referral code (migration 0099), carried here from
+  // /homeowner-signup. Handed to OnboardingForm as a hidden field so
+  // claimPropertyAction can attribute a first home claim to the neighbor who
+  // shared the link. Passed through as-is; the action resolves it by exact
+  // match, so a junk or expired value simply never resolves and is ignored.
+  const ref =
+    typeof searchParams?.ref === "string" && searchParams.ref.trim()
+      ? searchParams.ref.trim()
+      : null;
 
   // First home vs. adding another - onboarding stays reachable either way.
   const homes = await getProperties();
@@ -93,7 +103,7 @@ export default async function OnboardingPage({
         )}
       </div>
 
-      <OnboardingForm next={next} />
+      <OnboardingForm next={next} referralCode={ref} />
 
       {!isFirst && (
         <Link

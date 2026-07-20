@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { addMaintenanceHistoryAction } from "./actions";
+import SubmitButton from "@/components/SubmitButton";
 
 // Lets the owner log a past maintenance event (date, what was done, optional
 // cost/pro) directly. Never AI-generated: every field here is something the
@@ -80,7 +81,7 @@ export default function MaintenanceHistoryForm() {
         >
           Cancel
         </button>
-        <button className="btn-primary flex-1">Save entry</button>
+        <SubmitButton>Save entry</SubmitButton>
       </div>
     </form>
   );

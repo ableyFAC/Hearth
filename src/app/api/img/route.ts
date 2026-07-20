@@ -34,5 +34,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  return NextResponse.redirect(data.signedUrl);
+  const res = NextResponse.redirect(data.signedUrl);
+  // 480s < the signed URL's 600s TTL, so a cached redirect can never outlive
+  // the URL it points to. "private" keeps this out of any shared/CDN cache
+  // since the signed URL itself is effectively a per-user credential.
+  res.headers.set("Cache-Control", "private, max-age=480");
+  return res;
 }

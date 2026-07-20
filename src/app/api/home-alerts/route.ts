@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { SYSTEM_TYPES, labelFor } from "@/lib/constants";
 import { assessSystem } from "@/lib/health";
+import { STATE_NAMES } from "@/lib/forecast";
 
 export const runtime = "nodejs";
 
@@ -21,13 +22,27 @@ type Alert = {
   url?: string;
 };
 
-async function fetchJson(url: string, ms: number): Promise<any> {
+// revalidateSec, when given, lets Next's fetch data cache serve repeat calls
+// to the SAME upstream URL without re-hitting the third-party API - this is
+// a per-URL cache on the outgoing fetch, not on this route's own response
+// (the route stays uncached, see the GET handler below), and it never touches
+// Supabase data, so it can't leak one homeowner's info to another: the only
+// thing cached is a public geocode/forecast/recall payload keyed by its own
+// request URL (which already encodes the city/coords/brand query params).
+async function fetchJson(
+  url: string,
+  ms: number,
+  revalidateSec?: number
+): Promise<any> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
   try {
     const r = await fetch(url, {
       signal: ctrl.signal,
       headers: { accept: "application/json" },
+      ...(revalidateSec
+        ? { next: { revalidate: revalidateSec } }
+        : { cache: "no-store" as const }),
     });
     if (!r.ok) return null;
     return await r.json();
@@ -36,6 +51,22 @@ async function fetchJson(url: string, ms: number): Promise<any> {
   } finally {
     clearTimeout(t);
   }
+}
+
+// True when an Open-Meteo geocoding result sits in the property's US state.
+// admin1 comes back as the full state name ("Illinois"), while properties
+// usually store the two-letter code, so compare against both forms. Same
+// logic as cron/alerts/route.ts's matchesState, duplicated here rather than
+// shared since it's a few lines and each caller is otherwise independent.
+function matchesState(result: any, state: string): boolean {
+  const admin1 = typeof result?.admin1 === "string" ? result.admin1.toLowerCase() : "";
+  if (!admin1) return false;
+  const wanted = state.trim();
+  const fullName = STATE_NAMES[wanted.toUpperCase()] ?? "";
+  return (
+    admin1 === wanted.toLowerCase() ||
+    (fullName !== "" && admin1 === fullName.toLowerCase())
+  );
 }
 
 function whenLabel(i: number): string {
@@ -82,18 +113,47 @@ async function fetchWeather(property: any, systems: any[]): Promise<Alert[]> {
   try {
     const place = [property.city, property.state].filter(Boolean).join(", ");
     if (place) {
+      // Geocoding: an address string always resolves to the same coordinates,
+      // so this is cached for a full day. But Open-Meteo's geocoder ranks
+      // bare-name matches by global prominence, not by US state ("Springfield"
+      // alone returns Springfield, MO ahead of Springfield, IL) - and it does
+      // NOT understand a comma-separated "City, State" in the name param
+      // (verified live: that query returns zero results), so the state can't
+      // be folded into `name` to disambiguate. Instead: ask for several US
+      // candidates and pick the one whose admin1 matches property.state.
+      // Next's fetch cache is keyed on the request URL, so without the state
+      // somewhere in that URL, Springfield-IL and Springfield-MO homes would
+      // still collide on the SAME cached (wrong-for-one-of-them) top match for
+      // 24h even though selection below is correct. `hearthState` is not a
+      // real Open-Meteo parameter - the API ignores it (verified live: adding
+      // it returns identical results) - it exists purely to partition the
+      // cache key per state so each state gets its own cached response.
+      const stateParam = property.state
+        ? `&hearthState=${encodeURIComponent(property.state)}`
+        : "";
       const geo = await fetchJson(
         `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
           property.city
-        )}&count=1&language=en&format=json`,
-        4000
+        )}&count=10&language=en&format=json&countryCode=US${stateParam}`,
+        4000,
+        86400 // 24h: address -> coords never changes
       );
-      const loc = geo?.results?.[0];
+      const usResults: any[] = Array.isArray(geo?.results)
+        ? geo.results.filter((r: any) => r?.country_code === "US")
+        : [];
+      const loc = property.state
+        ? usResults.find((r) => matchesState(r, property.state))
+        : usResults[0];
       if (loc) {
+        // Forecast: cached 30 min. Keyed on lat/lon straight from the geocode
+        // result (already quantized by Open-Meteo's geocoder, so this doesn't
+        // fragment the cache across near-identical coordinates for the same
+        // city), so two homeowners in the same city share one upstream call.
         const fc = await fetchJson(
           `https://api.open-meteo.com/v1/forecast?latitude=${loc.latitude}&longitude=${loc.longitude}` +
             `&daily=temperature_2m_min,temperature_2m_max&forecast_days=4&temperature_unit=fahrenheit&timezone=auto`,
-          4000
+          4000,
+          1800 // 30 min
         );
         const mins: number[] = fc?.daily?.temperature_2m_min ?? [];
         const maxs: number[] = fc?.daily?.temperature_2m_max ?? [];
@@ -190,6 +250,10 @@ async function fetchRecalls(systems: any[]): Promise<Alert[]> {
     // cap, but that's a fair trade for not paying the timeout serially; the
     // selection below still processes brands in the same order and keeps the
     // same first-3-matches result.
+    // CPSC recalls: cached a day per brand query URL. New recalls post
+    // infrequently, and the key is the brand string, so this is shared across
+    // every homeowner who happens to have the same appliance brand - never
+    // anything user-specific.
     const brandEntries = Array.from(brands.entries());
     const brandResults = await Promise.all(
       brandEntries.map(([brand]) =>
@@ -197,7 +261,8 @@ async function fetchRecalls(systems: any[]): Promise<Alert[]> {
           `https://www.saferproducts.gov/RestWebServices/Recall?format=json&ProductName=${encodeURIComponent(
             brand
           )}`,
-          4000
+          4000,
+          86400 // 24h
         )
       )
     );

@@ -8,6 +8,7 @@ import { logIssueFromChat, setReminderFromChat } from "@/lib/ask-actions";
 import VoiceButton from "@/components/VoiceButton";
 import Markdown from "@/components/Markdown";
 import AiNotice from "@/components/AiNotice";
+import Lightbox from "@/components/Lightbox";
 import { track } from "@/lib/analytics";
 import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
 
@@ -333,8 +334,15 @@ function prune(msgs: Msg[], retention: Retention): Msg[] {
 const DEFAULT_GREETING =
   "Hi, I'm Hearth. If you have any questions about your home, feel free to ask.";
 const DEFAULT_HEADING_TITLE = "Ask Hearth";
+// Names itself as AI explicitly, not just "assistant": California's bot
+// disclosure law (B&P 17940-17943) wants this clear and conspicuous, and
+// persistent rather than only in the first message. This heading renders
+// every time the chat is open (both the compact card and the dock), so it
+// does that job; AiNotice under the composer below repeats it near the input
+// itself. The pro copilot passes its own headingSubtitle override (see
+// src/app/pro/layout.tsx), so this default only ever reaches homeowners.
 const DEFAULT_HEADING_SUBTITLE =
-  "Your home assistant. Answers use your systems, ages, and any issues.";
+  "Your home AI assistant. Answers use your systems, ages, and any issues.";
 const DEFAULT_DISCLAIMER =
   "Hearth's cost figures are ballpark estimates. Confirm with a local pro before you commit.";
 
@@ -386,6 +394,10 @@ export default function AskHearth({
     data: string;
   } | null>(null);
   const [imageError, setImageError] = useState(false);
+  // The data: URL of an attached photo currently open in the Lightbox, or
+  // null when closed. Built on demand from the base64 message data since
+  // messages only ever store the raw base64, not a ready-to-use URL.
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const submitRef = useRef<(t: string) => void>(() => {});
@@ -643,12 +655,21 @@ export default function AskHearth({
         }`}
       >
         {m.image && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={`data:${m.mime ?? "image/jpeg"};base64,${m.image}`}
-            alt="attached"
-            className="mb-1 max-h-48 rounded-lg border border-stone-200 object-cover dark:border-white/10"
-          />
+          <button
+            type="button"
+            onClick={() =>
+              setLightboxSrc(`data:${m.mime ?? "image/jpeg"};base64,${m.image}`)
+            }
+            className="mb-1 block cursor-zoom-in"
+            aria-label="View attached photo full size"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`data:${m.mime ?? "image/jpeg"};base64,${m.image}`}
+              alt="attached"
+              className="max-h-48 rounded-lg border border-stone-200 object-cover dark:border-white/10"
+            />
+          </button>
         )}
         {parsed.text && (
           <span
@@ -902,6 +923,12 @@ export default function AskHearth({
       </div>
 
       <div className="mt-2">{composer}</div>
+
+      <Lightbox
+        src={lightboxSrc}
+        alt="Attached photo"
+        onClose={() => setLightboxSrc(null)}
+      />
     </div>
   );
 }

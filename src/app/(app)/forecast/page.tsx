@@ -16,10 +16,16 @@ import {
 } from "@/lib/constants";
 import AskHearthPlanButton from "./AskHearthPlanButton";
 import CategoryIcon from "@/components/CategoryIcon";
+import { Lock } from "lucide-react";
 
 function money(n: number): string {
   return `$${Math.round(n).toLocaleString()}`;
 }
+
+// Free users see the real 10-year total and their soonest system or two; the
+// rest of the per-system amounts are masked (not blurred fake data) so the
+// number stays honest while the detail is what Plus unlocks.
+const MASKED_AMOUNT = "$•,•••";
 
 // Compact form for the bar chart labels ($1.2k instead of $1,200) so a decade
 // of bars stays readable on a phone screen.
@@ -32,9 +38,18 @@ function moneyShort(n: number): string {
 }
 
 export default async function ForecastPage() {
-  if (!(await hasPlus())) redirect("/plus?reason=forecast");
+  // hasPlus and getActiveProperty don't depend on each other - run them
+  // together instead of stacking two round trips before the redirect check.
+  const [plus, propertyOrNull] = await Promise.all([
+    hasPlus(),
+    getActiveProperty(),
+  ]);
+  // Everyone reaches the forecast now: Plus sees it all, free users get the
+  // real 10-year total plus a peek at the soonest systems, with the rest of
+  // the per-system detail masked behind an honest Plus CTA (see below).
+  if (!propertyOrNull) redirect("/onboarding");
 
-  const property = (await getActiveProperty())!;
+  const property = propertyOrNull;
   const supabase = createClient();
 
   // Same "open issues" query the Home page runs, so a resolved issue drops
@@ -177,6 +192,8 @@ export default async function ForecastPage() {
             )}
           </div>
 
+          {plus && (
+          <>
           <div className="mt-4 flex justify-center">
             <AskHearthPlanButton question={planQuestion} />
           </div>
@@ -379,6 +396,92 @@ export default async function ForecastPage() {
               into a bill you already planned for.
             </p>
           </div>
+          </>
+          )}
+
+          {!plus && (
+            <div className="card mt-6 space-y-3">
+              <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
+                {forecast.horizonYears}-year timeline
+              </h2>
+              <div className="divide-y divide-stone-100 dark:divide-white/10">
+                {/* The soonest system or two are shown in full: a real taste,
+                    not a teaser on fake data. */}
+                {forecast.timeline.slice(0, 2).map((item) => (
+                  <div
+                    key={item.system.id}
+                    className="flex items-center justify-between gap-3 py-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="icon-chip">
+                        <CategoryIcon list={SYSTEM_TYPES} value={item.system_type} />
+                      </span>
+                      <div>
+                        <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
+                          {labelFor(SYSTEM_TYPES, item.system_type)}
+                        </p>
+                        <p className="text-xs text-stone-500 dark:text-stone-400">
+                          {item.timingEstimated ? (
+                            "Timing unknown, add an install year for a real estimate"
+                          ) : (
+                            <>
+                              {item.yearsLeft <= 0
+                                ? "Due now"
+                                : `~${item.yearsLeft} year${item.yearsLeft === 1 ? "" : "s"} left`}
+                              {" · "}
+                              est. {item.replacementYear}
+                            </>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="whitespace-nowrap text-right text-sm text-stone-600 dark:text-stone-300">
+                      {money(item.costLow)} - {money(item.costHigh)}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Everything past the peek: real system names, real order,
+                    amounts masked rather than faked. */}
+                {forecast.timeline.slice(2).map((item) => (
+                  <div
+                    key={item.system.id}
+                    className="flex items-center justify-between gap-3 py-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="icon-chip">
+                        <CategoryIcon list={SYSTEM_TYPES} value={item.system_type} />
+                      </span>
+                      <div>
+                        <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
+                          {labelFor(SYSTEM_TYPES, item.system_type)}
+                        </p>
+                        <p className="text-xs text-stone-400 dark:text-stone-500">
+                          Timing and cost with Plus
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 whitespace-nowrap text-right text-sm text-stone-400 dark:text-stone-500">
+                      <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span className="tabular-nums">{MASKED_AMOUNT}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="rounded-lg border border-bark-100 bg-bark-50 p-4 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+                <p className="text-sm text-bark-700 dark:text-stone-300">
+                  That total up top is your real 10-year number.
+                  {forecast.timeline.length > 2
+                    ? " Hearth Plus opens up every system's timing and cost, the year-by-year chart of when the money is needed, and which projects to tackle first."
+                    : " Hearth Plus adds the year-by-year chart of when the money is needed and which projects to tackle first."}
+                </p>
+                <Link href="/plus?reason=forecast" className="btn-primary mt-3 inline-block">
+                  See what Plus shows
+                </Link>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

@@ -328,6 +328,45 @@ export async function claimPropertyAction(formData: FormData) {
     console.error("Ownership verification check failed:", err);
   }
 
+  // Homeowner referral attribution (migration 0100). If a ?ref= code rode all
+  // the way here from an invite link (threaded through /homeowner-signup ->
+  // /onboarding -> OnboardingForm's hidden field) AND this is the claimer's
+  // first owned home, credit the neighbor who invited them - once, ever.
+  //
+  // Gated to the first owned home (ownedHomes.length === 0 above): a code only
+  // attributes a genuinely new homeowner, never someone adding a second
+  // property later. Resolving another user's code requires the admin client
+  // (RLS "users self select" hides every row but the caller's own), and the
+  // write is guarded three ways: skip self-referral, skip if the code doesn't
+  // resolve, and only set referred_by when it is still null so it can never be
+  // overwritten. v1 attaches no reward to this - it is an honest record only.
+  //
+  // Entirely best-effort: any failure is swallowed. Attribution must never
+  // affect whether a signup or home claim succeeds.
+  if (ownedHomes.length === 0) {
+    try {
+      const rawRef = ((formData.get("ref") as string) ?? "").trim();
+      // Bound and normalize before it touches a query: the generator only ever
+      // emits [A-Z2-9]{8}, so anything outside that shape can't be a real code.
+      const refCode = /^[A-Z0-9]{4,16}$/.test(rawRef) ? rawRef : null;
+      if (refCode) {
+        const admin = createAdminClient();
+        const { data: inviter } = await (admin.from("users") as any)
+          .select("id")
+          .eq("referral_code", refCode)
+          .maybeSingle();
+        if (inviter?.id && inviter.id !== user.id) {
+          await (admin.from("users") as any)
+            .update({ referred_by: inviter.id })
+            .eq("id", user.id)
+            .is("referred_by", null);
+        }
+      }
+    } catch (err) {
+      console.error("Homeowner referral attribution failed:", err);
+    }
+  }
+
   // Make the new home the active one.
   cookies().set(ACTIVE_HOME_COOKIE, created.id, {
     httpOnly: true,

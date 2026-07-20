@@ -104,7 +104,7 @@ export default function GlobalSearch() {
               // this panel.
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => go(ex)}
-              className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-stone-700 hover:bg-bark-50 dark:text-stone-300 dark:hover:bg-stone-600"
+              className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-stone-700 active:opacity-70 hover:bg-bark-50 dark:text-stone-300 dark:hover:bg-stone-600"
             >
               {ex}
             </button>

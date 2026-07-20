@@ -7,8 +7,6 @@ import {
   deleteReminderAction,
 } from "./actions";
 import { useChecklist } from "@/components/ChecklistProvider";
-import { SYSTEM_TYPES } from "@/lib/constants";
-import { Wrench, type LucideIcon } from "lucide-react";
 
 const MONTHS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -72,20 +70,6 @@ function dueChip(
   };
 }
 
-// Best-effort icon for a reminder, matched from its title against the system
-// list (e.g. "Flush the water heater" -> the water heater icon). Falls back to
-// a generic wrench icon when nothing matches, purely cosmetic.
-function iconForTitle(title: string): LucideIcon {
-  const t = title.toLowerCase();
-  for (const s of SYSTEM_TYPES) {
-    const key = s.label.toLowerCase();
-    if (t.includes(key) || t.includes(s.value.replace(/_/g, " "))) {
-      return s.icon;
-    }
-  }
-  return Wrench;
-}
-
 // A reminder row: click the checkbox to cross it out (click again to uncross).
 export default function ReminderItem({
   id,
@@ -124,16 +108,19 @@ export default function ReminderItem({
   async function remove() {
     setBusy(true);
     setActionError(null);
+    // Optimistic: hide the row immediately, restore it if the delete fails.
+    checklist?.unregister(id);
+    setRemoved(true);
     try {
-      // Failure must NOT remove the row: the delete didn't actually happen,
-      // so hiding it here would just have it reappear confusingly on the
-      // next reload with no explanation. The action's own setFlash covers
-      // the visible error for the expected (DB) failure case.
       const res = await deleteReminderAction(id);
-      if (!res.ok) return;
-      checklist?.unregister(id);
-      setRemoved(true);
+      if (!res.ok) {
+        setRemoved(false);
+        checklist?.register(id, done);
+        return;
+      }
     } catch {
+      setRemoved(false);
+      checklist?.register(id, done);
       setActionError("Couldn't remove that reminder. Please try again.");
     } finally {
       setBusy(false);
@@ -144,18 +131,26 @@ export default function ReminderItem({
     const next = !done;
     setBusy(true);
     setActionError(null);
+    // Optimistic: flip the checkbox immediately, revert on failure. The
+    // checklist report (which can trigger the once-per-session completion
+    // celebration) waits for server confirmation, so a toggle that rolls
+    // back never burns that celebration for a completion that didn't
+    // actually happen.
+    setDone(next);
+    setJustCompleted(next);
     try {
-      // Same reasoning as remove(): only flip the checkbox once the server
-      // confirms the update actually landed, so a failure never shows a
-      // done/undone state that silently reverts itself on the next reload.
       const res = next
         ? await completeReminderAction(id)
         : await uncompleteReminderAction(id);
-      if (!res.ok) return;
-      setDone(next);
-      setJustCompleted(next);
+      if (!res.ok) {
+        setDone(!next);
+        setJustCompleted(false);
+        return;
+      }
       checklist?.report(id, next);
     } catch {
+      setDone(!next);
+      setJustCompleted(false);
       setActionError("Couldn't update that reminder. Please try again.");
     } finally {
       setBusy(false);
@@ -190,12 +185,6 @@ export default function ReminderItem({
             } ${justCompleted ? "motion-safe:animate-check-pop" : ""}`}
           >
             ✓
-          </span>
-          <span className="shrink-0 text-stone-500 dark:text-stone-400" aria-hidden>
-            {(() => {
-              const Icon = iconForTitle(title);
-              return <Icon className="h-4 w-4" />;
-            })()}
           </span>
           <span
             className={`truncate text-sm ${

@@ -62,6 +62,26 @@ function filterFields(
   };
 }
 
+// Exact model number + capacity / size (migration 0102), both optional free
+// text. Returns null when the form did not include them (e.g. the dashboard
+// quick-add chips), so we never null out columns the owner could not see.
+// Each value is trimmed and capped so a stray huge paste can't land in the DB.
+function modelCapacityFields(
+  formData: FormData
+): { model_number: string | null; capacity: string | null } | null {
+  if (!formData.has("model_number") && !formData.has("capacity")) {
+    return null;
+  }
+  const clean = (v: string) => {
+    const t = v.trim();
+    return t && t.length <= 60 ? t : t ? t.slice(0, 60) : null;
+  };
+  return {
+    model_number: clean((formData.get("model_number") as string) || ""),
+    capacity: clean((formData.get("capacity") as string) || ""),
+  };
+}
+
 // Save any photos the owner uploaded (the PhotoUpload component already pushed
 // them to storage and put the public URLs in the form as `photo_urls`). Photos
 // are polymorphic, so we tag them with related_type "system".
@@ -117,19 +137,24 @@ export async function addSystemAction(
     notes: (formData.get("notes") as string) || null,
   };
 
-  // HVAC filter reminder fields are migration 0042 columns not yet in the
-  // generated types (hence the cast). If the migration has not run, retry
-  // without them so adding a system never breaks - same pattern as
-  // pro/actions.
+  // Optional columns that a live DB might not have yet (HVAC filter reminder
+  // fields, migration 0042; exact model_number + capacity, migration 0102).
+  // Bundled together so that if EITHER migration has not run, a single retry
+  // without them keeps adding a system working - same pattern as pro/actions.
   const filter = filterFields(formData);
-  let { data: row, error } = filter
+  const modelCapacity = modelCapacityFields(formData);
+  const extras =
+    filter || modelCapacity
+      ? { ...(filter ?? {}), ...(modelCapacity ?? {}) }
+      : null;
+  let { data: row, error } = extras
     ? await supabase
         .from("home_systems")
-        .insert({ ...baseRow, ...filter } as any)
+        .insert({ ...baseRow, ...extras } as any)
         .select("id")
         .single()
     : await supabase.from("home_systems").insert(baseRow).select("id").single();
-  if (error && filter) {
+  if (error && extras) {
     ({ data: row, error } = await supabase
       .from("home_systems")
       .insert(baseRow)
@@ -223,18 +248,24 @@ export async function updateSystemAction(
     notes: (formData.get("notes") as string) || null,
   };
 
-  // HVAC filter reminder fields (migration 0042, not in generated types yet).
-  // Only written when the edit form actually sent them; if the columns are
-  // missing (migration not run), retry without them so saving never breaks.
+  // Optional columns a live DB might not have yet (filter reminder fields,
+  // migration 0042; model_number + capacity, migration 0102). Only written
+  // when the edit form actually sent them; if the columns are missing
+  // (migration not run), retry without them so saving never breaks.
   // RLS guarantees the row belongs to the caller's property.
   const filter = filterFields(formData);
-  let { error } = filter
+  const modelCapacity = modelCapacityFields(formData);
+  const extras =
+    filter || modelCapacity
+      ? { ...(filter ?? {}), ...(modelCapacity ?? {}) }
+      : null;
+  let { error } = extras
     ? await supabase
         .from("home_systems")
-        .update({ ...baseUpdate, ...filter } as any)
+        .update({ ...baseUpdate, ...extras } as any)
         .eq("id", id)
     : await supabase.from("home_systems").update(baseUpdate).eq("id", id);
-  if (error && filter) {
+  if (error && extras) {
     ({ error } = await supabase
       .from("home_systems")
       .update(baseUpdate)

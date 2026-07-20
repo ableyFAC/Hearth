@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { safeNextPath } from "@/lib/safeNext";
 import { requestOrigin } from "@/lib/requestOrigin";
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
@@ -46,12 +47,113 @@ export async function GET(request: NextRequest) {
         next === "/pro/onboarding" ||
         next.startsWith("/pro/onboarding?");
       if (data.user && isSignupConfirmation) {
-        const role = (data.user.user_metadata?.role ??
+        let role = (data.user.user_metadata?.role ??
           data.user.app_metadata?.role) as string | undefined;
+
+        // Google (GoogleSignInButton.tsx) signups arrive here with no role
+        // at all: unlike the email/password signup pages, signInWithOAuth()
+        // has no options.data to stamp role/full_name onto the new user at
+        // creation time, so it has to be backfilled the first time we see
+        // them with a session - which is here. `next` is reliable for this:
+        // isSignupConfirmation already established it's /onboarding or
+        // /pro/onboarding, and only contractor-signup's Google button ever
+        // points at the latter, so next.startsWith("/pro") is exactly
+        // "came from contractor-signup." An existing user signing IN via
+        // Google keeps whatever role they already have - they don't reach
+        // this branch at all unless `next` happens to be /onboarding or
+        // /pro/onboarding (only the two signup pages' redirectTo sets that),
+        // and even then `role` above is already set from their original
+        // signup, so the `!role` check below leaves them untouched.
+        const meta = data.user.user_metadata ?? {};
+        const needsRole = !role;
+        // Supabase maps Google's profile name into user_metadata.name (the
+        // OIDC "name" claim). The current Supabase Auth (gotrue) Google
+        // provider also copies that into a "to be deprecated" full_name
+        // field, but that's an implementation detail of the current
+        // version, not a documented guarantee, so mirror it ourselves.
+        // Ownership verification (src/app/onboarding/actions.ts) reads
+        // user_metadata.full_name to match the account holder's name
+        // against the county assessor's owner-of-record, and it's the only
+        // consumer of that field that matters pre-launch, so a missing
+        // full_name here would silently break that check for Google
+        // signups if gotrue's compat copy ever goes away.
+        const needsFullName =
+          !meta.full_name && typeof meta.name === "string" && meta.name;
+
+        if (needsRole || needsFullName) {
+          if (needsRole) {
+            role = next.startsWith("/pro") ? "contractor" : "homeowner";
+          }
+          const admin = createAdminClient();
+          const { error: updateError } = await admin.auth.admin.updateUserById(
+            data.user.id,
+            {
+              user_metadata: {
+                ...meta,
+                ...(needsRole ? { role } : {}),
+                ...(needsFullName ? { full_name: meta.name } : {}),
+              },
+            }
+          );
+          if (updateError) {
+            // Best-effort, same as recordTermsAcceptance below: never block
+            // the redirect on this. Worst case a Google signup lands without
+            // a role (getRole() falls back to the contractor-row check,
+            // then null, same as any pre-role-metadata legacy account) or
+            // without full_name (ownership verification just stays
+            // unverified, same as any other best-effort failure there).
+            console.error("auth/callback: failed to backfill OAuth user_metadata", {
+              userId: data.user.id,
+              updateError,
+            });
+          }
+        }
+
         await recordTermsAcceptance(
           data.user.id,
           role === "contractor" ? "pro_terms" : "terms"
         );
+      }
+
+      // The plain-sign-in (and any-other-entry) case for a brand-new Google
+      // user. The block above only assigns a role when `next` is one of the
+      // two signup pages' redirect targets, because there the door the user
+      // walked through IS their role choice. A user arriving via the plain
+      // /signin page instead has `next` = /dashboard (or some other gated
+      // path), so isSignupConfirmation is false and no role was assigned -
+      // yet they still have none. We must not guess one here: that would
+      // half-initialize them on the wrong side of the app. Ask instead, by
+      // sending them to the role picker. Existing users already carry a role,
+      // so `!role` leaves them completely untouched and they follow `next`.
+      if (data.user && !isSignupConfirmation) {
+        const role = (data.user.user_metadata?.role ??
+          data.user.app_metadata?.role) as string | undefined;
+        if (!role) {
+          // Same best-effort full_name backfill as the signup block above -
+          // ownership verification (onboarding/actions.ts) reads
+          // user_metadata.full_name and OAuth users arrive without it. No
+          // terms acceptance is recorded on this path: /welcome/role records
+          // it after the user actually picks a role.
+          const meta = data.user.user_metadata ?? {};
+          const needsFullName =
+            !meta.full_name && typeof meta.name === "string" && meta.name;
+          if (needsFullName) {
+            const admin = createAdminClient();
+            const { error: updateError } =
+              await admin.auth.admin.updateUserById(data.user.id, {
+                user_metadata: { ...meta, full_name: meta.name },
+              });
+            if (updateError) {
+              console.error(
+                "auth/callback: failed to backfill OAuth full_name",
+                { userId: data.user.id, updateError }
+              );
+            }
+          }
+          return NextResponse.redirect(
+            new URL(`/welcome/role?next=${encodeURIComponent(next)}`, origin)
+          );
+        }
       }
       return NextResponse.redirect(new URL(next, origin));
     }

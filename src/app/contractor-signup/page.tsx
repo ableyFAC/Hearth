@@ -5,6 +5,8 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/safeNext";
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
+import GoogleSignInButton from "@/components/GoogleSignInButton";
+import { Eye, EyeOff } from "lucide-react";
 
 // Real per-user contractor sign-up. Creates a Supabase Auth account tagged with
 // role=contractor, then sends them to set up their company. If email
@@ -45,6 +47,10 @@ export default function ContractorSignUpPage({
     : "";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  // Per-field show/hide toggles for the password and confirm inputs.
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   // Set when the account exists but email confirmation is still pending;
@@ -57,15 +63,27 @@ export default function ContractorSignUpPage({
   // since a crafted or programmatic submit can bypass HTML validation.
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
-  // Where the confirmation email's link should land: the auth callback
-  // exchanges the code for a session, then follows next= to company setup
-  // (with the original ?next= and any ?ref= still riding along, double-encoded
-  // so they survive the callback's own redirect).
+  // Where the confirmation email's link (and the Google button below) should
+  // land: the auth callback exchanges the code for a session, then follows
+  // next= to company setup (with the original ?next= and any ?ref= still
+  // riding along, double-encoded so they survive the callback's own
+  // redirect). The /pro/onboarding prefix also tells the callback this is a
+  // contractor signup, so it backfills role=contractor for a brand-new
+  // Google user (see src/app/auth/callback/route.ts).
+  const googleNextPath = `/pro/onboarding${onboardingQuery}`;
+
   function confirmRedirectUrl(): string {
     return `${window.location.origin}/auth/callback?next=${encodeURIComponent(
-      `/pro/onboarding${onboardingQuery}`
+      googleNextPath
     )}`;
   }
+
+  // Live inline mismatch signal: only once both fields have text and they
+  // differ, so a half-typed confirm field never flashes an error.
+  const passwordsMismatch =
+    password.length > 0 &&
+    confirmPassword.length > 0 &&
+    password !== confirmPassword;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -74,6 +92,11 @@ export default function ContractorSignUpPage({
 
     if (password.length < 6) {
       setError("Password must be at least 6 characters.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Passwords don't match.");
       return;
     }
 
@@ -249,16 +272,69 @@ export default function ContractorSignUpPage({
             <label className="label" htmlFor="password">
               Password
             </label>
-            <input
-              id="password"
-              className="input"
-              type="password"
-              autoComplete="new-password"
-              placeholder="At least 6 characters"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+            <div className="relative">
+              <input
+                id="password"
+                className="input pr-10"
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                placeholder="At least 6 characters"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((s) => !s)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="focus-ring absolute inset-y-0 right-0 flex items-center px-3 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200"
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="label" htmlFor="confirm_password">
+              Confirm password
+            </label>
+            <div className="relative">
+              <input
+                id="confirm_password"
+                className={`input pr-10 ${
+                  passwordsMismatch
+                    ? "border-red-400 focus:border-red-500 focus:ring-red-500 dark:border-red-500/60"
+                    : ""
+                }`}
+                type={showConfirm ? "text" : "password"}
+                autoComplete="new-password"
+                placeholder="Same password again"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                aria-invalid={passwordsMismatch}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirm((s) => !s)}
+                aria-label={showConfirm ? "Hide password" : "Show password"}
+                className="focus-ring absolute inset-y-0 right-0 flex items-center px-3 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200"
+              >
+                {showConfirm ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+            {passwordsMismatch && (
+              <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                Doesn&apos;t match yet
+              </p>
+            )}
           </div>
           {/* Unchecked-by-default, gated in onSubmit (Berman fix - a
               pre-ticked or merely-decorative agreement line doesn't bind).
@@ -292,6 +368,26 @@ export default function ContractorSignUpPage({
             purpose="create and secure your account, sign you in, and contact you about leads."
             sensitive="Your password is sensitive information. It's stored only as a scrambled hash that we can't reverse, and it's used for nothing but signing you in."
           />
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-stone-200 dark:bg-white/10" />
+            <span className="text-xs text-stone-500 dark:text-stone-400">or</span>
+            <div className="h-px flex-1 bg-stone-200 dark:bg-white/10" />
+          </div>
+          <GoogleSignInButton next={googleNextPath} onError={setError} />
+          {/* OAuth signups skip the checkbox above entirely, so the same
+              agreement needs to be restated here instead. Links to /pro-terms,
+              same as the checkbox (the B2B contractor terms). */}
+          <p className="text-center text-xs text-stone-500 dark:text-stone-400">
+            By continuing with Google you agree to the{" "}
+            <a href="/pro-terms" className="text-bark-700 hover:underline dark:text-stone-300">
+              Contractor Terms
+            </a>{" "}
+            and{" "}
+            <a href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
+              Privacy Policy
+            </a>
+            .
+          </p>
           <button className="btn-primary w-full" disabled={busy}>
             {busy ? "Creating account…" : "Sign up"}
           </button>

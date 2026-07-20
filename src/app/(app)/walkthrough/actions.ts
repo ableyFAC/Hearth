@@ -101,6 +101,11 @@ export async function confirmSystemAction(
 
   const update = {
     material_or_model: material ?? target.material_or_model,
+    // The scanned model number also lands in the dedicated model_number column
+    // (migration 0102), trivially available since the confirm form already
+    // reads it. Kept alongside material_or_model (brand + model), which the
+    // rest of the app still reads.
+    model_number: model ?? (target as { model_number?: string | null }).model_number ?? null,
     install_year: install_year ?? target.install_year,
     condition_rating: condition_rating ?? target.condition_rating,
     notes,
@@ -112,14 +117,16 @@ export async function confirmSystemAction(
     .update(update)
     .eq("id", systemId);
   if (error && isMissingSchemaError(error)) {
-    // Live DB hasn't run migration 0056 yet (confirmed_at column missing).
-    // Save everything else rather than losing the owner's typed values; the
-    // row just stays "estimated" until the migration runs. Same graceful
-    // degradation convention as saveCompanyAction and proAlerts.
-    const { confirmed_at: _dropped, ...withoutConfirm } = update;
+    // Live DB hasn't run a needed migration yet: confirmed_at (0056) or the
+    // model_number column (0102). Drop both brand-new columns and save the
+    // rest rather than losing the owner's typed values; the row just stays
+    // "estimated" until the migration runs. Same graceful degradation
+    // convention as saveCompanyAction and proAlerts.
+    const { confirmed_at: _dropped, model_number: _droppedModel, ...withoutNewCols } =
+      update;
     ({ error } = await supabase
       .from("home_systems")
-      .update(withoutConfirm)
+      .update(withoutNewCols)
       .eq("id", systemId));
   }
   if (error) {

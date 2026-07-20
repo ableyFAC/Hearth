@@ -6,6 +6,7 @@ import ProfileMenu from "@/components/ProfileMenu";
 import ToolsMenu from "@/components/ToolsMenu";
 import GlobalSearch from "@/components/GlobalSearch";
 import NotificationBell from "@/components/NotificationBell";
+import UnreadProvider from "@/components/UnreadProvider";
 import type { PropertyWithShared } from "@/lib/property";
 
 export default function Nav({
@@ -38,6 +39,10 @@ export default function Nav({
 
   return (
     <>
+    {/* Single provider for both NavLinks renderings below (desktop top strip
+        + mobile bottom bar): one poll and one realtime subscription for the
+        unread-messages badge instead of each rendering running its own. */}
+    <UnreadProvider role="homeowner">
     <header className="sticky top-0 z-30 border-b border-stone-200 bg-bark-50 dark:border-white/10 dark:bg-stone-900">
       <div className="mx-auto flex max-w-5xl flex-col gap-3 px-6 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
@@ -120,6 +125,7 @@ export default function Nav({
     >
       <NavLinks links={LINKS} variant="bottom" />
     </nav>
+    </UnreadProvider>
     </>
   );
 }

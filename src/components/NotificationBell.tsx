@@ -106,15 +106,21 @@ export default function NotificationBell() {
   // (loadList above only marks-read the rows it fetched, which can leave the
   // badge count wrong if there are more unread than the current limit).
   async function markAllRead() {
+    // Optimistic: zero the badge and dim every item to read locally first,
+    // THEN fire the Supabase update in the background. There is nothing to
+    // roll back on failure - the worst case is a stale read_at that the next
+    // poll (or simply reopening the panel, which re-marks read on load)
+    // reconciles anyway, and that beats leaving the badge stuck on its old
+    // count while the request is still in flight.
+    setItems((cur) =>
+      cur.map((n) => (n.read_at ? n : { ...n, read_at: new Date().toISOString() }))
+    );
+    setUnread(0);
     try {
       await supabase
         .from("notifications")
         .update({ read_at: new Date().toISOString() })
         .is("read_at", null);
-      setItems((cur) =>
-        cur.map((n) => (n.read_at ? n : { ...n, read_at: new Date().toISOString() }))
-      );
-      setUnread(0);
     } catch {
       // Leave whatever was already shown; next poll will reconcile.
     }
@@ -222,7 +228,7 @@ export default function NotificationBell() {
         aria-label={
           unread > 0 ? `Notifications, ${unread} unread` : "Notifications"
         }
-        className="relative flex h-9 w-9 items-center justify-center rounded-full text-stone-500 hover:bg-bark-50 hover:text-bark-700 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+        className="relative flex h-9 w-9 items-center justify-center rounded-full text-stone-500 hover:bg-bark-50 hover:text-bark-700 active:scale-95 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300"
       >
         <svg
           viewBox="0 0 24 24"
@@ -257,7 +263,7 @@ export default function NotificationBell() {
               <button
                 type="button"
                 onClick={markAllRead}
-                className="text-xs font-medium text-bark-700 hover:underline dark:text-stone-300"
+                className="text-xs font-medium text-bark-700 hover:underline active:opacity-70 dark:text-stone-300"
               >
                 Mark all read
               </button>
@@ -314,7 +320,7 @@ export default function NotificationBell() {
             <button
               type="button"
               onClick={showMore}
-              className="block w-full border-t border-stone-100 px-4 py-2 text-center text-xs font-medium text-bark-700 hover:bg-bark-50 hover:underline dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-600"
+              className="block w-full border-t border-stone-100 px-4 py-2 text-center text-xs font-medium text-bark-700 hover:bg-bark-50 hover:underline active:opacity-70 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-600"
             >
               Show more
             </button>

@@ -1,0 +1,601 @@
+import { REPLACEMENT_INFO } from "@/lib/health";
+
+// Grounded two-stage quote analyzer pipeline, extracted from
+// src/app/api/analyze-quote/route.ts so it is callable directly (no HTTP, no
+// auth) by a test script: buildTranscribePrompt / buildDiagnosePrompt are
+// pure string builders, and runDiagnose is the stage-2 evaluator itself, so a
+// script can feed it a synthetic Transcript fixture and assert on the
+// findings without ever going through stage 1 or the route's auth/credit
+// logic.
+//
+// WHY TWO STAGES: a single pass that reads the document AND judges it in the
+// same call let the model's judgment contaminate its reading, so it could
+// report a red flag ("no warranty mentioned") that was not actually true of
+// the document. Splitting the read from the judgment fixes that:
+//   STAGE 1 (transcribe): purely descriptive. Faithfully extract the quote's
+//     line items, totals, terms, contractor fields, and eight commonly
+//     expected items (permit, license number, dates, payment schedule,
+//     warranty, cleanup, change-order terms) as present/absent, citing the
+//     verbatim line when present. Nothing evaluative.
+//   STAGE 2 (diagnose): purely evaluative, and its ONLY input is the stage-1
+//     JSON, never the raw photo or text. Every finding it writes must cite
+//     the exact verbatim line it is based on, or, for an absence, must name
+//     the specific checked-and-absent field. normalizeDiagnosis then enforces
+//     that rule in code, not just in the prompt: a finding whose evidence
+//     cannot be found verbatim in the transcript (and is not the exact
+//     "not mentioned in the quote" phrase) is dropped rather than shown. That
+//     code-level check is the actual fix for the false-positive bug, since a
+//     prompt instruction alone is exactly what already failed once.
+//
+// LATENCY: this is up to two sequential Gemini calls instead of one, each
+// with its own up-to-4-model fallback chain on failure (see MODELS). Typical
+// case is one call per stage (two total). Worst case, every model failing or
+// rate-limited on both stages, is roughly double the old single-call route's
+// worst case. Judged acceptable for grounded findings; the caller (route.ts)
+// raised its own budget accordingly, and the client's fetch timeout
+// (QuoteAnalyzer.tsx) was raised to match. When stage 1 reports the document
+// is not actually a quote, the route skips stage 2 entirely (see
+// notAQuoteDiagnosis), so that path stays a single call.
+
+export const MODELS = [
+  "gemini-2.5-flash",
+  "gemini-flash-latest",
+  "gemini-2.5-flash-lite",
+  "gemini-2.0-flash",
+];
+
+// A rough mapping from a job category to the closest system_type Hearth
+// already keeps a national cost range for, so stage 2 gets a grounded
+// baseline instead of guessing. Categories with no clean match (structural,
+// remodeling, landscaping, cleaning, painting, home_inspection, pest,
+// handyman, other) fall back to no baseline, and the model is told to use its
+// own general knowledge, ranges only, only when confident.
+const CATEGORY_TO_SYSTEM: Record<string, string> = {
+  roof: "roof",
+  hvac: "hvac",
+  plumbing: "plumbing",
+  windows: "windows",
+  electrical: "electrical_panel",
+  garage_door: "garage_door",
+};
+
+export function baselineFor(category: string | null): string | null {
+  if (!category) return null;
+  const systemType = CATEGORY_TO_SYSTEM[category];
+  const info = systemType ? REPLACEMENT_INFO[systemType] : null;
+  if (!info) return null;
+  return `$${info.low.toLocaleString()}-$${info.high.toLocaleString()} (national ballpark for a full ${category} replacement job; smaller repairs cost less)`;
+}
+
+// ---------------------------------------------------------------------------
+// Stage 1: transcribe
+// ---------------------------------------------------------------------------
+
+export type TranscriptLineItem = {
+  text: string;
+  quantity: string | null;
+  price: string | null;
+};
+
+export type ContractorInfo = {
+  name: string | null;
+  company: string | null;
+  license_number: string | null;
+  contact: string | null;
+};
+
+export type CheckField =
+  | "permit"
+  | "license_number"
+  | "start_date"
+  | "completion_date"
+  | "payment_schedule"
+  | "warranty"
+  | "cleanup"
+  | "change_order_terms";
+
+export type Check = {
+  field: CheckField;
+  label: string;
+  present: boolean;
+  line: string | null;
+};
+
+export type Transcript = {
+  is_quote: boolean;
+  contractor: ContractorInfo;
+  line_items: TranscriptLineItem[];
+  total: string | null;
+  terms: string[];
+  checks: Check[];
+  unreadable_note: string | null;
+};
+
+// The eight commonly-expected items stage 1 always checks, in this order.
+// Shared between the prompt builder (so the wording can't drift from the
+// schema) and normalizeTranscript (so every transcript always has all eight,
+// even if the model dropped one).
+export const CHECK_FIELDS: { field: CheckField; label: string }[] = [
+  { field: "permit", label: "a permit mention" },
+  { field: "license_number", label: "the contractor's license number" },
+  { field: "start_date", label: "a start date" },
+  { field: "completion_date", label: "a completion date" },
+  { field: "payment_schedule", label: "a payment schedule" },
+  { field: "warranty", label: "a warranty" },
+  { field: "cleanup", label: "cleanup or debris removal terms" },
+  { field: "change_order_terms", label: "change order terms (what happens if the scope changes)" },
+];
+
+export const TRANSCRIBE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    is_quote: { type: "BOOLEAN" },
+    unreadable_note: { type: "STRING" },
+    contractor: {
+      type: "OBJECT",
+      properties: {
+        name: { type: "STRING" },
+        company: { type: "STRING" },
+        license_number: { type: "STRING" },
+        contact: { type: "STRING" },
+      },
+    },
+    line_items: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          text: { type: "STRING" },
+          quantity: { type: "STRING" },
+          price: { type: "STRING" },
+        },
+        required: ["text"],
+      },
+    },
+    total: { type: "STRING" },
+    terms: { type: "ARRAY", items: { type: "STRING" } },
+    checks: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          field: {
+            type: "STRING",
+            enum: CHECK_FIELDS.map((c) => c.field),
+          },
+          label: { type: "STRING" },
+          present: { type: "BOOLEAN" },
+          line: { type: "STRING" },
+        },
+        required: ["field", "label", "present"],
+      },
+    },
+  },
+  required: ["is_quote", "line_items", "checks"],
+};
+
+export function buildTranscribePrompt(opts: {
+  category: string | null;
+  today: string;
+}): string {
+  const { category, today } = opts;
+  return (
+    "You are transcribing a contractor's quote, estimate, or invoice for a homeowner. " +
+    "This is a transcription step only: do not judge, evaluate, or comment on anything, only record faithfully what is actually printed or written, whether it comes from a photo or pasted text. " +
+    "Set is_quote to false if what you are given is not actually a contractor's quote, estimate, or invoice, or if you cannot read enough of it to transcribe, and explain briefly why in unreadable_note. Otherwise leave unreadable_note empty and still transcribe everything you can read. " +
+    "List every line item in line_items, each with its text exactly as written, its quantity if one is given, and its price if one is given, including the currency symbol as printed. Leave a field empty rather than guessing when the document does not show it. " +
+    "Copy the total exactly as printed into total. " +
+    "Copy every term, condition, or fine-print line verbatim into terms, such as payment terms, cancellation terms, or disclaimers, each as its own entry. " +
+    "Fill in the contractor's name, company, license number, and contact info exactly as written, leaving any field empty if it is not shown. " +
+    "Then check for eight specific things a solid quote commonly includes, and for each one decide present or absent: a permit mention, the contractor's license number, a start date, a completion date, a payment schedule, a warranty, cleanup or debris removal terms, and change order terms (what happens if the scope changes). " +
+    "Add one entry to checks for each of the eight, using exactly these field values: permit, license_number, start_date, completion_date, payment_schedule, warranty, cleanup, change_order_terms. Set present to true or false. When present, copy the exact verbatim line that shows it into line. When absent, leave line empty. " +
+    (category
+      ? `The homeowner tagged this job as: ${category}. Use that only to help you read the document, not to judge it. `
+      : "") +
+    `Today's date is ${today}. ` +
+    "Never add, infer, correct, or estimate anything that is not explicitly shown in the document. If a number or word is illegible, leave it out rather than guessing. Do not compare anything to market rates or typical costs, that happens in a separate step you are not doing. " +
+    "Transcribe verbatim text (line item text, terms, contractor fields, checked lines) in the language it is written in. Keep field names, is_quote, and present or absent values as instructed. " +
+    "Write in plain, complete sentences where prose is needed. Never use an em dash or a hyphen as a connector: use a comma, a colon, or a new sentence instead."
+  );
+}
+
+export function normalizeTranscript(raw: any): Transcript {
+  const str = (v: any) => {
+    const s = typeof v === "string" ? v.trim() : "";
+    return s.length ? s : null;
+  };
+
+  const lineItems: TranscriptLineItem[] = Array.isArray(raw?.line_items)
+    ? raw.line_items
+        .map((li: any) => ({
+          text: str(li?.text),
+          quantity: str(li?.quantity),
+          price: str(li?.price),
+        }))
+        .filter((li: any): li is TranscriptLineItem => !!li.text)
+    : [];
+
+  const terms: string[] = Array.isArray(raw?.terms)
+    ? raw.terms.map((t: any) => (typeof t === "string" ? t.trim() : "")).filter(Boolean)
+    : [];
+
+  const rawChecks: any[] = Array.isArray(raw?.checks) ? raw.checks : [];
+  const checks: Check[] = CHECK_FIELDS.map(({ field, label }) => {
+    const match = rawChecks.find((c) => c?.field === field);
+    const present = !!match?.present;
+    return {
+      field,
+      label,
+      present,
+      line: present ? str(match?.line) : null,
+    };
+  });
+
+  return {
+    is_quote: raw?.is_quote !== false, // default to true unless explicitly false
+    contractor: {
+      name: str(raw?.contractor?.name),
+      company: str(raw?.contractor?.company),
+      license_number: str(raw?.contractor?.license_number),
+      contact: str(raw?.contractor?.contact),
+    },
+    line_items: lineItems,
+    total: str(raw?.total),
+    terms,
+    checks,
+    unreadable_note: str(raw?.unreadable_note),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Stage 2: diagnose
+// ---------------------------------------------------------------------------
+
+export type Severity = "red_flag" | "ask" | "ok";
+export type FindingArea = "pricing" | "missing_info" | "terms" | "other";
+
+export type RawFinding = {
+  area: FindingArea;
+  text: string;
+  evidence: string;
+  severity: Severity;
+};
+
+export type Verdict = "fair" | "high" | "low" | "unclear";
+
+export type Diagnosis = {
+  verdict: Verdict;
+  overall: string;
+  summary: string;
+  findings: RawFinding[];
+  negotiation: string;
+};
+
+// The exact phrase a finding's evidence must use when it is based on an
+// absence rather than a verbatim line. Enforced both in the prompt and in
+// normalizeDiagnosis, so the model can't drift the wording and still pass.
+export const NOT_MENTIONED = "not mentioned in the quote";
+
+const SEVERITIES: Severity[] = ["red_flag", "ask", "ok"];
+const AREAS: FindingArea[] = ["pricing", "missing_info", "terms", "other"];
+
+export const DIAGNOSE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    verdict: { type: "STRING", enum: ["fair", "high", "low", "unclear"] },
+    overall: { type: "STRING" },
+    summary: { type: "STRING" },
+    findings: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          area: { type: "STRING", enum: AREAS },
+          text: { type: "STRING" },
+          evidence: { type: "STRING" },
+          severity: { type: "STRING", enum: SEVERITIES },
+        },
+        required: ["text", "evidence", "severity"],
+      },
+    },
+    negotiation: { type: "STRING" },
+  },
+  required: ["verdict", "overall", "summary", "findings", "negotiation"],
+};
+
+export function buildDiagnosePrompt(opts: {
+  baseline: string | null;
+  category: string | null;
+  today: string;
+}): string {
+  const { baseline, category, today } = opts;
+  return (
+    "You are a homeowner's advocate reviewing a contractor's quote. Your only input is a structured transcript of that quote, given to you as JSON, extracted verbatim line by line by a separate step. You do not have the original document, photo, or any text beyond this transcript. Base every judgment strictly on it. " +
+    "Hard rule: every finding you write must cite exact evidence. If the finding is about something present in the quote, evidence must be the exact verbatim line, term, or field value from the transcript it is based on, copied exactly, not paraphrased or summarized. If the finding is about something the transcript checked and marked absent, evidence must be exactly the phrase \"not mentioned in the quote\", and text must name the specific missing item (for example the license number, a start date, a payment schedule, a warranty, cleanup terms, or change order terms). Never write a finding you cannot cite this way. If you cannot point to an exact verbatim source or a checked absence, leave it out entirely rather than including it. " +
+    "Give every finding an area: pricing, missing_info, terms, or other, and a severity: red_flag for a clear problem (padded or inflated pricing, a vague charge with no detail behind it, the same work billed twice under different names, and similar), ask for something ambiguous that is worth a direct question to the contractor, phrased as that question, or ok for something you checked and it looks standard. " +
+    "A missing license number is a red_flag only when the work clearly falls under a licensed trade, such as electrical, plumbing, HVAC, roofing, or general contracting on a large job. For small general repair or handyman work (fixing a faucet, patching drywall, rehanging a cabinet door, and similar small jobs), most places do not require a license for that kind of work, so a missing license number there is normal and not worth a finding at all. When you are not sure whether a missing item is actually a problem for the specific job described, use ask instead of red_flag, never guess upward into red_flag. " +
+    "Standard, expected parts of a quote are not red flags: a legally required lien notice or 'notice to owner' disclosure, a normal exclusions or scope-limiting section, a manufacturer's warranty being passed through as-is instead of extended by the contractor, and a deposit amount that is simply restated in more than one place (for example once in the line items and again in the payment schedule) are all routine and should be marked ok, not flagged, unless the actual dollar amounts disagree with each other. " +
+    "If the pricing and terms look reasonable, say so plainly. Most or all of your findings can be ok, and overall should say something like nothing concerning here, this quote looks standard. Do not manufacture concerns just to fill the list. " +
+    "When you mention what something should cost, only do so if you are confident, and always give a range, never a single invented number with false precision" +
+    (baseline
+      ? `. A grounded national baseline for this category is ${baseline}, use it as a reference and adjust for the scope actually described`
+      : "") +
+    ". " +
+    "Never give legal advice. If something touches licensing, permits, or contract law, phrase it as a question for the homeowner to ask the contractor, not a legal conclusion. " +
+    "Decide an overall verdict: fair if the total is in a reasonable range, high if it looks padded or overpriced, low if it looks unusually cheap (which can itself be a red flag, such as a bid that is too good to be true or omits scope), or unclear if the transcript does not have enough information to judge. If is_quote is false in the transcript, set verdict to unclear and explain why in summary, using the transcript's unreadable_note. " +
+    "Write overall as one short, plain sentence giving the headline read (for example: fair, standard, a few things worth asking about, and so on). Write summary as two or three short, plain sentences: what the quote is for, the total, and why you reached that verdict. Write negotiation as a short, polite message the homeowner can copy and send to the contractor as is, referencing only the specific red_flag and ask findings you found. Leave negotiation as an empty string if you found nothing worth raising. Keep negotiation to three or four sentences, friendly, not accusatory. " +
+    (category ? `The homeowner tagged this job as: ${category}. ` : "") +
+    `Today's date is ${today}. ` +
+    "Write overall, summary, finding text, and negotiation in the same language as the verbatim text inside the transcript (for example, if the transcript's lines are in Spanish, respond in Spanish). Keep verdict, area, and severity values in English. " +
+    "Write in plain, complete sentences. Never use an em dash or a hyphen as a connector: use a comma, a colon, or a new sentence instead."
+  );
+}
+
+// Builds one lowercased corpus of every verbatim string stage 1 recorded, so
+// a stage-2 finding's evidence can be checked against it. Whitespace is
+// collapsed on both sides at compare time (isEvidenceGrounded) so trivial
+// formatting differences don't cause a real match to be dropped.
+function verbatimCorpus(t: Transcript): string {
+  const parts: string[] = [];
+  for (const li of t.line_items) {
+    if (li.text) parts.push(li.text);
+    if (li.quantity) parts.push(li.quantity);
+    if (li.price) parts.push(li.price);
+  }
+  if (t.total) parts.push(t.total);
+  for (const term of t.terms) parts.push(term);
+  for (const c of t.checks) if (c.line) parts.push(c.line);
+  const { name, company, license_number, contact } = t.contractor;
+  for (const v of [name, company, license_number, contact]) if (v) parts.push(v);
+  return parts.join("\n").toLowerCase();
+}
+
+const normalizeWs = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
+
+// The code-level half of the grounding rule: true only if `evidence` is
+// either the exact absence phrase, or a substring of something stage 1
+// actually transcribed verbatim. This is what actually stops a hallucinated
+// red flag from reaching the homeowner, the prompt asking nicely is not
+// enough on its own (that is exactly how the original bug happened).
+export function isEvidenceGrounded(evidence: string, transcript: Transcript): boolean {
+  if (typeof evidence !== "string" || !evidence.trim()) return false;
+  const e = normalizeWs(evidence);
+  if (e === NOT_MENTIONED) return true;
+  const corpus = normalizeWs(verbatimCorpus(transcript));
+  return corpus.includes(e);
+}
+
+export function normalizeDiagnosis(raw: any, transcript: Transcript): Diagnosis {
+  const str = (v: any) => (typeof v === "string" ? v.trim() : "");
+
+  const verdictRaw = str(raw?.verdict);
+  const verdict: Verdict = (
+    ["fair", "high", "low", "unclear"] as const
+  ).includes(verdictRaw as any)
+    ? (verdictRaw as Verdict)
+    : "unclear";
+
+  const findings: RawFinding[] = Array.isArray(raw?.findings)
+    ? raw.findings
+        .map((f: any) => ({
+          area: (AREAS as string[]).includes(f?.area) ? (f.area as FindingArea) : "other",
+          text: str(f?.text),
+          evidence: str(f?.evidence),
+          severity: (SEVERITIES as string[]).includes(f?.severity)
+            ? (f.severity as Severity)
+            : null,
+        }))
+        .filter(
+          (f: any): f is RawFinding =>
+            !!f.text && !!f.severity && isEvidenceGrounded(f.evidence, transcript)
+        )
+    : [];
+
+  const summary = str(raw?.summary);
+  const overall =
+    str(raw?.overall) ||
+    (findings.every((f) => f.severity === "ok")
+      ? "Nothing concerning here, this quote looks standard."
+      : summary);
+
+  return {
+    verdict,
+    overall,
+    summary,
+    findings,
+    negotiation: str(raw?.negotiation),
+  };
+}
+
+// A quote-shaped document that stage 1 could not confirm is actually a
+// quote (or could not read enough of): built without a stage-2 call at all,
+// since there is nothing to diagnose and no reason to spend a second model
+// call on it.
+export function notAQuoteDiagnosis(transcript: Transcript): Diagnosis {
+  const reason =
+    transcript.unreadable_note ||
+    "This doesn't look like a contractor's quote, estimate, or invoice, or not enough of it could be read to judge.";
+  return {
+    verdict: "unclear",
+    overall: "Not enough here to judge.",
+    summary: reason,
+    findings: [],
+    negotiation: "",
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Final response shape (what the UI renders)
+// ---------------------------------------------------------------------------
+
+export type LineItemOut = { label: string; amount: string | null; note: string | null };
+export type Finding = { text: string; evidence: string; severity: Severity };
+
+export type Analysis = {
+  verdict: Verdict;
+  total: string | null;
+  summary: string;
+  overall: string;
+  line_items: LineItemOut[];
+  red_flags: Finding[];
+  missing: Finding[];
+  negotiation: string;
+};
+
+// Merges the stage-1 transcript (verbatim facts) and stage-2 diagnosis
+// (evaluative findings, each already grounding-checked) into the shape
+// QuoteAnalyzer.tsx renders. line_items stay purely transcribed, verbatim,
+// with no evaluative "note" attached to them any more, every judgment now
+// lives in red_flags / missing instead, each with its own citation.
+export function buildAnalysis(transcript: Transcript, diagnosis: Diagnosis): Analysis {
+  const line_items: LineItemOut[] = transcript.line_items.map((li) => ({
+    label: li.quantity ? `${li.quantity} ${li.text}` : li.text,
+    amount: li.price,
+    note: null,
+  }));
+
+  const toFinding = (f: RawFinding): Finding => ({
+    text: f.text,
+    evidence: f.evidence,
+    severity: f.severity,
+  });
+  const missing = diagnosis.findings.filter((f) => f.area === "missing_info").map(toFinding);
+  const red_flags = diagnosis.findings.filter((f) => f.area !== "missing_info").map(toFinding);
+
+  return {
+    verdict: diagnosis.verdict,
+    total: transcript.total,
+    summary: diagnosis.summary,
+    overall: diagnosis.overall,
+    line_items,
+    red_flags,
+    missing,
+    negotiation: diagnosis.negotiation,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Gemini calls (model fallback, same convention as every other Gemini route)
+// ---------------------------------------------------------------------------
+
+async function callGeminiWithFallback(params: {
+  apiKey: string;
+  models: string[];
+  systemInstruction: string;
+  contents: any[];
+  schema: any;
+  maxOutputTokens: number;
+}): Promise<{ parsed: any | null; rateLimited: boolean }> {
+  const requestBody = JSON.stringify({
+    systemInstruction: { parts: [{ text: params.systemInstruction }] },
+    contents: params.contents,
+    generationConfig: {
+      maxOutputTokens: params.maxOutputTokens,
+      responseMimeType: "application/json",
+      responseSchema: params.schema,
+    },
+  });
+
+  let rateLimited = false;
+  for (const model of params.models) {
+    try {
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-goog-api-key": params.apiKey,
+          },
+          body: requestBody,
+        }
+      );
+      if (resp.status === 429) {
+        rateLimited = true;
+        continue;
+      }
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!responseText) continue;
+      try {
+        return { parsed: JSON.parse(responseText), rateLimited: false };
+      } catch {
+        continue; // malformed - try the next model
+      }
+    } catch {
+      // network error - try the next model
+    }
+  }
+  return { parsed: null, rateLimited };
+}
+
+export type GeminiOpts = { apiKey: string; models?: string[] };
+
+// Stage 1 runner: vision (or text) call that produces the grounded
+// transcript. Takes the same raw input shape the route already accepts.
+export async function runTranscribe(
+  input: { image?: string; mime?: string; text?: string; category?: string | null },
+  opts: GeminiOpts
+): Promise<{ transcript: Transcript | null; rateLimited: boolean }> {
+  const category = input.category ?? null;
+  const today = new Date().toISOString().slice(0, 10);
+  const instruction = buildTranscribePrompt({ category, today });
+
+  const userParts: any[] = [];
+  const introBits: string[] = [];
+  if (category) introBits.push(`The homeowner tagged this job as: ${category}.`);
+  if (input.image) {
+    introBits.push("Transcribe the quote shown in this photo.");
+    userParts.push({ text: introBits.join(" ") });
+    userParts.push({ inlineData: { mimeType: input.mime || "image/jpeg", data: input.image } });
+    if (input.text) {
+      userParts.push({ text: `The homeowner also typed this note or additional text:\n\n${input.text}` });
+    }
+  } else {
+    introBits.push("Transcribe this quote:");
+    userParts.push({ text: `${introBits.join(" ")}\n\n${input.text || ""}` });
+  }
+
+  const { parsed, rateLimited } = await callGeminiWithFallback({
+    apiKey: opts.apiKey,
+    models: opts.models ?? MODELS,
+    systemInstruction: instruction,
+    contents: [{ role: "user", parts: userParts }],
+    schema: TRANSCRIBE_SCHEMA,
+    maxOutputTokens: 1600,
+  });
+
+  return { transcript: parsed ? normalizeTranscript(parsed) : null, rateLimited };
+}
+
+// Stage 2 runner, THE STAGE-2 EVALUATOR: its only input is a Transcript (no
+// image, no raw text, no HTTP request, no auth). A test script can build a
+// synthetic Transcript by hand (or via normalizeTranscript on a fixture) and
+// call this directly with a real GEMINI_API_KEY to assert on the findings it
+// produces, independent of stage 1 and independent of the route.
+export async function runDiagnose(
+  transcript: Transcript,
+  opts: GeminiOpts & { category?: string | null }
+): Promise<{ diagnosis: Diagnosis | null; rateLimited: boolean }> {
+  const category = opts.category ?? null;
+  const baseline = baselineFor(category);
+  const today = new Date().toISOString().slice(0, 10);
+  const instruction = buildDiagnosePrompt({ baseline, category, today });
+
+  const { parsed, rateLimited } = await callGeminiWithFallback({
+    apiKey: opts.apiKey,
+    models: opts.models ?? MODELS,
+    systemInstruction: instruction,
+    // ONLY the stage-1 JSON, per the grounding design: stage 2 never sees
+    // the photo or the raw pasted text again.
+    contents: [{ role: "user", parts: [{ text: JSON.stringify(transcript) }] }],
+    schema: DIAGNOSE_SCHEMA,
+    maxOutputTokens: 1200,
+  });
+
+  return {
+    diagnosis: parsed ? normalizeDiagnosis(parsed, transcript) : null,
+    rateLimited,
+  };
+}

@@ -64,9 +64,15 @@ const SEVERITY_LABEL: Record<string, string> = {
 };
 
 export default async function HomeReportPage() {
-  if (!(await hasPlus())) redirect("/plus?reason=report");
+  // hasPlus and getActiveProperty don't depend on each other - run them
+  // together instead of stacking two round trips before the redirect check.
+  const [plus, propertyOrNull] = await Promise.all([
+    hasPlus(),
+    getActiveProperty(),
+  ]);
+  if (!plus) redirect("/plus?reason=report");
 
-  const property = (await getActiveProperty())!;
+  const property = propertyOrNull!;
   const supabase = createClient();
 
   const [

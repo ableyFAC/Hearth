@@ -25,8 +25,13 @@ const MIN_ADDRESS_LENGTH = 5;
 
 export default function OnboardingForm({
   next,
+  referralCode,
 }: {
   next?: string | null;
+  // The inviter's referral code (migration 0099), carried through from the
+  // sign-up link and posted as a hidden field so claimPropertyAction can
+  // attribute this first home claim. Null for the ordinary, non-invited signup.
+  referralCode?: string | null;
 }) {
   const [step, setStep] = useState<"address" | "confirm" | "out_of_area">(
     "address"
@@ -117,7 +122,13 @@ export default function OnboardingForm({
     setBusy(true);
     try {
       await claimPropertyAction(formData);
-    } catch (err) {
+    } catch (err: any) {
+      // Trap: claimPropertyAction redirects to the dashboard on success, and
+      // redirect() does that by throwing a NEXT_REDIRECT-digest error for
+      // Next's router to catch higher up. A bare catch here swallows that
+      // throw and reports a successful claim as "that didn't go through" -
+      // rethrow it so the redirect still happens.
+      if (err?.digest?.startsWith("NEXT_REDIRECT")) throw err;
       // Surface claimPropertyAction's own validation message (e.g. an
       // address rejected server-side) when there is one; fall back to the
       // generic copy for network blips and other unexpected failures.
@@ -254,6 +265,7 @@ export default function OnboardingForm({
 
           <input type="hidden" name="parcel_id" value={facts.parcel_id ?? ""} />
           <input type="hidden" name="next" value={next ?? ""} />
+          <input type="hidden" name="ref" value={referralCode ?? ""} />
 
           {/* RentCast enrichment (src/lib/parcel.ts) the owner can't edit and
               isn't shown on this screen: carried through as hidden fields so
@@ -405,6 +417,10 @@ export default function OnboardingForm({
 
           <p className="rounded-lg bg-bark-50 p-3 text-xs text-bark-700 dark:bg-bark-700/40 dark:text-stone-300">
             By claiming this home you&apos;re confirming you own or manage it.
+            We also quietly compare the name on your account against the
+            county&apos;s public owner-of-record for this address. It helps pros
+            trust that jobs here are real, and nothing bad happens if it
+            doesn&apos;t match.
           </p>
 
           {error && (

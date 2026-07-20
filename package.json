@@ -5,6 +5,7 @@
   "description": "Hearth: a homeowner tool. Keep your house in good shape, know what needs attention, and reach a trustworthy pro when something breaks.",
   "scripts": {
     "dev": "next dev",
+    "dev:turbo": "next dev --turbo -H 0.0.0.0 -p 3000",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

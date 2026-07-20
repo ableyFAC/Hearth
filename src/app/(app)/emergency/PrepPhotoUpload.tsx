@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { imgSrc } from "@/lib/storage";
 import { savePrepItemAction } from "./actions";
 import SubmitButton from "@/components/SubmitButton";
+import Lightbox from "@/components/Lightbox";
 import type { PrepKey } from "./PanicCard";
 
 const MAX_BYTES = 15 * 1024 * 1024; // 15MB, same cap as PhotoUpload
@@ -31,6 +32,7 @@ export default function PrepPhotoUpload({
   const [photoUrl, setPhotoUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const input = e.target;
@@ -85,12 +87,26 @@ export default function PrepPhotoUpload({
       <input type="hidden" name="photo_url" value={photoUrl} />
       <p className="text-sm font-medium text-stone-800 dark:text-stone-200">{label}</p>
       {preview ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={preview}
-          alt={label}
-          className="h-28 w-full rounded-md object-cover"
-        />
+        <>
+          <button
+            type="button"
+            onClick={() => setLightboxOpen(true)}
+            className="block w-full cursor-zoom-in"
+            aria-label={`View ${label} photo full size`}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={preview}
+              alt={label}
+              className="h-28 w-full rounded-md object-cover"
+            />
+          </button>
+          <Lightbox
+            src={lightboxOpen ? preview : null}
+            alt={label}
+            onClose={() => setLightboxOpen(false)}
+          />
+        </>
       ) : (
         <div className="flex h-28 items-center justify-center rounded-md bg-stone-50 text-xs text-stone-500 dark:bg-stone-900 dark:text-stone-400">
           No photo yet

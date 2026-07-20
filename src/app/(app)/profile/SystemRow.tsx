@@ -236,6 +236,27 @@ export default function SystemRow({
                 defaultValue={s.material_or_model ?? ""}
               />
             </div>
+            {/* Exact model + capacity (migration 0102), optional free text. */}
+            <div>
+              <label className="label">Model number (optional)</label>
+              <input
+                name="model_number"
+                className="input"
+                placeholder="XE50T10H45U0"
+                maxLength={60}
+                defaultValue={s.model_number ?? ""}
+              />
+            </div>
+            <div>
+              <label className="label">Capacity / size (optional)</label>
+              <input
+                name="capacity"
+                className="input"
+                placeholder="50 gal / 3 ton / 200 sq ft"
+                maxLength={60}
+                defaultValue={s.capacity ?? ""}
+              />
+            </div>
             <div>
               <label className="label">Condition</label>
               <select
@@ -409,6 +430,22 @@ export default function SystemRow({
                 <dt className="font-medium text-stone-800 dark:text-stone-200">{materialLabel(s.system_type)}</dt>
                 <dd className="text-stone-500 dark:text-stone-400">
                   {s.material_or_model}
+                </dd>
+              </div>
+            )}
+            {s.model_number && (
+              <div>
+                <dt className="font-medium text-stone-800 dark:text-stone-200">Model number</dt>
+                <dd className="text-stone-500 dark:text-stone-400">
+                  {s.model_number}
+                </dd>
+              </div>
+            )}
+            {s.capacity && (
+              <div>
+                <dt className="font-medium text-stone-800 dark:text-stone-200">Capacity / size</dt>
+                <dd className="text-stone-500 dark:text-stone-400">
+                  {s.capacity}
                 </dd>
               </div>
             )}

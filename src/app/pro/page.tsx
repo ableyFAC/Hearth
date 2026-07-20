@@ -18,6 +18,7 @@ import ChatDrawer from "@/components/ChatDrawer";
 import LeadsRealtime from "./LeadsRealtime";
 import ApplyJobButton from "./ApplyJobButton";
 import JobStatusSelect from "./JobStatusSelect";
+import JobPhotoStrip from "./JobPhotoStrip";
 import SetupChecklist, { type SetupItem } from "@/components/pro/SetupChecklist";
 import { agingLeadFee } from "@/lib/leadPricing";
 import { hasProPlan } from "@/lib/subscription";
@@ -67,7 +68,9 @@ function qualityChips(j: any): string[] {
   const chips: string[] = [];
   if ((j.issue_description ?? "").trim().length >= 80)
     chips.push("Detailed description");
-  if (j.has_photos) chips.push("Photos attached");
+  // Photos are now shown as a thumbnail strip on the card, so no redundant
+  // "Photos attached" chip; a job with photos but no rendered urls (rare) still
+  // gets no chip - the strip is the signal now.
   if (j.timing) chips.push("Timing set");
   return chips;
 }
@@ -105,7 +108,7 @@ export default async function ProDashboard({
       supabase
         .from("contractor_leads")
         .select(
-          "id, status, category, issue_severity, issue_description, homeowner_name, homeowner_email, homeowner_phone, property_address, created_at"
+          "id, issue_id, status, category, issue_severity, issue_description, homeowner_name, homeowner_email, homeowner_phone, property_address, created_at"
         )
         .eq("contractor_id", contractor.id)
         .order("created_at", { ascending: false }),
@@ -175,6 +178,33 @@ export default async function ProDashboard({
   const assigned = ((assignedData ?? []) as any[]).sort(
     (a, b) => (isDone(a) ? 1 : 0) - (isDone(b) ? 1 : 0)
   );
+
+  // Full-resolution job photos for the leads this pro was chosen for. The
+  // photos table is owner-only under RLS, so we read the urls via the admin
+  // client (best-effort: any error just leaves those cards photo-less). The
+  // /api/job-photo route re-checks entitlement with can_view_job_photo_full
+  // before it signs anything, so this lookup is display data, not the gate.
+  const assignedPhotos = new Map<string, string[]>();
+  const assignedIssueIds = assigned
+    .map((l) => l.issue_id)
+    .filter((v): v is string => Boolean(v));
+  if (assignedIssueIds.length) {
+    const admin = createAdminClient();
+    const { data: photoRows } = await admin
+      .from("photos")
+      .select("related_id, url, uploaded_at")
+      .eq("related_type", "issue")
+      .in("related_id", assignedIssueIds)
+      .order("uploaded_at", { ascending: true });
+    for (const l of assigned) {
+      if (!l.issue_id) continue;
+      const urls = ((photoRows ?? []) as any[])
+        .filter((p) => p.related_id === l.issue_id)
+        .map((p) => p.url as string)
+        .filter(Boolean);
+      if (urls.length) assignedPhotos.set(l.id, urls);
+    }
+  }
 
   // Applications still waiting on the homeowner (not yet chosen for the job).
   const pendingApps = apps.filter((a) => a.status === "applied");
@@ -546,6 +576,9 @@ export default async function ProDashboard({
                       No details provided yet
                     </p>
                   )}
+                  {Array.isArray(j.photo_urls) && j.photo_urls.length > 0 && (
+                    <JobPhotoStrip leadId={j.id} urls={j.photo_urls} />
+                  )}
                   {(chips.length > 0 || budgetLabel) && (
                     <div className="flex flex-wrap gap-1">
                       {budgetLabel && (
@@ -650,7 +683,11 @@ export default async function ProDashboard({
         ) : (
           <ul className="space-y-3">
             {assigned.map((l) => (
-              <AssignedJobCard key={l.id} l={l} />
+              <AssignedJobCard
+                key={l.id}
+                l={l}
+                photoUrls={assignedPhotos.get(l.id) ?? []}
+              />
             ))}
           </ul>
         )}
@@ -735,7 +772,13 @@ export default async function ProDashboard({
 }
 
 // A job the homeowner picked this pro for: contact revealed + chat + pipeline.
-function AssignedJobCard({ l }: { l: any }) {
+function AssignedJobCard({
+  l,
+  photoUrls,
+}: {
+  l: any;
+  photoUrls: string[];
+}) {
   return (
     <li className="card space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -761,6 +804,10 @@ function AssignedJobCard({ l }: { l: any }) {
         <p className="text-sm text-stone-600 dark:text-stone-400">{l.issue_description}</p>
       ) : (
         <p className="text-sm italic text-stone-500 dark:text-stone-400">No details provided yet</p>
+      )}
+
+      {photoUrls.length > 0 && (
+        <JobPhotoStrip leadId={l.id} urls={photoUrls} full />
       )}
 
       <div className="rounded-lg bg-stone-50 p-3 text-sm text-stone-600 dark:bg-stone-900 dark:text-stone-400">

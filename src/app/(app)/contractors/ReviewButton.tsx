@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ActionResult } from "@/lib/actionResult";
+import { getMyInviteCodeAction } from "./inviteActions";
 
 // "Leave a review" / "Edit review" button shown on a closed job's row. Opens a
 // star + comment form that submits through the saveReviewAction server action
@@ -17,6 +18,14 @@ import type { ActionResult } from "@/lib/actionResult";
 // underneath: word of mouth is how most homeowners find a pro, and the moment
 // right after a good review is the highest-intent moment to ask. No reward is
 // ever offered here (FTC-clean): just the pro's own public page.
+//
+// A SECOND follow-up appears after ANY successful submit (the peak-satisfaction
+// moment): a "Invite a neighbor" panel with the homeowner's OWN Hearth invite
+// link (their lazy referral code, migration 0099 - see inviteActions.ts). This
+// one shares Hearth itself, not the pro, and is honest neighbor-to-neighbor
+// sharing with no reward, credit, or wallet of any kind. It's fetched lazily
+// so it only appears if a link can actually be produced, is dismissible, shows
+// at most once per submission, and never blocks the review flow.
 export default function ReviewButton({
   leadId,
   contractorName,
@@ -47,6 +56,68 @@ export default function ReviewButton({
   const [shareState, setShareState] = useState<"idle" | "copied" | "show-link">(
     "idle"
   );
+  // Set on ANY fresh submit; drives the "Invite a neighbor" panel below. The
+  // code is fetched lazily once (getMyInviteCodeAction) - null means no link
+  // could be made (feature not live, etc.), so the panel simply never shows.
+  const [justSubmitted, setJustSubmitted] = useState(false);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [inviteDismissed, setInviteDismissed] = useState(false);
+  const [inviteShareState, setInviteShareState] = useState<
+    "idle" | "copied" | "show-link"
+  >("idle");
+
+  // Lazily pull the homeowner's own invite code the moment the panel is armed,
+  // so the link is ready synchronously when they tap Share (some browsers void
+  // navigator.share if it isn't called straight from the user gesture). A null
+  // result just leaves the panel hidden.
+  useEffect(() => {
+    if (!justSubmitted || inviteCode) return;
+    let active = true;
+    getMyInviteCodeAction()
+      .then((code) => {
+        if (active) setInviteCode(code);
+      })
+      .catch(() => {
+        // Silent: no link, no panel. Never disturb the review flow.
+      });
+    return () => {
+      active = false;
+    };
+  }, [justSubmitted, inviteCode]);
+
+  function inviteUrl(): string {
+    const path = `/homeowner-signup?ref=${inviteCode}`;
+    return typeof window !== "undefined"
+      ? `${window.location.origin}${path}`
+      : path;
+  }
+
+  async function handleInviteShare() {
+    if (!inviteCode) return;
+    const url = inviteUrl();
+    const shareData = {
+      title: "Hearth",
+      text: "I've been using Hearth to keep on top of my house. Thought you might find it handy for yours:",
+      url,
+    };
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (err) {
+        // The user closing the share sheet is a decision, not a failure.
+        if (err instanceof Error && err.name === "AbortError") return;
+        // A real failure falls through to copying the link.
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setInviteShareState("copied");
+      setTimeout(() => setInviteShareState("idle"), 2000);
+    } catch {
+      setInviteShareState("show-link");
+    }
+  }
 
   async function handleShare() {
     const url = `${window.location.origin}${proProfilePath}`;
@@ -107,6 +178,10 @@ export default function ReviewButton({
                   if (res.ok) {
                     setOpen(false);
                     if (rating >= 4) setJustRatedHigh(true);
+                    // Arm the neighbor-invite panel on every successful submit,
+                    // not just high ratings: sharing Hearth with a neighbor
+                    // isn't about the pro's rating.
+                    setJustSubmitted(true);
                   } else {
                     setError(res.error);
                   }
@@ -205,6 +280,36 @@ export default function ReviewButton({
               {typeof window !== "undefined"
                 ? `${window.location.origin}${proProfilePath}`
                 : proProfilePath}
+            </p>
+          )}
+        </div>
+      )}
+
+      {justSubmitted && inviteCode && !inviteDismissed && (
+        <div className="mt-2 w-full basis-full rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-white/10 dark:bg-stone-700">
+          <p className="text-sm text-stone-700 dark:text-stone-300">
+            Know a neighbor who could use a hand with their place? Share your
+            invite link.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={handleInviteShare}
+              className="btn-primary text-sm"
+            >
+              {inviteShareState === "copied" ? "Link copied" : "Share invite"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setInviteDismissed(true)}
+              className="btn-secondary text-sm"
+            >
+              Not now
+            </button>
+          </div>
+          {inviteShareState === "show-link" && (
+            <p className="mt-2 select-all break-all text-xs text-stone-500 dark:text-stone-400">
+              {inviteUrl()}
             </p>
           )}
         </div>

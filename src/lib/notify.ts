@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { signUnsubscribeToken } from "@/lib/unsubscribeToken";
 
 // Single entry point for notifying a homeowner. Always writes the in-app
 // notification row (what the bell in the nav shows), then tries the email and
@@ -60,11 +62,60 @@ export async function sendNotification(
   return true;
 }
 
+// CAN-SPAM footer appended to every outgoing email: sender identity, a
+// physical mailing address, and a working per-user unsubscribe link. The
+// address is a deliberate TODO(legal) placeholder in the same bracketed
+// convention as src/app/dmca/page.tsx, so the pre-launch legal sweep's
+// grep for TODO(legal) catches it before real mail goes out (email is
+// dormant until RESEND_API_KEY is set regardless).
+//
+// Uniform footer on ALL emails, including transactional-critical ones: that
+// is the safe default. CAN-SPAM's transactional exemption from the unsubscribe
+// requirement is a per-category call that can be layered on later (skip the
+// unsubscribe line for a specific `input.kind`); it is not worth risking a
+// missing footer on a message that should have carried one tonight.
+function emailFooter(unsubscribeUrl: string): string {
+  return [
+    "",
+    "--",
+    "Hearth",
+    "[TODO(legal): registered business address]",
+    `Unsubscribe from these emails: ${unsubscribeUrl}`,
+  ].join("\n");
+}
+
 // Email via the Resend REST API. Plain fetch, no SDK, so there is no new
 // dependency to install. Dormant until RESEND_API_KEY is set.
 async function sendEmail(input: NotificationInput): Promise<void> {
   if (!process.env.RESEND_API_KEY || !input.email) return;
+
+  // Honor the CAN-SPAM opt-out centrally. Unlike sms_consent (which the caller
+  // passes, so a forgotten field fails safe to no-send), the email opt-out is
+  // enforced here by reading the recipient's own notification_prefs - so the
+  // unsubscribe link in the footer is real without threading a flag through
+  // every caller. A lookup hiccup falls open and still sends: the footer's
+  // unsubscribe link remains the recipient's guaranteed exit either way.
   try {
+    const admin = createAdminClient();
+    const { data: prefRow } = await admin
+      .from("users")
+      .select("notification_prefs")
+      .eq("id", input.userId)
+      .single();
+    if (prefRow?.notification_prefs?.email_opt_out === true) return;
+  } catch {
+    // Couldn't read prefs; fall open and send. See comment above.
+  }
+
+  try {
+    const siteUrl =
+      process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+    const unsubscribeUrl = `${siteUrl}/unsubscribe?uid=${encodeURIComponent(
+      input.userId
+    )}&token=${signUnsubscribeToken(input.userId)}`;
+    const bodyText = input.body
+      ? `${input.title}\n\n${input.body}`
+      : input.title;
     await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -75,7 +126,7 @@ async function sendEmail(input: NotificationInput): Promise<void> {
         from: process.env.RESEND_FROM ?? "Hearth <onboarding@resend.dev>",
         to: input.email,
         subject: input.title,
-        text: input.body ? `${input.title}\n\n${input.body}` : input.title,
+        text: `${bodyText}\n${emailFooter(unsubscribeUrl)}`,
       }),
     });
   } catch {
@@ -93,6 +144,28 @@ async function sendSms(input: NotificationInput): Promise<void> {
   const from = process.env.TWILIO_FROM_NUMBER;
   if (!sid || !token || !from || !input.phone) return;
   if (input.smsConsent !== true) return;
+
+  // TCPA quiet hours: no marketing/informational texts before 8am or after
+  // 9pm in the recipient's local time. Crons can fire at any hour, so gate it
+  // here rather than trusting each caller. Single-metro launch, so the metro's
+  // timezone (America/Los_Angeles) is hardcoded on purpose - do NOT build a
+  // per-user-timezone deferred-send queue for this. When we launch a second
+  // metro, this needs to become per-recipient. The in-app notification row is
+  // already written by sendNotification regardless (the product's
+  // authoritative channel), so a suppressed text loses no information.
+  const laHour = Number(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Los_Angeles",
+      hour: "numeric",
+      hourCycle: "h23",
+    }).format(new Date())
+  );
+  if (Number.isNaN(laHour) || laHour < 8 || laHour >= 21) {
+    // Silent best-effort non-send, same shape as the unconfigured-Twilio and
+    // no-consent gates above; callers see no difference.
+    return;
+  }
+
   try {
     const body = input.body ? `${input.title} ${input.body}` : input.title;
     await fetch(

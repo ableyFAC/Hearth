@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Lightbox from "@/components/Lightbox";
 
 // Small, shared "what did I just pick" previews, used everywhere a homeowner
 // selects a file before or while it uploads. Images get a real thumbnail,
@@ -115,6 +116,7 @@ export function FilePreviewThumb({
   size?: string;
 }) {
   const [url, setUrl] = useState<string | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   // SVG is excluded from the image branch on purpose: Hearth's upload spots
   // that accept images never accept image/svg+xml (it can carry a <script>),
   // so a picked SVG renders as a plain file card, matching what would
@@ -133,14 +135,27 @@ export function FilePreviewThumb({
   if (isImage && url) {
     return (
       <div className="relative shrink-0">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={url}
-          alt={file.name}
-          title={file.name}
-          className={`${size} rounded-md border border-stone-200 object-cover dark:border-white/10`}
-        />
+        <button
+          type="button"
+          onClick={() => setLightboxOpen(true)}
+          className="block cursor-zoom-in"
+          aria-label={`View ${file.name} full size`}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={url}
+            alt={file.name}
+            title={file.name}
+            className={`${size} rounded-md border border-stone-200 object-cover dark:border-white/10`}
+          />
+        </button>
         {onRemove && <RemoveButton label={file.name} onRemove={onRemove} />}
+        <Lightbox
+          src={lightboxOpen ? url : null}
+          alt={file.name}
+          caption={file.name}
+          onClose={() => setLightboxOpen(false)}
+        />
       </div>
     );
   }
@@ -195,8 +210,9 @@ export function FilePreviewGrid({
 }
 
 // A thumbnail for a photo that's already saved to storage (a resolved
-// display URL - see lib/storage.ts's imgSrc - not a local File). Links out to
-// the full image in a new tab instead of trying to be a lightbox.
+// display URL - see lib/storage.ts's imgSrc - not a local File). Opens the
+// full image in the fullscreen Lightbox instead of linking out to a new tab
+// (the lightbox still offers an "open in new tab" link of its own).
 export function StoredPhotoThumb({
   src,
   alt,
@@ -208,9 +224,15 @@ export function StoredPhotoThumb({
   onRemove?: () => void;
   size?: string;
 }) {
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   return (
     <div className="relative shrink-0">
-      <a href={src} target="_blank" rel="noreferrer" className="block">
+      <button
+        type="button"
+        onClick={() => setLightboxOpen(true)}
+        className="block cursor-zoom-in"
+        aria-label={`View ${alt} full size`}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={src}
@@ -218,8 +240,13 @@ export function StoredPhotoThumb({
           title={alt}
           className={`${size} rounded-md border border-stone-200 object-cover dark:border-white/10`}
         />
-      </a>
+      </button>
       {onRemove && <RemoveButton label={alt} onRemove={onRemove} />}
+      <Lightbox
+        src={lightboxOpen ? src : null}
+        alt={alt}
+        onClose={() => setLightboxOpen(false)}
+      />
     </div>
   );
 }

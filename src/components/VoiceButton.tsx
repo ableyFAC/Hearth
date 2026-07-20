@@ -32,6 +32,13 @@ const PREFERRED_MIME = "audio/webm;codecs=opus";
 const BLOCKED_MSG =
   "Microphone is blocked. Tap the icon by the address bar (or your browser's site settings), allow the mic, then try again.";
 const BLOCKED_MSG_MS = 8000;
+// Some browsers/extensions let a permission prompt sit unanswered
+// indefinitely instead of rejecting getUserMedia's promise, which would
+// otherwise leave `requesting` (and the disabled button) stuck forever.
+// This caps the wait so the button always comes back to life.
+const MIC_REQUEST_TIMEOUT_MS = 15_000;
+const MIC_TIMEOUT_MSG =
+  "Still waiting for microphone permission. Check your browser prompt.";
 
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -54,6 +61,18 @@ export default function VoiceButton({
 }) {
   const [mode, setMode] = useState<Mode | null>(null);
   const [listening, setListening] = useState(false);
+  // True from the moment the recorder path is tapped until getUserMedia
+  // resolves (or rejects). Distinct from `listening`: the mic permission
+  // prompt can take a real beat (or sit waiting for the person to answer
+  // it), and without a state for that gap the button looks inert the whole
+  // time, like the tap didn't register.
+  const [requesting, setRequesting] = useState(false);
+  // Set the instant the MIC_REQUEST_TIMEOUT_MS cap fires while still
+  // requesting, so a getUserMedia promise that resolves AFTER the timeout
+  // (the person finally clicks "Allow" on a prompt we'd already given up on)
+  // is recognized as stale: the tracks it hands back get stopped immediately
+  // instead of the button silently entering listening state on its own.
+  const requestTimedOutRef = useRef(false);
   // The live bubble: interim speech, "Listening...", "Transcribing...", or a
   // short error message. Empty string hides it.
   const [bubble, setBubble] = useState("");
@@ -76,6 +95,7 @@ export default function VoiceButton({
   const chunksRef = useRef<Blob[]>([]);
   const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function switchMode(m: Mode) {
     modeRef.current = m;
@@ -102,6 +122,20 @@ export default function VoiceButton({
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: true,
       });
+      // The MIC_REQUEST_TIMEOUT_MS cap in toggle() may have already fired
+      // while this promise was still pending (a prompt left unanswered past
+      // the cap). If so, `requesting` was already cleared and the button
+      // re-enabled - entering listening now would be a stale grant nobody is
+      // waiting on anymore. Release the tracks this call obtained and stop,
+      // without touching state that's already moved on.
+      if (requestTimedOutRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      if (requestTimerRef.current) {
+        clearTimeout(requestTimerRef.current);
+        requestTimerRef.current = null;
+      }
       streamRef.current = stream;
       // Prefer webm/opus (small, well supported by Gemini); otherwise let the
       // browser pick and send whatever mimeType it actually used.
@@ -119,6 +153,7 @@ export default function VoiceButton({
       chunksRef.current = [];
       mediaRef.current = rec;
       rec.start();
+      setRequesting(false);
       setListening(true);
       if (flashTimerRef.current) {
         clearTimeout(flashTimerRef.current);
@@ -127,6 +162,14 @@ export default function VoiceButton({
       setBubble("Listening...");
       stopTimerRef.current = setTimeout(() => stopRecording(), MAX_RECORD_MS);
     } catch (err: any) {
+      if (requestTimerRef.current) {
+        clearTimeout(requestTimerRef.current);
+        requestTimerRef.current = null;
+      }
+      // If the timeout already fired, requesting/bubble were already reset
+      // by it; resetting again here is harmless and covers the normal case
+      // where the rejection (e.g. "denied") arrives before the cap does.
+      setRequesting(false);
       setListening(false);
       releaseStream();
       const noMic =
@@ -310,6 +353,7 @@ export default function VoiceButton({
     return () => {
       if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
       if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+      if (requestTimerRef.current) clearTimeout(requestTimerRef.current);
       const media = mediaRef.current;
       mediaRef.current = null;
       if (media && media.state !== "inactive") {
@@ -328,8 +372,34 @@ export default function VoiceButton({
 
   function toggle() {
     if (modeRef.current === "recorder") {
-      if (listening) stopRecording();
-      else void startRecording();
+      if (listening) {
+        stopRecording();
+      } else if (!requesting) {
+        // Set the pending bubble synchronously, before startRecording's
+        // first await (getUserMedia). Permission prompts can take a beat -
+        // or sit waiting on the person to answer - and getUserMedia doesn't
+        // resolve until then, so without this the button shows nothing
+        // happening for that whole stretch. `!requesting` guards against a
+        // second tap re-firing getUserMedia while the first prompt is still
+        // pending.
+        setRequesting(true);
+        requestTimedOutRef.current = false;
+        setBubble("Requesting microphone...");
+        // Cap the wait: some browsers/extensions let a permission prompt
+        // sit unanswered indefinitely rather than ever rejecting
+        // getUserMedia's promise, which would otherwise leave `requesting`
+        // (and the disabled button) stuck forever. If the promise later
+        // resolves anyway, startRecording checks requestTimedOutRef and
+        // discards the stale grant instead of entering listening.
+        if (requestTimerRef.current) clearTimeout(requestTimerRef.current);
+        requestTimerRef.current = setTimeout(() => {
+          requestTimerRef.current = null;
+          requestTimedOutRef.current = true;
+          setRequesting(false);
+          flashBubble(MIC_TIMEOUT_MSG, BLOCKED_MSG_MS);
+        }, MIC_REQUEST_TIMEOUT_MS);
+        void startRecording();
+      }
       return;
     }
     const rec = recRef.current;
@@ -365,15 +435,29 @@ export default function VoiceButton({
       <button
         type="button"
         onClick={toggle}
-        disabled={disabled}
+        disabled={disabled || requesting}
         // title only shows on hover; aria-label covers touch + screen readers.
-        aria-label={listening ? "Listening. Tap to stop." : "Speak your question"}
+        aria-label={
+          requesting
+            ? "Requesting microphone access"
+            : listening
+              ? "Listening. Tap to stop."
+              : "Speak your question"
+        }
         aria-pressed={listening}
-        title={listening ? "Listening. Tap to stop." : "Speak your question"}
+        title={
+          requesting
+            ? "Requesting microphone access"
+            : listening
+              ? "Listening. Tap to stop."
+              : "Speak your question"
+        }
         className={`flex items-center rounded-lg border px-2 text-lg disabled:opacity-50 ${
           listening
             ? "animate-pulse border-red-300 bg-red-50 text-red-600 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300"
-            : "border-stone-200 text-stone-500 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-stone-300"
+            : requesting
+              ? "animate-pulse border-bark-300 bg-bark-50 text-bark-600 dark:border-bark-700 dark:bg-bark-700/40 dark:text-stone-300"
+              : "border-stone-200 text-stone-500 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-stone-300"
         }`}
       >
         <Mic className="h-5 w-5" aria-hidden="true" />

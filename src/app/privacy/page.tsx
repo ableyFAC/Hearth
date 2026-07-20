@@ -304,7 +304,8 @@ export default function PrivacyPage() {
             reviewers at Google may read disconnected samples of that
             content. That is Google&apos;s policy for the free tier, not
             Hearth&apos;s choice. We plan to move to Google&apos;s paid tier,
-            under which Google does not use your data this way. See{" "}
+            under which Google states it does not use your data this way.
+            See{" "}
             <a href="/ai-disclosure" className="text-bark-700 hover:underline dark:text-stone-300">
               How Hearth Uses AI
             </a>{" "}
@@ -438,6 +439,13 @@ export default function PrivacyPage() {
             that data.
           </p>
           <p className="mt-3 leading-relaxed">
+            Because of that, a browser&apos;s Do Not Track signal doesn&apos;t
+            change anything here: there is no cross-site tracking for it to
+            turn off. We don&apos;t track your activity across other
+            companies&apos; sites and services, whether or not that signal is
+            on, so we don&apos;t respond to it differently either way.
+          </p>
+          <p className="mt-3 leading-relaxed">
             Honestly, one thing is not a third party: Hearth records a small
             amount of its own first-party product-usage events, like which
             feature you used (for example, that a job was posted, or that the
@@ -446,6 +454,22 @@ export default function PrivacyPage() {
             Hearth&apos;s own database, linked to your account when you&apos;re
             signed in, and are never sold or shared with any third-party ad or
             analytics company.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+            Security and breach notice
+          </h2>
+          <p className="mt-2 leading-relaxed">
+            We take reasonable steps to protect your information: photos and
+            documents live in private storage and are only ever served
+            through a short-lived signed link (see above), and we never
+            handle or store your full card number ourselves; Stripe does.
+            No system is perfectly secure, and we can&apos;t promise your
+            data will never be exposed. If a breach happens that affects your
+            personal information, we&apos;ll notify you as required by
+            California law.
           </p>
         </section>
 
@@ -465,6 +489,18 @@ export default function PrivacyPage() {
             we use sensitive information only to run Hearth itself, never to
             profile you or advertise to you. We will never deny you service or
             treat you worse for exercising any of these rights.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            One clarification worth being explicit about: when you contact a
+            pro and we hand that pro your name, phone, email, and address
+            (see &ldquo;What a contractor sees&rdquo; above), that is not a
+            &ldquo;sale&rdquo; or a &ldquo;share&rdquo; under California law.
+            It happens because you chose that pro and asked to be connected,
+            to get the job you posted done, not to advertise to you or build
+            a profile of you. The sale/share opt-out above is about the
+            advertising-driven data flow Hearth doesn&apos;t do; sending your
+            contact details to a pro you picked, at your request, is a
+            different thing.
           </p>
           <p className="mt-3 leading-relaxed">
             We keep each category of data for as long as your account is
@@ -502,6 +538,21 @@ export default function PrivacyPage() {
             account removes your data from Hearth&apos;s systems, but it
             doesn&apos;t reach a pro&apos;s independent copy of what you sent
             them.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+            Changes to this policy
+          </h2>
+          <p className="mt-2 leading-relaxed">
+            We may update this policy as Hearth changes. We&apos;ll always
+            update the &quot;Last updated&quot; date at the top of this page.
+            For a change that meaningfully affects what we collect, why, or
+            who we share it with, we&apos;ll also give you notice, such as an
+            email to the address on your account or a notice inside the app,
+            before it takes effect. Continuing to use Hearth after that means
+            you accept the change.
           </p>
         </section>
 

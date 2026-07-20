@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { saveHomeValueAction } from "./actions";
+import SubmitButton from "@/components/SubmitButton";
 
 export default function ValueForm({
   purchasePrice,
@@ -103,7 +104,7 @@ export default function ValueForm({
             Cancel
           </button>
         )}
-        <button className="btn-primary flex-1">Save</button>
+        <SubmitButton>Save</SubmitButton>
       </div>
     </form>
   );

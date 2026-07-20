@@ -12,6 +12,9 @@ type Plan = "weekly" | "monthly" | "yearly";
 // doesn't have to do all the work on its own.
 const YEARLY_PER_WEEK = (PLUS_PLAN.yearly / 52).toFixed(2);
 const YEARLY_PER_MONTH = (PLUS_PLAN.yearly / 12).toFixed(2);
+// The weekly plan reframed upward, so the cheapest-looking sticker ($1.99)
+// doesn't hide what a year of it actually costs.
+const WEEKLY_PER_YEAR = Math.round(PLUS_PLAN.weekly * 52);
 
 const PLAN_COPY: Record<
   Plan,
@@ -103,6 +106,11 @@ export default function PlanToggle({
                   about ${YEARLY_PER_WEEK}/week
                 </span>
               )}
+              {isWeekly && (
+                <span className="mt-0.5 block text-[11px] text-stone-500 dark:text-stone-400">
+                  about ${WEEKLY_PER_YEAR}/year
+                </span>
+              )}
             </button>
           );
         })}
@@ -123,6 +131,11 @@ export default function PlanToggle({
         {plan === "yearly" && (
           <p className="text-xs text-stone-500 dark:text-stone-400">
             about ${YEARLY_PER_WEEK}/week, or ${YEARLY_PER_MONTH}/month
+          </p>
+        )}
+        {plan === "weekly" && (
+          <p className="text-xs text-stone-500 dark:text-stone-400">
+            about ${WEEKLY_PER_YEAR}/year
           </p>
         )}
         <p className="text-xs text-stone-500 dark:text-stone-400">

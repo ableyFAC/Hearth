@@ -31,10 +31,32 @@ export default function HomeAlerts() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
+  // Once the rest of the page has fully loaded, a still-pending alerts
+  // fetch no longer earns a placeholder: the skeleton gives up (renders
+  // nothing) and real alerts simply appear if/when they arrive. Keeps a
+  // slow nice-to-have widget from being the last skeleton on an otherwise
+  // finished page.
+  const [pageLoaded, setPageLoaded] = useState(false);
+
+  useEffect(() => {
+    if (document.readyState === "complete") {
+      setPageLoaded(true);
+      return;
+    }
+    const onLoad = () => setPageLoaded(true);
+    window.addEventListener("load", onLoad);
+    return () => window.removeEventListener("load", onLoad);
+  }, []);
 
   useEffect(() => {
     let alive = true;
-    fetch("/api/home-alerts")
+    // Hard 6s cap: the route aggregates slow external APIs (weather,
+    // recalls), and without a timeout the skeleton row below can float on
+    // the dashboard indefinitely. Alerts are nice-to-have; past 6s we show
+    // nothing rather than a stuck placeholder.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6_000);
+    fetch("/api/home-alerts", { signal: controller.signal })
       .then((r) => r.json())
       .then((d) => {
         if (!alive) return;
@@ -43,17 +65,21 @@ export default function HomeAlerts() {
       })
       .catch(() => {})
       .finally(() => {
+        clearTimeout(timeout);
         if (alive) setLoading(false);
       });
     return () => {
       alive = false;
+      clearTimeout(timeout);
+      controller.abort();
     };
   }, []);
 
-  // Brief skeleton only while the first fetch is in flight, sized like one
-  // alert row - most loads resolve to zero alerts, so this must not linger
-  // or reserve space once we know there's nothing to show.
-  if (loading) {
+  // Brief skeleton only while the first fetch is in flight AND the page
+  // itself is still settling - most loads resolve to zero alerts, so this
+  // must not linger or reserve space once we know there's nothing to show,
+  // and it must never be the last skeleton standing on a loaded page.
+  if (loading && !pageLoaded) {
     return (
       <div className="flex items-start gap-2 rounded-lg border border-stone-200 p-3 dark:border-white/10" aria-hidden="true">
         <Skeleton className="h-5 w-5 shrink-0 rounded-full" />

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { saveTaxAssessmentAction } from "./actions";
+import SubmitButton from "@/components/SubmitButton";
 
 export default function TaxForm({
   assessedValue,
@@ -91,7 +92,7 @@ export default function TaxForm({
             Cancel
           </button>
         )}
-        <button className="btn-primary flex-1">Save</button>
+        <SubmitButton>Save</SubmitButton>
       </div>
     </form>
   );

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { imgSrc } from "@/lib/storage";
 import TakePhotoButton from "@/components/TakePhotoButton";
 import { FilePreviewGrid } from "@/components/FilePreview";
+import Lightbox from "@/components/Lightbox";
 
 // Uploads images to the `home-photos` bucket under <propertyId>/ and renders a
 // hidden input per uploaded URL (name="photo_urls") so the parent <form>'s
@@ -12,10 +13,15 @@ import { FilePreviewGrid } from "@/components/FilePreview";
 export default function PhotoUpload({
   propertyId,
   id,
+  onUrlsChange,
 }: {
   propertyId: string;
   // Ties the internal label to the file input for assistive tech.
   id?: string;
+  // Optional: notified with the full set of uploaded URLs whenever it changes,
+  // so a parent (e.g. the post-a-job form) can react to an attached photo. Left
+  // undefined by every other caller, so their behavior is unchanged.
+  onUrlsChange?: (urls: string[]) => void;
 }) {
   const supabase = createClient();
   const [urls, setUrls] = useState<string[]>([]);
@@ -26,6 +32,14 @@ export default function PhotoUpload({
   const [pending, setPending] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+
+  // Keep the optional parent listener in step with the uploaded set. Runs only
+  // when `urls` actually changes; a no-op when no listener was passed.
+  useEffect(() => {
+    onUrlsChange?.(urls);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urls]);
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const input = e.target;
@@ -111,18 +125,30 @@ export default function PhotoUpload({
       <FilePreviewGrid files={pending} />
       <div className="mt-2 flex flex-wrap gap-2">
         {urls.map((u) => (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <button
             key={u}
-            src={imgSrc(u) ?? u}
-            alt="upload preview"
-            className="h-16 w-16 rounded-md object-cover"
-          />
+            type="button"
+            onClick={() => setLightboxSrc(imgSrc(u) ?? u)}
+            className="block cursor-zoom-in"
+            aria-label="View photo full size"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imgSrc(u) ?? u}
+              alt="upload preview"
+              className="h-16 w-16 rounded-md object-cover"
+            />
+          </button>
         ))}
       </div>
       {urls.map((u) => (
         <input key={u} type="hidden" name="photo_urls" value={u} />
       ))}
+      <Lightbox
+        src={lightboxSrc}
+        alt="Uploaded photo"
+        onClose={() => setLightboxSrc(null)}
+      />
     </div>
   );
 }

@@ -100,7 +100,17 @@ export async function saveHomeValueAction(
 // market_value/_low/_high are new columns from migration 0066 that are not
 // yet in src/lib/database.types.ts, so the update payload is cast to any,
 // same pattern as saveHomeValueAction above.
-export async function fetchAndSaveMarketValueAction(): Promise<{ ok: boolean }> {
+//
+// Returns the fetched value (and its low/high range) alongside ok, so the
+// caller (ValueAutoFetch) can show the number itself the instant this
+// resolves instead of only learning it happened and having to wait on a
+// router.refresh() round trip to see what it actually got.
+export async function fetchAndSaveMarketValueAction(): Promise<{
+  ok: boolean;
+  marketValue?: number;
+  marketValueLow?: number | null;
+  marketValueHigh?: number | null;
+}> {
   try {
     const property = await getActiveProperty();
     if (!property) return { ok: false };
@@ -109,7 +119,14 @@ export async function fetchAndSaveMarketValueAction(): Promise<{ ok: boolean }> 
     // Already have a value on file (from onboarding's own AVM call, an
     // earlier /value visit, or a re-billing-avoidance cache hit elsewhere):
     // no-op rather than re-fetching.
-    if (typeof raw.market_value === "number") return { ok: true };
+    if (typeof raw.market_value === "number") {
+      return {
+        ok: true,
+        marketValue: raw.market_value,
+        marketValueLow: raw.market_value_low ?? null,
+        marketValueHigh: raw.market_value_high ?? null,
+      };
+    }
 
     // address_line1/zip are pre-existing typed columns, no cast needed.
     const street = property.address_line1 || null;
@@ -131,7 +148,12 @@ export async function fetchAndSaveMarketValueAction(): Promise<{ ok: boolean }> 
 
     revalidatePath("/value");
     revalidatePath("/dashboard");
-    return { ok: true };
+    return {
+      ok: true,
+      marketValue: facts.market_value,
+      marketValueLow: facts.market_value_low ?? null,
+      marketValueHigh: facts.market_value_high ?? null,
+    };
   } catch (err) {
     // Fail soft: a lookup or write hiccup should never surface as a 500 on a
     // background fetch the owner didn't explicitly ask for.

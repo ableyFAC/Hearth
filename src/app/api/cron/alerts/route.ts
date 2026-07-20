@@ -16,7 +16,8 @@ export const runtime = "nodejs";
 //
 // Recalls are intentionally left to the dashboard's home-alerts call for now -
 // they're per-brand and slower to fetch for every property on a schedule.
-// This endpoint focuses on the fast, cheap win: freeze/heat warnings.
+// This endpoint focuses on the fast, cheap wins: freeze, heat, high-wind
+// (Santa Ana), and heavy-rain warnings, all off the one Open-Meteo forecast.
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // Covers the full 4-day forecast horizon, so a single event first spotted
@@ -31,10 +32,17 @@ const MAX_PROPERTIES = 200; // cap the work a single run does
 const SEND_CHUNK = 10;
 
 type WeatherAlert = {
-  kind: "freeze" | "heat";
+  kind: "freeze" | "heat" | "high_wind" | "heavy_rain";
   title: string;
   body: string;
 };
+
+// Gust and rainfall thresholds that make an alert worth a homeowner's
+// attention. 40 mph gusts are the low end of a Santa Ana / high-wind advisory
+// (branches down, shingles and patio covers at risk); 1 inch of forecast rain
+// in a day is enough for gutters and drainage to matter in normally dry SoCal.
+const HIGH_WIND_MPH = 40;
+const HEAVY_RAIN_INCHES = 1;
 
 async function fetchJson(url: string, ms: number): Promise<any> {
   const ctrl = new AbortController();
@@ -74,8 +82,11 @@ function matchesState(result: any, state: string): boolean {
 }
 
 // Reuses the Open-Meteo logic from home-alerts, trimmed to the single top
-// weather alert (freeze takes priority since burst pipes are the costlier
-// surprise) and without the per-system age tailoring, to keep the cron cheap.
+// weather alert and without the per-system age tailoring, to keep the cron
+// cheap. Priority order when several conditions land in the same forecast:
+// freeze first (burst pipes are the costliest surprise), then high wind and
+// heavy rain (acute property damage that rewards acting before it hits), then
+// heat (comfort and efficiency). Each kind dedupes independently downstream.
 async function topWeatherAlert(
   city: string | null,
   state: string | null
@@ -103,11 +114,14 @@ async function topWeatherAlert(
 
   const fc = await fetchJson(
     `https://api.open-meteo.com/v1/forecast?latitude=${loc.latitude}&longitude=${loc.longitude}` +
-      `&daily=temperature_2m_min,temperature_2m_max&forecast_days=4&temperature_unit=fahrenheit&timezone=auto`,
+      `&daily=temperature_2m_min,temperature_2m_max,wind_gusts_10m_max,precipitation_sum` +
+      `&forecast_days=4&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto`,
     FETCH_TIMEOUT_MS
   );
   const mins: number[] = fc?.daily?.temperature_2m_min ?? [];
   const maxs: number[] = fc?.daily?.temperature_2m_max ?? [];
+  const gusts: number[] = fc?.daily?.wind_gusts_10m_max ?? [];
+  const rain: number[] = fc?.daily?.precipitation_sum ?? [];
 
   const fi = mins.findIndex((t) => t != null && t <= 32);
   if (fi !== -1) {
@@ -115,6 +129,24 @@ async function topWeatherAlert(
       kind: "freeze",
       title: `Freeze coming ${whenLabel(fi)} (${Math.round(mins[fi])}°F)`,
       body: "Let indoor faucets drip overnight, disconnect garden hoses, and open cabinet doors under sinks.",
+    };
+  }
+
+  const gi = gusts.findIndex((g) => g != null && g >= HIGH_WIND_MPH);
+  if (gi !== -1) {
+    return {
+      kind: "high_wind",
+      title: `High winds ${whenLabel(gi)} (gusts to ${Math.round(gusts[gi])} mph)`,
+      body: "Santa Ana winds are picking up. Bring in or tie down patio furniture and umbrellas, and check that your roof shingles and gutters are secure before the strongest gusts.",
+    };
+  }
+
+  const ri = rain.findIndex((p) => p != null && p >= HEAVY_RAIN_INCHES);
+  if (ri !== -1) {
+    return {
+      kind: "heavy_rain",
+      title: `Heavy rain ${whenLabel(ri)} (${rain[ri].toFixed(1)}" expected)`,
+      body: "Clear your gutters and downspouts, make sure water drains away from the house, and check any spot that has leaked before so a small drip doesn't become a stain.",
     };
   }
 

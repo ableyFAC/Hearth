@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
+import Lightbox from "@/components/Lightbox";
 import { FLOWS } from "./content";
 
 export type PrepKey = "water_shutoff" | "gas_shutoff" | "breaker_panel";
@@ -42,6 +43,7 @@ export default function PanicCard({
   prepNote: string | null;
 }) {
   const [open, setOpen] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const Icon = ICON_BY_KEY[flow.key] ?? null;
 
   const ctaHref =
@@ -84,11 +86,23 @@ export default function PanicCard({
                       <p className="mb-1 text-xs font-medium text-bark-700 dark:text-stone-300">
                         Your shutoff is here:
                       </p>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={prepPhotoSrc}
+                      <button
+                        type="button"
+                        onClick={() => setLightboxOpen(true)}
+                        className="block cursor-zoom-in"
+                        aria-label="View saved shutoff location photo full size"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={prepPhotoSrc}
+                          alt="Saved shutoff location"
+                          className="h-32 w-full max-w-xs rounded-md object-cover"
+                        />
+                      </button>
+                      <Lightbox
+                        src={lightboxOpen ? prepPhotoSrc : null}
                         alt="Saved shutoff location"
-                        className="h-32 w-full max-w-xs rounded-md object-cover"
+                        onClose={() => setLightboxOpen(false)}
                       />
                       {prepNote && (
                         <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">{prepNote}</p>

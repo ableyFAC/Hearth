@@ -45,6 +45,10 @@
       "schedule": "15 17 * * *"
     },
     {
+      "path": "/api/cron/seasonal-triggers",
+      "schedule": "30 17 * * *"
+    },
+    {
       "path": "/api/cron/referral-rewards",
       "schedule": "0 18 * * *"
     },

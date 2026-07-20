@@ -4,6 +4,8 @@ import { useRef, useState, useTransition } from "react";
 import { confirmSystemAction } from "./actions";
 import { labelFor, iconFor, SYSTEM_TYPES } from "@/lib/constants";
 import TakePhotoButton from "@/components/TakePhotoButton";
+import Lightbox from "@/components/Lightbox";
+import AiNotice from "@/components/AiNotice";
 import type { HomeSystem } from "@/lib/database.types";
 import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
 
@@ -70,6 +72,7 @@ export default function SystemCaptureCard({
   const [delta, setDelta] = useState<{ before: number; after: number } | null>(
     null
   );
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [saving, startSave] = useTransition();
   // Lets the Cancel button below abort an in-flight read and lets the catch
   // block tell an owner-initiated cancel apart from a real failure (so
@@ -268,13 +271,32 @@ export default function SystemCaptureCard({
           <input type="hidden" name="system_id" value={system.id} />
 
           {preview && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={preview}
-              alt={`${name} data plate`}
-              className="max-h-32 rounded-lg border border-stone-200 object-contain dark:border-white/10"
-            />
+            <>
+              <button
+                type="button"
+                onClick={() => setLightboxOpen(true)}
+                className="block cursor-zoom-in"
+                aria-label={`View ${name} data plate photo full size`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={preview}
+                  alt={`${name} data plate`}
+                  className="max-h-32 rounded-lg border border-stone-200 object-contain dark:border-white/10"
+                />
+              </button>
+              <Lightbox
+                src={lightboxOpen ? preview : null}
+                alt={`${name} data plate`}
+                onClose={() => setLightboxOpen(false)}
+              />
+            </>
           )}
+
+          {/* This IS the review step (every field below is editable before
+              Confirm), same placement convention as InspectionUpload and
+              DocumentUpload's equivalent notice. */}
+          <AiNotice detail="A model read the data plate, so it can misread a letter or number. Check every field before you confirm." />
 
           <div className="grid grid-cols-2 gap-3">
             <div>

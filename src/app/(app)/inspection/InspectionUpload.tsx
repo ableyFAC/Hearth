@@ -1,14 +1,22 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { Search } from "lucide-react";
+import Link from "next/link";
+import { Search, FileText } from "lucide-react";
 import { SYSTEM_TYPES, ISSUE_CATEGORIES, labelFor } from "@/lib/constants";
 import { saveInspectionFindingsAction } from "./actions";
 import AiNotice from "@/components/AiNotice";
 import CategoryIcon from "@/components/CategoryIcon";
+import Lightbox from "@/components/Lightbox";
 import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
 
-type Mode = "photo" | "text";
+type Mode = "photo" | "pdf" | "text";
+
+// Cap the PDF before reading it into memory and POSTing it to the vision
+// endpoint (cost/DoS + browser OOM). The API enforces the same ceiling; this
+// is the friendly first line so a homeowner isn't left guessing. accept="" is
+// only a hint, so the real check lives in onPickPdf.
+const MAX_PDF_BYTES = 20 * 1024 * 1024; // 20MB
 
 type ProposedSystem = {
   system_type: string;
@@ -76,6 +84,21 @@ function toBase64(file: File, maxDim = 1600, quality = 0.8): Promise<string> {
   });
 }
 
+// Read a PDF straight to base64 (no canvas rescaling: a PDF isn't a raster we
+// can downsize, and Gemini reads the file's own pages). Returns base64 without
+// the data: prefix so the server can pass it through as inlineData.
+function pdfToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const res = typeof reader.result === "string" ? reader.result : "";
+      resolve(res.includes(",") ? res.split(",")[1] : res);
+    };
+    reader.onerror = () => reject(new Error("unreadable pdf"));
+    reader.readAsDataURL(file);
+  });
+}
+
 // Add an inspection report an owner already has: photos of its pages or
 // pasted text go to Hearth, which proposes systems and issues. Nothing is
 // saved until the owner reviews the checklist and confirms.
@@ -83,12 +106,15 @@ export default function InspectionUpload() {
   const [mode, setMode] = useState<Mode>("photo");
   const [images, setImages] = useState<string[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
+  const [pdf, setPdf] = useState<string | null>(null);
+  const [pdfName, setPdfName] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [phase, setPhase] = useState<"idle" | "working" | "review" | "done">("idle");
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<IngestResult | null>(null);
   const [systemsChecked, setSystemsChecked] = useState<boolean[]>([]);
   const [issuesChecked, setIssuesChecked] = useState<boolean[]>([]);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [saving, startSave] = useTransition();
   // Lets the "Cancel" button below abort an in-flight read and lets the
   // catch block tell a homeowner-initiated cancel apart from a real failure
@@ -122,9 +148,41 @@ export default function InspectionUpload() {
     setPreviews((prev) => prev.filter((_, idx) => idx !== i));
   }
 
+  async function onPickPdf(e: React.ChangeEvent<HTMLInputElement>) {
+    const input = e.target;
+    const file = input.files?.[0];
+    input.value = ""; // allow re-picking the same file
+    if (!file) return;
+
+    if (file.size > MAX_PDF_BYTES) {
+      setError(
+        "That PDF is too large (max 20MB). Try the photos or paste option for a big report instead."
+      );
+      return;
+    }
+
+    setError(null);
+    try {
+      const b64 = await pdfToBase64(file);
+      setPdf(b64);
+      setPdfName(file.name);
+    } catch {
+      setError("We couldn't read that PDF. Try the photo or paste option instead.");
+    }
+  }
+
+  function removePdf() {
+    setPdf(null);
+    setPdfName(null);
+  }
+
   async function ingest() {
     if (mode === "photo" && images.length === 0) {
       setError("Add at least one photo of the report first.");
+      return;
+    }
+    if (mode === "pdf" && !pdf) {
+      setError("Choose the report PDF first.");
       return;
     }
     if (mode === "text" && !text.trim()) {
@@ -147,11 +205,14 @@ export default function InspectionUpload() {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             images: mode === "photo" ? images : undefined,
+            pdf: mode === "pdf" ? pdf : undefined,
             text: mode === "text" ? text : undefined,
           }),
           signal: controller.signal,
         },
-        120_000
+        // A multi-page PDF is a bigger read for the model than a handful of
+        // photos, so give it more headroom before the client gives up.
+        mode === "pdf" ? 180_000 : 120_000
       );
       abortRef.current = null;
 
@@ -178,7 +239,9 @@ export default function InspectionUpload() {
         setPhase("idle");
         setError(
           data?.error ||
-            "Couldn't read that report. Try clearer photos or paste the text instead."
+            (mode === "pdf"
+              ? "We couldn't read that PDF. Try the photo or paste option instead."
+              : "Couldn't read that report. Try clearer photos or paste the text instead.")
         );
       }
     } catch (e) {
@@ -217,6 +280,8 @@ export default function InspectionUpload() {
         setPhase("done");
         setImages([]);
         setPreviews([]);
+        setPdf(null);
+        setPdfName(null);
         setText("");
         setResult(null);
         return;
@@ -398,7 +463,7 @@ export default function InspectionUpload() {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button
           type="button"
           onClick={() => {
@@ -408,6 +473,16 @@ export default function InspectionUpload() {
           className={mode === "photo" ? "btn-primary" : "btn-secondary"}
         >
           Upload photos
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMode("pdf");
+            setError(null);
+          }}
+          className={mode === "pdf" ? "btn-primary" : "btn-secondary"}
+        >
+          Upload a PDF
         </button>
         <button
           type="button"
@@ -444,12 +519,19 @@ export default function InspectionUpload() {
             <div className="mt-3 flex flex-wrap gap-2">
               {previews.map((src, i) => (
                 <div key={i} className="relative">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={src}
-                    alt={`Report page ${i + 1}`}
-                    className="h-20 w-20 rounded-lg border border-stone-200 object-cover dark:border-white/10"
-                  />
+                  <button
+                    type="button"
+                    onClick={() => setLightboxSrc(src)}
+                    className="block cursor-zoom-in"
+                    aria-label={`View report page ${i + 1} full size`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={src}
+                      alt={`Report page ${i + 1}`}
+                      className="h-20 w-20 rounded-lg border border-stone-200 object-cover dark:border-white/10"
+                    />
+                  </button>
                   <button
                     type="button"
                     onClick={() => removeImage(i)}
@@ -459,6 +541,46 @@ export default function InspectionUpload() {
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+          <Lightbox
+            src={lightboxSrc}
+            alt="Inspection report page"
+            onClose={() => setLightboxSrc(null)}
+          />
+        </div>
+      ) : mode === "pdf" ? (
+        <div>
+          <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-stone-200 px-4 py-8 text-center hover:border-bark-500 hover:bg-bark-50 dark:border-stone-700 dark:hover:bg-bark-700/30">
+            <FileText className="h-8 w-8 text-stone-400 dark:text-stone-500" aria-hidden="true" />
+            <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
+              {pdfName ? "Choose a different PDF" : "Upload the inspection report PDF"}
+            </span>
+            <span className="text-xs text-stone-500 dark:text-stone-400">
+              The whole report as one PDF, up to 20MB
+            </span>
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              onChange={onPickPdf}
+              disabled={phase === "working"}
+              className="hidden"
+            />
+          </label>
+          {pdfName && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg border border-stone-200 p-3 dark:border-white/10">
+              <FileText className="h-5 w-5 shrink-0 text-stone-400 dark:text-stone-500" aria-hidden="true" />
+              <span className="min-w-0 flex-1 truncate text-sm text-stone-700 dark:text-stone-300">
+                {pdfName}
+              </span>
+              <button
+                type="button"
+                onClick={removePdf}
+                className="shrink-0 rounded-full bg-stone-800 px-1.5 text-xs text-white"
+                aria-label="Remove PDF"
+              >
+                ×
+              </button>
             </div>
           )}
         </div>
@@ -474,6 +596,21 @@ export default function InspectionUpload() {
           />
         </div>
       )}
+
+      {/* In-context data note on the surface where the owner decides to upload:
+          report reading runs on Google's free Gemini tier, so uploads can be
+          used by Google to improve its models. Same fact as the privacy page,
+          compressed to one sentence. */}
+      <p className="text-xs text-stone-500 dark:text-stone-400">
+        Report reading runs on Google&apos;s free AI tier, so what you upload may
+        be used by Google to improve its own products.{" "}
+        <Link
+          href="/ai-disclosure"
+          className="underline decoration-dotted hover:text-stone-600 dark:hover:text-stone-300"
+        >
+          How Hearth uses AI
+        </Link>
+      </p>
 
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 

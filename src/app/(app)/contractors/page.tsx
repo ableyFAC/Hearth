@@ -30,7 +30,10 @@ import CloseJobButton from "./CloseJobButton";
 import EditJobForm from "./EditJobForm";
 import PostJobButton from "./PostJobButton";
 import StrongPostMeter from "./StrongPostMeter";
-import PhotoUpload from "@/components/PhotoUpload";
+import DraftablePhotoUpload from "./DraftablePhotoUpload";
+import DescriptionField from "./DescriptionField";
+import { DraftJobProvider } from "./DraftJobContext";
+import { budgetBracketForCategory } from "@/lib/health";
 import PhotoTips from "@/components/PhotoTips";
 import ExistingJobPhotos from "./ExistingJobPhotos";
 import ReviewButton from "./ReviewButton";
@@ -55,41 +58,29 @@ export default async function ContractorsPage({
     timing?: string;
   };
 }) {
-  const property = await getActiveProperty();
-  if (!property) redirect("/onboarding");
   const supabase = createClient();
-  const plus = await hasPlus();
+
+  // Nothing here depends on anything else on the page (property/plus/auth
+  // are all independent lookups) - run them together instead of stacking
+  // three round trips before any property- or user-scoped query can start.
+  const [property, plus, authResult] = await Promise.all([
+    getActiveProperty(),
+    hasPlus(),
+    supabase.auth.getUser(),
+  ]);
+  if (!property) redirect("/onboarding");
+  const {
+    data: { user },
+  } = authResult;
 
   const category = searchParams.category ?? "";
   const issueId = searchParams.issue ?? "";
 
-  // If this job is about an issue that already has photos on file (the
-  // "Connect me with a local pro" link from the Issues page carries
-  // ?issue=<id>), fetch them so the form can show what will ride along
-  // automatically. postJobAction reuses this same issue_id for the lead, so
-  // photos already tied to it are already visible to pros with no extra
-  // upload step - this is purely about letting the owner SEE that before
-  // posting, and remove one if they don't want it sent.
-  let existingIssuePhotos: { id: string; url: string }[] = [];
-  if (issueId) {
-    const { data: pics } = await supabase
-      .from("photos")
-      .select("id, url")
-      .eq("property_id", property.id)
-      .eq("related_type", "issue")
-      .eq("related_id", issueId);
-    existingIssuePhotos = pics ?? [];
-  }
-
-  // Prefill the contact fields from the owner's saved profile.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: profile } = await supabase
-    .from("users")
-    .select("full_name, email, phone")
-    .eq("id", user?.id ?? "")
-    .maybeSingle();
+  // Pre-fill the budget dropdown with a sane bracket when the job arrives tied
+  // to a known system or issue (both carry ?category=). Falls back to "" (the
+  // "Prefer not to say" option) for a fresh manual post or a category we keep
+  // no cost range for, and stays user-changeable either way.
+  const budgetDefault = budgetBracketForCategory(category) ?? "";
 
   // The owner's posted jobs (with the chosen pro's info, if one is picked yet).
   // Cast to any[]: the generated types don't model the contractor_leads ->
@@ -99,22 +90,56 @@ export default async function ContractorsPage({
   // lead_applications reads below.
   const LEADS_SELECT_WITH_CLOSE =
     "id, category, issue_description, issue_id, contractor_id, status, timing, created_at, owner_closed_at, contractors(name, rating, review_count, service_area, license_number, contact_phone, contact_email)";
-  let { data: leadsData, error: leadsError } = await (supabase as any)
-    .from("contractor_leads")
-    .select(LEADS_SELECT_WITH_CLOSE)
-    .eq("property_id", property.id)
-    .order("created_at", { ascending: false });
-  if (leadsError && isMissingSchemaError(leadsError)) {
-    // Migration 0092 hasn't run against this database yet: retry without the
-    // new column instead of showing an empty jobs list.
-    ({ data: leadsData } = await (supabase as any)
-      .from("contractor_leads")
-      .select(
-        "id, category, issue_description, issue_id, contractor_id, status, timing, created_at, contractors(name, rating, review_count, service_area, license_number, contact_phone, contact_email)"
-      )
-      .eq("property_id", property.id)
-      .order("created_at", { ascending: false }));
-  }
+
+  // These three queries only need property.id / user.id (both already in
+  // hand) and are independent of each other, so they run as one parallel
+  // wave instead of three stacked round trips.
+  const [existingIssuePhotos, { data: profile }, leadsData] =
+    await Promise.all([
+      // If this job is about an issue that already has photos on file (the
+      // "Connect me with a local pro" link from the Issues page carries
+      // ?issue=<id>), fetch them so the form can show what will ride along
+      // automatically. postJobAction reuses this same issue_id for the lead,
+      // so photos already tied to it are already visible to pros with no
+      // extra upload step - this is purely about letting the owner SEE that
+      // before posting, and remove one if they don't want it sent.
+      issueId
+        ? supabase
+            .from("photos")
+            .select("id, url")
+            .eq("property_id", property.id)
+            .eq("related_type", "issue")
+            .eq("related_id", issueId)
+            .then((r) => r.data ?? [])
+        : Promise.resolve<{ id: string; url: string }[]>([]),
+      // Prefill the contact fields from the owner's saved profile.
+      supabase
+        .from("users")
+        .select("full_name, email, phone")
+        .eq("id", user?.id ?? "")
+        .maybeSingle(),
+      (async () => {
+        let { data: leadsData, error: leadsError } = await (
+          supabase as any
+        )
+          .from("contractor_leads")
+          .select(LEADS_SELECT_WITH_CLOSE)
+          .eq("property_id", property.id)
+          .order("created_at", { ascending: false });
+        if (leadsError && isMissingSchemaError(leadsError)) {
+          // Migration 0092 hasn't run against this database yet: retry
+          // without the new column instead of showing an empty jobs list.
+          ({ data: leadsData } = await (supabase as any)
+            .from("contractor_leads")
+            .select(
+              "id, category, issue_description, issue_id, contractor_id, status, timing, created_at, contractors(name, rating, review_count, service_area, license_number, contact_phone, contact_email)"
+            )
+            .eq("property_id", property.id)
+            .order("created_at", { ascending: false }));
+        }
+        return leadsData;
+      })(),
+    ]);
   const leads = (leadsData ?? []) as any[];
 
   // My Pros: distinct pros the homeowner previously hired on this property
@@ -153,37 +178,39 @@ export default async function ContractorsPage({
     { rating: number; comment: string | null }
   >();
   const closedIds = new Set<string>();
-  if (leadIds.length) {
-    const { data: revs } = await supabase
-      .from("reviews")
-      .select("lead_id, rating, comment")
-      .in("lead_id", leadIds);
-    for (const r of revs ?? [])
-      reviewByLead.set(r.lead_id, { rating: r.rating, comment: r.comment });
-
-    const { data: sys } = await supabase
-      .from("messages")
-      .select("lead_id, body, created_at")
-      .eq("sender_role", "system")
-      .in("lead_id", leadIds)
-      .order("created_at", { ascending: false });
-    const lastSys = new Map<string, any>();
-    for (const m of sys ?? []) if (!lastSys.has(m.lead_id)) lastSys.set(m.lead_id, m);
-    for (const [lid, m] of lastSys)
-      if (isCloseMarker(m.body)) closedIds.add(lid);
-  }
-
   // Applications on the owner's jobs, with each applying pro's public info.
   // lead_applications isn't in the generated types yet, so query via any.
   const appsByLead = new Map<string, any[]>();
   if (leadIds.length) {
-    const { data: apps } = await (supabase as any)
-      .from("lead_applications")
-      .select(
-        "id, lead_id, contractor_id, message, created_at, status, refunded_at, contractors(name, rating, review_count, service_area, license_number)"
-      )
-      .in("lead_id", leadIds)
-      .order("created_at", { ascending: true });
+    // None of these three depend on each other - only on leadIds - so they
+    // run as one parallel wave instead of three stacked round trips.
+    const [{ data: revs }, { data: sys }, { data: apps }] = await Promise.all([
+      supabase
+        .from("reviews")
+        .select("lead_id, rating, comment")
+        .in("lead_id", leadIds),
+      supabase
+        .from("messages")
+        .select("lead_id, body, created_at")
+        .eq("sender_role", "system")
+        .in("lead_id", leadIds)
+        .order("created_at", { ascending: false }),
+      (supabase as any)
+        .from("lead_applications")
+        .select(
+          "id, lead_id, contractor_id, message, created_at, status, refunded_at, contractors(name, rating, review_count, service_area, license_number, license_verified_at)"
+        )
+        .in("lead_id", leadIds)
+        .order("created_at", { ascending: true }),
+    ]);
+    for (const r of revs ?? [])
+      reviewByLead.set(r.lead_id, { rating: r.rating, comment: r.comment });
+
+    const lastSys = new Map<string, any>();
+    for (const m of sys ?? []) if (!lastSys.has(m.lead_id)) lastSys.set(m.lead_id, m);
+    for (const [lid, m] of lastSys)
+      if (isCloseMarker(m.body)) closedIds.add(lid);
+
     for (const a of (apps ?? []) as any[]) {
       const list = appsByLead.get(a.lead_id) ?? [];
       list.push(a);
@@ -227,6 +254,7 @@ export default async function ContractorsPage({
         action={postJobAction}
         className="card space-y-4"
       >
+        <DraftJobProvider initialCategory={category}>
         <input type="hidden" name="issue_id" value={issueId} />
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
@@ -296,35 +324,14 @@ export default async function ContractorsPage({
           </div>
         </div>
 
-        <div>
-          {/* Not labeled optional: postJobAction enforces a 20-character floor
-              on the description for a standalone post (a post linked to an
-              issue can fall back to the issue's own description). minLength
-              surfaces that floor in the browser before the action rejects it. */}
-          <label className="label" htmlFor="job-details">
-            Details about your project
-          </label>
-          <textarea
-            name="message"
-            id="job-details"
-            className="textarea"
-            rows={3}
-            minLength={20}
-            defaultValue={searchParams.desc ?? ""}
-            placeholder="What needs doing?"
-          />
-          <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-            A sentence or two helps pros quote accurately (20 characters
-            minimum).
-          </p>
-        </div>
+        <DescriptionField initialDescription={searchParams.desc ?? ""} />
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             {existingIssuePhotos.length > 0 && (
               <ExistingJobPhotos photos={existingIssuePhotos} />
             )}
-            <PhotoUpload propertyId={property.id} id="job-photos" />
+            <DraftablePhotoUpload propertyId={property.id} id="job-photos" />
             <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
               Pros quote more accurately when they can see the job.
             </p>
@@ -338,7 +345,7 @@ export default async function ContractorsPage({
               name="budget_range"
               id="job-budget"
               className="select"
-              defaultValue=""
+              defaultValue={budgetDefault}
             >
               <option value="">Prefer not to say</option>
               {BUDGET_RANGES.map((b) => (
@@ -360,6 +367,7 @@ export default async function ContractorsPage({
           Your contact stays private. Only the pro you choose from the applicants
           gets your name, address, and contact details.
         </p>
+        </DraftJobProvider>
       </form>
 
       {myPros.length > 0 && (
@@ -418,8 +426,8 @@ export default async function ContractorsPage({
             </p>
             <p className="text-sm text-bark-700 dark:text-stone-300">
               Free covers 3 open jobs at a time. Hearth Plus is unlimited, plus
-              priority matching so pros see yours first. Free first month, then
-              $4.99.
+              priority matching so pros see yours first. 3-day free trial, then
+              $4.99/mo.
             </p>
           </div>
           <Link href="/plus" className="btn-primary shrink-0">
@@ -633,9 +641,25 @@ export default async function ContractorsPage({
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
-                                <span className="font-medium text-stone-900 dark:text-stone-100">
-                                  {a.contractors?.name ?? "A pro"}
-                                </span>
+                                {/* Name links to the pro's full public page
+                                    (/p/<id>, new tab) so the owner can see
+                                    reviews and project photos before choosing.
+                                    Falls back to plain text if this row somehow
+                                    has no contractor_id. */}
+                                {a.contractor_id ? (
+                                  <a
+                                    href={`/p/${a.contractor_id}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="font-medium text-stone-900 hover:underline dark:text-stone-100"
+                                  >
+                                    {a.contractors?.name ?? "A pro"}
+                                  </a>
+                                ) : (
+                                  <span className="font-medium text-stone-900 dark:text-stone-100">
+                                    {a.contractors?.name ?? "A pro"}
+                                  </span>
+                                )}
                                 {a.contractors?.review_count > 0 ? (
                                   <span className="text-xs text-amber-600 dark:text-amber-400">
                                     ★ {a.contractors.rating}
@@ -657,12 +681,65 @@ export default async function ContractorsPage({
                                   count={a.contractors.review_count}
                                 />
                               )}
-                              <p className="text-xs text-stone-500 dark:text-stone-400">
-                                {a.contractors?.service_area ?? ""}
-                                {a.contractors?.license_number
-                                  ? ` · Lic. ${a.contractors.license_number}`
-                                  : ""}
-                              </p>
+                              {a.contractors?.service_area && (
+                                <p className="text-xs text-stone-500 dark:text-stone-400">
+                                  {a.contractors.service_area}
+                                </p>
+                              )}
+                              {/* License trust: same honest distinction as the
+                                  public profile (/p/<id>). A real CSLB-checked
+                                  license (license_verified_at, migration 0055)
+                                  gets the green "License verified" badge; a
+                                  license the pro merely typed in gets the
+                                  neutral gray "License on file" badge so it can
+                                  never be mistaken for the verified one. The
+                                  raw number stays visible either way so a wary
+                                  owner can look it up at cslb.ca.gov. */}
+                              {a.contractors?.license_verified_at ? (
+                                <p className="mt-1">
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200">
+                                    <svg
+                                      viewBox="0 0 24 24"
+                                      className="h-3 w-3"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2.5"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    >
+                                      <path d="M20 6L9 17l-5-5" />
+                                    </svg>
+                                    License verified
+                                  </span>
+                                  <span className="ml-1.5 text-xs text-stone-500 dark:text-stone-400">
+                                    {a.contractors?.license_number
+                                      ? `Lic. ${a.contractors.license_number} · `
+                                      : ""}
+                                    Checked against the CSLB public database.
+                                  </span>
+                                </p>
+                              ) : a.contractors?.license_number ? (
+                                <p className="mt-1">
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-stone-300 bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300">
+                                    <svg
+                                      viewBox="0 0 24 24"
+                                      className="h-3 w-3"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    >
+                                      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M9 15l2 2 4-4" />
+                                    </svg>
+                                    License on file
+                                  </span>
+                                  <span className="ml-1.5 text-xs text-stone-500 dark:text-stone-400">
+                                    Lic. {a.contractors.license_number} ·
+                                    Reported by the business, not verified.
+                                  </span>
+                                </p>
+                              ) : null}
                               {formatResponseTime(
                                 replyMinutesByContractor.get(a.contractor_id) ??
                                   null

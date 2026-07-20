@@ -72,6 +72,9 @@ export interface Database {
           full_name: string | null;
           notification_prefs: { [key: string]: boolean } | null;
           free_quote_used_at: string | null;
+          // One free maintenance-plan build for non-Plus users (migration
+          // 0099), mirroring free_quote_used_at. Null while unused.
+          free_plan_used_at: string | null;
           // TCPA SMS consent (migration 0073): sms_consent_at only moves
           // forward on a false -> true transition (see
           // src/app/(app)/account/actions.ts saveAccountAction).
@@ -86,6 +89,7 @@ export interface Database {
           full_name?: string | null;
           notification_prefs?: { [key: string]: boolean } | null;
           free_quote_used_at?: string | null;
+          free_plan_used_at?: string | null;
           sms_consent?: boolean;
           sms_consent_at?: string | null;
           created_at?: string;
@@ -162,6 +166,8 @@ export interface Database {
           property_id: string;
           system_type: string;
           material_or_model: string | null;
+          model_number: string | null;
+          capacity: string | null;
           install_year: number | null;
           last_serviced: string | null;
           condition_rating: number | null;
@@ -175,6 +181,8 @@ export interface Database {
           property_id: string;
           system_type: string;
           material_or_model?: string | null;
+          model_number?: string | null;
+          capacity?: string | null;
           install_year?: number | null;
           last_serviced?: string | null;
           condition_rating?: number | null;
@@ -1056,6 +1064,30 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["app_events"]["Insert"]>;
         Relationships: [];
       };
+      quote_analyses: {
+        Row: {
+          id: string;
+          user_id: string;
+          status: string;
+          quote_filename: string | null;
+          findings: Json | null;
+          error: string | null;
+          created_at: string;
+          finished_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          status?: string;
+          quote_filename?: string | null;
+          findings?: Json | null;
+          error?: string | null;
+          created_at?: string;
+          finished_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["quote_analyses"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: {
       lead_previews: {
@@ -1085,6 +1117,14 @@ export interface Database {
       };
       can_access_lead: {
         Args: { p_lead_id: string };
+        Returns: boolean;
+      };
+      can_preview_job_photo: {
+        Args: { p_lead_id: string; p_photo_url: string };
+        Returns: boolean;
+      };
+      can_view_job_photo_full: {
+        Args: { p_lead_id: string; p_photo_url: string };
         Returns: boolean;
       };
       leave_review: {
@@ -1165,6 +1205,7 @@ export interface Database {
           budget_range: string | null;
           city: string | null;
           ownership_verified: boolean;
+          photo_urls: string[] | null;
         }[];
       };
       redeem_household_invite_token: {

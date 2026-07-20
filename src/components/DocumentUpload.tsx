@@ -7,6 +7,8 @@ import { saveDocumentAction } from "@/lib/document-actions";
 import TakePhotoButton from "@/components/TakePhotoButton";
 import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
 import { FilePreviewThumb } from "@/components/FilePreview";
+import Lightbox from "@/components/Lightbox";
+import AiNotice from "@/components/AiNotice";
 
 const DOC_TYPES = [
   { value: "warranty", label: "Warranty" },
@@ -63,6 +65,7 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
   // Lets the "Reading the document..." step be cancelled: aborts the
   // in-flight extraction fetch and hands the picker back to the owner.
   const [reading, setReading] = useState<AbortController | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const input = e.target;
@@ -310,16 +313,34 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
 
       {phase === "review" && fields && (
         <form action={save} className="mt-3 space-y-3">
+          {/* Sits above the editable fields, same placement as the equivalent
+              notice on the inspection-report reader: this IS the human
+              review step, so the caveat needs to be read before it. */}
+          <AiNotice detail="A model read this file, so it can misread a brand, model, or date; check every field before you save. If this is an insurance document, this isn't insurance advice: what your policy actually covers is decided by your insurer and the policy itself, not this reading." />
           {preview && file && (
             file.type === "application/pdf" ? (
               <FilePreviewThumb file={file} size="mb-1 h-28 w-28" />
             ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={preview}
-                alt="Document preview"
-                className="mb-1 max-h-40 rounded-lg border border-stone-200 object-contain dark:border-white/10"
-              />
+              <>
+                <button
+                  type="button"
+                  onClick={() => setLightboxOpen(true)}
+                  className="mb-1 block cursor-zoom-in"
+                  aria-label="View document preview full size"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={preview}
+                    alt="Document preview"
+                    className="max-h-40 rounded-lg border border-stone-200 object-contain dark:border-white/10"
+                  />
+                </button>
+                <Lightbox
+                  src={lightboxOpen ? preview : null}
+                  alt="Document preview"
+                  onClose={() => setLightboxOpen(false)}
+                />
+              </>
             )
           )}
 

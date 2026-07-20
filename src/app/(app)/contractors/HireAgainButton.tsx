@@ -71,9 +71,15 @@ export default function HireAgainButton({
                   const res = await action(fd);
                   if (res.ok) setOpen(false);
                   else setError(res.error);
-                } catch {
-                  // A rejected server action (network blip, server hiccup)
-                  // must not strand the button in its pending state.
+                } catch (err: any) {
+                  // Trap: rehireProAction redirects straight to the new chat
+                  // thread on success, and redirect() does that by throwing a
+                  // NEXT_REDIRECT-digest error for Next's router to catch
+                  // higher up. A bare catch here swallows that throw and
+                  // reports a successful rehire as "something went wrong" -
+                  // rethrow it so the redirect still happens, only treat
+                  // everything else as a real failure.
+                  if (err?.digest?.startsWith("NEXT_REDIRECT")) throw err;
                   setError("Something went wrong. Please try again.");
                 } finally {
                   setPending(false);

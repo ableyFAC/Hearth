@@ -36,10 +36,42 @@ const STOP_WORDS = new Set([
   "CANCEL",
   "END",
   "QUIT",
+  // FCC's April 2025 standardized opt-out keyword list adds these two. "OPT
+  // OUT" carries a space, so Body is whitespace-collapsed before this lookup
+  // (see the normalize step in POST below) - "opt   out" still matches.
+  "REVOKE",
+  "OPT OUT",
 ]);
 const START_WORDS = new Set(["START", "YES", "UNSTOP"]);
+// Carriers require a HELP/INFO auto-reply for 10DLC approval, and the SMS
+// consent copy (src/app/(app)/account/ProfileInfoForm.tsx) promises "HELP for
+// help" - so both keywords must actually answer. HELP never touches consent.
+const HELP_WORDS = new Set(["HELP", "INFO"]);
 
 const TWIML_EMPTY_RESPONSE = "<Response></Response>";
+
+// Canonical site origin for the support link in the HELP reply. Same env var
+// and fallback the rest of the app uses (src/app/layout.tsx etc.).
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+// XML-escape values dropped into TwiML. The HELP body contains "&" (in
+// "Msg&data"), which is not valid raw in XML, so at minimum & < > must be
+// encoded or Twilio rejects the TwiML.
+function escapeXml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+// One compliant HELP/INFO auto-reply, returned as TwiML so Twilio sends it
+// back to the texter (the same reply channel this route already speaks - no
+// separate REST call needed). Identifies the sender, points to support, and
+// restates the rate + opt-out disclosure carriers look for.
+function helpTwiml(): string {
+  const message = `Hearth: home maintenance help. Support: ${SITE_URL}/contact Msg&data rates may apply. Reply STOP to opt out.`;
+  return `<Response><Message>${escapeXml(message)}</Message></Response>`;
+}
 
 // Best-effort US phone match: strip everything but digits and compare the
 // last 10 (the national number), so it doesn't matter whether one side has a
@@ -141,8 +173,22 @@ export async function POST(req: NextRequest) {
       return new NextResponse("Forbidden", { status: 403 });
     }
 
-    const body = (params.get("Body") ?? "").trim().toUpperCase();
+    // Whitespace-collapsed so multi-token keywords like "OPT OUT" match no
+    // matter how many spaces the texter typed.
+    const body = (params.get("Body") ?? "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, " ");
     const from = params.get("From") ?? "";
+
+    // HELP/INFO get an informational auto-reply and never change consent, so
+    // answer and return before the STOP/START handling below.
+    if (HELP_WORDS.has(body)) {
+      return new NextResponse(helpTwiml(), {
+        status: 200,
+        headers: { "Content-Type": "text/xml" },
+      });
+    }
 
     let consent: boolean | null = null;
     if (STOP_WORDS.has(body)) consent = false;

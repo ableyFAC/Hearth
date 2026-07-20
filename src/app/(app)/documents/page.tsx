@@ -6,6 +6,7 @@ import { stateName } from "@/lib/forecast";
 import DocumentUpload from "@/components/DocumentUpload";
 import CategoryIcon from "@/components/CategoryIcon";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
+import SubmitButton from "@/components/SubmitButton";
 import { FileText } from "lucide-react";
 import { imgSrc } from "@/lib/storage";
 import {
@@ -66,7 +67,13 @@ function money(n: number): string {
 }
 
 export default async function DocumentsPage() {
-  const property = (await getActiveProperty())!;
+  // getActiveProperty and hasPlus don't depend on each other - run them
+  // together up front instead of stacking a round trip after the docs query.
+  const [propertyOrNull, isPlus] = await Promise.all([
+    getActiveProperty(),
+    hasPlus(),
+  ]);
+  const property = propertyOrNull!;
   const supabase = createClient();
 
   const { data: docs, error: docsError } = await supabase
@@ -78,7 +85,6 @@ export default async function DocumentsPage() {
     .order("uploaded_at", { ascending: false });
 
   const list = docs ?? [];
-  const isPlus = await hasPlus();
 
   // insurance_renewal_date and insurance_premium are new columns from
   // migration 0040, not yet in src/lib/database.types.ts, so they are read
@@ -204,12 +210,12 @@ export default async function DocumentsPage() {
                   {canApply && (
                     <form action={applyDocumentToTwinAction}>
                       <input type="hidden" name="id" value={d.id} />
-                      <button
-                        type="submit"
+                      <SubmitButton
+                        pendingLabel="Adding…"
                         className="btn-primary px-2.5 py-1 text-xs"
                       >
                         + Add to my home
-                      </button>
+                      </SubmitButton>
                     </form>
                   )}
                   {d.applied_at && (

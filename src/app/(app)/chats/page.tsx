@@ -70,10 +70,15 @@ export default async function HomeownerChatsPage({
 }: {
   searchParams: { lead?: string };
 }) {
-  const property = await getActiveProperty();
+  // getProactiveGreeting doesn't depend on the property lookup (or anything
+  // else on this page) - run it alongside getActiveProperty instead of
+  // stacking a round trip after the redirect check.
+  const [property, greeting] = await Promise.all([
+    getActiveProperty(),
+    getProactiveGreeting(),
+  ]);
   if (!property) redirect("/onboarding");
   const supabase = createClient();
-  const greeting = await getProactiveGreeting();
 
   // The homeowner's conversations are jobs where they've PICKED a pro. Open
   // postings with no chosen pro yet aren't chats - there's no one to message.
@@ -102,63 +107,107 @@ export default async function HomeownerChatsPage({
   // the regex guess off plain chat text is only a fallback for threads that
   // never got one.
   const quoteByLead = new Map<string, number>();
-  if (ids.length) {
-    // Previously unbounded: this pulled EVERY message ever sent across every
-    // one of the owner's leads just to read off the newest one per lead (plus
-    // the newest contractor price as a fallback below). A per-lead "give me
-    // just the newest row" query needs a DISTINCT ON / lateral-join view or
-    // RPC, which is out of lane for a page-level fix - see the note below.
-    // Ordered created_at desc + a generous cap bounds the worst case (a user
-    // with many long-running conversations) without truncating the realistic
-    // case (a handful of leads, each with well under a thousand messages).
-    // IDEAL FIX (cross-lane, needs a DB view/RPC): a
-    // `select distinct on (lead_id) ...` view, or an RPC that returns one row
-    // per lead_id ordered by created_at desc, so this is correct at any scale
-    // instead of "generous enough in practice."
-    const MESSAGES_SCAN_LIMIT = 2000;
-    const { data: msgs } = await supabase
-      .from("messages")
-      .select("lead_id, body, created_at, sender_role")
-      .in("lead_id", ids)
-      .order("created_at", { ascending: false })
-      .limit(MESSAGES_SCAN_LIMIT);
-    for (const m of msgs ?? []) {
-      if (!lastByLead.has(m.lead_id)) lastByLead.set(m.lead_id, m);
-      // Messages are newest first, so the first contractor price we see per lead
-      // is that pro's most recent quote. Companion messages are skipped: their
-      // amount belongs to a structured quote, which the pass below handles
-      // (including excluding it once withdrawn).
-      if (
-        m.sender_role === "contractor" &&
-        !isQuoteCompanionBody(m.body) &&
-        !quoteByLead.has(m.lead_id)
-      ) {
-        const q = extractQuote(m.body);
-        if (q != null) quoteByLead.set(m.lead_id, q * 100);
-      }
-    }
 
-    // Structured quotes take priority: fetch the latest per lead and
-    // overwrite any regex-based guess for that lead.
+  // "Ask Hearth" is a pinned assistant conversation, always available. It's the
+  // default when there are no real (chosen-pro) conversations yet.
+  const askSelected =
+    !searchParams.lead || searchParams.lead === "ask-hearth";
+  // Candidate pick from the active home's own conversation list. Finding it
+  // here (before the messages/quotes fetch below) is safe: convos.sort()
+  // further down only reorders the array, it never changes which lead
+  // objects are in it, so the element `find` returns is identical either way.
+  const selectedCandidate = askSelected
+    ? null
+    : (convos.find((l) => l.id === searchParams.lead) ?? null);
+  // Notification deep links ("/chats?lead=X" from quote/message alerts) are
+  // property-blind, but the list above only holds the ACTIVE home's
+  // conversations. For a multi-home (Plus) user, a lead on another of their
+  // homes would otherwise dead-end on the empty "Select a conversation" pane,
+  // and its unread badge could never be cleared from the page the link opens.
+  // Fall back to fetching the lead directly: RLS only returns leads on
+  // properties this user can read, so a hit is safe to open even though it is
+  // not in the active home's list.
+  const needsCrossHomeLookup =
+    !askSelected && !selectedCandidate && Boolean(searchParams.lead);
+
+  // Previously unbounded: this pulled EVERY message ever sent across every
+  // one of the owner's leads just to read off the newest one per lead (plus
+  // the newest contractor price as a fallback below). A per-lead "give me
+  // just the newest row" query needs a DISTINCT ON / lateral-join view or
+  // RPC, which is out of lane for a page-level fix - see the note below.
+  // Ordered created_at desc + a generous cap bounds the worst case (a user
+  // with many long-running conversations) without truncating the realistic
+  // case (a handful of leads, each with well under a thousand messages).
+  // IDEAL FIX (cross-lane, needs a DB view/RPC): a
+  // `select distinct on (lead_id) ...` view, or an RPC that returns one row
+  // per lead_id ordered by created_at desc, so this is correct at any scale
+  // instead of "generous enough in practice."
+  const MESSAGES_SCAN_LIMIT = 2000;
+
+  // None of these three depend on each other - only on `ids` (already known)
+  // and, for the cross-home lookup, on searchParams.lead - so they run as one
+  // parallel wave instead of three stacked round trips.
+  const [msgs, structuredQuotes, crossHomeLead] = await Promise.all([
+    ids.length
+      ? supabase
+          .from("messages")
+          .select("lead_id, body, created_at, sender_role")
+          .in("lead_id", ids)
+          .order("created_at", { ascending: false })
+          .limit(MESSAGES_SCAN_LIMIT)
+          .then((r) => r.data)
+      : Promise.resolve(null),
+    // Structured quotes take priority: fetched alongside the plain-text scan
+    // above, then overwrite any regex-based guess for that lead below.
     // Withdrawn quotes are excluded: the pro retracted that price, so it is
     // not their standing offer. Declined ones still count as the last price
     // the pro actually stated.
     // Same unbounded-fan-out shape as the messages query above, but far lower
     // volume in practice (one row per quote sent, not per chat message);
     // bounded for the same reason and with the same ideal-fix note.
-    const { data: structuredQuotes } = await supabase
-      .from("lead_quotes")
-      .select("lead_id, total_cents, created_at")
-      .in("lead_id", ids)
-      .neq("status", "withdrawn")
-      .order("created_at", { ascending: false })
-      .limit(MESSAGES_SCAN_LIMIT);
-    const latestStructured = new Set<string>();
-    for (const q of structuredQuotes ?? []) {
-      if (latestStructured.has(q.lead_id)) continue;
-      latestStructured.add(q.lead_id);
-      quoteByLead.set(q.lead_id, q.total_cents);
+    ids.length
+      ? supabase
+          .from("lead_quotes")
+          .select("lead_id, total_cents, created_at")
+          .in("lead_id", ids)
+          .neq("status", "withdrawn")
+          .order("created_at", { ascending: false })
+          .limit(MESSAGES_SCAN_LIMIT)
+          .then((r) => r.data)
+      : Promise.resolve(null),
+    needsCrossHomeLookup
+      ? supabase
+          .from("contractor_leads")
+          .select("id, category, contractor_id, created_at, contractors(name)")
+          // needsCrossHomeLookup already guarantees searchParams.lead is
+          // truthy (Boolean(searchParams.lead) is part of that condition).
+          .eq("id", searchParams.lead as string)
+          .not("contractor_id", "is", null)
+          .maybeSingle()
+          .then((r) => r.data)
+      : Promise.resolve(null),
+  ]);
+
+  for (const m of msgs ?? []) {
+    if (!lastByLead.has(m.lead_id)) lastByLead.set(m.lead_id, m);
+    // Messages are newest first, so the first contractor price we see per lead
+    // is that pro's most recent quote. Companion messages are skipped: their
+    // amount belongs to a structured quote, which the pass below handles
+    // (including excluding it once withdrawn).
+    if (
+      m.sender_role === "contractor" &&
+      !isQuoteCompanionBody(m.body) &&
+      !quoteByLead.has(m.lead_id)
+    ) {
+      const q = extractQuote(m.body);
+      if (q != null) quoteByLead.set(m.lead_id, q * 100);
     }
+  }
+  const latestStructured = new Set<string>();
+  for (const q of structuredQuotes ?? []) {
+    if (latestStructured.has(q.lead_id)) continue;
+    latestStructured.add(q.lead_id);
+    quoteByLead.set(q.lead_id, q.total_cents);
   }
 
   // Pros who have sent a price, cheapest first, for the compare panel.
@@ -185,31 +234,11 @@ export default async function HomeownerChatsPage({
     return tb < ta ? -1 : tb > ta ? 1 : 0;
   });
 
-  // "Ask Hearth" is a pinned assistant conversation, always available. It's the
-  // default when there are no real (chosen-pro) conversations yet.
-  const askSelected =
-    !searchParams.lead || searchParams.lead === "ask-hearth";
-  let selected = askSelected
-    ? null
-    : (convos.find((l) => l.id === searchParams.lead) ?? null);
-
-  // Notification deep links ("/chats?lead=X" from quote/message alerts) are
-  // property-blind, but the list above only holds the ACTIVE home's
-  // conversations. For a multi-home (Plus) user, a lead on another of their
-  // homes would otherwise dead-end on the empty "Select a conversation" pane,
-  // and its unread badge could never be cleared from the page the link opens.
-  // Fall back to fetching the lead directly: RLS only returns leads on
-  // properties this user can read, so a hit is safe to open even though it is
-  // not in the active home's list.
-  if (!askSelected && !selected && searchParams.lead) {
-    const { data: crossHomeLead } = await supabase
-      .from("contractor_leads")
-      .select("id, category, contractor_id, created_at, contractors(name)")
-      .eq("id", searchParams.lead)
-      .not("contractor_id", "is", null)
-      .maybeSingle();
-    if (crossHomeLead) selected = crossHomeLead;
-  }
+  // askSelected/selectedCandidate/needsCrossHomeLookup and the cross-home
+  // fetch itself were already resolved above (in parallel with the
+  // messages/quotes queries); just fold the result in here.
+  let selected = selectedCandidate;
+  if (needsCrossHomeLookup && crossHomeLead) selected = crossHomeLead;
 
   // On phones the two-pane grid stacks, so tapping a conversation used to
   // render the thread below the list where it looked like nothing happened.

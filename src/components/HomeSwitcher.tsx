@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { setActiveHomeAction } from "@/lib/homeActions";
 import RemoveHomeButton from "@/components/RemoveHomeButton";
+import SubmitButton from "@/components/SubmitButton";
 import type { PropertyWithShared } from "@/lib/property";
 
 // Dropdown of the user's homes: switch, remove, or add. Closes on outside
@@ -46,7 +47,7 @@ export default function HomeSwitcher({
             ? `Switch home, current: ${active.address_line1}`
             : "Switch home"
         }
-        className="-my-2.5 flex items-center gap-1 py-2.5 text-sm font-medium text-stone-600 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200"
+        className="-my-2.5 flex items-center gap-1 py-2.5 text-sm font-medium text-stone-600 active:opacity-70 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200"
       >
         <span className="max-w-[12rem] truncate">{active?.address_line1}</span>
         <span
@@ -79,14 +80,17 @@ export default function HomeSwitcher({
               ) : (
                 <form action={setActiveHomeAction} className="min-w-0 flex-1">
                   <input type="hidden" name="id" value={h.id} />
-                  <button className="w-full truncate text-left text-sm text-stone-700 hover:text-bark-700 dark:text-stone-300 dark:hover:text-stone-300">
+                  <SubmitButton
+                    className="w-full truncate text-left text-sm text-stone-700 active:opacity-70 hover:text-bark-700 disabled:opacity-60 dark:text-stone-300 dark:hover:text-stone-300"
+                    pendingLabel="Switching…"
+                  >
                     {h.address_line1}
                     {h.isShared && (
                       <span className="ml-1 text-xs font-normal text-stone-500 dark:text-stone-400">
                         Shared
                       </span>
                     )}
-                  </button>
+                  </SubmitButton>
                 </form>
               )}
 

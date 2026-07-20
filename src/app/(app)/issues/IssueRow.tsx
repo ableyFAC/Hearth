@@ -10,6 +10,7 @@ import {
 import CategoryIcon from "@/components/CategoryIcon";
 import { imgSrc } from "@/lib/storage";
 import { StoredPhotoGrid } from "@/components/FilePreview";
+import SubmitButton from "@/components/SubmitButton";
 import {
   updateIssueAction,
   checkResolveIssueAction,
@@ -120,7 +121,7 @@ export default function IssueRow({
             >
               Cancel
             </button>
-            <button className="btn-primary flex-1">Save changes</button>
+            <SubmitButton pendingLabel="Saving…">Save changes</SubmitButton>
           </div>
         </form>
       </li>

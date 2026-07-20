@@ -113,6 +113,12 @@ export async function updateSession(request: NextRequest) {
     // message would defeat the point of building it.
     path === "/contact" ||
     path.startsWith("/contact/") ||
+    // Email unsubscribe (src/app/unsubscribe): CAN-SPAM requires the opt-out
+    // to work with no login, and it is opened straight from an email by a
+    // recipient who usually has no session. The route authenticates via a
+    // signed token, not a user session, so a 307 to /signin here would break
+    // a legally required unsubscribe.
+    path === "/unsubscribe" ||
     // SEO endpoints (src/app/sitemap.ts, robots.ts): crawlers have no
     // session, and a 307 to /signin here would hide the whole site from them.
     path === "/sitemap.xml" ||

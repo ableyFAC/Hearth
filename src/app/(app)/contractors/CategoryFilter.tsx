@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { SERVICE_CATEGORIES, REMODEL_PROJECTS } from "@/lib/constants";
+import { useDraftJob } from "./DraftJobContext";
 
 // The "what do you need?" picker for posting a job. Lists every service category
 // a contractor can offer, plus common projects that map to one of them, so a
@@ -18,7 +19,14 @@ export default function CategoryFilter({
   // Lets a surrounding <label htmlFor> point at this select.
   id?: string;
 }) {
-  const [value, setValue] = useState(category);
+  // On the post-a-job form the category is shared through context, so a
+  // photo-drafted category guess can preselect it (and we can tell when the
+  // owner picked it themselves). Everywhere else the context is null and this
+  // falls back to local state, unchanged.
+  const ctx = useDraftJob();
+  const [localValue, setLocalValue] = useState(category);
+  const value = ctx ? ctx.category : localValue;
+  const setValue = (v: string) => (ctx ? ctx.setCategory(v) : setLocalValue(v));
 
   return (
     <>
@@ -27,7 +35,10 @@ export default function CategoryFilter({
         id={id}
         className="select"
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => {
+          setValue(e.target.value);
+          ctx?.markCategoryTouched();
+        }}
         required
       >
         <option value="" disabled>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { saveInsuranceAction } from "./insurance-actions";
+import SubmitButton from "@/components/SubmitButton";
 
 // Collapsible entry form for the "Home insurance" card: the renewal date and
 // annual premium off the owner's current policy. Mirrors TaxForm on /taxes.
@@ -85,7 +86,7 @@ export default function InsuranceForm({
             Cancel
           </button>
         )}
-        <button className="btn-primary flex-1">Save</button>
+        <SubmitButton>Save</SubmitButton>
       </div>
     </form>
   );

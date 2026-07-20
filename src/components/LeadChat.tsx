@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Image as ImageIcon } from "lucide-react";
 import { FilePreviewThumb } from "@/components/FilePreview";
+import Lightbox from "@/components/Lightbox";
 import { createClient } from "@/lib/supabase/client";
 import { censor } from "@/lib/censor";
 import { extractQuote, formatUSD, dollarsToCents, formatUSDCents } from "@/lib/quotes";
@@ -172,6 +173,13 @@ export default function LeadChat({
   const [reportReason, setReportReason] = useState("");
   const [reported, setReported] = useState(false);
   const [confirmingClose, setConfirmingClose] = useState(false);
+  // True the instant confirmClose runs, before the close system message has
+  // round-tripped through load()/router.refresh(). Keeps the header showing
+  // a plain "Conversation closed" line instead of falling back to "Finish
+  // conversation" for the beat between the Yes/No confirm clearing and the
+  // real `closed` state landing. Reset on reopen so a later close in the
+  // same session shows its own line again.
+  const [justClosed, setJustClosed] = useState(false);
   const [reactions, setReactions] = useState<
     Record<string, { emoji: string; user_id: string | null }[]>
   >({});
@@ -189,6 +197,10 @@ export default function LeadChat({
   // while it uploads (sendImage posts it as a message immediately - there's
   // no separate "attach then send" step to preview it in otherwise).
   const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
+  // The full-size URL of a shared photo currently open in the Lightbox, or
+  // null when closed. One shared piece of state for the whole thread, since
+  // only one photo bubble can be enlarged at a time.
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const uidRef = useRef<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -477,6 +489,23 @@ export default function LeadChat({
     setBusy(true);
     setBody("");
     setReplyingTo(null);
+
+    // Optimistic: show the bubble the instant Send is pressed (dimmed via the
+    // "temp-" id prefix, checked at render time below) instead of waiting on
+    // the insert + full thread refetch. load() below replaces the whole
+    // `messages` array wholesale from the DB once it resolves, which is what
+    // actually reconciles the temp bubble with the real persisted row - no
+    // separate matching step is needed. (A concurrent load() from the poll
+    // or realtime channel firing between this line and the insert resolving
+    // can briefly wholesale-replace `messages` without the temp bubble in
+    // it, hiding it for a moment; it's cosmetic and self-heals on the next
+    // load() once the real row exists, so it's not worth guarding against.)
+    const tempId = `temp-${Date.now()}-${Math.round(Math.random() * 1000)}`;
+    setMessages((prev) => [
+      ...prev,
+      { id: tempId, sender_role: role, body: finalBody, created_at: new Date().toISOString() },
+    ]);
+
     try {
       const { data, error } = await supabase
         .from("messages")
@@ -497,9 +526,11 @@ export default function LeadChat({
         });
       }
       setBusy(false);
-      load();
+      await load();
     } catch {
-      // Couldn't deliver (bad connection, etc.) - keep it as a failed message.
+      // Couldn't deliver (bad connection, etc.) - roll back the optimistic
+      // bubble and keep it as a failed message instead.
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
       setBusy(false);
       setFailed((f) => [
         ...f,
@@ -571,17 +602,28 @@ export default function LeadChat({
     }
   }
 
-  // Post a system marker to close or reopen the thread.
-  async function postSystem(text: string) {
+  // Post a system marker to close or reopen the thread. Returns whether the
+  // insert actually landed: confirmClose gates the visible "Conversation
+  // closed" state on this, so a rejected insert or a network throw doesn't
+  // leave that state showing (or busy stuck true) for something that never
+  // happened.
+  async function postSystem(text: string): Promise<boolean> {
     setBusy(true);
-    await supabase.from("messages").insert({
-      lead_id: leadId,
-      sender_role: "system",
-      sender_id: await ensureUid(),
-      body: text,
-    });
-    setBusy(false);
-    load();
+    try {
+      const { error } = await supabase.from("messages").insert({
+        lead_id: leadId,
+        sender_role: "system",
+        sender_id: await ensureUid(),
+        body: text,
+      });
+      if (error) return false;
+      load();
+      return true;
+    } catch {
+      return false;
+    } finally {
+      setBusy(false);
+    }
   }
 
   // Unsend (delete) one of your own messages. The DB policy only allows this
@@ -589,6 +631,12 @@ export default function LeadChat({
   async function unsend(id: string) {
     setConfirmUnsendId(null);
     setBusy(true);
+    // Optimistic: hide the bubble immediately, restore it if the delete is
+    // rejected. Restore just appends it back rather than reinserting at its
+    // old index - the feed above always re-sorts by created_at, so position
+    // in the `messages` array doesn't matter.
+    const removedMsg = messages.find((m) => m.id === id) ?? null;
+    setMessages((prev) => prev.filter((m) => m.id !== id));
     // .select() returns the deleted rows. If RLS blocked the delete (policy not
     // applied), it returns an empty array even though there's no error.
     const { data, error } = await supabase
@@ -598,11 +646,20 @@ export default function LeadChat({
       .select();
     setBusy(false);
     if (error || !data || data.length === 0) {
+      // Dedupe the restore: a concurrent load() (poll / realtime / tab
+      // refocus) can already have re-fetched this same still-existing
+      // message (this is exactly the RLS-blocked-delete case above), so
+      // appending it back unconditionally would add a second row with the
+      // same id and show the bubble twice.
+      if (removedMsg) {
+        setMessages((prev) =>
+          prev.some((m) => m.id === removedMsg.id) ? prev : [...prev, removedMsg]
+        );
+      }
       setNotice("Couldn't unsend. It isn't enabled in the database yet.");
       setTimeout(() => setNotice(null), 5000);
       return;
     }
-    setMessages((prev) => prev.filter((m) => m.id !== id));
     load();
   }
 
@@ -683,9 +740,26 @@ export default function LeadChat({
   // /chats) re-fetches and its "Leave a review" prompt shows up right away
   // instead of waiting for the next manual reload.
   async function confirmClose() {
-    await postSystem(`${CLOSE_PREFIX} by the ${role}.`);
     setConfirmingClose(false);
+    // justClosed only flips on a CONFIRMED insert (see postSystem's return
+    // value): setting it eagerly would show "Conversation closed" - with no
+    // Reopen, since canReopen only turns true from a real close marker - for
+    // a close that silently failed or never reached the server.
+    const ok = await postSystem(`${CLOSE_PREFIX} by the ${role}.`);
+    if (!ok) {
+      setNotice("Could not close the conversation. Please try again.");
+      setTimeout(() => setNotice(null), 5000);
+      return;
+    }
+    setJustClosed(true);
     router.refresh();
+  }
+
+  // Reopen a thread I closed. Clears justClosed so a later close in this
+  // same session shows its own "Conversation closed" line again.
+  function reopen() {
+    setJustClosed(false);
+    postSystem(REOPEN_BODY);
   }
 
   // Flag this conversation for the Hearth team to review.
@@ -1014,17 +1088,21 @@ export default function LeadChat({
             )}
           </div>
           <div className="shrink-0">
-            {closed ? (
+            {closed || justClosed ? (
               canReopen ? (
                 <button
                   type="button"
-                  onClick={() => postSystem(REOPEN_BODY)}
+                  onClick={reopen}
                   disabled={busy}
                   className="text-xs font-medium text-bark-700 hover:underline disabled:opacity-50"
                 >
                   Reopen
                 </button>
-              ) : null
+              ) : (
+                <span className="text-xs font-medium text-stone-500 dark:text-stone-400">
+                  Conversation closed
+                </span>
+              )
             ) : confirmingClose ? (
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-stone-700 dark:text-stone-300">End?</span>
@@ -1255,11 +1333,13 @@ export default function LeadChat({
                   )}
 
                   {isImageBody(m.body) ? (
-                    <a
-                      href={imgSrc(imageUrl(m.body)) ?? undefined}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block"
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setLightboxSrc(imgSrc(imageUrl(m.body)) ?? null)
+                      }
+                      className="block cursor-zoom-in"
+                      aria-label="View shared photo full size"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
@@ -1267,14 +1347,14 @@ export default function LeadChat({
                         alt="shared photo"
                         className="max-h-60 w-auto rounded-lg border border-stone-200 object-cover dark:border-white/10"
                       />
-                    </a>
+                    </button>
                   ) : (
                     <span
                       className={`block whitespace-pre-wrap break-words rounded-lg px-3 py-1.5 text-sm ${
                         mine
                           ? "bg-bark-600 text-white"
                           : "border border-stone-200 bg-white text-stone-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-200"
-                      }`}
+                      } ${m.id.startsWith("temp-") ? "opacity-60" : ""}`}
                     >
                       {m.body}
                     </span>
@@ -1644,6 +1724,12 @@ export default function LeadChat({
           </button>
         )}
       </div>
+
+      <Lightbox
+        src={lightboxSrc}
+        alt="Shared photo"
+        onClose={() => setLightboxSrc(null)}
+      />
     </div>
   );
 }

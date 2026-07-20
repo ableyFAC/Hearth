@@ -1,7 +1,25 @@
 "use client";
 
 import { useState } from "react";
+import { useFormStatus } from "react-dom";
 import { removeHomeAction } from "@/lib/homeActions";
+
+// The delete button itself, split out so useFormStatus can read the pending
+// state of the <form action={removeHomeAction}> it's rendered inside (the
+// hook only sees the nearest enclosing form from within a child component,
+// not from RemoveHomeButton's own scope). Disables the button and swaps in a
+// pending label so the delete round trip can't be double-tapped.
+function ConfirmDeleteButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      disabled={pending}
+      className="btn bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
+    >
+      {pending ? "Deleting…" : "Delete home"}
+    </button>
+  );
+}
 
 // Styled in-app confirmation modal (replaces the browser confirm() dialog).
 export default function RemoveHomeButton({
@@ -51,9 +69,7 @@ export default function RemoveHomeButton({
               </button>
               <form action={removeHomeAction}>
                 <input type="hidden" name="id" value={id} />
-                <button className="btn bg-red-600 text-white hover:bg-red-700">
-                  Delete home
-                </button>
+                <ConfirmDeleteButton />
               </form>
             </div>
           </div>

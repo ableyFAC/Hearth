@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveProperty } from "@/lib/property";
 import { hasPlus } from "@/lib/subscription";
 import { setFlash } from "@/lib/flash";
@@ -99,14 +100,70 @@ function addDays(base: Date, days: number): string {
   return `${y}-${m}-${day}`;
 }
 
-// Plus-only: builds a short, staggered set of maintenance reminders tailored to
-// the active property's systems, adding only task types not already open.
+// Builds a short, staggered set of maintenance reminders tailored to the
+// active property's systems, adding only task types not already open.
+//
+// Plus members rebuild freely (that ongoing "keep it fresh as the home
+// changes" is the paid value). A non-Plus homeowner gets exactly ONE free
+// build as a taste, tracked the same way the free quote check is
+// (users.free_plan_used_at, migration 0099). The credit is claimed ATOMICALLY
+// up front: a conditional update that only matches while the column is still
+// null, so parallel submits can't farm extra free builds. It's refunded below
+// if the build adds no new tasks, so a click that changes nothing never burns
+// the one free build.
 export async function generateMaintenancePlanAction() {
   const plus = await hasPlus();
-  if (!plus) redirect("/plus?reason=plan");
+
+  let claimedFreeCredit = false;
+  if (!plus) {
+    const {
+      data: { user },
+    } = await createClient().auth.getUser();
+    if (!user) redirect("/plus?reason=plan");
+    try {
+      const admin = createAdminClient();
+      const { data: claimed, error } = await admin
+        .from("users")
+        .update({ free_plan_used_at: new Date().toISOString() })
+        .eq("id", user.id)
+        .is("free_plan_used_at", null)
+        .select("id");
+      if (error) throw error;
+      claimedFreeCredit = !!claimed && claimed.length > 0;
+    } catch {
+      // Column missing (migration 0099 not run yet) or write failed: fall
+      // back to the old Plus-only behavior so nothing breaks.
+      claimedFreeCredit = false;
+    }
+    // Already spent the free build (or the claim couldn't be recorded):
+    // back to the Plus pitch, same as before.
+    if (!claimedFreeCredit) redirect("/plus?reason=plan");
+  }
+
+  // Hand the free build back if this run adds nothing, so only a build that
+  // actually schedules new tasks spends it. Best-effort: if the refund fails,
+  // the credit stays spent.
+  const refundFreeCredit = async () => {
+    if (!claimedFreeCredit) return;
+    try {
+      const {
+        data: { user },
+      } = await createClient().auth.getUser();
+      if (!user) return;
+      await createAdminClient()
+        .from("users")
+        .update({ free_plan_used_at: null })
+        .eq("id", user.id);
+    } catch {
+      // ignore: the plan outcome still goes back to the user
+    }
+  };
 
   const property = await getActiveProperty();
-  if (!property) redirect("/dashboard");
+  if (!property) {
+    await refundFreeCredit();
+    redirect("/dashboard");
+  }
 
   const supabase = createClient();
   const { data: systems } = await supabase
@@ -148,6 +205,8 @@ export async function generateMaintenancePlanAction() {
     await supabase.from("maintenance_tasks").insert(rows);
     setFlash("Your maintenance plan is ready. Check your reminders.", "success");
   } else {
+    // Nothing new to add: don't let the one free build be spent on a no-op.
+    await refundFreeCredit();
     setFlash("Your maintenance plan is already up to date.", "info");
   }
   revalidatePath("/dashboard");

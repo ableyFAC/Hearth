@@ -3,7 +3,14 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasPlus } from "@/lib/subscription";
 import { countAiUsage } from "@/lib/aiUsage";
-import { REPLACEMENT_INFO } from "@/lib/health";
+import { sendNotification } from "@/lib/notify";
+import {
+  runTranscribe,
+  runDiagnose,
+  notAQuoteDiagnosis,
+  buildAnalysis,
+  type Analysis,
+} from "@/lib/quoteAnalysis";
 
 export const runtime = "nodejs";
 
@@ -12,77 +19,37 @@ export const runtime = "nodejs";
 const MAX_IMAGE_B64_CHARS = 14_000_000;
 
 // AI Quote Analyzer (Hearth Plus): a homeowner uploads a photo of a
-// contractor's quote or pastes the text, and Gemini reads every line item,
+// contractor's quote or pastes the text, and Hearth reads every line item,
 // compares the total against typical costs, flags padded/vague/duplicated
 // charges, and drafts a negotiation message. This is the "$150 instead of an
 // $800 quote" feature competitors use as their headline save.
 //
+// GROUNDED TWO-STAGE PIPELINE (src/lib/quoteAnalysis.ts): stage 1 transcribes
+// the quote verbatim (no judgment), stage 2 diagnoses it using ONLY that
+// transcript, and every finding it returns must cite the exact verbatim line
+// it came from, or the specific field the transcript checked and found
+// absent. See that file's header for the full rationale and the latency
+// budget (up to two sequential model calls now, instead of one).
+//
+// PERSISTENCE (migration 0098, quote_analyses): the whole pipeline below runs
+// synchronously inside this POST handler, from auth through the final
+// notification insert, before a response is ever sent. That means the
+// analysis is written to the DB and the homeowner is notified even if they
+// navigate away or close the tab mid-request: this handler never reads
+// req.signal, so a client-side abort does not cancel the Node.js process
+// running it (true on Vercel's Node runtime, which does not tie a function
+// invocation's lifetime to the originating socket; if this route ever moves
+// to an edge runtime that IS tied to request.signal, this guarantee would
+// need re-checking). The pending row is what QuoteAnalyzer.tsx polls if the
+// homeowner comes back before it finishes, and what GET below returns to
+// restore the latest result on a fresh mount. If the homeowner stays on the
+// page, the POST response delivers the finished result directly, so the
+// notification path adds zero latency to that common case: the live request
+// always resolves before the 30s notification-bell poll would ever fire.
+//
 // Input:  { image?: <base64, no data: prefix>, mime?: string, text?: string,
-//           category?: string }
-// Output: { analysis: { verdict, total, summary, line_items, red_flags,
-//                        missing, negotiation } | null, reason? }
-
-// A rough mapping from a job category to the closest system_type Hearth
-// already keeps a national cost range for, so the model gets a grounded
-// baseline instead of guessing. Categories with no clean match (structural,
-// remodeling, landscaping, cleaning, painting, home_inspection, pest,
-// handyman, other) fall back to no baseline, and the model is told to use its
-// own general knowledge.
-const CATEGORY_TO_SYSTEM: Record<string, string> = {
-  roof: "roof",
-  hvac: "hvac",
-  plumbing: "plumbing",
-  windows: "windows",
-  electrical: "electrical_panel",
-  garage_door: "garage_door",
-};
-
-function baselineFor(category: string | null): string | null {
-  if (!category) return null;
-  const systemType = CATEGORY_TO_SYSTEM[category];
-  const info = systemType ? REPLACEMENT_INFO[systemType] : null;
-  if (!info) return null;
-  return `$${info.low.toLocaleString()}-$${info.high.toLocaleString()} (national ballpark for a full ${category} replacement job; smaller repairs cost less)`;
-}
-
-const RESPONSE_SCHEMA = {
-  type: "OBJECT",
-  properties: {
-    verdict: { type: "STRING", enum: ["fair", "high", "low", "unclear"] },
-    total: { type: "STRING" },
-    summary: { type: "STRING" },
-    line_items: {
-      type: "ARRAY",
-      items: {
-        type: "OBJECT",
-        properties: {
-          label: { type: "STRING" },
-          amount: { type: "STRING" },
-          note: { type: "STRING" },
-        },
-        required: ["label"],
-      },
-    },
-    red_flags: { type: "ARRAY", items: { type: "STRING" } },
-    missing: { type: "ARRAY", items: { type: "STRING" } },
-    negotiation: { type: "STRING" },
-  },
-  required: [
-    "verdict",
-    "summary",
-    "line_items",
-    "red_flags",
-    "missing",
-    "negotiation",
-  ],
-};
-
-const MODELS = [
-  "gemini-2.5-flash",
-  "gemini-flash-latest",
-  "gemini-2.5-flash-lite",
-  "gemini-2.0-flash",
-];
+//           category?: string, filename?: string }
+// Output: { analysis: Analysis | null, reason? }
 
 export async function POST(req: NextRequest) {
   // Require a signed-in user before touching the paid vision model.
@@ -153,6 +120,12 @@ export async function POST(req: NextRequest) {
   const mime = typeof body.mime === "string" ? body.mime : "image/jpeg";
   const text = typeof body.text === "string" ? body.text.trim() : "";
   const category = typeof body.category === "string" && body.category ? body.category : null;
+  // Display-only label for the saved row (e.g. "roof-quote.jpg"), never used
+  // to identify or re-fetch anything: the photo itself is never stored.
+  const filename =
+    typeof body.filename === "string" && body.filename.trim()
+      ? body.filename.trim().slice(0, 200)
+      : null;
 
   if (!image && !text) {
     await refundFreeCredit();
@@ -168,135 +141,135 @@ export async function POST(req: NextRequest) {
 
   // Same per-user daily cap as /api/ask (same ai_usage table and limits), so
   // the quote analyzer can't be a side door around the abuse limits on the
-  // paid model. Over the cap degrades like any other model failure.
+  // paid model. Counted exactly once here for the whole two-stage pipeline
+  // below, however many Gemini calls it ends up making.
   const { overLimit } = await countAiUsage(user.id, isPlus);
   if (overLimit) {
     await refundFreeCredit();
     return NextResponse.json({ analysis: null, reason: "rate_limited" });
   }
 
-  const baseline = baselineFor(category);
-  const today = new Date().toISOString().slice(0, 10);
-  const instruction =
-    "You are reading a contractor's quote, estimate, or invoice for a homeowner, acting as their advocate. " +
-    "Read every line item and the total price closely, whether it comes from a photo or pasted text. " +
-    "Itemize each charge in line_items: a short label, the amount as printed (including the currency symbol, or empty if no amount is given for that line), and a note only when something about that specific line is worth flagging. " +
-    "Compare the total, and the individual line items where you can, against typical costs for this kind of job" +
-    (baseline ? `. A rough national baseline for this category is ${baseline}, but adjust for the actual scope described` : ", using your general knowledge of home repair and remodeling costs") +
-    ". " +
-    "Decide an overall verdict: fair if the total is in a reasonable range, high if it looks padded or overpriced, low if it looks unusually cheap (which can also be a red flag, such as a bid that is too good to be true or omits scope), or unclear if there is not enough information in the quote to judge. " +
-    "Look closely for line items that are padded (marked up well above a typical rate), vague (a charge like 'materials' or 'miscellaneous' with no detail behind it), duplicated (the same work billed twice under different names), or otherwise suspicious. Write each one as a short plain sentence in red_flags. If nothing looks wrong, leave red_flags empty. " +
-    "Also note anything missing that a solid quote should include, such as a permit line, a materials versus labor breakdown, an itemized scope of work, a start or completion date, or a warranty on the work. List these in missing. If the quote is thorough, leave missing empty. " +
-    "Write summary as two or three short, plain sentences giving the homeowner the bottom line: what the quote is for, the total, and why you reached that verdict. " +
-    "Write negotiation as a short, polite message the homeowner can copy and send to the contractor as is. Reference the specific concerns you found (a vague line, a high total, a missing breakdown, and so on) and ask for a revised or itemized quote. Keep it to three or four sentences, and keep the tone friendly, not accusatory. " +
-    "If what you are given is not actually a contractor's quote, or you cannot read enough of it to judge, set verdict to unclear, leave total empty, and explain why in summary. " +
-    "Never invent numbers that are not shown or implied by the quote. " +
-    `Today's date is ${today}. ` +
-    "Write summary, notes, red_flags, missing, and negotiation in the language the quote is written in (for example, a Spanish quote gets a Spanish analysis and negotiation message), keeping the verdict field values in English. " +
-    "Write in plain, complete sentences. Never use an em dash or a hyphen as a connector: use a comma, a colon, or a new sentence instead.";
-
-  const userParts: any[] = [];
-  const introBits: string[] = [];
-  if (category) introBits.push(`The homeowner tagged this job as: ${category}.`);
-  if (image) {
-    introBits.push("Analyze the quote shown in this photo.");
-    userParts.push({ text: introBits.join(" ") });
-    userParts.push({ inlineData: { mimeType: mime, data: image } });
-    if (text) userParts.push({ text: `The homeowner also typed this note or additional text:\n\n${text}` });
-  } else {
-    introBits.push("Analyze this quote:");
-    userParts.push({ text: `${introBits.join(" ")}\n\n${text}` });
+  // From here on the request is committed to an actual analysis attempt, so
+  // it gets a durable row: pending until the pipeline below finishes one way
+  // or the other. Written with the service-role client since quote_analyses
+  // has no client insert policy (migration 0098).
+  const admin = createAdminClient();
+  const { data: row, error: insertErr } = await admin
+    .from("quote_analyses")
+    .insert({ user_id: user.id, status: "pending", quote_filename: filename })
+    .select("id")
+    .single();
+  if (insertErr) {
+    console.error("analyze-quote: quote_analyses insert failed:", insertErr.message ?? insertErr);
   }
+  const rowId = row?.id ?? null;
 
-  const requestBody = JSON.stringify({
-    systemInstruction: { parts: [{ text: instruction }] },
-    contents: [{ role: "user", parts: userParts }],
-    generationConfig: {
-      maxOutputTokens: 1200,
-      responseMimeType: "application/json",
-      responseSchema: RESPONSE_SCHEMA,
-    },
-  });
-
-  let rateLimited = false;
-  for (const model of MODELS) {
-    try {
-      const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-goog-api-key": apiKey,
-          },
-          body: requestBody,
-        }
-      );
-      if (resp.status === 429) {
-        rateLimited = true;
-        continue;
-      }
-      if (!resp.ok) continue;
-      const data = await resp.json();
-      const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!responseText) continue;
-
-      let parsed: any;
-      try {
-        parsed = JSON.parse(responseText);
-      } catch {
-        continue; // malformed - try the next model
-      }
-      // The analysis succeeded, so the credit claimed up front stays spent.
-      return NextResponse.json({ analysis: normalize(parsed) });
-    } catch {
-      // network error - try the next model
+  const finish = async (
+    outcome:
+      | { ok: true; analysis: Analysis }
+      | { ok: false; reason: "rate_limited" | "failed" }
+  ) => {
+    if (!rowId) return; // migration not applied yet: degrade to the old, unsaved behavior
+    if (outcome.ok) {
+      await admin
+        .from("quote_analyses")
+        .update({
+          status: "done",
+          findings: outcome.analysis as any,
+          finished_at: new Date().toISOString(),
+        })
+        .eq("id", rowId);
+      // In-app only (per product decision): no email/SMS for this. Best
+      // effort, never blocks the response the homeowner is waiting on.
+      await sendNotification(admin, {
+        userId: user.id,
+        kind: "quote_analysis",
+        title: "Your quote analysis is ready",
+        body: outcome.analysis.overall || undefined,
+        url: "/quote-check",
+      }).catch(() => {});
+    } else {
+      await admin
+        .from("quote_analyses")
+        .update({
+          status: "failed",
+          error: outcome.reason,
+          finished_at: new Date().toISOString(),
+        })
+        .eq("id", rowId);
     }
+  };
+
+  // STAGE 1: transcribe the quote into a faithful, verbatim JSON record.
+  // Nothing evaluative happens here.
+  const { transcript, rateLimited: t1RateLimited } = await runTranscribe(
+    { image, mime, text, category },
+    { apiKey }
+  );
+  if (!transcript) {
+    await refundFreeCredit();
+    const reason = t1RateLimited ? "rate_limited" : "failed";
+    await finish({ ok: false, reason });
+    return NextResponse.json({ analysis: null, reason });
   }
 
-  await refundFreeCredit();
-  return NextResponse.json({
-    analysis: null,
-    reason: rateLimited ? "rate_limited" : "failed",
+  // Stage 1 couldn't confirm this is actually a quote: nothing to diagnose,
+  // so skip stage 2 rather than spend a second model call on it.
+  if (!transcript.is_quote) {
+    const analysis = buildAnalysis(transcript, notAQuoteDiagnosis(transcript));
+    await finish({ ok: true, analysis });
+    return NextResponse.json({ analysis });
+  }
+
+  // STAGE 2: diagnose using ONLY the stage-1 transcript above, never the raw
+  // photo or pasted text again, so every finding traces back to a verbatim
+  // line (isEvidenceGrounded in quoteAnalysis.ts enforces this in code, not
+  // just via the prompt).
+  const { diagnosis, rateLimited: t2RateLimited } = await runDiagnose(transcript, {
+    apiKey,
+    category,
   });
+  if (!diagnosis) {
+    await refundFreeCredit();
+    const reason = t2RateLimited ? "rate_limited" : "failed";
+    await finish({ ok: false, reason });
+    return NextResponse.json({ analysis: null, reason });
+  }
+
+  const analysis = buildAnalysis(transcript, diagnosis);
+  await finish({ ok: true, analysis });
+  return NextResponse.json({ analysis });
 }
 
-const VERDICTS = ["fair", "high", "low", "unclear"] as const;
+// Restores the signed-in homeowner's latest analysis: used on mount (so a
+// finished result survives navigating away and back) and polled while
+// status is still "pending" (so an analysis started before a navigation, or
+// on another tab, is picked up once it finishes). RLS on quote_analyses
+// already scopes rows to their owner; the .eq below is just belt and
+// suspenders, and lets a broken/missing RLS policy fail closed to "no rows"
+// rather than open.
+export async function GET() {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-// Coerce the model's output into a clean, predictable shape rather than
-// trusting arbitrary JSON straight into the UI.
-function normalize(raw: any) {
-  const str = (v: any) => {
-    const s = typeof v === "string" ? v.trim() : "";
-    return s.length ? s : null;
-  };
-  const strArray = (v: any) =>
-    Array.isArray(v)
-      ? v.map((x) => (typeof x === "string" ? x.trim() : "")).filter(Boolean)
-      : [];
+  const { data, error } = await supabase
+    .from("quote_analyses")
+    .select("id, status, quote_filename, findings, error, created_at, finished_at")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  const verdictRaw = str(raw?.verdict);
-  const verdict = (VERDICTS as readonly string[]).includes(verdictRaw ?? "")
-    ? (verdictRaw as (typeof VERDICTS)[number])
-    : "unclear";
+  if (error) {
+    // quote_analyses migration (0098) not applied yet, or some other read
+    // failure: degrade to "nothing saved" rather than error the page.
+    return NextResponse.json({ latest: null });
+  }
 
-  const lineItems = Array.isArray(raw?.line_items)
-    ? raw.line_items
-        .map((li: any) => ({
-          label: str(li?.label),
-          amount: str(li?.amount),
-          note: str(li?.note),
-        }))
-        .filter((li: any) => li.label)
-    : [];
-
-  return {
-    verdict,
-    total: str(raw?.total),
-    summary: str(raw?.summary) ?? "",
-    line_items: lineItems,
-    red_flags: strArray(raw?.red_flags),
-    missing: strArray(raw?.missing),
-    negotiation: str(raw?.negotiation) ?? "",
-  };
+  return NextResponse.json({ latest: data ?? null });
 }

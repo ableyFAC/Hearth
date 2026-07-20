@@ -15,6 +15,7 @@ import {
 import PlanToggle from "./PlanToggle";
 import PlusWelcome from "./PlusWelcome";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
+import SubmitButton from "@/components/SubmitButton";
 import {
   COLD_START_FREE_POSTING,
   COLD_START_FREE_ALERTS,
@@ -22,8 +23,8 @@ import {
 
 const COMPARISON: Array<{ label: string; free: string; plus: string }> = [
   // Plus-exclusive rows lead: they're the reason to upgrade.
-  { label: "Maintenance plan", free: "-", plus: "Auto-built for your home" },
-  { label: "Cost forecast & repair fund", free: "-", plus: "10-year outlook" },
+  { label: "Maintenance plan", free: "First build free", plus: "Auto-built for your home" },
+  { label: "Cost forecast & repair fund", free: "10-year total + set-aside", plus: "Full per-system breakdown" },
   { label: "Quote analyzer", free: "-", plus: "Included" },
   { label: "Home report for resale & insurance", free: "-", plus: "Included" },
   // When the posting cap is on, unlimited postings are a real Plus perk, so
@@ -122,7 +123,9 @@ export default async function PlusPage({
               : ""}
           </p>
           <form action={manageBillingAction}>
-            <button className="btn-secondary">Manage billing</button>
+            <SubmitButton className="btn-secondary" pendingLabel="Opening…">
+              Manage billing
+            </SubmitButton>
           </form>
           {sub?.stripe_subscription_id && cancelsAt && (
             <div className="space-y-2 border-t border-stone-100 pt-4 dark:border-white/10">
@@ -131,7 +134,9 @@ export default async function PlusPage({
                 keep every Plus benefit until then.
               </p>
               <form action={resumeMembershipAction}>
-                <button className="btn-secondary">Keep my membership</button>
+                <SubmitButton className="btn-secondary" pendingLabel="Saving…">
+                  Keep my membership
+                </SubmitButton>
               </form>
             </div>
           )}
@@ -177,7 +182,9 @@ export default async function PlusPage({
                     {scheduledDowngrade.switchesAt.toLocaleDateString()}
                   </p>
                   <form action={keepYearlyAction}>
-                    <button className="btn-secondary">Keep yearly</button>
+                    <SubmitButton className="btn-secondary" pendingLabel="Saving…">
+                      Keep yearly
+                    </SubmitButton>
                   </form>
                 </>
               )}
@@ -237,7 +244,9 @@ export default async function PlusPage({
             further is charged.
           </p>
           <form action={manageBillingAction}>
-            <button className="btn-primary">Update payment method</button>
+            <SubmitButton className="btn-primary" pendingLabel="Opening…">
+              Update payment method
+            </SubmitButton>
           </form>
           <div className="border-t border-stone-100 pt-4 dark:border-white/10">
             <form action={cancelMembershipAction}>
@@ -414,6 +423,11 @@ export default async function PlusPage({
             </tbody>
           </table>
         </div>
+        <p className="mt-2 px-1 text-[11px] text-stone-500 dark:text-stone-400">
+          Free shows your 10-year total, the monthly set-aside, and full detail
+          on your soonest one or two systems. Plus adds every system&apos;s
+          timeline, the year-by-year spend chart, and the running-costs section.
+        </p>
       </details>
 
       <p className="text-center text-sm text-stone-600 dark:text-stone-300">

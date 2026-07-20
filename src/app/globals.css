@@ -94,7 +94,8 @@ body {
   /* Clickable card: gentle lift on hover, calm again for reduced motion. */
   .card-link {
     @apply card block transition-all duration-150 hover:-translate-y-0.5
-           hover:border-bark-500 hover:shadow-lift motion-reduce:transform-none
+           hover:border-bark-500 hover:shadow-lift active:scale-[0.99]
+           active:translate-y-0 motion-reduce:transform-none
            motion-reduce:transition-none dark:hover:border-bark-500;
   }
   /* Hero variant of .card: one warm, elevated surface per screen. Flat now,

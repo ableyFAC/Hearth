@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ReceiptText } from "lucide-react";
 import { JOB_CATEGORIES } from "@/lib/constants";
@@ -8,6 +8,7 @@ import AiNotice from "@/components/AiNotice";
 import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
 
 type Verdict = "fair" | "high" | "low" | "unclear";
+type Severity = "red_flag" | "ask" | "ok";
 
 type LineItem = {
   label: string;
@@ -15,14 +16,34 @@ type LineItem = {
   note: string | null;
 };
 
+// A single grounded finding from the diagnose stage: `evidence` is either the
+// exact verbatim line it's citing, or "not mentioned in the quote" for an
+// absence finding. See src/lib/quoteAnalysis.ts for how that's enforced.
+type Finding = {
+  text: string;
+  evidence: string;
+  severity: Severity;
+};
+
 type Analysis = {
   verdict: Verdict;
   total: string | null;
   summary: string;
+  overall: string;
   line_items: LineItem[];
-  red_flags: string[];
-  missing: string[];
+  red_flags: Finding[];
+  missing: Finding[];
   negotiation: string;
+};
+
+// The row shape /api/analyze-quote's GET returns (migration 0098).
+type SavedRow = {
+  status: "pending" | "done" | "failed";
+  quote_filename: string | null;
+  findings: Analysis | null;
+  error: string | null;
+  created_at: string;
+  finished_at: string | null;
 };
 
 type Mode = "photo" | "text";
@@ -32,6 +53,20 @@ const VERDICT_STYLE: Record<Verdict, { label: string; classes: string }> = {
   low: { label: "Looks low", classes: "border-bark-100 bg-bark-50 text-bark-700 dark:border-bark-700 dark:bg-bark-700/40 dark:text-stone-300" },
   high: { label: "Looks high", classes: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300" },
   unclear: { label: "Not enough info", classes: "border-stone-200 bg-stone-100 text-stone-600 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300" },
+};
+
+// One color per severity, red reserved for a real red_flag so it can't be
+// confused with the merely-ambiguous "ask" items, green/neutral for "ok" so
+// a clean bill of health reads as good news, not as another warning.
+const SEVERITY_STYLE: Record<Severity, string> = {
+  red_flag: "border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300",
+  ask: "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300",
+  ok: "border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200",
+};
+const SEVERITY_LABEL: Record<Severity, string> = {
+  red_flag: "Red flag",
+  ask: "Worth asking",
+  ok: "Looks standard",
 };
 
 // Read a File into base64 (no data: prefix) for the vision endpoint.
@@ -47,11 +82,39 @@ function toBase64(file: File): Promise<string> {
   });
 }
 
+// One finding, in either the "Findings" list or the "What's missing" list:
+// the claim, a small severity chip, and the verbatim evidence it's grounded
+// in (or "not mentioned in the quote" for an absence). Every finding the
+// route sends has already passed the code-level grounding check in
+// src/lib/quoteAnalysis.ts, so this is purely a rendering concern.
+function FindingBody({ f }: { f: Finding }) {
+  return (
+    <>
+      <div className="flex items-start justify-between gap-3">
+        <span>{f.text}</span>
+        <span className="shrink-0 rounded-full bg-white/60 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide dark:bg-black/20">
+          {SEVERITY_LABEL[f.severity]}
+        </span>
+      </div>
+      <p className="mt-1 text-xs italic text-stone-500 dark:text-stone-400">
+        &quot;{f.evidence}&quot;
+      </p>
+    </>
+  );
+}
+
 // The homeowner's advocate: hand over a photo of a contractor's quote (or its
 // text), and Hearth reads every line, checks it against typical costs, calls
 // out padding or vague charges, and writes a negotiation message for them.
 // `freeTaste` means a non-Plus user is spending their one free check, so a
 // successful result gets a compact Plus upsell under it.
+//
+// PERSISTENCE (migration 0098): the analysis itself is saved server-side by
+// /api/analyze-quote, not in this component's state, so it survives leaving
+// the page. On mount this fetches the homeowner's latest saved analysis; if
+// it's still "pending" (started here or on another tab, not yet finished) it
+// polls every 5s until it resolves. A finished result restores exactly as if
+// the analysis had just completed.
 export default function QuoteAnalyzer({
   freeTaste = false,
 }: {
@@ -61,6 +124,7 @@ export default function QuoteAnalyzer({
   const [preview, setPreview] = useState<string | null>(null);
   const [image, setImage] = useState<string | null>(null);
   const [mime, setMime] = useState<string>("image/jpeg");
+  const [fileName, setFileName] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [category, setCategory] = useState("");
   const [loading, setLoading] = useState(false);
@@ -70,14 +134,89 @@ export default function QuoteAnalyzer({
   const [copyFallback, setCopyFallback] = useState(false);
   const negotiationRef = useRef<HTMLParagraphElement>(null);
 
+  // Restore state: whether the initial "load the latest saved analysis" fetch
+  // is still in flight, the "when did we analyze this" / "what was it called"
+  // line shown above a result, whether a saved analysis is still pending
+  // (started by this mount or a previous one) with no result to show yet, and
+  // the reason text if the last saved attempt failed with nothing to show.
+  const [restoring, setRestoring] = useState(true);
+  const [resultMeta, setResultMeta] = useState<{ analyzedAt: string; filename: string | null } | null>(null);
+  const [pendingRemote, setPendingRemote] = useState(false);
+  const [failedRemote, setFailedRemote] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function stopPolling() {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }
+
+  function applyLatest(latest: SavedRow | null) {
+    if (!latest) return;
+    if (latest.status === "done" && latest.findings) {
+      setResult(latest.findings);
+      setResultMeta({
+        analyzedAt: latest.finished_at ?? latest.created_at,
+        filename: latest.quote_filename,
+      });
+      setPendingRemote(false);
+      setFailedRemote(null);
+      stopPolling();
+    } else if (latest.status === "pending") {
+      setPendingRemote(true);
+      setFailedRemote(null);
+      startPolling();
+    } else if (latest.status === "failed") {
+      setPendingRemote(false);
+      setFailedRemote(latest.error || "failed");
+      stopPolling();
+    }
+  }
+
+  function startPolling() {
+    stopPolling();
+    // Modest interval: this is a "did it finish yet" check, not a live feed,
+    // and the common case (staying on the page) never touches this path at
+    // all, the POST response below already delivers the result directly.
+    pollRef.current = setInterval(async () => {
+      try {
+        const resp = await fetch("/api/analyze-quote");
+        const data = await resp.json().catch(() => ({}));
+        applyLatest(data?.latest ?? null);
+      } catch {
+        // transient network hiccup: keep polling, the next tick tries again
+      }
+    }, 5000);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await fetch("/api/analyze-quote");
+        const data = await resp.json().catch(() => ({}));
+        if (!cancelled) applyLatest(data?.latest ?? null);
+      } catch {
+        // No saved analysis to restore: fall through to the empty upload form.
+      } finally {
+        if (!cancelled) setRestoring(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      stopPolling();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Homeowner corrections to the "what's missing" list. The AI's read isn't
   // final: sometimes the pro just forgot to write something down, or the
   // homeowner knows it's covered. `coveredMissing` holds indexes into
   // result.missing the homeowner confirmed are covered, and `addedCovered`
-  // holds things the quote includes that the analyzer didn't catch. Analyses
-  // live only in this component's state (nothing is persisted server-side),
-  // so these edits are client state too and last exactly as long as the
-  // analysis itself.
+  // holds things the quote includes that the analyzer didn't catch. These
+  // edits are client-only state, same as before: they last exactly as long
+  // as this result is showing, and don't get saved server-side.
   const [coveredMissing, setCoveredMissing] = useState<Set<number>>(new Set());
   const [addedCovered, setAddedCovered] = useState<string[]>([]);
   const [addDraft, setAddDraft] = useState("");
@@ -134,6 +273,7 @@ export default function QuoteAnalyzer({
     setError(null);
     setResult(null);
     setMime(file.type || "image/jpeg");
+    setFileName(file.name || null);
     const b64 = await toBase64(file);
     setImage(b64);
     setPreview(URL.createObjectURL(file));
@@ -143,6 +283,23 @@ export default function QuoteAnalyzer({
     setResult(null);
     setError(null);
     clearEdits();
+  }
+
+  // Leaves the current result (if any) behind and shows an empty upload form
+  // for a new analysis. Does not delete the saved row this result came from,
+  // running a new analysis is what replaces it as the "latest" one.
+  function startNew() {
+    setResult(null);
+    setResultMeta(null);
+    setFailedRemote(null);
+    setPendingRemote(false);
+    stopPolling();
+    clearEdits();
+    setError(null);
+    setPreview(null);
+    setImage(null);
+    setText("");
+    setFileName(null);
   }
 
   async function analyze() {
@@ -158,21 +315,33 @@ export default function QuoteAnalyzer({
     setLoading(true);
     setError(null);
     setResult(null);
+    setFailedRemote(null);
+    setPendingRemote(false);
+    stopPolling();
     setCopyFallback(false);
     setCopied(false);
     clearEdits();
 
     try {
-      const resp = await fetchWithTimeout("/api/analyze-quote", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          image: mode === "photo" ? image : undefined,
-          mime: mode === "photo" ? mime : undefined,
-          text: mode === "text" ? text : undefined,
-          category: category || undefined,
-        }),
-      });
+      // Longer than the single-call default: the route now runs a grounded
+      // two-stage pipeline (transcribe, then diagnose), up to two sequential
+      // Gemini calls instead of one, each with its own model fallback chain.
+      // See src/app/api/analyze-quote/route.ts for the latency budget.
+      const resp = await fetchWithTimeout(
+        "/api/analyze-quote",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            image: mode === "photo" ? image : undefined,
+            mime: mode === "photo" ? mime : undefined,
+            text: mode === "text" ? text : undefined,
+            category: category || undefined,
+            filename: mode === "photo" ? fileName ?? undefined : undefined,
+          }),
+        },
+        150_000
+      );
 
       if (resp.status === 401) {
         setError("Please sign in and try again.");
@@ -186,6 +355,10 @@ export default function QuoteAnalyzer({
       const data = await resp.json().catch(() => ({}));
       if (data?.analysis) {
         setResult(data.analysis as Analysis);
+        setResultMeta({
+          analyzedAt: new Date().toISOString(),
+          filename: mode === "photo" ? fileName : null,
+        });
       } else if (data?.reason === "rate_limited") {
         setError("Hearth has hit today's free usage limit. Please try again later.");
       } else if (data?.reason === "no_key") {
@@ -233,9 +406,49 @@ export default function QuoteAnalyzer({
 
   const verdictStyle = result ? VERDICT_STYLE[result.verdict] : null;
   const editCount = coveredMissing.size + addedCovered.length;
+  // Whether anything above "looks standard" was actually found, drives the
+  // overall banner's color: green when the quote came back clean, amber when
+  // there's a red flag or a question worth asking.
+  const hasConcern = result
+    ? [...result.red_flags, ...result.missing].some((f) => f.severity !== "ok")
+    : false;
+
+  if (restoring) {
+    return (
+      <div className="card">
+        <p className="text-sm text-stone-500 dark:text-stone-400">Loading…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
+      {pendingRemote && !loading && (
+        <div className="card space-y-2 text-center">
+          <svg
+            className="mx-auto h-5 w-5 animate-spin text-bark-600 dark:text-bark-300"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12H4z" />
+          </svg>
+          <p className="text-sm text-stone-700 dark:text-stone-300">Still reading your last quote…</p>
+          <p className="text-xs text-stone-500 dark:text-stone-400">
+            You can leave this page. We&apos;ll notify you when it&apos;s ready.
+          </p>
+        </div>
+      )}
+
+      {failedRemote && !result && (
+        <p className="text-sm text-red-600 dark:text-red-400">
+          {failedRemote === "rate_limited"
+            ? "Hearth hit today's usage limit while analyzing your last quote. Try again below."
+            : "Couldn't finish analyzing your last quote. Try again below."}
+        </p>
+      )}
+
       <div className="card space-y-4">
         <div className="flex gap-2">
           <button
@@ -314,6 +527,18 @@ export default function QuoteAnalyzer({
           </div>
         )}
 
+        <p className="text-xs text-stone-500 dark:text-stone-400">
+          Heads up: this runs on Google&apos;s free AI tier, so what you upload
+          may be used by Google to improve its models, which is Google&apos;s
+          free-tier policy, not Hearth&apos;s choice.{" "}
+          <Link
+            href="/ai-disclosure"
+            className="underline decoration-dotted hover:text-stone-600 dark:hover:text-stone-300"
+          >
+            How Hearth uses AI
+          </Link>
+        </p>
+
         <div>
           <label className="label">Job category (optional)</label>
           <select
@@ -340,12 +565,60 @@ export default function QuoteAnalyzer({
           aria-busy={loading}
           className="btn-primary w-full"
         >
+          {loading && (
+            // currentColor rather than a literal stone shade: this button is
+            // btn-primary (bark background, white text), so the spinner needs
+            // to inherit that white to actually read against it, not the
+            // gray that would work on a plain surface. Makes clear the
+            // disabled state is working, not stuck.
+            <svg
+              className="h-4 w-4 animate-spin"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12H4z"
+              />
+            </svg>
+          )}
           {loading ? "Reading the quote…" : "Analyze this quote"}
         </button>
+        {loading && (
+          <p className="text-center text-xs text-stone-500 dark:text-stone-400">
+            You can leave this page. We&apos;ll notify you when it&apos;s ready.
+          </p>
+        )}
       </div>
 
       {result && (
         <div className="card space-y-5">
+          {resultMeta && (
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500 dark:text-stone-400">
+              <span>
+                Analyzed {new Date(resultMeta.analyzedAt).toLocaleString()}
+                {resultMeta.filename ? ` · ${resultMeta.filename}` : ""}
+              </span>
+              <button
+                type="button"
+                onClick={startNew}
+                className="font-medium text-bark-700 hover:underline dark:text-stone-300"
+              >
+                Analyze another quote
+              </button>
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center gap-3">
             {verdictStyle && (
               <span
@@ -360,6 +633,21 @@ export default function QuoteAnalyzer({
               </span>
             )}
           </div>
+
+          {/* The plain-language headline read, always present: "nothing
+              concerning here" is a valid, expected verdict, not just the
+              absence of a red_flags section. */}
+          {result.overall && (
+            <p
+              className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                hasConcern
+                  ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300"
+                  : "border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200"
+              }`}
+            >
+              {result.overall}
+            </p>
+          )}
 
           <p className="text-sm text-stone-700 dark:text-stone-300">{result.summary}</p>
 
@@ -416,14 +704,14 @@ export default function QuoteAnalyzer({
 
           {result.red_flags.length > 0 && (
             <div>
-              <h2 className="mb-2 text-sm font-medium text-stone-900 dark:text-stone-100">Red flags</h2>
+              <h2 className="mb-2 text-sm font-medium text-stone-900 dark:text-stone-100">Findings</h2>
               <ul className="space-y-1.5">
-                {result.red_flags.map((flag, i) => (
+                {result.red_flags.map((f, i) => (
                   <li
                     key={i}
-                    className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300"
+                    className={`rounded-lg border px-3 py-2 text-sm ${SEVERITY_STYLE[f.severity]}`}
                   >
-                    {flag}
+                    <FindingBody f={f} />
                   </li>
                 ))}
               </ul>
@@ -444,16 +732,20 @@ export default function QuoteAnalyzer({
                       coveredMissing.has(i) ? null : (
                         <li
                           key={i}
-                          className="flex items-start justify-between gap-3 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-600 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300"
+                          className={`rounded-lg border px-3 py-2 text-sm ${SEVERITY_STYLE[item.severity]}`}
                         >
-                          <span>{item}</span>
-                          <button
-                            type="button"
-                            onClick={() => markCovered(i)}
-                            className="shrink-0 text-xs font-medium text-bark-700 hover:text-bark-700 dark:text-stone-300 dark:hover:text-stone-300"
-                          >
-                            It&apos;s covered
-                          </button>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <FindingBody f={item} />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => markCovered(i)}
+                              className="shrink-0 text-xs font-medium underline-offset-2 hover:underline"
+                            >
+                              It&apos;s covered
+                            </button>
+                          </div>
                         </li>
                       )
                     )}
@@ -479,7 +771,7 @@ export default function QuoteAnalyzer({
                         className="flex items-start justify-between gap-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200"
                       >
                         <span>
-                          {item}{" "}
+                          {item.text}{" "}
                           <span className="text-xs text-green-700 dark:text-green-300">
                             (you confirmed)
                           </span>
@@ -595,7 +887,7 @@ export default function QuoteAnalyzer({
         <div className="card space-y-3 border-bark-100 bg-bark-50 text-center dark:border-bark-700 dark:bg-bark-700/40">
           <p className="text-sm text-bark-700 dark:text-stone-300">
             That was your free check. Get every quote checked with Hearth Plus,
-            $4.99/mo (first month free for new members).
+            $4.99/mo (3-day free trial for new members).
           </p>
           <Link href="/plus?reason=quote" className="btn-primary inline-block">
             Get Hearth Plus

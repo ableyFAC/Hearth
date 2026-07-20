@@ -335,7 +335,9 @@ export const BUDGET_RANGES = [
   { value: "500-1500", label: "$500-1,500" },
   { value: "1500-5000", label: "$1,500-5,000" },
   { value: "5000-15000", label: "$5,000-15,000" },
-  { value: "15000-plus", label: "$15,000+" },
+  { value: "15000-25000", label: "$15,000 - $25,000" },
+  { value: "25000-50000", label: "$25,000 - $50,000" },
+  { value: "50000-plus", label: "$50,000+" },
   { value: "not-sure", label: "Not sure yet" },
 ] as const;
 

@@ -79,9 +79,10 @@ export default function AiDisclosurePage() {
             key first). This is Google&apos;s policy for the free tier, not
             Hearth&apos;s choice, and it is separate from whether Hearth
             trains its own model, which it does not. We plan to move to
-            Google&apos;s paid tier, under which Google contractually does
-            not use your prompts or responses to improve its products; when
-            that happens this paragraph will be updated to reflect it.
+            Google&apos;s paid tier; Google states that under that billing
+            arrangement it does not use your prompts or responses to improve
+            its products. When we move to that tier, this paragraph will be
+            updated to reflect it.
           </p>
           <p className="mt-3 leading-relaxed">The features that call it are:</p>
           <ul className="mt-3 list-disc space-y-2 pl-5 leading-relaxed">

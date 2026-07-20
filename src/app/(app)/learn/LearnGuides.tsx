@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import LearnGuide from "./LearnGuide";
 import { requestTopicAction } from "./actions";
 import { SYSTEM_TYPES } from "@/lib/constants";
+import SubmitButton from "@/components/SubmitButton";
 
 export type GuideData = {
   systemType: string;
@@ -135,9 +136,9 @@ export default function LearnGuides({ guides }: { guides: GuideData[] }) {
             placeholder="e.g. How do I winterize outdoor faucets?"
             required
           />
-          <button type="submit" className="btn-secondary shrink-0">
+          <SubmitButton className="btn-secondary shrink-0" pendingLabel="Sending…">
             Request
-          </button>
+          </SubmitButton>
         </form>
       </div>
     </div>
