@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 import { getProperties } from "@/lib/property";
 import { isContractor } from "@/lib/contractor";
 import { hasPlus } from "@/lib/subscription";
@@ -19,6 +20,19 @@ export default async function OnboardingPage({
 }) {
   // Contractors belong in /pro - don't let them create a homeowner property.
   if (await isContractor()) redirect("/pro");
+
+  // Who is signed in, for the escape hatch below. Before this existed, an
+  // account with no claimed home was hard-stuck here: the (app) layout
+  // bounces every page back to /onboarding, this page had no sign-out, and
+  // an account with contractor role metadata but no contractors row (pro
+  // signup never finished) failed the isContractor() redirect above too.
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const roleMeta = (user?.user_metadata?.role ?? user?.app_metadata?.role) as
+    | string
+    | undefined;
 
   const next = safeNextPath(
     typeof searchParams?.next === "string" ? searchParams.next : null
@@ -89,6 +103,31 @@ export default async function OnboardingPage({
           Cancel
         </Link>
       )}
+
+      {/* Escape hatch: nobody should be trapped on this page. Signed-in
+          users with no home land here from every app URL, so this is the
+          only place they can change course. */}
+      <div className="mt-8 text-center text-sm text-stone-500 dark:text-stone-400">
+        {roleMeta === "contractor" && (
+          <p>
+            Here for the pro side?{" "}
+            <Link href="/pro" className="underline hover:text-stone-700 dark:hover:text-stone-200">
+              Go to Hearth Pro
+            </Link>
+          </p>
+        )}
+        <div className={roleMeta === "contractor" ? "mt-2" : undefined}>
+          <span>Signed in as {user?.email ?? "unknown"}. Wrong account? </span>
+          <form action="/auth/signout" method="post" className="inline">
+            <button
+              type="submit"
+              className="underline hover:text-stone-700 dark:hover:text-stone-200"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      </div>
     </main>
   );
 }
