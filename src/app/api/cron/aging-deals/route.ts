@@ -215,7 +215,7 @@ async function runCron(req: NextRequest) {
   // are configured (same pattern as proAlerts.ts).
   const { data: users } = await supabase
     .from("users")
-    .select("id, email, phone")
+    .select("id, email, phone, sms_consent")
     .in(
       "id",
       memberContractors.map((c) => c.user_id)
@@ -256,6 +256,7 @@ async function runCron(req: NextRequest) {
             url: ALERT_URL,
             email: contact?.email ?? null,
             phone: contact?.phone ?? null,
+            smsConsent: contact?.sms_consent === true,
           });
           if (sent) notified += 1;
         } catch {

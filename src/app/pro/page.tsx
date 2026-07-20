@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentContractor, getRole } from "@/lib/contractor";
 import {
   labelFor,
@@ -110,8 +111,39 @@ export default async function ProDashboard({
         .order("created_at", { ascending: false }),
     ]);
 
-  const open = (openJobs ?? []) as any[];
+  let open = (openJobs ?? []) as any[];
   const apps = (myApps ?? []) as any[];
+
+  // Advisory signal only (see migration 0092's RESIDUAL note): apply_to_lead
+  // has no awareness of owner_closed_at, so open_jobs_for_me - a DB function,
+  // out of scope for this page - can still hand back a job the homeowner
+  // already closed without picking anyone. Filtered out here, client-side,
+  // rather than in the RPC body. Admin client: RLS only lets a pro SELECT a
+  // lead once they're its assigned contractor ("leads contractor select",
+  // 0005 migration), which an open, unassigned job never is. Best-effort and
+  // fail-open: any error here (including migration 0092 not having run yet,
+  // so owner_closed_at doesn't exist) leaves the board unchanged rather than
+  // hiding jobs or breaking the page.
+  if (open.length) {
+    const admin = createAdminClient();
+    const { data: closedRows, error: closedError } = await admin
+      .from("contractor_leads")
+      .select("id, owner_closed_at")
+      .in(
+        "id",
+        open.map((j) => j.id)
+      );
+    if (!closedError) {
+      const closedIds = new Set(
+        (closedRows ?? [])
+          .filter((r: any) => r.owner_closed_at)
+          .map((r: any) => r.id)
+      );
+      if (closedIds.size) {
+        open = open.filter((j) => !closedIds.has(j.id));
+      }
+    }
+  }
 
   // Open jobs posted by a homeowner this pro already has an active job with,
   // in the same category. Those cards get "message them instead" in place of

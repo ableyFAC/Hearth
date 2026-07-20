@@ -197,12 +197,12 @@ async function runCron(req: NextRequest) {
   );
   const userById = new Map<
     string,
-    { id: string; email: string | null; phone: string | null }
+    { id: string; email: string | null; phone: string | null; sms_consent: boolean | null }
   >();
   for (const ids of chunk(allUserIds, QUERY_CHUNK)) {
     const { data: users } = await supabase
       .from("users")
-      .select("id, email, phone")
+      .select("id, email, phone, sms_consent")
       .in("id", ids);
     for (const u of users ?? []) userById.set(u.id, u);
   }
@@ -246,6 +246,7 @@ async function runCron(req: NextRequest) {
           url: REWARD_URL,
           email: contact?.email ?? null,
           phone: contact?.phone ?? null,
+          smsConsent: contact?.sms_consent === true,
         });
       }
       const referrerUserId = referrerUserById.get(candidate.referred_by);
@@ -259,6 +260,7 @@ async function runCron(req: NextRequest) {
           url: REWARD_URL,
           email: contact?.email ?? null,
           phone: contact?.phone ?? null,
+          smsConsent: contact?.sms_consent === true,
         });
       }
     } catch {

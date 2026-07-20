@@ -157,7 +157,7 @@ async function runCron(req: NextRequest) {
   const userIds = Array.from(new Set(ownerByProperty.values()));
   const { data: users } = await supabase
     .from("users")
-    .select("id, email, phone, notification_prefs")
+    .select("id, email, phone, sms_consent, notification_prefs")
     .in("id", userIds);
   const userById = new Map((users ?? []).map((u) => [u.id, u]));
 
@@ -237,6 +237,7 @@ async function runCron(req: NextRequest) {
               url: "/dashboard#this-month",
               email: user.email,
               phone: user.phone,
+              smsConsent: user.sms_consent === true,
             });
             if (sent) {
               created += 1;
@@ -266,6 +267,7 @@ async function runCron(req: NextRequest) {
               url: "/dashboard#this-month",
               email: user.email,
               phone: user.phone,
+              smsConsent: user.sms_consent === true,
             });
             if (sent) {
               created += 1;

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { Search } from "lucide-react";
 import { SYSTEM_TYPES, ISSUE_CATEGORIES, labelFor } from "@/lib/constants";
 import { saveInspectionFindingsAction } from "./actions";
 import AiNotice from "@/components/AiNotice";
 import CategoryIcon from "@/components/CategoryIcon";
+import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
 
 type Mode = "photo" | "text";
 
@@ -89,6 +90,11 @@ export default function InspectionUpload() {
   const [systemsChecked, setSystemsChecked] = useState<boolean[]>([]);
   const [issuesChecked, setIssuesChecked] = useState<boolean[]>([]);
   const [saving, startSave] = useTransition();
+  // Lets the "Cancel" button below abort an in-flight read and lets the
+  // catch block tell a homeowner-initiated cancel apart from a real failure
+  // (so cancelling doesn't also flash an error message).
+  const abortRef = useRef<AbortController | null>(null);
+  const cancelledRef = useRef(false);
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const input = e.target;
@@ -129,16 +135,25 @@ export default function InspectionUpload() {
     setPhase("working");
     setError(null);
     setResult(null);
+    cancelledRef.current = false;
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     try {
-      const resp = await fetch("/api/ingest-inspection", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          images: mode === "photo" ? images : undefined,
-          text: mode === "text" ? text : undefined,
-        }),
-      });
+      const resp = await fetchWithTimeout(
+        "/api/ingest-inspection",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            images: mode === "photo" ? images : undefined,
+            text: mode === "text" ? text : undefined,
+          }),
+          signal: controller.signal,
+        },
+        120_000
+      );
+      abortRef.current = null;
 
       if (resp.status === 401) {
         setPhase("idle");
@@ -166,10 +181,31 @@ export default function InspectionUpload() {
             "Couldn't read that report. Try clearer photos or paste the text instead."
         );
       }
-    } catch {
+    } catch (e) {
+      abortRef.current = null;
+      // Cancel already reset the phase and left no error - don't overwrite
+      // that with a failure message for an abort the homeowner asked for.
+      if (cancelledRef.current) {
+        cancelledRef.current = false;
+        return;
+      }
       setPhase("idle");
-      setError("Something went wrong. Please try again.");
+      setError(
+        isTimeoutError(e)
+          ? "That took too long. Try again."
+          : "Something went wrong. Please try again."
+      );
     }
+  }
+
+  // Lets the homeowner back out of "Reading the report..." instead of being
+  // stuck waiting on a hung request with no escape.
+  function cancelIngest() {
+    cancelledRef.current = true;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setPhase("idle");
+    setError(null);
   }
 
   function confirmAndSave(formData: FormData) {
@@ -449,6 +485,15 @@ export default function InspectionUpload() {
       >
         {phase === "working" ? "Reading the report…" : "Read this report"}
       </button>
+      {phase === "working" && (
+        <button
+          type="button"
+          onClick={cancelIngest}
+          className="block w-full text-center text-sm text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-300"
+        >
+          Cancel
+        </button>
+      )}
     </div>
   );
 }

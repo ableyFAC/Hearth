@@ -5,10 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentContractor, getRole } from "@/lib/contractor";
 import { hasProPlan } from "@/lib/subscription";
 import { buildProStats } from "@/lib/proStats";
-import {
-  computeResponseTimeMinutes,
-  formatResponseTime,
-} from "@/lib/responseTime";
+import { computeResponseTimeMinutes } from "@/lib/responseTime";
 import AccountPanel from "@/components/pro/AccountPanel";
 import WinShareButton from "@/components/pro/WinShareButton";
 import ReviewShareRow from "@/components/pro/ReviewShareRow";
@@ -43,6 +40,21 @@ function refundDaysLeft(appliedAt: string | null | undefined): number {
   if (!Number.isFinite(t)) return GHOST_PROTECTION_DAYS;
   const elapsed = (Date.now() - t) / 86_400_000;
   return Math.max(0, Math.ceil(GHOST_PROTECTION_DAYS - elapsed));
+}
+
+// Honest phrasing for the median job-posted-to-application gap. Same minute
+// buckets as src/lib/responseTime.ts's formatResponseTime, kept local
+// because that stat measures how fast a pro applies after a job posts, not
+// how fast they reply to a homeowner message: the old copy on this page
+// called it "reply speed", which this stat was never actually measuring.
+// Absence (null) is the correct state for a slow or unproven time, so a slow
+// pro sees nothing discouraging.
+function timeToApplyText(minutes: number | null): string | null {
+  if (minutes === null) return null;
+  if (minutes < 60) return "You typically apply within an hour of a job posting";
+  if (minutes < 240) return "You typically apply within a few hours of a job posting";
+  if (minutes < 1440) return "You typically apply the same day a job posts";
+  return null;
 }
 
 // "My Business": one compact cockpit for the numbers a pro actually runs on -
@@ -99,21 +111,22 @@ export default async function ProBusinessPage() {
   const won = (wonData ?? []) as any[];
   const shareableReviews = reviewRows ?? [];
 
-  // Reply speed: median minutes from job-posted to this pro's application,
+  // Time to apply: median minutes from job-posted to this pro's application,
   // over their last up to 20 applications. Needs the admin client because most
   // of a pro's application history is against jobs that stayed open or went to
   // another pro, and "leads contractor select" RLS only covers leads currently
   // assigned to them - a user-scoped client can't read those leads' posted-at
   // timestamps. Only timestamps/ids are read here, nothing homeowner-facing.
-  const medianReplyMinutes = await computeResponseTimeMinutes(
+  const medianApplyMinutes = await computeResponseTimeMinutes(
     createAdminClient(),
     contractor.id
   );
-  const replySpeedText = formatResponseTime(medianReplyMinutes);
-  // A slow median (or one too slow for formatResponseTime to say anything
+  const timeToApplyStat = timeToApplyText(medianApplyMinutes);
+  // A slow median (or one too slow for timeToApplyText to say anything
   // about, per its "show nothing slow" rule) is exactly when the nudge below
   // is worth showing; a fast one gets the stat line instead.
-  const showReplyNudge = medianReplyMinutes !== null && medianReplyMinutes > 60;
+  const showApplySpeedNudge =
+    medianApplyMinutes !== null && medianApplyMinutes > 60;
   // Public profile URL, same slug-preferred pattern as win-card and
   // src/app/p/[id]/page.tsx: the real slug (0043) when the pro has one, the
   // bare contractor id otherwise. Never the truncated 8-char id used for the
@@ -168,20 +181,20 @@ export default async function ProBusinessPage() {
           Your numbers, your wallet, and everything in flight.
         </p>
         <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-          Homeowners overwhelmingly go with the first pro to respond. Fast
-          replies win jobs.
+          Homeowners overwhelmingly pick from the pros who apply first. Fast
+          applications win jobs.
         </p>
-        {(replySpeedText || showReplyNudge) && (
+        {(timeToApplyStat || showApplySpeedNudge) && (
           <div className="mt-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 dark:border-white/10 dark:bg-stone-800">
-            {replySpeedText && (
+            {timeToApplyStat && (
               <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
-                {replySpeedText}
+                {timeToApplyStat}
               </p>
             )}
             <p className="text-xs text-stone-500 dark:text-stone-400">
-              Jobs go to the first responder far more often than not.
+              Jobs usually go to whoever applies first.
             </p>
-            {showReplyNudge && (
+            {showApplySpeedNudge && (
               <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                 {COLD_START_FREE_ALERTS || isPro ? (
                   "You already get instant alerts the moment a matching job posts, open Hearth as soon as one comes in to keep that edge."

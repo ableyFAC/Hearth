@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { closeJobAction } from "./actions";
+import SubmitButton from "@/components/SubmitButton";
 
 const REASONS = [
   "Found a pro elsewhere",
@@ -12,9 +13,21 @@ const REASONS = [
 ];
 
 // Close (cancel) a job posting. Clicking "Close job" opens a small panel that
-// asks for a reason before confirming. Only shown for jobs no pro has applied
-// to yet. The panel expands downward, so nothing shifts horizontally.
-export default function CloseJobButton({ leadId }: { leadId: string }) {
+// asks for a reason before confirming. The panel expands downward, so nothing
+// shifts horizontally.
+//
+// Shown both for a job with no applicants yet (closeJobAction deletes it
+// outright: nobody paid, nothing to preserve) and, now, for one that already
+// has applicants (closeJobAction stamps owner_closed_at and notifies them
+// instead - see the action for why it can't just flip status). applicantCount
+// drives which honest copy shows in the confirm panel.
+export default function CloseJobButton({
+  leadId,
+  applicantCount = 0,
+}: {
+  leadId: string;
+  applicantCount?: number;
+}) {
   const [confirming, setConfirming] = useState(false);
   const [reason, setReason] = useState("");
   const [other, setOther] = useState("");
@@ -36,6 +49,14 @@ export default function CloseJobButton({ leadId }: { leadId: string }) {
   return (
     <form action={closeJobAction} className="flex flex-col items-end gap-2">
       <input type="hidden" name="lead_id" value={leadId} />
+      {applicantCount > 0 && (
+        <p className="max-w-xs text-right text-xs text-stone-500 dark:text-stone-400">
+          {applicantCount} pro{applicantCount === 1 ? " has" : "s have"}{" "}
+          already paid to apply. Closing won&apos;t pick anyone: they&apos;ll
+          be notified you closed the job, and their fee is refunded
+          automatically if nobody&apos;s chosen within a week.
+        </p>
+      )}
       <select
         value={reason}
         onChange={(e) => setReason(e.target.value)}
@@ -72,9 +93,9 @@ export default function CloseJobButton({ leadId }: { leadId: string }) {
         >
           Cancel
         </button>
-        <button type="submit" className="btn-primary text-sm">
+        <SubmitButton className="btn-primary text-sm" pendingLabel="Closing…">
           Confirm close
-        </button>
+        </SubmitButton>
       </div>
     </form>
   );

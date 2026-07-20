@@ -6,30 +6,42 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { hasPlus } from "@/lib/subscription";
 import { setFlash } from "@/lib/flash";
+import { ok, err, type ActionResult } from "@/lib/actionResult";
 import { ALWAYS_SCHEDULE, SYSTEM_SCHEDULE } from "@/lib/maintenancePlan";
 
 // Mark a reminder (maintenance task) done. RLS limits it to the caller's tasks.
-export async function completeReminderAction(id: string) {
+// Called programmatically from ReminderItem, which needs the ActionResult to
+// know whether the checkbox should actually flip (a failed update must not
+// look done, or the next reload will silently un-check it with no explanation).
+export async function completeReminderAction(id: string): Promise<ActionResult> {
   const supabase = createClient();
   const { error } = await supabase
     .from("maintenance_tasks")
     .update({ status: "done", completed_at: new Date().toISOString() })
     .eq("id", id);
-  if (error)
+  if (error) {
     setFlash("Couldn't update that reminder. Please try again.", "error");
+    return err(error.message);
+  }
   revalidatePath("/dashboard");
+  return ok();
 }
 
-// Delete a reminder entirely (offered only after it's checked off).
-export async function deleteReminderAction(id: string) {
+// Delete a reminder entirely (offered only after it's checked off). Same
+// ActionResult contract as completeReminderAction: ReminderItem must not
+// remove the row from the list until the delete actually succeeded.
+export async function deleteReminderAction(id: string): Promise<ActionResult> {
   const supabase = createClient();
   const { error } = await supabase
     .from("maintenance_tasks")
     .delete()
     .eq("id", id);
-  if (error)
+  if (error) {
     setFlash("Couldn't remove that reminder. Please try again.", "error");
+    return err(error.message);
+  }
   revalidatePath("/dashboard");
+  return ok();
 }
 
 // Edit a reminder's title / due date.
@@ -49,15 +61,18 @@ export async function editReminderAction(formData: FormData) {
 }
 
 // Undo: put a reminder back to open (in case it was checked off by accident).
-export async function uncompleteReminderAction(id: string) {
+export async function uncompleteReminderAction(id: string): Promise<ActionResult> {
   const supabase = createClient();
   const { error } = await supabase
     .from("maintenance_tasks")
     .update({ status: "open", completed_at: null })
     .eq("id", id);
-  if (error)
+  if (error) {
     setFlash("Couldn't update that reminder. Please try again.", "error");
+    return err(error.message);
+  }
   revalidatePath("/dashboard");
+  return ok();
 }
 
 // --- Hearth Plus: personalized maintenance plan ---

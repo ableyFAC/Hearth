@@ -35,7 +35,9 @@ import PhotoTips from "@/components/PhotoTips";
 import ReviewButton from "./ReviewButton";
 import ContractorReviews from "./ContractorReviews";
 import HireAgainButton from "./HireAgainButton";
+import ChooseApplicantButton from "./ChooseApplicantButton";
 import { redactContact } from "@/lib/redact";
+import { isMissingSchemaError } from "@/lib/dbErrors";
 
 // Must match the markers LeadChat posts when either side closes a thread.
 const isCloseMarker = (b: string) =>
@@ -73,13 +75,27 @@ export default async function ContractorsPage({
   // The owner's posted jobs (with the chosen pro's info, if one is picked yet).
   // Cast to any[]: the generated types don't model the contractor_leads ->
   // contractors join, so the nested relation reads as an error type otherwise.
-  const { data: leadsData } = await supabase
+  // owner_closed_at (migration 0092) isn't in the generated types yet either,
+  // so the client itself is cast to any for this call, same pattern as the
+  // lead_applications reads below.
+  const LEADS_SELECT_WITH_CLOSE =
+    "id, category, issue_description, issue_id, contractor_id, status, timing, created_at, owner_closed_at, contractors(name, rating, review_count, service_area, license_number, contact_phone, contact_email)";
+  let { data: leadsData, error: leadsError } = await (supabase as any)
     .from("contractor_leads")
-    .select(
-      "id, category, issue_description, issue_id, contractor_id, status, timing, created_at, contractors(name, rating, review_count, service_area, license_number, contact_phone, contact_email)"
-    )
+    .select(LEADS_SELECT_WITH_CLOSE)
     .eq("property_id", property.id)
     .order("created_at", { ascending: false });
+  if (leadsError && isMissingSchemaError(leadsError)) {
+    // Migration 0092 hasn't run against this database yet: retry without the
+    // new column instead of showing an empty jobs list.
+    ({ data: leadsData } = await (supabase as any)
+      .from("contractor_leads")
+      .select(
+        "id, category, issue_description, issue_id, contractor_id, status, timing, created_at, contractors(name, rating, review_count, service_area, license_number, contact_phone, contact_email)"
+      )
+      .eq("property_id", property.id)
+      .order("created_at", { ascending: false }));
+  }
   const leads = (leadsData ?? []) as any[];
 
   // My Pros: distinct pros the homeowner previously hired on this property
@@ -145,7 +161,7 @@ export default async function ContractorsPage({
     const { data: apps } = await (supabase as any)
       .from("lead_applications")
       .select(
-        "id, lead_id, contractor_id, message, created_at, contractors(name, rating, review_count, service_area, license_number)"
+        "id, lead_id, contractor_id, message, created_at, status, refunded_at, contractors(name, rating, review_count, service_area, license_number)"
       )
       .in("lead_id", leadIds)
       .order("created_at", { ascending: true });
@@ -277,6 +293,16 @@ export default async function ContractorsPage({
             {leads.map((l) => {
               const apps = appsByLead.get(l.id) ?? [];
               const chosen = Boolean(l.contractor_id);
+              // closeJobAction only counts and notifies LIVE applicants
+              // (status 'applied', not yet ghost-refunded), so the close
+              // copy should match that, not the raw application count.
+              const liveApplicantCount = apps.filter(
+                (a: any) => a.status === "applied" && !a.refunded_at
+              ).length;
+              // Closed by the owner without picking anyone (migration 0092):
+              // status/contractor_id are untouched by this, so `chosen` still
+              // reads correctly even for a job closed this way.
+              const closedByOwner = !chosen && Boolean(l.owner_closed_at);
               return (
                 <li key={l.id} className="card space-y-3">
                   <div className="flex items-center justify-between gap-2">
@@ -298,11 +324,13 @@ export default async function ContractorsPage({
                     <span className="shrink-0 rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-medium text-stone-500 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300">
                       {chosen
                         ? "Pro selected"
+                        : closedByOwner
+                        ? "Closed"
                         : `${apps.length} applicant${apps.length === 1 ? "" : "s"}`}
                     </span>
                   </div>
 
-                  {!chosen && <EditJobForm job={l} />}
+                  {!chosen && !closedByOwner && <EditJobForm job={l} />}
 
                   {chosen ? (
                     // A pro has been picked: show them + open the message thread.
@@ -386,6 +414,17 @@ export default async function ContractorsPage({
                         </div>
                       )}
                     </div>
+                  ) : closedByOwner ? (
+                    // Owner closed the job without picking anyone (migration
+                    // 0092): status is still 'new' underneath, so the applicants
+                    // still refund on the normal ghost-protection schedule -
+                    // this is purely the UI reflecting that decision.
+                    <div className="rounded-lg border border-dashed border-stone-300 p-4 text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400">
+                      You closed this job without choosing a pro.
+                      {apps.length > 0
+                        ? " Applicants who already paid to apply were notified, and their fee is refunded automatically if you haven't picked anyone within a week of applying."
+                        : ""}
+                    </div>
                   ) : apps.length === 0 ? (
                     <div className="space-y-2">
                       <div className="rounded-lg border border-dashed border-stone-300 p-4 text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400">
@@ -424,14 +463,17 @@ export default async function ContractorsPage({
                       <CloseJobButton leadId={l.id} />
                     </div>
                   ) : (
-                    // Review the applicants and pick one.
-                    <ul className="space-y-2">
-                      {apps.map((a) => (
+                    // Review the applicants and pick one, or close the job
+                    // without picking anyone (see closeJobAction for why that
+                    // no longer refuses once applicants exist).
+                    <div className="space-y-2">
+                      <ul className="space-y-2">
+                        {apps.map((a) => (
                         <li
                           key={a.id}
                           className="rounded-lg border border-stone-200 p-3 dark:border-white/10"
                         >
-                          <div className="flex items-start justify-between gap-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className="font-medium text-stone-900 dark:text-stone-100">
@@ -488,14 +530,16 @@ export default async function ContractorsPage({
                                 name="application_id"
                                 value={a.id}
                               />
-                              <button className="btn-primary shrink-0 text-sm">
-                                Choose
-                              </button>
+                              <ChooseApplicantButton
+                                contractorName={a.contractors?.name ?? "this pro"}
+                              />
                             </form>
                           </div>
                         </li>
                       ))}
-                    </ul>
+                      </ul>
+                      <CloseJobButton leadId={l.id} applicantCount={liveApplicantCount} />
+                    </div>
                   )}
                 </li>
               );

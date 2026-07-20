@@ -6,10 +6,12 @@ import { SYSTEM_TYPES, materialLabel } from "@/lib/constants";
 import PhotoUpload from "@/components/PhotoUpload";
 import MonthYearInput from "@/components/MonthYearInput";
 import MaterialSelect from "@/components/MaterialSelect";
+import SubmitButton from "@/components/SubmitButton";
 
 export default function SystemForm({ propertyId }: { propertyId: string }) {
   const [open, setOpen] = useState(false);
   const [systemType, setSystemType] = useState<string>(SYSTEM_TYPES[0].value);
+  const [error, setError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
   if (!open) {
@@ -24,7 +26,12 @@ export default function SystemForm({ propertyId }: { propertyId: string }) {
     <form
       ref={formRef}
       action={async (fd) => {
-        await addSystemAction(fd);
+        const res = await addSystemAction(fd);
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        setError(null);
         formRef.current?.reset();
         setOpen(false);
       }}
@@ -111,11 +118,15 @@ export default function SystemForm({ propertyId }: { propertyId: string }) {
 
       <PhotoUpload propertyId={propertyId} />
 
+      {error && (
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>
+      )}
+
       <div className="flex gap-3">
         <button type="button" className="btn-secondary" onClick={() => setOpen(false)}>
           Cancel
         </button>
-        <button className="btn-primary flex-1">Save system</button>
+        <SubmitButton pendingLabel="Saving…">Save system</SubmitButton>
       </div>
     </form>
   );

@@ -55,7 +55,7 @@ export default async function GuideCta({
         house-specific answer, free.
       </p>
       <a
-        href="/get-started"
+        href="/homeowner-signup"
         className="btn-primary mt-5 inline-block px-6 py-2.5"
       >
         Get started free

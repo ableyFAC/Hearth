@@ -23,7 +23,10 @@ function validPhotoUrls(formData: FormData): string[] {
 
 export async function reportIssueAction(formData: FormData) {
   const property = await getActiveProperty();
-  if (!property) throw new Error("No active property");
+  if (!property) {
+    setFlash("Couldn't log that issue. Try again.", "error");
+    return;
+  }
   const supabase = createClient();
 
   const category = formData.get("category") as string;
@@ -39,7 +42,17 @@ export async function reportIssueAction(formData: FormData) {
     .select("id")
     .single();
 
-  if (error || !issue) throw new Error(error?.message ?? "insert failed");
+  if (error || !issue) {
+    // Any photos the owner already picked were uploaded straight to storage
+    // by PhotoUpload before this insert ran, so a failure here leaves them
+    // orphaned (no DB row references them yet). Keeping this simple: report
+    // the error and leave the form open (no redirect) so the owner can retry,
+    // which will attach those same photo URLs once the insert succeeds.
+    // Sweeping up true orphans (the owner gives up instead) is left to
+    // future janitor work, not built here.
+    setFlash("Couldn't log that issue. Try again.", "error");
+    return;
+  }
 
   // Attach any uploaded photos.
   const urls = validPhotoUrls(formData);
@@ -78,7 +91,10 @@ export async function updateIssueAction(formData: FormData) {
       description: clipText(formData.get("description"), 4000),
     })
     .eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) {
+    setFlash("Couldn't save your changes. Try again.", "error");
+    return;
+  }
   setFlash("Issue updated");
   revalidatePath("/issues");
   revalidatePath("/dashboard");
@@ -121,7 +137,10 @@ export async function resolveIssueAction(formData: FormData) {
     .from("issues")
     .update({ status: "resolved" })
     .eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) {
+    setFlash("Couldn't resolve that issue. Try again.", "error");
+    return;
+  }
   await liftSystemConditionForIssue(supabase, id);
   setFlash("Issue resolved");
   revalidatePath("/issues");
@@ -136,7 +155,10 @@ export async function reopenIssueAction(id: string) {
     .from("issues")
     .update({ status: "open" })
     .eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) {
+    setFlash("Couldn't reopen that issue. Try again.", "error");
+    return;
+  }
   revalidatePath("/issues");
   revalidatePath("/dashboard");
   revalidatePath("/forecast");
@@ -149,7 +171,10 @@ export async function checkResolveIssueAction(id: string) {
     .from("issues")
     .update({ status: "resolved" })
     .eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) {
+    setFlash("Couldn't update that issue. Try again.", "error");
+    return;
+  }
   await liftSystemConditionForIssue(supabase, id);
   revalidatePath("/issues");
   revalidatePath("/dashboard");

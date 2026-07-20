@@ -108,6 +108,10 @@ export default function ReminderItem({
   // True only right after the toggle turns a reminder on, so the check-pop
   // animation plays for that action and not for items already done on load.
   const [justCompleted, setJustCompleted] = useState(false);
+  // Server errors already surface as a toast (the actions call setFlash), but
+  // a truly unexpected failure (network drop, etc.) never reaches that code
+  // path, so this is a local fallback the row can show right where it happened.
+  const [actionError, setActionError] = useState<string | null>(null);
   const checklist = useChecklist();
 
   useEffect(() => {
@@ -119,11 +123,19 @@ export default function ReminderItem({
 
   async function remove() {
     setBusy(true);
+    setActionError(null);
     try {
-      await deleteReminderAction(id);
+      // Failure must NOT remove the row: the delete didn't actually happen,
+      // so hiding it here would just have it reappear confusingly on the
+      // next reload with no explanation. The action's own setFlash covers
+      // the visible error for the expected (DB) failure case.
+      const res = await deleteReminderAction(id);
+      if (!res.ok) return;
       checklist?.unregister(id);
       setRemoved(true);
     } catch {
+      setActionError("Couldn't remove that reminder. Please try again.");
+    } finally {
       setBusy(false);
     }
   }
@@ -131,14 +143,20 @@ export default function ReminderItem({
   async function toggle() {
     const next = !done;
     setBusy(true);
+    setActionError(null);
     try {
-      if (next) await completeReminderAction(id);
-      else await uncompleteReminderAction(id);
+      // Same reasoning as remove(): only flip the checkbox once the server
+      // confirms the update actually landed, so a failure never shows a
+      // done/undone state that silently reverts itself on the next reload.
+      const res = next
+        ? await completeReminderAction(id)
+        : await uncompleteReminderAction(id);
+      if (!res.ok) return;
       setDone(next);
       setJustCompleted(next);
       checklist?.report(id, next);
     } catch {
-      /* ignore */
+      setActionError("Couldn't update that reminder. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -207,6 +225,11 @@ export default function ReminderItem({
           </button>
         </div>
       </div>
+      {actionError && (
+        <p role="alert" className="px-2 pb-1 text-xs text-red-600 dark:text-red-400">
+          {actionError}
+        </p>
+      )}
     </li>
   );
 }

@@ -336,16 +336,31 @@ export default function LeadChat({
     endRef.current?.scrollIntoView({ block: "nearest" });
   }, [messages]);
 
-  // Close the tap-opened action bar on any tap outside it (or its "…" toggle).
+  // Close the tap-opened action bar on any tap outside it (or its "…"
+  // toggle). Also disarms a pending "Unsend" confirm: without this, a touch
+  // user could arm it, tap away without confirming, and have it still armed
+  // (and one tap from deleting) the next time they reopen the action bar.
   useEffect(() => {
-    if (!menuFor) return;
+    if (!menuFor && !confirmUnsendId) return;
     const onPointerDown = (e: PointerEvent) => {
       const target = e.target as Element | null;
-      if (!target?.closest("[data-msg-actions]")) setMenuFor(null);
+      if (!target?.closest("[data-msg-actions]")) {
+        setMenuFor(null);
+        setConfirmUnsendId(null);
+      }
     };
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [menuFor]);
+  }, [menuFor, confirmUnsendId]);
+
+  // Belt-and-suspenders: an armed "Unsend" confirm also disarms itself after
+  // a few seconds, so a stale confirm can never sit around long enough to
+  // turn a later, unrelated tap into an instant delete.
+  useEffect(() => {
+    if (!confirmUnsendId) return;
+    const t = setTimeout(() => setConfirmUnsendId(null), 4000);
+    return () => clearTimeout(t);
+  }, [confirmUnsendId]);
 
   // Closed if the most recent system marker is a "close" (not a "reopen").
   const closed = useMemo(() => {
@@ -636,13 +651,20 @@ export default function LeadChat({
   // Report a single (other person's) message for review.
   async function reportMessage(m: Msg) {
     setBusy(true);
-    await supabase.from("reports").insert({
+    const { error } = await supabase.from("reports").insert({
       lead_id: leadId,
       reporter_id: await ensureUid(),
       reporter_role: role,
       reason: `Reported message: "${m.body.slice(0, 140)}"`,
     });
     setBusy(false);
+    if (error) {
+      // Leave the report affordance in place so the person can try again,
+      // instead of claiming the report went through when the insert failed.
+      setNotice("Couldn't report that message. Please try again.");
+      setTimeout(() => setNotice(null), 4000);
+      return;
+    }
     setNotice("Message reported. Our team will review it.");
     setTimeout(() => setNotice(null), 4000);
   }
@@ -709,6 +731,25 @@ export default function LeadChat({
     (r) => r.label.trim() === "" && (dollarsToCents(r.amount) ?? 0) > 0
   );
 
+  // Confirm a quote/invoice send actually landed by re-querying for a row id
+  // that wasn't already known (see the comment in submitQuote/submitInvoice
+  // below for why this is the only way to tell success from failure). Retried
+  // once on its own query error, so a blip on this SELECT is not reported as
+  // a failed send for an insert that actually succeeded.
+  async function verifyNewRow(
+    table: "lead_quotes" | "invoices",
+    knownIds: Set<string>
+  ): Promise<boolean> {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const { data, error } = await supabase
+        .from(table)
+        .select("id")
+        .eq("lead_id", leadId);
+      if (!error) return (data ?? []).some((r) => !knownIds.has(r.id));
+    }
+    return false;
+  }
+
   async function submitQuote(e: React.FormEvent) {
     e.preventDefault();
     if (!sendQuoteAction) return;
@@ -730,11 +771,7 @@ export default function LeadChat({
     let sent = false;
     try {
       await sendQuoteAction(fd);
-      const { data: after } = await supabase
-        .from("lead_quotes")
-        .select("id")
-        .eq("lead_id", leadId);
-      sent = (after ?? []).some((q) => !knownIds.has(q.id));
+      sent = await verifyNewRow("lead_quotes", knownIds);
     } catch {
       // Network blip or server-side throw: treated the same as a silent no-op.
       sent = false;
@@ -867,11 +904,7 @@ export default function LeadChat({
     let sent = false;
     try {
       await createInvoiceAction(fd);
-      const { data: after } = await supabase
-        .from("invoices")
-        .select("id")
-        .eq("lead_id", leadId);
-      sent = (after ?? []).some((i) => !knownIds.has(i.id));
+      sent = await verifyNewRow("invoices", knownIds);
     } catch {
       sent = false;
     } finally {

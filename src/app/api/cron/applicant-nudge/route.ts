@@ -180,15 +180,19 @@ async function runCron(req: NextRequest) {
   const ownerIds = Array.from(new Set(ownerByProperty.values()));
   const contactByUser = new Map<
     string,
-    { email: string | null; phone: string | null }
+    { email: string | null; phone: string | null; sms_consent: boolean | null }
   >();
   for (const ids of chunk(ownerIds, QUERY_CHUNK)) {
     const { data: users } = await supabase
       .from("users")
-      .select("id, email, phone")
+      .select("id, email, phone, sms_consent")
       .in("id", ids);
     for (const u of users ?? [])
-      contactByUser.set(u.id, { email: u.email, phone: u.phone });
+      contactByUser.set(u.id, {
+        email: u.email,
+        phone: u.phone,
+        sms_consent: u.sms_consent,
+      });
   }
 
   let checked = 0;
@@ -263,6 +267,7 @@ async function runCron(req: NextRequest) {
             url: n.url,
             email: contact?.email ?? null,
             phone: contact?.phone ?? null,
+            smsConsent: contact?.sms_consent === true,
           });
           if (sent) notified += 1;
         } catch {

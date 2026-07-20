@@ -43,9 +43,11 @@ const PERKS: Array<{ icon: LucideIcon; title: string; body: string }> = [
   {
     icon: Bot,
     title: "AI back office",
-    // The 250 mirrors DAILY_LIMIT_PLUS in src/lib/aiUsage.ts: the shared
-    // per-user daily cap on every AI route. Keep the two in sync.
-    body: "Draft estimates, invoices, and follow-up messages in seconds, up to 250 drafts a day, so evenings go back to being evenings.",
+    // /api/pro-tools ships five tools (estimate, invoice, followup,
+    // review_response, overdue); list all five here so this perk isn't
+    // undersold. The 250 mirrors DAILY_LIMIT_PLUS in src/lib/aiUsage.ts: the
+    // shared per-user daily cap on every AI route. Keep both in sync.
+    body: "Draft estimates, invoices, follow-up messages, review responses, and overdue-invoice reminders in seconds, up to 250 drafts a day, so evenings go back to being evenings.",
   },
   {
     icon: Globe,

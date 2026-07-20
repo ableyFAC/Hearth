@@ -23,8 +23,17 @@ const PRO_CRM_FEATURES: Array<{
   {
     icon: Bot,
     title: "AI back office",
-    body: "Draft estimates, invoices, and follow-up messages in seconds, so evenings go back to being evenings.",
+    body: "Draft estimates, invoices, follow-up messages, review responses, and overdue-invoice reminders in seconds, so evenings go back to being evenings.",
     href: "/pro/tools",
+  },
+  {
+    icon: Star,
+    title: "Automated review requests",
+    // Real, shipped behavior: updateLeadStatusAction (src/app/pro/actions.ts)
+    // fires requestReviewForWonLead automatically for Pro members on the
+    // closed (Won) transition. Not a planned item, so it belongs here, not
+    // in the "What's coming" list below.
+    body: "Mark a job Won and we ask the homeowner for a review automatically. No extra step, no reminder to send yourself.",
   },
 ];
 
@@ -32,7 +41,6 @@ const PRO_CRM_FEATURES: Array<{
 // list exists in the app yet, and nothing here is sold as if it does.
 const PLANNED_CRM_FEATURES: Array<{ icon: LucideIcon; label: string }> = [
   { icon: Clock, label: "Automated follow-up reminders" },
-  { icon: Star, label: "Automated review requests when you win a job" },
   { icon: FileText, label: "Saved quote and estimate templates" },
   { icon: Tag, label: "Customer tags and filtering" },
   { icon: BarChart3, label: "Pipeline analytics and CSV export" },

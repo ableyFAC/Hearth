@@ -125,29 +125,54 @@ export async function startPlusCheckoutAction(formData: FormData) {
   // from failing the whole checkout.
   const consentTerms = billingTermsText(plan, freeTrial).slice(0, 500);
 
-  const session = await stripe.checkout.sessions.create({
-    mode: "subscription",
-    line_items: [lineItem],
-    // The step-up flag mirrors the Pro side so the renewal-reminders cron has
-    // one signal to read for both memberships. Plus's free trial is a Stripe
-    // trial, which stays visible on the subscription, but the flag costs
-    // nothing and keeps the two flows from diverging.
-    subscription_data: {
-      ...(freeTrial ? { trial_period_days: PLUS_PLAN.trialDays } : {}),
-      metadata: { intro_step_up: freeTrial ? "true" : "false" },
-    },
-    customer: customerId ?? undefined,
-    customer_email: customerId ? undefined : user.email ?? undefined,
-    metadata: {
-      type: "plus_subscription",
-      user_id: user.id,
-      plan,
-      consent_terms: consentTerms,
-      consent_at: new Date().toISOString(),
-    },
-    success_url: `${siteUrl()}/plus?welcome=1`,
-    cancel_url: `${siteUrl()}/plus`,
-  });
+  // Idempotency key: stable per user + plan + a 5-minute time bucket, so a
+  // double-click (two form submits landing on the server milliseconds apart)
+  // replays the same Stripe session instead of minting two, but a genuine
+  // later retry (new bucket) still creates a fresh one.
+  const idempotencyBucket = Math.floor(Date.now() / (5 * 60 * 1000));
+  const idempotencyKey = `plus-checkout:${user.id}:${plan}:${idempotencyBucket}`;
+
+  // consent_at has to be derived from the bucket start, not a fresh Date: the
+  // idempotency key above is stable across two submits landing in the same
+  // bucket, but a freshly-computed timestamp would make the request body
+  // differ between those submits, and Stripe treats a replayed key with a
+  // different body as a conflict error. This lands within 5 minutes of "now",
+  // which is fine for what it records - the billing-terms acknowledgment
+  // above, not a precise click time.
+  const consentAt = new Date(idempotencyBucket * 5 * 60 * 1000).toISOString();
+
+  let session: Stripe.Checkout.Session;
+  try {
+    session = await stripe.checkout.sessions.create(
+      {
+        mode: "subscription",
+        line_items: [lineItem],
+        // The step-up flag mirrors the Pro side so the renewal-reminders cron has
+        // one signal to read for both memberships. Plus's free trial is a Stripe
+        // trial, which stays visible on the subscription, but the flag costs
+        // nothing and keeps the two flows from diverging.
+        subscription_data: {
+          ...(freeTrial ? { trial_period_days: PLUS_PLAN.trialDays } : {}),
+          metadata: { intro_step_up: freeTrial ? "true" : "false" },
+        },
+        customer: customerId ?? undefined,
+        customer_email: customerId ? undefined : user.email ?? undefined,
+        metadata: {
+          type: "plus_subscription",
+          user_id: user.id,
+          plan,
+          consent_terms: consentTerms,
+          consent_at: consentAt,
+        },
+        success_url: `${siteUrl()}/plus?welcome=1`,
+        cancel_url: `${siteUrl()}/plus`,
+      },
+      { idempotencyKey }
+    );
+  } catch {
+    setFlash("We couldn't start checkout. Please try again.", "error");
+    redirect("/plus");
+  }
 
   if (session.url) redirect(session.url);
   redirect("/plus");

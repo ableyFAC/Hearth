@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { SYSTEM_TYPES } from "@/lib/constants";
 import { saveDocumentAction } from "@/lib/document-actions";
 import TakePhotoButton from "@/components/TakePhotoButton";
+import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
 
 const DOC_TYPES = [
   { value: "warranty", label: "Warranty" },
@@ -58,6 +59,9 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
   const [preview, setPreview] = useState<string | null>(null);
   const [fields, setFields] = useState<Extracted | null>(null);
   const [saving, startSave] = useTransition();
+  // Lets the "Reading the document..." step be cancelled: aborts the
+  // in-flight extraction fetch and hands the picker back to the owner.
+  const [reading, setReading] = useState<AbortController | null>(null);
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const input = e.target;
@@ -112,21 +116,53 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
     setFile(picked);
     // Local preview only, no storage object: a blob URL renders directly, no
     // signing needed, and it never touches the (private) home-photos bucket.
-    setPreview(picked.type.startsWith("image/") ? URL.createObjectURL(picked) : null);
+    // Kept in a local too (not just state) so the timeout path below revokes
+    // THIS call's URL, not a stale `preview` from before the await.
+    const objectUrl = picked.type.startsWith("image/")
+      ? URL.createObjectURL(picked)
+      : null;
+    setPreview(objectUrl);
 
-    // Ask Hearth to read the facts off it.
+    // Ask Hearth to read the facts off it. The controller lets the Cancel
+    // affordance below abort this mid-flight; fetchWithTimeout also aborts
+    // it on its own after 90s so a hung endpoint can't strand the picker.
+    const controller = new AbortController();
+    setReading(controller);
     let extracted: Extracted | null = null;
+    let timedOut = false;
     try {
       const b64 = await toBase64(picked);
-      const resp = await fetch("/api/extract-document", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ image: b64, mime: picked.type || "image/jpeg" }),
-      });
+      const resp = await fetchWithTimeout(
+        "/api/extract-document",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ image: b64, mime: picked.type || "image/jpeg" }),
+          signal: controller.signal,
+        },
+        90_000
+      );
       const data = await resp.json();
       extracted = data?.doc ?? null;
-    } catch {
+    } catch (e) {
+      if (isTimeoutError(e)) {
+        timedOut = true;
+      } else if (controller.signal.aborted) {
+        // Owner hit "Cancel" below; cancelReading() already reset the phase
+        // and picker, so there is nothing left to do here.
+        return;
+      }
       extracted = null;
+    }
+    setReading(null);
+
+    if (timedOut) {
+      setPhase("idle");
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      setFile(null);
+      setPreview(null);
+      setNote({ text: "That took too long. Try again.", tone: "error" });
+      return;
     }
 
     // Fall back to a blank, editable form if extraction was unavailable.
@@ -204,6 +240,18 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
     setNote(null);
   }
 
+  // Back out of "Reading the document..." without waiting on it: abort the
+  // extraction fetch and hand the picker straight back to the owner.
+  function cancelReading() {
+    reading?.abort();
+    setReading(null);
+    if (preview) URL.revokeObjectURL(preview);
+    setPhase("idle");
+    setFile(null);
+    setPreview(null);
+    setNote(null);
+  }
+
   const val = (v: string | number | null) => (v == null ? "" : String(v));
 
   return (
@@ -233,6 +281,15 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
             disabled={phase === "working"}
             className="mt-2"
           />
+          {phase === "working" && (
+            <button
+              type="button"
+              onClick={cancelReading}
+              className="mt-2 text-xs text-stone-500 underline-offset-2 hover:text-stone-700 hover:underline dark:text-stone-400 dark:hover:text-stone-300"
+            >
+              Cancel and pick a different file
+            </button>
+          )}
         </>
       )}
 

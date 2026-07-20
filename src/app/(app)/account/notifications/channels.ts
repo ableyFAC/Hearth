@@ -17,9 +17,7 @@ export const NOTIFICATION_CHANNELS = [
     label: "Weather and safety alerts",
     desc: "Freeze, heat, and product recall warnings for your home.",
   },
-  {
-    key: "product_updates",
-    label: "Product news and tips",
-    desc: "Occasional updates about new Hearth features.",
-  },
+  // "Product news and tips" (product_updates) was removed: nothing sends
+  // product updates today, so the toggle promised control the settings page
+  // did not have. Restore it once a sender exists.
 ] as const;

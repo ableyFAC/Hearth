@@ -240,6 +240,24 @@ export default async function PublicProPage({
 
   if (!profile) notFound();
 
+  // "Request a quote" CTA: pragmatic version, no new schema. Signed-in
+  // visitors go straight to the homeowner job-post flow with this pro's
+  // primary category prefilled, the same /contractors?category= prefill the
+  // dashboard briefing and forecast pages already use. There is no way to
+  // target one specific pro on /contractors today, so this lands them on the
+  // job board pre-filtered instead of inventing a new column to carry that.
+  // Signed-out visitors go create an account first, carrying the same
+  // destination through ?next=, same pattern as /onboarding and /signin.
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const primaryCategory = profile.categories[0] ?? "other";
+  const quoteHref = `/contractors?category=${encodeURIComponent(primaryCategory)}`;
+  const requestQuoteHref = user
+    ? quoteHref
+    : `/homeowner-signup?next=${encodeURIComponent(quoteHref)}`;
+
   const hasRating = profile.review_count > 0 && profile.rating != null;
   const showBadge =
     profile.member && (profile.has_license || profile.has_insurance);
@@ -332,7 +350,9 @@ export default async function PublicProPage({
 
           {showBadge && (
             <div className="mt-3">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-medium text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200">
+              {/* Self-reported: neutral stone, not green, so it can never be
+                  mistaken for the real CSLB-verified badge below. */}
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-stone-300 bg-stone-100 px-3 py-1 text-xs font-medium text-stone-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300">
                 <svg
                   viewBox="0 0 24 24"
                   className="h-3.5 w-3.5"
@@ -346,9 +366,8 @@ export default async function PublicProPage({
                 </svg>
                 {badgeLabel}
               </span>
-              <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
-                Details provided by the business. Not independently verified by
-                Hearth.
+              <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
+                Reported by the business, not verified.
               </p>
             </div>
           )}
@@ -371,7 +390,7 @@ export default async function PublicProPage({
                     </svg>
                     License verified
                   </span>
-                  <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
+                  <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
                     Checked against the CSLB public database on {licenseVerifiedLabel}.
                   </p>
                 </div>
@@ -392,7 +411,7 @@ export default async function PublicProPage({
                     </svg>
                     Background checked
                   </span>
-                  <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
+                  <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
                     Background check run by Checkr on {backgroundCheckedLabel}.
                   </p>
                 </div>
@@ -418,6 +437,12 @@ export default async function PublicProPage({
             </div>
           )}
 
+          <div className="mt-5">
+            <a href={requestQuoteHref} className="btn-primary inline-flex">
+              Request a quote
+            </a>
+          </div>
+
           {about && (
             <section className="mt-5 border-t border-stone-100 pt-4 dark:border-white/10">
               <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">About</h2>
@@ -434,7 +459,7 @@ export default async function PublicProPage({
               <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
                 Projects
               </h2>
-              <p className="mt-0.5 text-[11px] text-stone-500 dark:text-stone-400">
+              <p className="mt-0.5 text-xs text-stone-600 dark:text-stone-400">
                 Photos provided by the business.
               </p>
               <ul className="mt-2 space-y-4">
@@ -460,7 +485,7 @@ export default async function PublicProPage({
                               />
                               {hasPair && (
                                 <span
-                                  className={`absolute bottom-1 left-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                                  className={`absolute bottom-1 left-1 rounded-full px-1.5 py-0.5 text-xs font-medium ${
                                     ph.is_before
                                       ? "bg-stone-900/70 text-white"
                                       : "bg-green-600/90 text-white"
@@ -523,7 +548,7 @@ export default async function PublicProPage({
                       <span className="text-xs">
                         <Stars rating={r.rating} />
                       </span>
-                      <span className="text-[11px] text-stone-500 dark:text-stone-400">
+                      <span className="text-xs text-stone-500 dark:text-stone-400">
                         {r.created_at.slice(0, 10)}
                       </span>
                     </div>

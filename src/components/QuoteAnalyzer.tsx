@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { ReceiptText } from "lucide-react";
 import { JOB_CATEGORIES } from "@/lib/constants";
 import AiNotice from "@/components/AiNotice";
+import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
 
 type Verdict = "fair" | "high" | "low" | "unclear";
 
@@ -66,6 +67,8 @@ export default function QuoteAnalyzer({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Analysis | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copyFallback, setCopyFallback] = useState(false);
+  const negotiationRef = useRef<HTMLParagraphElement>(null);
 
   // Homeowner corrections to the "what's missing" list. The AI's read isn't
   // final: sometimes the pro just forgot to write something down, or the
@@ -155,10 +158,12 @@ export default function QuoteAnalyzer({
     setLoading(true);
     setError(null);
     setResult(null);
+    setCopyFallback(false);
+    setCopied(false);
     clearEdits();
 
     try {
-      const resp = await fetch("/api/analyze-quote", {
+      const resp = await fetchWithTimeout("/api/analyze-quote", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -188,8 +193,12 @@ export default function QuoteAnalyzer({
       } else {
         setError(data?.error || "Couldn't read that quote. Try a clearer photo or paste the text instead.");
       }
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (e) {
+      setError(
+        isTimeoutError(e)
+          ? "That took too long. Try again."
+          : "Something went wrong. Please try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -197,13 +206,29 @@ export default function QuoteAnalyzer({
 
   async function copyNegotiation() {
     if (!result?.negotiation) return;
-    try {
-      await navigator.clipboard.writeText(result.negotiation);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* clipboard unavailable */
+    setCopyFallback(false);
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(result.negotiation);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        return;
+      } catch {
+        /* fall through to the selection fallback below */
+      }
     }
+    // Clipboard API missing or blocked (some browsers require a permission or
+    // a secure context): select the visible negotiation text instead of
+    // silently doing nothing, so the homeowner can still copy it by hand.
+    const node = negotiationRef.current;
+    if (node && window.getSelection) {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }
+    setCopyFallback(true);
   }
 
   const verdictStyle = result ? VERDICT_STYLE[result.verdict] : null;
@@ -546,9 +571,17 @@ export default function QuoteAnalyzer({
                   {copied ? "Copied" : "Copy"}
                 </button>
               </div>
-              <p className="whitespace-pre-wrap rounded-lg border border-stone-200 bg-white px-3 py-3 text-sm text-stone-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300">
+              <p
+                ref={negotiationRef}
+                className="whitespace-pre-wrap rounded-lg border border-stone-200 bg-white px-3 py-3 text-sm text-stone-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300"
+              >
                 {result.negotiation}
               </p>
+              {copyFallback && (
+                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                  Couldn&apos;t copy automatically, so the text above is selected: press Ctrl+C (or Cmd+C) to copy it.
+                </p>
+              )}
             </div>
           )}
 

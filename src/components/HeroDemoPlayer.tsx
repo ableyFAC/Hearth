@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import Logo from "./Logo";
 import styles from "./HeroDemoPlayer.module.css";
+import { track } from "@/lib/analytics";
 
 // Inline click-to-play landing demo, rebuilt from an 11-agent research pass
 // on high-converting product videos and web-audio sound design. The shape:
@@ -2235,6 +2236,7 @@ export default function HeroDemoPlayer() {
     setStarted(true);
     setPaused(false);
     engineRef.current?.play();
+    track("hero_demo_play");
   }
 
   function handleTogglePause() {

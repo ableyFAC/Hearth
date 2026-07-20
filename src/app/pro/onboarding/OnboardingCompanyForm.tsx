@@ -1,5 +1,7 @@
 "use client";
 
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Hammer } from "lucide-react";
 import { saveCompanyAction } from "../actions";
 import CategoryPicker from "../CategoryPicker";
@@ -7,17 +9,62 @@ import FieldIcon from "../FieldIcon";
 import PhoneInput from "@/components/PhoneInput";
 import { STATE_NAMES } from "@/lib/forecast";
 
+// Honest end state for a pro who answers "No" to the Orange County question:
+// saveCompanyAction (../actions.ts) redirects here with ?waitlisted=1 instead
+// of dumping them back on this blank form having lost every field they typed.
+// Same tone as the homeowner out_of_area step
+// (src/app/onboarding/OnboardingForm.tsx): state plainly what happened, and
+// always leave a working way out.
+function WaitlistedPanel() {
+  return (
+    <div className="space-y-4 overflow-hidden rounded-2xl border border-stone-200 bg-white px-6 py-10 text-center shadow-sm dark:border-white/10 dark:bg-stone-800">
+      <div className="flex justify-center">
+        <Hammer className="h-8 w-8 text-hearth-700 dark:text-hearth-400" aria-hidden="true" />
+      </div>
+      <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
+        You&apos;re on the waitlist
+      </h1>
+      <p className="text-sm text-stone-600 dark:text-stone-300">
+        Hearth is matching pros in Orange County, CA only right now. We added
+        you to the waitlist and will reach out when Hearth opens in your area.
+      </p>
+      <p className="text-sm text-stone-500 dark:text-stone-400">
+        There&apos;s nothing else to set up here yet since Hearth only covers
+        Orange County, CA right now.
+      </p>
+      <form action="/auth/signout" method="post">
+        <button
+          type="submit"
+          className="text-sm text-stone-500 hover:underline dark:text-stone-400"
+        >
+          Sign out
+        </button>
+      </form>
+    </div>
+  );
+}
+
 // First-time company setup. Same visual language as the edit-profile form
 // (matching fields + category cards) but lean: no tabs, no account-security, no
 // cover/logo upload, and the license is an open input since it's set here first.
 // Posts to saveCompanyAction, which inserts the new contractor row.
-export default function OnboardingCompanyForm({
+//
+// Wrapped in its own Suspense boundary below because useSearchParams needs
+// one; kept self-contained here rather than threading the query param through
+// the server page, so this file alone covers both the form and its honest
+// waitlisted end state.
+function OnboardingCompanyFormInner({
   defaultEmail,
   defaultReferralCode = "",
 }: {
   defaultEmail: string;
   defaultReferralCode?: string;
 }) {
+  const searchParams = useSearchParams();
+  if (searchParams.get("waitlisted") === "1") {
+    return <WaitlistedPanel />;
+  }
+
   return (
     <form
       action={saveCompanyAction}
@@ -138,20 +185,37 @@ export default function OnboardingCompanyForm({
               </div>
 
               <div>
-                <label className="flex items-start gap-2 text-sm text-stone-700 dark:text-stone-300">
-                  <input
-                    type="checkbox"
-                    name="serves_orange_county"
-                    value="true"
-                    required
-                    className="mt-0.5 h-4 w-4 rounded border-stone-300 text-hearth-600 focus:ring-hearth-500 dark:border-white/20"
-                  />
-                  <span>
-                    I serve homes in Orange County, California.
-                  </span>
-                </label>
+                <fieldset>
+                  <legend className="label">
+                    Do you serve Orange County, California?
+                  </legend>
+                  <div className="space-y-2">
+                    <label className="flex items-start gap-2 text-sm text-stone-700 dark:text-stone-300">
+                      <input
+                        type="radio"
+                        name="serves_orange_county"
+                        value="true"
+                        required
+                        className="mt-0.5 h-4 w-4 border-stone-300 text-hearth-600 focus:ring-hearth-500 dark:border-white/20"
+                      />
+                      <span>Yes, I serve Orange County.</span>
+                    </label>
+                    <label className="flex items-start gap-2 text-sm text-stone-700 dark:text-stone-300">
+                      <input
+                        type="radio"
+                        name="serves_orange_county"
+                        value="false"
+                        required
+                        className="mt-0.5 h-4 w-4 border-stone-300 text-hearth-600 focus:ring-hearth-500 dark:border-white/20"
+                      />
+                      <span>No, notify me when you expand to my area.</span>
+                    </label>
+                  </div>
+                </fieldset>
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                   Hearth is currently matching pros in Orange County, CA only.
+                  Choose &quot;No&quot; and we&apos;ll add you to the waitlist
+                  instead of setting up a company profile.
                 </p>
               </div>
 
@@ -220,5 +284,16 @@ export default function OnboardingCompanyForm({
         </div>
       </div>
     </form>
+  );
+}
+
+export default function OnboardingCompanyForm(props: {
+  defaultEmail: string;
+  defaultReferralCode?: string;
+}) {
+  return (
+    <Suspense fallback={null}>
+      <OnboardingCompanyFormInner {...props} />
+    </Suspense>
   );
 }

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { DEFAULT_LIFESPANS } from "@/lib/health";
 import { setFlash } from "@/lib/flash";
+import { ok, err, type ActionResult } from "@/lib/actionResult";
 import { labelFor, SYSTEM_TYPES } from "@/lib/constants";
 
 // "MM/YYYY" from the simple text field back to a "YYYY-MM-01" date for storage.
@@ -82,9 +83,19 @@ async function attachPhotos(
   );
 }
 
-export async function addSystemAction(formData: FormData) {
+// Used two ways: as a plain <form action> for the dashboard's one-tap quick-add
+// chips (which never look at the return value, only the setFlash toast), and
+// as a programmatic `await` from SystemForm's submit wrapper (which needs the
+// ActionResult to keep the panel open and show an inline error on failure).
+// Both paths get a flash + a typed result so neither call site is left guessing.
+export async function addSystemAction(
+  formData: FormData
+): Promise<ActionResult<{ id: string }>> {
   const property = await getActiveProperty();
-  if (!property) throw new Error("No active property");
+  if (!property) {
+    setFlash("Couldn't add that system. Try again.", "error");
+    return err("No active property");
+  }
   const supabase = createClient();
 
   const num = (k: string) => {
@@ -126,18 +137,40 @@ export async function addSystemAction(formData: FormData) {
       .single());
   }
 
-  if (error || !row) throw new Error(error?.message ?? "insert failed");
+  if (error || !row) {
+    // Any photos the owner already picked were uploaded straight to storage
+    // by PhotoUpload before this insert ran, so a failure here leaves them
+    // orphaned (no DB row references them yet). Keeping this simple: surface
+    // the error and let the owner retry from the still-open form, which will
+    // attach those same photo URLs once the insert succeeds. Sweeping up
+    // true orphans (the owner gives up instead of retrying) is left to
+    // future janitor work, not built here.
+    setFlash("Couldn't add that system. Try again.", "error");
+    return err(error?.message ?? "insert failed");
+  }
   await attachPhotos(formData, property.id, row.id);
   setFlash(`Added ${labelFor(SYSTEM_TYPES, systemType)}`);
   revalidatePath("/dashboard");
   revalidatePath("/home-report");
+  return ok({ id: row.id });
+}
+
+// Form-action wrapper, toast-only callers: a plain <form action> prop needs a
+// void-returning function, but addSystemAction returns an ActionResult for
+// SystemForm's programmatic await. This just discards the result; the flash
+// set inside addSystemAction is the only feedback these callers show.
+export async function addSystemFormAction(formData: FormData): Promise<void> {
+  await addSystemAction(formData);
 }
 
 // One-tap add: create a system with just its type + default lifespan. The owner
 // can fill in year/condition later. Powers the quick-add chips on the profile.
 export async function quickAddSystemAction(formData: FormData) {
   const property = await getActiveProperty();
-  if (!property) throw new Error("No active property");
+  if (!property) {
+    setFlash("Couldn't add that system. Try again.", "error");
+    return;
+  }
   const supabase = createClient();
 
   const systemType = formData.get("system_type") as string;
@@ -146,24 +179,36 @@ export async function quickAddSystemAction(formData: FormData) {
     system_type: systemType,
     expected_lifespan_years: DEFAULT_LIFESPANS[systemType] ?? null,
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    setFlash("Couldn't add that system. Try again.", "error");
+    return;
+  }
   setFlash(`Added ${labelFor(SYSTEM_TYPES, systemType)}`);
   revalidatePath("/dashboard");
   revalidatePath("/home-report");
 }
 
+// Plain <form action>, not called programmatically anywhere, so a setFlash
+// error (rather than an ActionResult no one reads) is the right signal.
 export async function deleteSystemAction(formData: FormData) {
   const id = formData.get("id") as string;
   const supabase = createClient();
   // RLS guarantees the row belongs to the caller's property.
   const { error } = await supabase.from("home_systems").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) {
+    setFlash("Couldn't remove that system. Try again.", "error");
+    return;
+  }
   setFlash("System removed", "info");
   revalidatePath("/dashboard");
   revalidatePath("/home-report");
 }
 
-export async function updateSystemAction(formData: FormData) {
+// Called programmatically from SystemRow's edit form so it can keep the panel
+// open with the owner's edits intact and show an inline error on failure.
+export async function updateSystemAction(
+  formData: FormData
+): Promise<ActionResult> {
   const id = formData.get("id") as string;
   const supabase = createClient();
   const num = (k: string) => {
@@ -195,18 +240,31 @@ export async function updateSystemAction(formData: FormData) {
       .update(baseUpdate)
       .eq("id", id));
   }
-  if (error) throw new Error(error.message);
+  if (error) {
+    // As with addSystemAction, any newly-picked photos already sit in
+    // storage by this point; a failed update just leaves them unattached.
+    // Simple path: report the error, keep the edit form open so the owner
+    // can retry (same photo URLs re-attach on success). Orphan cleanup is
+    // future janitor work, not built here.
+    return err(error.message);
+  }
 
   const property = await getActiveProperty();
   if (property) await attachPhotos(formData, property.id, id);
   setFlash("System updated");
   revalidatePath("/dashboard");
   revalidatePath("/home-report");
+  return ok();
 }
 
+// Not called from anywhere today (no home-details form wires it up yet), but
+// kept crash-proof to match the rest of this file rather than left throwing.
 export async function updatePropertyAction(formData: FormData) {
   const property = await getActiveProperty();
-  if (!property) throw new Error("No active property");
+  if (!property) {
+    setFlash("Couldn't save home details. Try again.", "error");
+    return;
+  }
   const supabase = createClient();
 
   const num = (k: string) => {
@@ -228,7 +286,10 @@ export async function updatePropertyAction(formData: FormData) {
     })
     .eq("id", property.id);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    setFlash("Couldn't save home details. Try again.", "error");
+    return;
+  }
   setFlash("Home details saved");
   revalidatePath("/dashboard");
   revalidatePath("/home-report");

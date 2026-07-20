@@ -10,7 +10,7 @@ Ran 10 QA agents + 2 red-team agents (all live-verified against the running dev 
 - MIGRATION 0089_referral_and_flood_fixes.sql (verified ship): closes 0088 Shape-B waived-recharge referral leak; adds messages send-rate-limit trigger (30/60s, mirrors 0087 support/reports); grants is_active_member to anon (fixes 42501 on anon properties select).
 - MIGRATION 0090_membership_credit_clawback.sql (verified ship after fixing an over-claw bug): reverse_membership_credit + membership_reversals guard table, wired into stripe webhook dispute/refund handlers; mirrors reverse_deposit. No-match branch reverses 0 (never claws the membership PRICE). Uses stripe.invoicePayments.list (SDK v22 removed Charge.invoice) - RECOMMEND a Stripe test-mode trigger before trusting invoice resolution end to end.
 - Reliability batch: cron batching (alerts/maintenance-reminders/aging-deals now chunked Promise.all), Checkr webhook returns 500 on real DB error/failed update so Checkr retries, ghost-protection notifications now via sendNotification (email/SMS, batching preserved), home-alerts parallelized (no cache - user-specific), pro-past-jobs real-tier cap. package.json em-dash removed.
-- TO PASTE ON LIVE DB (both idempotent, verified): 0089 then 0090.
+- ~~TO PASTE ON LIVE DB: 0089 then 0090.~~ DONE: live DB probe-verified caught up through 0092 (0089/0090 via APPLY_0089_0090, 0091/0092 via APPLY_0091_0092, both bundles spent in applied-bundles/). No live-DB migration work outstanding.
 
 ### Legal CODE fixes (the 5 code-fixable items) - DONE + VERIFIED (uncommitted, owner asked for them)
 1. src/app/privacy/page.tsx: added the free-tier Gemini disclosure paragraph in the AI section + link to /ai-disclosure (the "see the AI section above" pointer now resolves).

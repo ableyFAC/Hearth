@@ -18,16 +18,33 @@ export default function ContractorReviews({
   const [open, setOpen] = useState(false);
   const [reviews, setReviews] = useState<Review[] | null>(null);
   const [loading, setLoading] = useState(false);
+  // Distinct from "reviews is an empty array": that's zero written reviews, a
+  // normal state. This is "we don't actually know", so the two don't get the
+  // same copy. Left cleared only by a fetch that succeeds, so reopening after
+  // a failure retries instead of showing the same stale error forever.
+  const [failed, setFailed] = useState(false);
 
   async function toggle() {
     if (!open && reviews === null) {
       setLoading(true);
-      const supabase = createClient();
-      const { data } = await supabase.rpc("contractor_reviews", {
-        p_contractor: contractorId,
-      });
-      setReviews((data as Review[]) ?? []);
-      setLoading(false);
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase.rpc("contractor_reviews", {
+          p_contractor: contractorId,
+        });
+        if (error) {
+          setFailed(true);
+        } else {
+          setFailed(false);
+          setReviews((data as Review[]) ?? []);
+        }
+      } catch {
+        // A rejected call (network blip, server hiccup) must not strand the
+        // button in its loading state forever.
+        setFailed(true);
+      } finally {
+        setLoading(false);
+      }
     }
     setOpen((v) => !v);
   }
@@ -45,6 +62,11 @@ export default function ContractorReviews({
       {open && (
         <div className="mt-2 space-y-2">
           {loading && <p className="text-xs text-stone-500 dark:text-stone-400">Loading…</p>}
+          {!loading && failed && (
+            <p role="alert" className="text-xs text-red-600 dark:text-red-400">
+              Couldn&apos;t load reviews right now.
+            </p>
+          )}
           {reviews?.map((r, i) => (
             <div key={i} className="rounded-lg border border-stone-200 p-2 dark:border-white/10">
               <div className="flex items-center justify-between">

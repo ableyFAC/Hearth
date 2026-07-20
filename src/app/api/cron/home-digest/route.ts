@@ -330,12 +330,12 @@ async function runCron(req: NextRequest) {
   // are configured (same pattern as the pro weekly digest).
   const userById = new Map<
     string,
-    { id: string; email: string | null; phone: string | null }
+    { id: string; email: string | null; phone: string | null; sms_consent: boolean | null }
   >();
   for (const ids of chunk(digests.map((d) => d.userId), QUERY_CHUNK)) {
     const { data: users } = await supabase
       .from("users")
-      .select("id, email, phone")
+      .select("id, email, phone, sms_consent")
       .in("id", ids)
       .order("id", { ascending: true });
     for (const u of users ?? []) userById.set(u.id, u);
@@ -356,6 +356,7 @@ async function runCron(req: NextRequest) {
             url: DIGEST_URL,
             email: contact?.email ?? null,
             phone: contact?.phone ?? null,
+            smsConsent: contact?.sms_consent === true,
           });
           if (sent) notified += 1;
         } catch {

@@ -24,7 +24,7 @@ import {
 import { planTitles } from "@/lib/maintenancePlan";
 import SystemForm from "../profile/SystemForm";
 import SystemRow from "../profile/SystemRow";
-import { addSystemAction } from "../profile/actions";
+import { addSystemFormAction } from "../profile/actions";
 import Confetti from "@/components/Confetti";
 import SeasonalChecklist from "@/components/SeasonalChecklist";
 import ChecklistProvider from "@/components/ChecklistProvider";
@@ -267,14 +267,18 @@ export default async function HomePage({
     const them = plural ? "them" : "it";
     const ageOnly = !isMust(s);
     const basedOnAge = ageOnly ? `, based on ${its} age` : "";
+    // "Plan it" starts a job posting (prefilled with this system's details);
+    // "Learn more" is a lower-stakes ask (aging, not yet due) so it points at
+    // the maintenance guides instead of the contractor flow.
+    const contractorHref =
+      `/contractors?category=${cat}` +
+      `&desc=${encodeURIComponent(desc)}` +
+      (urgent ? "&timing=asap" : "");
     briefing.push({
       text: must
         ? `Your ${name.toLowerCase()} ${verb} near the end of ${its} life${basedOnAge}. It is worth planning ahead.`
         : `Your ${name.toLowerCase()} ${verb} aging${basedOnAge}. Keep an eye on ${them}.`,
-      href:
-        `/contractors?category=${cat}` +
-        `&desc=${encodeURIComponent(desc)}` +
-        (urgent ? "&timing=asap" : ""),
+      href: must ? contractorHref : "/learn",
       cta: must ? "Plan it" : "Learn more",
     });
     seenCat.add(cat);
@@ -1051,7 +1055,7 @@ export default async function HomePage({
                 { type: "hvac", label: "+ HVAC" },
                 { type: "water_heater", label: "+ Water heater" },
               ].map((q) => (
-                <form key={q.type} action={addSystemAction}>
+                <form key={q.type} action={addSystemFormAction}>
                   <input type="hidden" name="system_type" value={q.type} />
                   <button className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-hearth-500 dark:hover:text-hearth-300">
                     {q.label}

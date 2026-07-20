@@ -1,10 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import type { ActionResult } from "@/lib/actionResult";
 
 // "Leave a review" / "Edit review" button shown on a closed job's row. Opens a
 // star + comment form that submits through the saveReviewAction server action
 // (which routes to the leave_review RPC). Prefills when a review already exists.
+//
+// The form is submitted programmatically (not a plain <form action>) so the
+// modal only closes, and the share follow-up only appears, once
+// saveReviewAction actually returns ok(): a failed rating (bad RPC, network
+// hiccup) keeps the modal open with the picked stars and typed comment
+// intact, and shows the error inline instead of closing optimistically.
 //
 // After a fresh submit of 4 or 5 stars, a "Share your pro" follow-up appears
 // underneath: word of mouth is how most homeowners find a pro, and the moment
@@ -20,7 +27,7 @@ export default function ReviewButton({
 }: {
   leadId: string;
   contractorName: string;
-  action: (formData: FormData) => Promise<void>;
+  action: (formData: FormData) => Promise<ActionResult>;
   existing?: { rating: number; comment: string | null } | null;
   // The pro's public page PATH (e.g. "/p/<id>"). The full URL is built here
   // on the client from window.location.origin, the same way PublicPageCard
@@ -32,6 +39,8 @@ export default function ReviewButton({
   const [open, setOpen] = useState(false);
   const [rating, setRating] = useState(existing?.rating ?? 0);
   const [hover, setHover] = useState(0);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   // Set on a fresh submit of >= 4 stars; drives the share follow-up below.
   // Component state only, cleared by "Not now": no table, no persistence.
   const [justRatedHigh, setJustRatedHigh] = useState(false);
@@ -89,10 +98,25 @@ export default function ReviewButton({
             </p>
 
             <form
-              action={action}
-              onSubmit={() => {
-                setOpen(false);
-                if (rating >= 4) setJustRatedHigh(true);
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setPending(true);
+                setError(null);
+                try {
+                  const res = await action(new FormData(e.currentTarget));
+                  if (res.ok) {
+                    setOpen(false);
+                    if (rating >= 4) setJustRatedHigh(true);
+                  } else {
+                    setError(res.error);
+                  }
+                } catch {
+                  // A rejected server action (network blip, server hiccup)
+                  // must not strand the button in its pending state.
+                  setError("Something went wrong. Please try again.");
+                } finally {
+                  setPending(false);
+                }
               }}
               className="mt-4 space-y-4"
             >
@@ -126,20 +150,27 @@ export default function ReviewButton({
                 className="input w-full"
               />
 
+              {error && (
+                <p role="alert" className="text-sm font-medium text-red-600 dark:text-red-400">
+                  {error}
+                </p>
+              )}
+
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
                   className="btn-secondary flex-1"
+                  disabled={pending}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={rating === 0}
+                  disabled={rating === 0 || pending}
                   className="btn-primary flex-1 disabled:opacity-50"
                 >
-                  {existing ? "Update" : "Submit"}
+                  {pending ? "Saving…" : existing ? "Update" : "Submit"}
                 </button>
               </div>
             </form>

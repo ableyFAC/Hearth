@@ -430,13 +430,14 @@ export default function PrivacyPage() {
             that data.
           </p>
           <p className="mt-3 leading-relaxed">
-            Honestly, one thing is not a third party: Hearth logs a small
+            Honestly, one thing is not a third party: Hearth records a small
             amount of its own first-party product-usage events, like which
-            feature you used (for example, posting a job from a chat
-            answer), so we can see what is and isn&apos;t working and improve
-            the app. That data stays on Hearth&apos;s own server, is never
-            sold or shared with anyone, and today it is only written to a
-            server log, not sent to any analytics company.
+            feature you used (for example, that a job was posted, or that the
+            demo video was played), so we can see what is and isn&apos;t
+            working and improve the app. Those events are stored as rows in
+            Hearth&apos;s own database, linked to your account when you&apos;re
+            signed in, and are never sold or shared with any third-party ad or
+            analytics company.
           </p>
         </section>
 

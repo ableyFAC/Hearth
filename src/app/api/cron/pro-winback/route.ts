@@ -160,12 +160,12 @@ async function runCron(req: NextRequest) {
   // are configured (same pattern as proAlerts.ts).
   const userById = new Map<
     string,
-    { id: string; email: string | null; phone: string | null }
+    { id: string; email: string | null; phone: string | null; sms_consent: boolean | null }
   >();
   for (const ids of chunk(contractors.map((c) => c.user_id), QUERY_CHUNK)) {
     const { data: users } = await supabase
       .from("users")
-      .select("id, email, phone")
+      .select("id, email, phone, sms_consent")
       .in("id", ids)
       .order("id", { ascending: true });
     for (const u of users ?? []) userById.set(u.id, u);
@@ -260,6 +260,7 @@ async function runCron(req: NextRequest) {
         url: CREDIT_URL,
         email: contact?.email ?? null,
         phone: contact?.phone ?? null,
+        smsConsent: contact?.sms_consent === true,
       });
     } catch {
       // One bad contractor shouldn't stop the rest of the run.

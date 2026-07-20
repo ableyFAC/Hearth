@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendNotification } from "@/lib/notify";
 import { getCurrentContractor } from "@/lib/contractor";
 import { dollarsToCents, formatUSDCents } from "@/lib/quotes";
 import type { QuoteLineItem, InvoiceLineItem } from "@/lib/database.types";
@@ -99,12 +100,24 @@ export async function sendQuoteAction(formData: FormData) {
         .maybeSingle();
       if (property?.user_id) {
         const admin = createAdminClient();
-        await admin.from("notifications").insert({
-          user_id: property.user_id,
+        // "Messages from pros" (pro_messages) gates the email/SMS channels
+        // only, never the in-app row: an unset pref reads as enabled, same
+        // default as the notification settings form.
+        const { data: owner } = await admin
+          .from("users")
+          .select("email, phone, sms_consent, notification_prefs")
+          .eq("id", property.user_id)
+          .maybeSingle();
+        const wantsProMessages = owner?.notification_prefs?.pro_messages ?? true;
+        await sendNotification(admin, {
+          userId: property.user_id,
           kind: "quote_sent",
           title: `${contractor.name} sent you a quote`,
           body: `${formatUSDCents(totalCents)} total. Check the chat to see the details.`,
           url: `/chats?lead=${leadId}`,
+          email: wantsProMessages ? owner?.email ?? null : null,
+          phone: wantsProMessages ? owner?.phone ?? null : null,
+          smsConsent: wantsProMessages ? owner?.sms_consent === true : false,
         });
       }
     }
@@ -224,12 +237,24 @@ export async function createInvoiceAction(formData: FormData) {
       .maybeSingle();
     if (property?.user_id) {
       const admin = createAdminClient();
-      await admin.from("notifications").insert({
-        user_id: property.user_id,
+      // "Messages from pros" (pro_messages) gates the email/SMS channels
+      // only, never the in-app row: an unset pref reads as enabled, same
+      // default as the notification settings form.
+      const { data: owner } = await admin
+        .from("users")
+        .select("email, phone, sms_consent, notification_prefs")
+        .eq("id", property.user_id)
+        .maybeSingle();
+      const wantsProMessages = owner?.notification_prefs?.pro_messages ?? true;
+      await sendNotification(admin, {
+        userId: property.user_id,
         kind: "invoice_sent",
         title: `${contractor.name} sent you an invoice`,
         body: `${formatUSDCents(totalCents)} total. Check the chat to review and sign.`,
         url: `/chats?lead=${leadId}`,
+        email: wantsProMessages ? owner?.email ?? null : null,
+        phone: wantsProMessages ? owner?.phone ?? null : null,
+        smsConsent: wantsProMessages ? owner?.sms_consent === true : false,
       });
     }
   } catch (err) {

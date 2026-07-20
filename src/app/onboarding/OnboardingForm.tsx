@@ -2,9 +2,9 @@
 
 import NoticeAtCollection from "@/components/NoticeAtCollection";
 import { useState } from "react";
-import { lookupParcelAction, claimPropertyAction } from "./actions";
+import { lookupParcelAction, claimPropertyAction, joinMarketWaitlistAction } from "./actions";
 import type { ParcelFacts } from "@/lib/parcel";
-import { PROPERTY_TYPES } from "@/lib/constants";
+import { PROPERTY_TYPES, FOUNDER } from "@/lib/constants";
 import { isOrangeCountyZip } from "@/lib/serviceArea";
 import { Hammer, Bell, FileText } from "lucide-react";
 
@@ -28,12 +28,17 @@ export default function OnboardingForm({
 }: {
   next?: string | null;
 }) {
-  const [step, setStep] = useState<"address" | "confirm">("address");
+  const [step, setStep] = useState<"address" | "confirm" | "out_of_area">(
+    "address"
+  );
   const [street, setStreet] = useState("");
   const [zip, setZip] = useState("");
   const [facts, setFacts] = useState<ParcelFacts | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Whether the out-of-area waitlist save actually went through - drives the
+  // honest vs. "we couldn't save you" copy on the out_of_area panel below.
+  const [waitlistSaved, setWaitlistSaved] = useState(true);
 
   async function onLookup(e: React.FormEvent) {
     e.preventDefault();
@@ -56,9 +61,24 @@ export default function OnboardingForm({
     // Fast client-side feedback for the launch restriction so an out-of-area
     // ZIP never even reaches the server lookup. lookupParcelAction enforces
     // the same check server-side (before its RentCast call) - that's the
-    // real gate, this is just quicker, kinder feedback.
+    // real gate, this is just quicker, kinder feedback. Because this check
+    // short-circuits BEFORE lookupParcelAction ever runs, the waitlist save
+    // has to happen right here too, or a rejected visitor would never
+    // actually land on the list despite being told they had.
     if (!isOrangeCountyZip(z)) {
-      setError(OC_ONLY_MESSAGE);
+      setBusy(true);
+      try {
+        const result = await joinMarketWaitlistAction(z);
+        setWaitlistSaved(result.ok);
+      } catch {
+        // A rejected server action (network blip, server hiccup) must not
+        // strand the button in its busy state - still land on the
+        // out_of_area step, just with the honest "couldn't save you" copy.
+        setWaitlistSaved(false);
+      } finally {
+        setBusy(false);
+      }
+      setStep("out_of_area");
       return;
     }
 
@@ -165,7 +185,7 @@ export default function OnboardingForm({
               <input
                 id="zip"
                 className="input"
-                placeholder="94110"
+                placeholder="92646"
                 inputMode="numeric"
                 maxLength={10}
                 value={zip}
@@ -405,6 +425,46 @@ export default function OnboardingForm({
             </button>
           </div>
         </form>
+      )}
+
+      {/* Out-of-area: an honest end state, not a form that keeps rejecting
+          the same visitor with nowhere to go. States plainly what happened,
+          confirms (or corrects) the waitlist claim, and always leaves a
+          working way out - either try again with a different address, or
+          sign out entirely. */}
+      {step === "out_of_area" && (
+        <div className="space-y-4 text-center">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+            Hearth isn&apos;t in your area yet
+          </h2>
+          <p className="text-sm text-stone-600 dark:text-stone-300">
+            {waitlistSaved
+              ? OC_ONLY_MESSAGE
+              : `We couldn't save you to the waitlist. Email us at ${FOUNDER.email} and we'll add you by hand.`}
+          </p>
+          <p className="text-sm text-stone-500 dark:text-stone-400">
+            There&apos;s nothing else to set up here yet since Hearth only
+            covers Orange County, CA right now.
+          </p>
+          <button
+            type="button"
+            className="btn-secondary w-full"
+            onClick={() => {
+              setError(null);
+              setStep("address");
+            }}
+          >
+            Try a different address
+          </button>
+          <form action="/auth/signout" method="post">
+            <button
+              type="submit"
+              className="text-sm text-stone-500 hover:underline dark:text-stone-400"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
       )}
     </div>
   );

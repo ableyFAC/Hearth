@@ -9,6 +9,7 @@ import VoiceButton from "@/components/VoiceButton";
 import Markdown from "@/components/Markdown";
 import AiNotice from "@/components/AiNotice";
 import { track } from "@/lib/analytics";
+import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
 
 type Msg = {
   role: "user" | "assistant";
@@ -541,7 +542,7 @@ export default function AskHearth({
     setPendingImage(null);
     setLoading(true);
     try {
-      const res = await fetch(endpoint, {
+      const res = await fetchWithTimeout(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
         // Drop the leading canned greeting before sending history to the model.
@@ -560,12 +561,17 @@ export default function AskHearth({
       ];
       setMessages(updated);
       persist(updated);
-    } catch {
+    } catch (e) {
+      // Timeout gets its own honest message; the chat itself is the retry
+      // affordance, since the form is re-enabled below and the owner can just
+      // ask again.
       const updated: Msg[] = [
         ...next,
         {
           role: "assistant",
-          content: "Something went wrong. Please try again.",
+          content: isTimeoutError(e)
+            ? "That took too long. Try again."
+            : "Something went wrong. Please try again.",
           ts: Date.now(),
         },
       ];

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { confirmSystemAction } from "./actions";
 import { labelFor, iconFor, SYSTEM_TYPES } from "@/lib/constants";
 import TakePhotoButton from "@/components/TakePhotoButton";
 import type { HomeSystem } from "@/lib/database.types";
+import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
 
 type Suggestion = {
   brand: string | null;
@@ -70,6 +71,12 @@ export default function SystemCaptureCard({
     null
   );
   const [saving, startSave] = useTransition();
+  // Lets the Cancel button below abort an in-flight read and lets the catch
+  // block tell an owner-initiated cancel apart from a real failure (so
+  // cancelling doesn't also flash an error note). Same pattern as
+  // InspectionUpload.tsx.
+  const abortRef = useRef<AbortController | null>(null);
+  const cancelledRef = useRef(false);
 
   const name = labelFor(SYSTEM_TYPES, system.system_type);
   const Icon = iconFor(SYSTEM_TYPES, system.system_type);
@@ -96,13 +103,16 @@ export default function SystemCaptureCard({
     // Local preview only; nothing is written to storage (see the note above
     // the component).
     setPreview(URL.createObjectURL(file));
+    cancelledRef.current = false;
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     let read: Suggestion | null = null;
     let failNote =
       "Couldn't read it automatically. Fill in what you can and confirm.";
     try {
       const b64 = await toBase64(file);
-      const resp = await fetch("/api/confirm-system", {
+      const resp = await fetchWithTimeout("/api/confirm-system", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -110,7 +120,9 @@ export default function SystemCaptureCard({
           mime: file.type || "image/jpeg",
           system_id: system.id,
         }),
+        signal: controller.signal,
       });
+      abortRef.current = null;
       const data = await resp.json().catch(() => null);
       read = data?.suggestion ?? null;
       // Tell the truth about WHY nothing was read: a used-up daily AI limit
@@ -122,8 +134,18 @@ export default function SystemCaptureCard({
         failNote =
           "Automatic reading isn't set up yet. Fill in what you can and confirm.";
       }
-    } catch {
+    } catch (e) {
+      abortRef.current = null;
+      // Cancel already reset the phase and left no note - don't overwrite
+      // that with a failure message for an abort the owner asked for.
+      if (cancelledRef.current) {
+        cancelledRef.current = false;
+        return;
+      }
       read = null;
+      if (isTimeoutError(e)) {
+        failNote = "That took too long. Fill in what you can and confirm.";
+      }
     }
 
     setSuggestion(read ?? BLANK_SUGGESTION);
@@ -133,6 +155,19 @@ export default function SystemCaptureCard({
         : failNote
     );
     setPhase("review");
+  }
+
+  // Lets the owner back out of "Reading the data plate..." instead of being
+  // stuck waiting on a hung request with no escape.
+  function cancelCapture() {
+    cancelledRef.current = true;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    if (preview) URL.revokeObjectURL(preview);
+    setPhase("idle");
+    setSuggestion(null);
+    setPreview(null);
+    setNote(null);
   }
 
   function skipToManual() {
@@ -218,6 +253,16 @@ export default function SystemCaptureCard({
           {phase === "working" ? "⏳ " : ""}
           {note}
         </p>
+      )}
+
+      {phase === "working" && (
+        <button
+          type="button"
+          onClick={cancelCapture}
+          className="block text-xs text-stone-500 hover:text-stone-600 dark:text-stone-400 dark:hover:text-stone-300"
+        >
+          Cancel
+        </button>
       )}
 
       {phase === "review" && suggestion && (

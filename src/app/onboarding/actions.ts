@@ -13,6 +13,7 @@ import { setFlash } from "@/lib/flash";
 import { safeNextPath } from "@/lib/safeNext";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import { isOrangeCountyZip } from "@/lib/serviceArea";
+import { ok, err, type ActionResult } from "@/lib/actionResult";
 
 // The one message shown by every OC-only gate (this file's two checks, plus
 // the fast client-side copy in OnboardingForm.tsx) - kept as a single
@@ -42,6 +43,42 @@ const CURRENT_YEAR = new Date().getFullYear();
 // only there for faster client-side feedback.
 const MIN_ADDRESS_LENGTH = 5;
 
+// Records an out-of-area lead in market_waitlist (0074) for the signed-in
+// user, so Hearth can email them when it expands to their ZIP. Shared by
+// every OC-only gate below AND by OnboardingForm.tsx's own faster
+// client-side ZIP check: that check short-circuits before ever calling
+// lookupParcelAction, so without a direct call here someone rejected right
+// there would never actually land on the waitlist. Returns an honest
+// ActionResult instead of throwing, since the caller needs to tell the user
+// plainly if the save itself failed, not just that they're out of area.
+export async function joinMarketWaitlistAction(
+  zip: string
+): Promise<ActionResult<null>> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user?.email) {
+    return err("Please sign in to join the waitlist.");
+  }
+
+  const admin = createAdminClient();
+  const { error } = await (admin as any).from("market_waitlist").insert({
+    role: "homeowner",
+    email: user.email,
+    zip: zip.trim().slice(0, 5) || null,
+  });
+
+  // 23505: the unique index on (lower(email), role) means this email is
+  // already on the waitlist - that's the outcome we wanted anyway, not a
+  // real failure. Any other error (including the table not existing yet on
+  // a live DB that hasn't run 0074) is a genuine save failure.
+  if (error && error.code !== "23505") {
+    return err("We couldn't save you to the waitlist.");
+  }
+  return ok(null);
+}
+
 // Step 1: pull baseline facts from the parcel layer for the entered address.
 export async function lookupParcelAction(
   street: string,
@@ -61,9 +98,12 @@ export async function lookupParcelAction(
   }
   // Launch-restriction gate: checked before the rate limiter/RentCast call
   // below so an out-of-area address never spends a billed RentCast lookup.
-  // No waitlist insert here - claimPropertyAction (the step that actually
-  // commits the user to an address) is where that happens.
+  // OnboardingForm.tsx runs the same check client-side first and normally
+  // never lets a rejected ZIP reach this action at all - this is the
+  // fallback path (JS disabled, a modified client, or a direct call), so it
+  // still logs the lead to the waitlist rather than silently dropping it.
   if (!isOrangeCountyZip(zip.trim())) {
+    await joinMarketWaitlistAction(zip.trim());
     throw new Error(OC_ONLY_MESSAGE);
   }
 
@@ -136,20 +176,13 @@ export async function claimPropertyAction(formData: FormData) {
   }
 
   // Launch-restriction gate: the authoritative one, since this is the step
-  // that actually commits the address to a claimed home. Best-effort log the
-  // lead to the waitlist (migration 0074) before rejecting - a failed insert
-  // (e.g. live DB hasn't run 0074 yet) must never block the message itself
-  // from being shown, so it's swallowed rather than surfaced.
+  // that actually commits the address to a claimed home. Log the lead to the
+  // waitlist (joinMarketWaitlistAction above) before rejecting - a failed
+  // save (e.g. live DB hasn't run 0074 yet) must never block the message
+  // itself from being shown, so its result is ignored here, not surfaced.
   const claimZip = ((formData.get("zip") as string) ?? "").trim().slice(0, 5);
   if (!isOrangeCountyZip(claimZip)) {
-    try {
-      const admin = createAdminClient();
-      await (admin as any)
-        .from("market_waitlist")
-        .insert({ role: "homeowner", zip: claimZip, email: user.email });
-    } catch {
-      // Best-effort only - see comment above.
-    }
+    await joinMarketWaitlistAction(claimZip);
     throw new Error(OC_ONLY_MESSAGE);
   }
 

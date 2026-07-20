@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import SubmitButton from "@/components/SubmitButton";
 
 // The one account-security surface, shared by the homeowner page
 // (/account/security) and the pro profile's Account Security tab so the two
@@ -107,9 +108,9 @@ export default function AccountSecurityPanel({
               until you click it.
             </p>
           </div>
-          <button type="submit" className="btn-primary">
+          <SubmitButton className="btn-primary" pendingLabel="Updating…">
             Update Email
-          </button>
+          </SubmitButton>
         </form>
       </div>
 
@@ -166,13 +167,13 @@ export default function AccountSecurityPanel({
             </div>
           </div>
 
-          <button type="submit" className="btn-primary">
+          <SubmitButton className="btn-primary" pendingLabel="Updating…">
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
               <path d="M17 21v-8H7v8M7 3v5h8" />
             </svg>
             Update Password
-          </button>
+          </SubmitButton>
         </form>
       </div>
 
@@ -190,9 +191,9 @@ export default function AccountSecurityPanel({
             </p>
           </div>
           <form action={signOutOthersAction}>
-            <button type="submit" className="btn-secondary whitespace-nowrap">
+            <SubmitButton className="btn-secondary whitespace-nowrap" pendingLabel="Signing out…">
               Sign out everywhere else
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </div>
@@ -274,12 +275,12 @@ export default function AccountSecurityPanel({
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <button
-                  type="submit"
-                  className="whitespace-nowrap rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+                <SubmitButton
+                  className="whitespace-nowrap rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  pendingLabel="Deleting…"
                 >
                   Permanently delete account
-                </button>
+                </SubmitButton>
                 <button
                   type="button"
                   onClick={() => setConfirmingDelete(false)}

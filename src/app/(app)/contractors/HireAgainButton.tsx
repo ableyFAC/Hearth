@@ -2,11 +2,21 @@
 
 import { useState } from "react";
 import { JOB_CATEGORIES } from "@/lib/constants";
+import type { ActionResult } from "@/lib/actionResult";
+
+const MIN_DESCRIPTION = 20;
 
 // "Hire again" button on a My Pros row. Opens a small form (category
 // preselected from the last job, free-text description) that submits through
 // rehireProAction, which creates the repeat lead free (no apply fee) and
 // routes to the new chat thread with that pro.
+//
+// Submitted programmatically (not a plain <form action>) so the modal only
+// closes once rehireProAction actually returns ok(): a failure keeps it open
+// with the typed description intact and shows the error inline. The
+// description is trimmed before the length check on the client too, not just
+// the browser's minLength (which counts raw characters): the server already
+// trims, so 20 spaces used to pass here and fail there with no useful error.
 export default function HireAgainButton({
   contractorId,
   contractorName,
@@ -16,10 +26,12 @@ export default function HireAgainButton({
   contractorId: string;
   contractorName: string;
   lastCategory: string;
-  action: (formData: FormData) => Promise<void>;
+  action: (formData: FormData) => Promise<ActionResult>;
 }) {
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState(lastCategory);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <>
@@ -43,8 +55,30 @@ export default function HireAgainButton({
             </p>
 
             <form
-              action={action}
-              onSubmit={() => setOpen(false)}
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const fd = new FormData(e.currentTarget);
+                const desc = String(fd.get("description") ?? "").trim();
+                if (desc.length < MIN_DESCRIPTION) {
+                  setError(
+                    "Please describe the job in at least 20 characters so your pro knows what to expect."
+                  );
+                  return;
+                }
+                setPending(true);
+                setError(null);
+                try {
+                  const res = await action(fd);
+                  if (res.ok) setOpen(false);
+                  else setError(res.error);
+                } catch {
+                  // A rejected server action (network blip, server hiccup)
+                  // must not strand the button in its pending state.
+                  setError("Something went wrong. Please try again.");
+                } finally {
+                  setPending(false);
+                }
+              }}
               className="mt-4 space-y-4"
             >
               <input type="hidden" name="contractor_id" value={contractorId} />
@@ -75,16 +109,22 @@ export default function HireAgainButton({
                   placeholder="What needs doing this time? At least 20 characters so they know what to expect."
                 />
               </div>
+              {error && (
+                <p role="alert" className="text-sm font-medium text-red-600 dark:text-red-400">
+                  {error}
+                </p>
+              )}
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
                   className="btn-secondary flex-1"
+                  disabled={pending}
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary flex-1">
-                  Send
+                <button type="submit" className="btn-primary flex-1" disabled={pending}>
+                  {pending ? "Sending…" : "Send"}
                 </button>
               </div>
             </form>

@@ -204,7 +204,7 @@ export async function alertProsForNewLead(
     // notification_prefs keys are homeowner-facing), so recipients get them all.
     const { data: users } = await admin
       .from("users")
-      .select("id, email, phone")
+      .select("id, email, phone, sms_consent")
       .in("id", targetIds);
     const userById = new Map((users ?? []).map((u) => [u.id, u]));
 
@@ -245,6 +245,7 @@ export async function alertProsForNewLead(
             url: "/pro",
             email: contact?.email ?? null,
             phone: contactPhoneByUser.get(userId) ?? contact?.phone ?? null,
+            smsConsent: contact?.sms_consent === true,
           });
           if (sent) alerted.add(userId);
         })

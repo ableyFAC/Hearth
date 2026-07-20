@@ -107,12 +107,10 @@ export default function ContractorSignUpPage({
 
     // Confirmation OFF → session returned → go set up the company.
     if (data.session) {
-      // Best-effort audit-trail write; never block signup on it.
-      // TODO(legal): when email confirmation is ON, no session exists yet
-      // here and this never fires - /auth/callback (which exchanges the
-      // confirmation code for a session) should also call
-      // recordTermsAcceptance() once it has a userId, so a confirmed signup
-      // is covered too.
+      // Best-effort audit-trail write; never block signup on it. When email
+      // confirmation is ON, no session exists yet here and this never fires -
+      // /auth/callback records the acceptance instead, once it exchanges the
+      // confirmation code for a session (see the comment there).
       if (data.user) {
         void recordTermsAcceptance(data.user.id, "pro_terms");
       }

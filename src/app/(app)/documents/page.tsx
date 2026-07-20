@@ -5,6 +5,7 @@ import { labelFor, SYSTEM_TYPES } from "@/lib/constants";
 import { stateName } from "@/lib/forecast";
 import DocumentUpload from "@/components/DocumentUpload";
 import CategoryIcon from "@/components/CategoryIcon";
+import ConfirmSubmit from "@/components/ConfirmSubmit";
 import { FileText } from "lucide-react";
 import { imgSrc } from "@/lib/storage";
 import {
@@ -218,12 +219,12 @@ export default async function DocumentsPage() {
                   )}
                   <form action={deleteDocumentAction}>
                     <input type="hidden" name="id" value={d.id} />
-                    <button
-                      type="submit"
-                      className="text-xs text-stone-500 hover:text-red-600 dark:text-stone-400"
-                    >
-                      Remove
-                    </button>
+                    <ConfirmSubmit
+                      subtle
+                      label="Remove"
+                      note="Delete this document? This can't be undone."
+                      yesLabel="Yes, delete"
+                    />
                   </form>
                 </div>
               </div>

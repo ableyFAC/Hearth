@@ -7,18 +7,23 @@ import { createClient } from "@/lib/supabase/server";
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Records a terms/pro-terms acceptance into public.terms_acceptances (0073),
-// called from the signup pages (src/app/homeowner-signup/page.tsx,
-// src/app/contractor-signup/page.tsx) right after signUp() returns a session,
-// i.e. only when the required agreement checkbox was checked. Uses the admin
-// client because the table's RLS "insert own" policy targets the
-// `authenticated` role, and this action can run before the browser's new
-// session cookie has propagated back to a server-side request.
+// Records a terms/pro-terms acceptance into public.terms_acceptances (0073).
+// Called from two places: the signup pages (src/app/homeowner-signup/page.tsx,
+// src/app/contractor-signup/page.tsx) right after signUp() returns a session
+// (confirmation OFF, or the required agreement checkbox was checked), and
+// /auth/callback/route.ts right after it exchanges a confirmation code for a
+// session (confirmation ON - signUp() itself returned no session, so the
+// signup page's own call never fired). Uses the admin client because the
+// table's RLS "insert own" policy targets the `authenticated` role, and the
+// signup-page call path can run before the browser's new session cookie has
+// propagated back to a server-side request.
 //
-// TODO(legal): confirm the email-confirmation path also records acceptance -
-// when Supabase email confirmation is ON, signUp() returns no session and
-// this never fires; /auth/callback (which exchanges the code for a session)
-// should call this too once a userId is available there.
+// Idempotent by design (see the existence check below): a confirmation link
+// can be visited more than once (a stale/reused link, a reload, or a double
+// call from both entry points above for the same account), and
+// terms_acceptances has no unique constraint of its own - it's an
+// append-only audit trail with intentionally no update/delete policy - so
+// the duplicate guard has to live here instead.
 //
 // TODO(legal): bump VERSION whenever /terms or /pro-terms changes materially.
 const VERSION = "2026-07-18";
@@ -116,6 +121,31 @@ export async function recordTermsAcceptance(
     }
     verifiedUserId = lookup.user.id;
   }
+
+  // Idempotency guard: skip the insert if this user already has a row for
+  // this doc, regardless of version. Without this, a second call for the
+  // same signup (e.g. /auth/callback firing after the signup page's own call
+  // already succeeded, or a confirmation link visited twice) would append a
+  // duplicate acceptance row instead of a no-op.
+  const { data: existing, error: existingError } = await admin
+    .from("terms_acceptances")
+    .select("id")
+    .eq("user_id", verifiedUserId)
+    .eq("doc", doc)
+    .limit(1)
+    .maybeSingle();
+  if (existingError) {
+    // Best-effort, same as the insert below: a read hiccup here must not
+    // block signup, but it also must not risk a duplicate insert, so bail
+    // out rather than proceeding as if nothing existed.
+    console.error("recordTermsAcceptance: existence check failed", {
+      userId: verifiedUserId,
+      doc,
+      existingError,
+    });
+    return;
+  }
+  if (existing) return;
 
   const { error } = await admin.from("terms_acceptances").insert({
     user_id: verifiedUserId,

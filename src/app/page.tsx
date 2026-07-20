@@ -53,6 +53,64 @@ export default async function Home({
     },
   ];
 
+  // Backs both the visible FAQ cards below and the FAQPage JSON-LD: one list,
+  // so the structured data can never drift from what a visitor actually
+  // reads. `a` is the plain-text answer (what JSON-LD gets); `node`, when
+  // present, is the richer JSX version rendered on the page (for the one
+  // answer that links out to the privacy policy).
+  const FAQ_ITEMS: { q: string; a: string; node?: React.ReactNode }[] = [
+    {
+      q: "Is it really free?",
+      a: "Yes. Your first home is free, no card needed. Hearth makes money two ways: an optional Plus plan, and a fee pros pay when they apply to a job. We never sell your data.",
+    },
+    {
+      q: "What do you do with my data?",
+      a: "Your home details are stored in our database and used to run Hearth: reminders, alerts, and answers about your house. We don't sell your personal data, and we don't let ad companies track what you do here. When you post a job, a pro sees only what's needed to quote it. The full details are in the privacy policy.",
+      node: (
+        <>
+          Your home details are stored in our database and used to run
+          Hearth: reminders, alerts, and answers about your house. We
+          don&apos;t sell your personal data, and we don&apos;t let ad
+          companies track what you do here. When you post a job, a pro sees only
+          what&apos;s needed to quote it. The full details are in the{" "}
+          <a
+            href="/privacy"
+            className="text-hearth-700 hover:underline dark:text-hearth-300"
+          >
+            privacy policy
+          </a>
+          .
+        </>
+      ),
+    },
+    {
+      q: "Who are the pros?",
+      a: "Local pros who set up their own Hearth profiles. When a pro has a California license number on file, we check it with the state's contractor license board (the CSLB) and show the result on their profile. You can see exactly what's been verified.",
+    },
+    {
+      q: "What does Plus cost?",
+      a: "Hearth itself stays free for your first home. Hearth Plus is optional: new subscribers get a free 3-day trial, then it's $1.99/wk, $4.99/mo, or $39.99/yr (about $3.33/mo), whichever you pick. Cancel anytime.",
+    },
+    {
+      q: "Where does my home's info come from?",
+      a: "When you enter your address, we look it up against public county records to pre-fill your home's year built, size, and other facts. You can correct anything that's off once you're in.",
+    },
+    {
+      q: "What happens if I cancel or delete my account?",
+      a: "Canceling Hearth Plus just stops the subscription: you keep your account and home data, and lose the Plus tools. Deleting your account is separate and permanent: it removes your data from Hearth. One honest caveat: if you already shared details with a pro through a job or message, they may keep their own copy in their own business records.",
+    },
+  ];
+
+  const faqJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: FAQ_ITEMS.map((f) => ({
+      "@type": "Question",
+      name: f.q,
+      acceptedAnswer: { "@type": "Answer", text: f.a },
+    })),
+  };
+
   const STEPS = [
     { n: "1", text: "Type your address." },
     {
@@ -239,50 +297,27 @@ export default async function Home({
         ) : null}
       </section>
 
-      {/* FAQ: the three questions people actually ask, answered from what
-          the product really does. No invented stats, no "vetted" claims. */}
+      {/* FAQ: the questions people actually ask, answered from what the
+          product really does. No invented stats, no "vetted" claims.
+          FAQ_ITEMS also backs the FAQPage JSON-LD below, so the structured
+          data can't say something these cards don't. */}
       <section className="mt-16 sm:mt-24">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+        />
         <h2 className="text-center text-2xl font-semibold text-stone-900 dark:text-stone-100 [text-wrap:balance]">
           Quick questions
         </h2>
         <div className="mx-auto mt-6 max-w-xl space-y-4">
-          <div className="card">
-            <h3 className="font-semibold text-stone-900 dark:text-stone-100">Is it really free?</h3>
-            <p className="mt-1 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
-              Yes. Your first home is free, no card needed. Hearth makes money
-              two ways: an optional Plus plan, and a fee pros pay when they
-              apply to a job. We never sell your data.
-            </p>
-          </div>
-          <div className="card">
-            <h3 className="font-semibold text-stone-900 dark:text-stone-100">
-              What do you do with my data?
-            </h3>
-            <p className="mt-1 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
-              Your home details are stored in our database and used to run
-              Hearth: reminders, alerts, and answers about your house. We
-              don&apos;t sell your personal data, and we don&apos;t let ad
-              companies track what you do here. When you post a job, a pro sees only
-              what&apos;s needed to quote it. The full details are in the{" "}
-              <a
-                href="/privacy"
-                className="text-hearth-700 hover:underline dark:text-hearth-300"
-              >
-                privacy policy
-              </a>
-              .
-            </p>
-          </div>
-          <div className="card">
-            <h3 className="font-semibold text-stone-900 dark:text-stone-100">Who are the pros?</h3>
-            <p className="mt-1 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
-              Local pros who set up their own Hearth profiles. When a pro has
-              a California license number on file, we check it with the
-              state&apos;s contractor license board (the CSLB) and show the
-              result on their profile. You can see exactly what&apos;s been
-              verified.
-            </p>
-          </div>
+          {FAQ_ITEMS.map((f) => (
+            <div key={f.q} className="card">
+              <h3 className="font-semibold text-stone-900 dark:text-stone-100">{f.q}</h3>
+              <p className="mt-1 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
+                {f.node ?? f.a}
+              </p>
+            </div>
+          ))}
         </div>
       </section>
 

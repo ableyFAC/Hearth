@@ -16,8 +16,43 @@ import {
 import { setFlash } from "@/lib/flash";
 import { hasPlus } from "@/lib/subscription";
 import { alertProsForNewLead } from "@/lib/proAlerts";
+import { sendNotification } from "@/lib/notify";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import { redactContact } from "@/lib/redact";
+import { ok, err, type ActionResult } from "@/lib/actionResult";
+import type { Json } from "@/lib/database.types";
+
+// Server-side counterpart to src/lib/analytics.ts's track(): that helper
+// fires via navigator.sendBeacon, which doesn't exist in a server action, so
+// this writes straight to app_events with the admin client instead. Mirrors
+// src/app/pro/actions.ts's own trackServerEvent (same table, same
+// isMissingSchemaError fallback to a log line if migration 0091 hasn't run
+// on this DB yet, and never throws), duplicated here rather than imported
+// since pro/actions.ts is a "use server" file and doesn't export it.
+async function trackServerEvent(
+  userId: string | null,
+  event: string,
+  props?: Record<string, unknown>
+) {
+  try {
+    const admin = createAdminClient();
+    const { error } = await admin.from("app_events").insert({
+      event,
+      props: (props ?? null) as Json | null,
+      user_id: userId,
+    });
+    if (error && !isMissingSchemaError(error)) {
+      console.error(`trackServerEvent(${event}): insert failed:`, error.message);
+    } else if (error) {
+      console.log("[track]", event, props ?? {});
+    }
+  } catch (e) {
+    console.error(
+      `trackServerEvent(${event}) failed:`,
+      e instanceof Error ? e.message : e
+    );
+  }
+}
 
 // Photo URLs come from our own upload component (PhotoUpload), so anything
 // oversized is not a real URL; drop it quietly instead of storing a broken
@@ -306,6 +341,11 @@ export async function postJobAction(formData: FormData) {
     }
   }
 
+  // "post_job" (src/app/api/track/route.ts): fires once for the kept posting
+  // (below the dedup block above, so a duplicate submit that gets deleted
+  // never double-counts). No PII, just the category.
+  await trackServerEvent(user.id, "post_job", { category });
+
   // Attach the uploaded photos to the (existing or carrier) issue, exactly like
   // the issue tracker does, so pros see the "Photos attached" quality chip.
   // Best-effort: a photo hiccup should never break the post.
@@ -389,7 +429,14 @@ export async function postJobAction(formData: FormData) {
 // degrade the posting below what a fresh post is allowed to be), and once any
 // pro has paid the non-refundable apply fee the category (and with it the
 // payout tier) is frozen, mirroring closeJobAction's refusal to cancel.
-export async function updateJobAction(formData: FormData) {
+//
+// EditJobForm calls this programmatically (await updateJobAction(fd)) rather
+// than posting a plain <form>, so it returns ActionResult instead of using
+// setFlash: the panel only closes after a real ok(), and a validation failure
+// keeps it open with the typed input intact and the error shown inline.
+export async function updateJobAction(
+  formData: FormData
+): Promise<ActionResult> {
   const supabase = createClient();
 
   const {
@@ -412,20 +459,16 @@ export async function updateJobAction(formData: FormData) {
   // Only a real category may set the payout tier: a forged value would fall
   // back to the cheapest "other" fee in leadFeeFor.
   if (!JOB_CATEGORIES.some((c) => c.value === category)) {
-    setFlash("Please pick a valid job category.", "error");
-    revalidatePath("/contractors");
-    return;
+    return err("Please pick a valid job category.");
   }
 
   // Same 20-character description floor as postJobAction: pros pay to apply,
-  // so an edit can't blank out what they're applying to.
+  // so an edit can't blank out what they're applying to. Not labeled
+  // "optional" on the form: see the honest label + minLength hint there.
   if ((message ?? "").length < 20) {
-    setFlash(
-      "Please describe the job in at least 20 characters so pros know what they're applying to.",
-      "error"
+    return err(
+      "Please describe the job in at least 20 characters so pros know what they're applying to."
     );
-    revalidatePath("/contractors");
-    return;
   }
 
   // RLS scopes this read to a lead the caller owns, same as the update below.
@@ -435,9 +478,7 @@ export async function updateJobAction(formData: FormData) {
     .eq("id", leadId)
     .maybeSingle();
   if (!lead) {
-    setFlash("Something went wrong. Please try again.", "error");
-    revalidatePath("/contractors");
-    return;
+    return err("Something went wrong. Please try again.");
   }
 
   // Once a pro has paid the (non-refundable) apply fee, the job they paid for
@@ -450,12 +491,9 @@ export async function updateJobAction(formData: FormData) {
       .select("id", { count: "exact", head: true })
       .eq("lead_id", leadId);
     if ((count ?? 0) > 0) {
-      setFlash(
-        "Pros have already paid to apply to this job, so its category can't change. Edit the details, or post the new work as a separate job.",
-        "error"
+      return err(
+        "Pros have already paid to apply to this job, so its category can't change. Edit the details, or post the new work as a separate job."
       );
-      revalidatePath("/contractors");
-      return;
     }
   }
 
@@ -478,33 +516,171 @@ export async function updateJobAction(formData: FormData) {
       homeowner_phone: homeownerPhone,
     })
     .eq("id", leadId);
-  if (error) setFlash("Something went wrong. Please try again.", "error");
-  else setFlash("Job updated.", "success");
+  if (error) return err("Something went wrong. Please try again.");
+
+  // The flash cookie survives revalidatePath, so this still shows even
+  // though EditJobForm closes the panel itself on ok() rather than reloading.
+  setFlash("Job updated.", "success");
   revalidatePath("/contractors");
+  return ok();
 }
 
-// Homeowner closes (cancels) a job posting. Only allowed before any pro has
-// applied - once a pro has paid the apply fee, the owner must pick from the
-// applicants rather than cancel (the fee is non-refundable).
+// Homeowner closes (cancels) a job posting. Two shapes, depending on whether
+// any pro has paid to apply:
+//  - No live applicants: nothing paid, nothing to preserve. Delete, as before.
+//  - Has live applicants (status 'applied', not yet ghost-refunded - mirrors
+//    enforce_contractor_leads_locked()'s own "live" check in 0087): the
+//    non-refundable apply fee means the row can't just vanish, and this used
+//    to be flatly refused ("pick one instead"). It's opened up here, but
+//    WITHOUT inventing any new money logic. See migration 0092 for the full
+//    reasoning: a raw status flip to 'closed' either gets silently reverted
+//    by the DB trigger (0087) or, if forced through a privileged RPC, would
+//    make ghost_refund_application() - the only refund path for these fees -
+//    permanently unable to see the lead (it requires status = 'new'). So
+//    instead this stamps a plain owner_closed_at marker the ghost-protection
+//    cron and refund function never look at, and notifies the applicants.
+//    Their apply fee still comes back automatically on the normal 7-day
+//    ghost-protection schedule if nobody was chosen - this action moves zero
+//    money and reads no wallet/fee columns.
 export async function closeJobAction(formData: FormData) {
   const supabase = createClient();
   const leadId = String(formData.get("lead_id"));
-  const reason = (formData.get("reason") as string) || "";
+  // Capped before it ever reaches notification bodies or the flash message:
+  // it's a free-text field with no length limit at the source.
+  const reason = ((formData.get("reason") as string) || "").slice(0, 200);
 
-  const { count } = await (supabase as any)
-    .from("lead_applications")
-    .select("id", { count: "exact", head: true })
-    .eq("lead_id", leadId);
-  if ((count ?? 0) > 0) {
+  // RLS scopes this read to a lead on a property the caller owns.
+  const { data: lead } = await supabase
+    .from("contractor_leads")
+    .select("id, contractor_id, status")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (!lead) {
+    setFlash("Something went wrong. Please try again.", "error");
+    revalidatePath("/contractors");
+    return;
+  }
+  if (lead.contractor_id || lead.status !== "new") {
+    // A pro is already assigned (or the lead is otherwise not a plain open
+    // posting): closing here would be meaningless, and the UI never renders
+    // this form for that job. Guard anyway against a forged/replayed submit.
     setFlash(
-      "Pros have already applied, so this job can't be closed. Pick one from the applicants.",
+      "This job already has a pro assigned, so it can't be closed here.",
       "error"
     );
     revalidatePath("/contractors");
     return;
   }
 
-  // RLS limits the delete to a lead on a property the caller owns.
+  const { count } = await (supabase as any)
+    .from("lead_applications")
+    .select("id", { count: "exact", head: true })
+    .eq("lead_id", leadId)
+    .eq("status", "applied")
+    .is("refunded_at", null);
+
+  if ((count ?? 0) > 0) {
+    // Stamp the marker. The `.is("owner_closed_at", null)` filter makes a
+    // resubmit (e.g. a doubled form post) a no-op on the second try, so
+    // applicants are never notified twice for the same close.
+    const { data: updated, error } = await (supabase as any)
+      .from("contractor_leads")
+      .update({ owner_closed_at: new Date().toISOString() })
+      .eq("id", leadId)
+      .is("owner_closed_at", null)
+      .select("id")
+      .maybeSingle();
+
+    if (error && isMissingSchemaError(error)) {
+      // Migration 0092 hasn't run against this database yet: degrade to the
+      // old refusal instead of crashing or silently no-oping.
+      setFlash(
+        "Pros have already applied, so this job can't be closed. Pick one from the applicants.",
+        "error"
+      );
+      revalidatePath("/contractors");
+      return;
+    }
+    if (error) {
+      setFlash("Something went wrong. Please try again.", "error");
+      revalidatePath("/contractors");
+      return;
+    }
+
+    // Tell the pros who paid to apply, honestly: closed, nobody picked, fee
+    // follows the normal ghost-protection refund timeline. Best-effort: the
+    // close itself already saved, so a notification hiccup here shouldn't
+    // turn into an error the homeowner sees.
+    if (updated) {
+      try {
+        const { data: apps } = await (supabase as any)
+          .from("lead_applications")
+          .select("contractor_id")
+          .eq("lead_id", leadId)
+          .eq("status", "applied")
+          .is("refunded_at", null);
+        const contractorIds: string[] = Array.from(
+          new Set<string>(
+            (apps ?? [])
+              .map((a: any) => a.contractor_id as string | null)
+              .filter((id: string | null): id is string => Boolean(id))
+          )
+        );
+        if (contractorIds.length) {
+          const admin = createAdminClient();
+          const { data: contractors } = await admin
+            .from("contractors")
+            .select("id, user_id")
+            .in("id", contractorIds);
+          const notifyTargets = (contractors ?? []).filter(
+            (c): c is typeof c & { user_id: string } => Boolean(c.user_id)
+          );
+          const userIds = Array.from(
+            new Set(notifyTargets.map((c) => c.user_id))
+          );
+          // Contact details so the email/SMS channels can fire once their
+          // providers are configured, following the contractors -> users
+          // sms_consent pattern in src/app/pro/chats/actions.ts.
+          const { data: users } = userIds.length
+            ? await admin
+                .from("users")
+                .select("id, email, phone, sms_consent")
+                .in("id", userIds)
+            : { data: [] as { id: string; email: string | null; phone: string | null; sms_consent: boolean | null }[] };
+          const userById = new Map((users ?? []).map((u) => [u.id, u]));
+          const body = reason
+            ? `They closed it without choosing anyone: ${reason}.`
+            : "They closed it without choosing anyone.";
+          // sendNotification always writes the in-app row unconditionally;
+          // email/SMS stay dormant until their provider env vars are set.
+          await Promise.all(
+            notifyTargets.map((c) => {
+              const contact = userById.get(c.user_id);
+              return sendNotification(admin, {
+                userId: c.user_id,
+                kind: "job_closed",
+                title: "The homeowner closed this job",
+                body,
+                url: "/pro",
+                email: contact?.email ?? null,
+                phone: contact?.phone ?? null,
+                smsConsent: contact?.sms_consent === true,
+              });
+            })
+          );
+        }
+      } catch {
+        // Notifications are a nice-to-have here, not part of the close.
+      }
+    }
+
+    setFlash(reason ? `Job closed: ${reason}.` : "Job closed.", "info");
+    revalidatePath("/contractors");
+    revalidatePath("/dashboard");
+    return;
+  }
+
+  // No live applicants: nothing paid, nothing to preserve. Delete as before.
   const { error } = await supabase
     .from("contractor_leads")
     .delete()
@@ -520,15 +696,23 @@ export async function closeJobAction(formData: FormData) {
 export async function chooseApplicantAction(formData: FormData) {
   const supabase = createClient() as any;
   const applicationId = String(formData.get("application_id"));
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   const { error } = await supabase.rpc("choose_applicant", {
     p_application: applicationId,
   });
   if (error) setFlash("Something went wrong. Please try again.", "error");
-  else
+  else {
     setFlash(
       "Pro selected. They now have your contact and can message you.",
       "success"
     );
+    // "choose_applicant" (src/app/api/track/route.ts): fires once per
+    // successful pick. The category isn't already in scope here (would need
+    // an extra application -> lead join just for this), so no props.
+    await trackServerEvent(user?.id ?? null, "choose_applicant");
+  }
   revalidatePath("/contractors");
 }
 
@@ -544,22 +728,26 @@ const REVIEW_COMMENT_MAX = 600;
 // edits the existing review instead of being rejected: there is no unhappy
 // path to steer around, which is exactly the point. This is the only place a
 // review is written, so both /contractors and /chats can share it.
-export async function saveReviewAction(formData: FormData) {
+//
+// ReviewButton calls this programmatically (await saveReviewAction(fd))
+// rather than posting a plain <form>, so it returns ActionResult instead of
+// using setFlash: the modal only closes (and the share follow-up only shows)
+// after a real ok(), never optimistically on submit.
+export async function saveReviewAction(
+  formData: FormData
+): Promise<ActionResult> {
   const supabase = createClient();
   const leadId = String(formData.get("lead_id") || "");
   const rating = Number(formData.get("rating"));
   const comment = String(formData.get("comment") || "").trim();
 
   if (!leadId || !Number.isInteger(rating) || rating < 1 || rating > 5) {
-    setFlash("Please pick a star rating between 1 and 5.", "error");
-    return;
+    return err("Please pick a star rating between 1 and 5.");
   }
   if (comment.length > REVIEW_COMMENT_MAX) {
-    setFlash(
-      `Reviews are capped at ${REVIEW_COMMENT_MAX} characters. Please shorten yours.`,
-      "error"
+    return err(
+      `Reviews are capped at ${REVIEW_COMMENT_MAX} characters. Please shorten yours.`
     );
-    return;
   }
 
   // Check whether this lead already has a review before the upsert, so the pro
@@ -577,12 +765,10 @@ export async function saveReviewAction(formData: FormData) {
   });
 
   if (error) {
-    setFlash(error.message, "error");
     revalidatePath("/contractors");
     revalidatePath("/chats");
-    return;
+    return err(error.message);
   }
-  setFlash("Thanks for your review!", "success");
 
   // Tell the pro a review came in. Best-effort: a notification hiccup should
   // never undo a review that already saved. Only on the first review for this
@@ -632,16 +818,20 @@ export async function saveReviewAction(formData: FormData) {
           }
         }
       }
-    } catch (err) {
+    } catch (notifyErr) {
       console.error(
         "review notification:",
-        err instanceof Error ? err.message : err
+        notifyErr instanceof Error ? notifyErr.message : notifyErr
       );
     }
   }
 
+  // The flash cookie survives revalidatePath, so this still shows even
+  // though ReviewButton closes the modal itself on ok() rather than reloading.
+  setFlash("Thanks for your review!", "success");
   revalidatePath("/contractors");
   revalidatePath("/chats");
+  return ok();
 }
 
 // Homeowner re-hires a pro they've already worked with (My Pros). The repeat
@@ -649,7 +839,16 @@ export async function saveReviewAction(formData: FormData) {
 // apply fee and no wallet charge, so nobody pays to work together again.
 // rehire_pro isn't in the generated types yet, so the rpc client is cast to
 // any (same pattern as choose_applicant/apply_to_lead above).
-export async function rehireProAction(formData: FormData) {
+//
+// HireAgainButton calls this programmatically (await rehireProAction(fd))
+// rather than posting a plain <form>, so every failure returns ActionResult
+// instead of using setFlash + redirect: the modal stays open with the typed
+// description intact and the error shown inline. On success there is nothing
+// to return to: the action redirects straight to the new chat thread, same as
+// before (redirect() still works from a programmatically-invoked action).
+export async function rehireProAction(
+  formData: FormData
+): Promise<ActionResult> {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
   const supabase = createClient();
@@ -661,21 +860,22 @@ export async function rehireProAction(formData: FormData) {
 
   const contractorId = String(formData.get("contractor_id") || "");
   const category = String(formData.get("category") || "");
+  // Trimmed here, same as before, but ALSO trimmed client-side before submit
+  // now (HireAgainButton): the textarea's minLength=20 counts raw characters,
+  // so 20 spaces used to pass the browser check and only fail here, with a
+  // confusing "it looked fine, why did it fail" mismatch.
   const description = ((formData.get("description") as string) || "").trim();
 
   if (!contractorId || !category) {
-    setFlash("Something went wrong. Please try again.", "error");
-    redirect("/contractors");
+    return err("Something went wrong. Please try again.");
   }
 
   // Mirror postJobAction: the pro needs a real description to go on, even on a
   // repeat job.
   if (description.length < 20) {
-    setFlash(
-      "Please describe the job in at least 20 characters so your pro knows what to expect.",
-      "error"
+    return err(
+      "Please describe the job in at least 20 characters so your pro knows what to expect."
     );
-    redirect("/contractors");
   }
 
   const rpc = supabase as any;
@@ -693,14 +893,11 @@ export async function rehireProAction(formData: FormData) {
       error.code === "PGRST202" ||
       (/rehire_pro/i.test(error.message ?? "") &&
         /(does not exist|schema cache|not find)/i.test(error.message ?? ""));
-    setFlash(
+    return err(
       missingFn
         ? "Hiring a pro again isn't available yet. Please check back soon."
-        : "Something went wrong. Please try again.",
-      "error"
+        : "Something went wrong. Please try again."
     );
-    revalidatePath("/contractors");
-    redirect("/contractors");
   }
 
   // Nudge the pro that a free repeat lead just came in. Best-effort only, same

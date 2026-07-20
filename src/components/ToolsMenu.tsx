@@ -53,6 +53,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
   }, [open]);
 
   const homeLinks = [
+    { href: "/walkthrough", label: "Walk your home" },
     { href: "/documents", label: "Documents" },
     { href: "/value", label: "Home value" },
     { href: "/taxes", label: "Property taxes" },

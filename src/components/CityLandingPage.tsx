@@ -115,7 +115,7 @@ export default async function CityLandingPage({
           </a>
         ) : (
           <a
-            href="/get-started"
+            href="/homeowner-signup"
             className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:text-stone-300 dark:hover:text-hearth-300"
           >
             Get started free
@@ -140,7 +140,7 @@ export default async function CityLandingPage({
             </a>
           ) : (
             <a
-              href="/get-started"
+              href="/homeowner-signup"
               className="btn-primary mt-6 inline-block px-6 py-3 text-base shadow-md"
             >
               Get started free

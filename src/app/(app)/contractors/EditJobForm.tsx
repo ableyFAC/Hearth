@@ -6,10 +6,17 @@ import { TIMING_OPTIONS } from "@/lib/constants";
 import CategoryFilter from "./CategoryFilter";
 import PhoneInput from "@/components/PhoneInput";
 
+const MIN_DESCRIPTION = 20;
+
 // Inline editor for a posted job. Shows an "Edit" link that opens a prefilled
-// form (same fields as posting). Closes itself once the update saves.
+// form (same fields as posting). Calls updateJobAction programmatically so it
+// can read the ActionResult back: the panel only closes on a real ok(), and a
+// validation failure keeps it open with what was typed and shows the error
+// inline instead of closing optimistically and losing it.
 export default function EditJobForm({ job }: { job: any }) {
   const [editing, setEditing] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!editing) {
     return (
@@ -27,9 +34,21 @@ export default function EditJobForm({ job }: { job: any }) {
 
   return (
     <form
-      action={async (fd) => {
-        await updateJobAction(fd);
-        setEditing(false);
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setPending(true);
+        setError(null);
+        try {
+          const res = await updateJobAction(new FormData(e.currentTarget));
+          if (res.ok) setEditing(false);
+          else setError(res.error);
+        } catch {
+          // A rejected server action (network blip, server hiccup) must not
+          // strand the button in its pending state with no explanation.
+          setError("Something went wrong. Please try again.");
+        } finally {
+          setPending(false);
+        }
       }}
       className="space-y-3 rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-white/10 dark:bg-stone-700"
     >
@@ -55,13 +74,21 @@ export default function EditJobForm({ job }: { job: any }) {
         </div>
       </div>
       <div>
-        <label className="label">Details about your project (optional)</label>
+        {/* Not "optional": updateJobAction enforces the same 20-character
+            floor postJobAction does (pros pay to apply, so an edit can't
+            blank out what they're applying to). minLength surfaces that in
+            the browser before the action rejects it. */}
+        <label className="label">Details about your project</label>
         <textarea
           name="message"
           className="textarea"
           rows={3}
+          minLength={MIN_DESCRIPTION}
           defaultValue={job.issue_description ?? ""}
         />
+        <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+          At least 20 characters so pros know what they&apos;re applying to.
+        </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
         <div>
@@ -93,16 +120,26 @@ export default function EditJobForm({ job }: { job: any }) {
           </p>
         </div>
       </div>
+      {error && (
+        <p role="alert" className="text-sm font-medium text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      )}
       <div className="flex gap-2">
         <button
           type="button"
           onClick={() => setEditing(false)}
           className="btn-secondary text-sm"
+          disabled={pending}
         >
           Cancel
         </button>
-        <button type="submit" className="btn-primary flex-1 text-sm">
-          Save changes
+        <button
+          type="submit"
+          className="btn-primary flex-1 text-sm"
+          disabled={pending}
+        >
+          {pending ? "Saving…" : "Save changes"}
         </button>
       </div>
     </form>

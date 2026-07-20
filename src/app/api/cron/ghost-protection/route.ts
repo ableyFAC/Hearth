@@ -136,7 +136,7 @@ async function runCron(req: NextRequest) {
   const { data: refundUsers } = refundUserIds.length
     ? await supabase
         .from("users")
-        .select("id, email, phone")
+        .select("id, email, phone, sms_consent")
         .in("id", refundUserIds)
     : { data: [] };
   const contactByUser = new Map((refundUsers ?? []).map((u) => [u.id, u]));
@@ -173,6 +173,7 @@ async function runCron(req: NextRequest) {
         url: "/pro",
         email: contact?.email ?? null,
         phone: contact?.phone ?? null,
+        smsConsent: contact?.sms_consent === true,
       });
     } catch {
       // One bad notification shouldn't stop the rest of the run.

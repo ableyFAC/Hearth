@@ -23,6 +23,7 @@ import { updateSystemAction, deleteSystemAction } from "./actions";
 import PhotoUpload from "@/components/PhotoUpload";
 import MonthYearInput from "@/components/MonthYearInput";
 import MaterialSelect from "@/components/MaterialSelect";
+import SubmitButton from "@/components/SubmitButton";
 
 const STAGE_STYLE: Record<string, string> = {
   healthy: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-200 dark:border-green-900",
@@ -65,6 +66,7 @@ export default function SystemRow({
   const [editing, setEditing] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const h = assessSystem(s);
   // A system to deal with now: reported failing, or with an URGENT reported
   // issue. A low/medium issue shouldn't blare red (it lines up with the Issues
@@ -174,12 +176,12 @@ export default function SystemRow({
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
+                <SubmitButton
+                  pendingLabel="Removing…"
                   className="text-xs font-semibold text-red-600 hover:text-red-700"
                 >
                   Confirm remove?
-                </button>
+                </SubmitButton>
               </div>
             ) : (
               <button
@@ -194,7 +196,12 @@ export default function SystemRow({
         </div>
         <form
           action={async (fd) => {
-            await updateSystemAction(fd);
+            const res = await updateSystemAction(fd);
+            if (!res.ok) {
+              setEditError(res.error);
+              return;
+            }
+            setEditError(null);
             setEditing(false);
           }}
           className="space-y-3"
@@ -289,15 +296,22 @@ export default function SystemRow({
 
           <PhotoUpload propertyId={s.property_id} />
 
+          {editError && (
+            <p role="alert" className="text-sm text-red-600 dark:text-red-400">{editError}</p>
+          )}
+
           <div className="flex gap-2">
             <button
               type="button"
               className="btn-secondary"
-              onClick={() => setEditing(false)}
+              onClick={() => {
+                setEditError(null);
+                setEditing(false);
+              }}
             >
               Cancel
             </button>
-            <button className="btn-primary flex-1">Save changes</button>
+            <SubmitButton pendingLabel="Saving…">Save changes</SubmitButton>
           </div>
         </form>
       </li>

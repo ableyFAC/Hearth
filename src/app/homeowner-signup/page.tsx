@@ -5,6 +5,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/safeNext";
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
+import { track } from "@/lib/analytics";
 
 // Real per-user sign-up. Creates a Supabase Auth account from the user's email
 // + password. If email confirmation is OFF in Supabase, the user is signed in
@@ -95,15 +96,14 @@ export default function HomeownerSignUpPage({
 
     // Confirmation OFF → a session is returned immediately → go claim a home.
     if (data.session) {
-      // Best-effort audit-trail write; never block signup on it.
-      // TODO(legal): when email confirmation is ON, no session exists yet
-      // here and this never fires - /auth/callback (which exchanges the
-      // confirmation code for a session) should also call
-      // recordTermsAcceptance() once it has a userId, so a confirmed signup
-      // is covered too.
+      // Best-effort audit-trail write; never block signup on it. When email
+      // confirmation is ON, no session exists yet here and this never fires -
+      // /auth/callback records the acceptance instead, once it exchanges the
+      // confirmation code for a session (see the comment there).
       if (data.user) {
         void recordTermsAcceptance(data.user.id, "terms");
       }
+      track("signup_homeowner");
       window.location.href = `/onboarding${nextQuery}`;
       return;
     }
@@ -119,6 +119,7 @@ export default function HomeownerSignUpPage({
     }
 
     // Confirmation ON → no session yet; show the check-your-inbox panel.
+    track("signup_homeowner");
     setBusy(false);
     setPendingEmail(email.trim());
   }

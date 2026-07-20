@@ -999,6 +999,24 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["parcel_cache"]["Insert"]>;
         Relationships: [];
       };
+      app_events: {
+        Row: {
+          id: string;
+          created_at: string;
+          event: string;
+          props: Json | null;
+          user_id: string | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          event: string;
+          props?: Json | null;
+          user_id?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["app_events"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: {
       lead_previews: {

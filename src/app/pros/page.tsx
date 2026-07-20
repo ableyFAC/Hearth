@@ -351,9 +351,9 @@ export default async function ProsLanding({
           </div>
         </div>
         <p className="mx-auto mt-6 max-w-md text-center text-sm text-stone-500 dark:text-stone-400">
-          A Pro membership adds an AI back office on top: estimates drafted
-          from your own past invoices, replies to your reviews, and reminders
-          for overdue invoices.{" "}
+          A Pro membership adds an AI back office on top: draft estimates,
+          invoices, follow-up messages, review replies, and overdue-invoice
+          reminders in seconds.{" "}
           <a href="/pro/plus" className="text-hearth-700 hover:underline dark:text-hearth-300">
             See what&apos;s included
           </a>

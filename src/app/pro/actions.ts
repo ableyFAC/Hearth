@@ -15,6 +15,39 @@ import { lookupCslbLicense, type CslbLookupResult } from "@/lib/cslb";
 import { createCandidateAndInvite } from "@/lib/checkr";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import { findActiveJobConflicts } from "@/lib/activeJobConflicts";
+import type { Json } from "@/lib/database.types";
+
+// Server-side counterpart to src/lib/analytics.ts's track(): that helper
+// fires via navigator.sendBeacon, which doesn't exist in a server action, so
+// this writes straight to app_events with the admin client instead. Mirrors
+// src/app/api/track/route.ts's own insert: same table, same
+// isMissingSchemaError fallback to a log line if migration 0091 hasn't run
+// on this DB yet, and never throws, so a call site never needs its own
+// try/catch around it.
+async function trackServerEvent(
+  userId: string | null,
+  event: string,
+  props?: Record<string, unknown>
+) {
+  try {
+    const admin = createAdminClient();
+    const { error } = await admin.from("app_events").insert({
+      event,
+      props: (props ?? null) as Json | null,
+      user_id: userId,
+    });
+    if (error && !isMissingSchemaError(error)) {
+      console.error(`trackServerEvent(${event}): insert failed:`, error.message);
+    } else if (error) {
+      console.log("[track]", event, props ?? {});
+    }
+  } catch (err) {
+    console.error(
+      `trackServerEvent(${event}) failed:`,
+      err instanceof Error ? err.message : err
+    );
+  }
+}
 
 // Real CSLB check (0055) is debounced off the most recent check we recorded:
 // license_verified_at (stamped only on a 'verified' outcome) or the
@@ -157,10 +190,11 @@ export async function saveCompanyAction(formData: FormData) {
 
   // Orange County launch gate (0074). Same missing-column-safe pattern as
   // service_state above: only overwrite when the submitting form actually
-  // carries the field. The onboarding checkbox is `required`, so a submit
-  // from that form always posts "true" here; a form that doesn't render the
-  // field at all (e.g. the profile edit form) posts null and must never wipe
-  // a stored value.
+  // carries the field. The onboarding form renders `serves_orange_county` as
+  // two required radios ("true"/"false"), so a submit from that form always
+  // posts one of those strings here; a form that doesn't render the field at
+  // all (e.g. the profile edit form) posts null and must never wipe a stored
+  // value.
   const ocEntry = formData.get("serves_orange_county");
   const servesOrangeCounty = ocEntry !== null && String(ocEntry) === "true";
   const ocWrite =
@@ -291,11 +325,12 @@ export async function saveCompanyAction(formData: FormData) {
         err instanceof Error ? err.message : err
       );
     }
-    setFlash(
-      "Hearth is matching pros in Orange County, CA only right now. We added you to the waitlist and will reach out when Hearth opens in your area.",
-      "error"
-    );
-    redirect("/pro/onboarding");
+    // Honest end state instead of dumping them back on a blank form (which
+    // lost every field they'd just typed): redirect to a query flag
+    // OnboardingCompanyForm reads to show an in-panel confirmation, plus a
+    // working sign-out link, instead of a toast over an empty form. Mirrors
+    // the homeowner out_of_area step's tone (src/app/onboarding/OnboardingForm.tsx).
+    redirect("/pro/onboarding?waitlisted=1");
   }
 
   // First-time setup. `vetted` is a matchability flag, not a trust claim:
@@ -642,7 +677,7 @@ export async function updateLeadStatusAction(formData: FormData) {
   // the read to this contractor's own leads, same as the update.
   const { data: before } = await supabase
     .from("contractor_leads")
-    .select("status")
+    .select("status, category")
     .eq("id", leadId)
     .maybeSingle();
   // RLS also guarantees the lead is assigned to this contractor.
@@ -673,6 +708,12 @@ export async function updateLeadStatusAction(formData: FormData) {
         err instanceof Error ? err.message : err
       );
     }
+    // "job_won" (src/app/api/track/route.ts): fires on the same real
+    // transition INTO Won as the review ask above, independent of Pro plan
+    // status. No PII, just the category.
+    await trackServerEvent(contractor.user_id, "job_won", {
+      category: before.category,
+    });
   }
 
   revalidatePath("/pro");
@@ -714,6 +755,39 @@ export async function applyToJobAction(formData: FormData) {
     return;
   }
 
+  // Advisory pre-check (see migration 0092's RESIDUAL note): apply_to_lead
+  // has no awareness of owner_closed_at, so without this a pro could still
+  // pay to apply to a job the homeowner already closed. RLS only lets a pro
+  // SELECT a lead once they're the assigned contractor ("leads contractor
+  // select", 0005), which an unassigned open job never is, so this reads
+  // through the admin client rather than the user-scoped one. Advisory only:
+  // a race between this check and the RPC below is acceptable (ghost
+  // protection still refunds an apply fee paid in that window), and this
+  // never touches apply_to_lead's own SQL or any money logic.
+  const admin = createAdminClient();
+  const { data: leadClosedCheck, error: leadClosedError } = await admin
+    .from("contractor_leads")
+    .select("owner_closed_at")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (leadClosedError && !isMissingSchemaError(leadClosedError)) {
+    console.error(
+      "applyToJobAction: owner_closed_at pre-check failed:",
+      leadClosedError.message
+    );
+  }
+  if (!leadClosedError && (leadClosedCheck as any)?.owner_closed_at) {
+    setFlash(
+      "The homeowner closed this job before you applied, so you were not charged.",
+      "error"
+    );
+    revalidatePath("/pro");
+    return;
+  }
+  // Any error here (0092 not run yet, or an unrelated hiccup) falls through
+  // and lets apply_to_lead run exactly as it did before this check existed:
+  // this pre-check is advisory only and must never itself block a legit apply.
+
   const supabase = createClient() as any;
   const { data, error } = await supabase.rpc("apply_to_lead", {
     p_lead: leadId,
@@ -741,7 +815,8 @@ export async function applyToJobAction(formData: FormData) {
     // client. Best-effort: a hiccup here must never break a paid application.
     try {
       if (contractor.user_id) {
-        const admin = createAdminClient();
+        // Reuses the admin client created for the owner_closed_at pre-check
+        // above, rather than opening a second one.
         const { data: lead } = await admin
           .from("contractor_leads")
           .select("category, payout_amount, created_at")
@@ -763,6 +838,11 @@ export async function applyToJobAction(formData: FormData) {
             title: "Application sent",
             body: `You applied to a ${labelFor(JOB_CATEGORIES, lead.category)} job. ${feeStr} was charged to your wallet.`,
             url: "/pro",
+          });
+          // "pro_apply" (src/app/api/track/route.ts): fires once per
+          // successful, fee-charged application. No PII, just the category.
+          await trackServerEvent(contractor.user_id, "pro_apply", {
+            category: lead.category,
           });
         }
       }

@@ -2,6 +2,7 @@ import { type EmailOtpType } from "@supabase/supabase-js";
 import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { safeNextPath } from "@/lib/safeNext";
+import { requestOrigin } from "@/lib/requestOrigin";
 
 // Handles the magic-link click: ?token_hash=...&type=email
 // Configure your Supabase email template's confirmation URL to point here:
@@ -19,9 +20,13 @@ export async function GET(request: NextRequest) {
     const supabase = createClient();
     const { error } = await supabase.auth.verifyOtp({ type, token_hash });
     if (!error) {
-      return NextResponse.redirect(new URL(next, request.url));
+      // requestOrigin, not request.url: request.url carries the dev server's
+      // bind address (`-H 0.0.0.0`) and would strand the browser there.
+      return NextResponse.redirect(new URL(next, requestOrigin(request)));
     }
   }
 
-  return NextResponse.redirect(new URL("/signin?error=link_invalid", request.url));
+  return NextResponse.redirect(
+    new URL("/signin?error=link_invalid", requestOrigin(request))
+  );
 }

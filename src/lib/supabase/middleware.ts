@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/lib/database.types";
+import { requestOrigin } from "@/lib/requestOrigin";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
@@ -139,13 +140,14 @@ export async function updateSession(request: NextRequest) {
     path === "/api/twilio/inbound";
 
   if (!user && !isPublic) {
-    const url = request.nextUrl.clone();
+    // Origin from requestOrigin, not nextUrl.clone(): nextUrl carries the
+    // dev server's bind address (`-H 0.0.0.0`) and strands the browser there.
+    const url = new URL("/signin", requestOrigin(request));
     // One unified sign-in for everyone; "/" routes by role after login.
     // The page they were headed to rides along as ?next= so signin can send
     // them back instead of dropping them on the dashboard (GET pages only:
     // a POST's destination would just 404 or sit empty after a redirect).
     const next = request.nextUrl.pathname + request.nextUrl.search;
-    url.pathname = "/signin";
     url.search =
       request.method === "GET" && next.startsWith("/") && !next.startsWith("//")
         ? `?next=${encodeURIComponent(next)}`

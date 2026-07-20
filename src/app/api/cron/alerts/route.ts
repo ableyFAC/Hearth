@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendNotification } from "@/lib/notify";
 import { STATE_NAMES } from "@/lib/forecast";
 
 export const runtime = "nodejs";
@@ -234,14 +235,19 @@ async function runCron(req: NextRequest) {
             .limit(1);
           if (existing && existing.length > 0) return;
 
-          const { error: insertError } = await supabase.from("notifications").insert({
-            user_id: property.user_id as string,
+          // Routed through sendNotification (not a raw insert) so this cron
+          // gets the same email/SMS-once-configured path as every other
+          // notification source. No contact details are fetched here today,
+          // so email/SMS stay dormant for this alert either way; only the
+          // in-app row (the source of truth) fires, same as before.
+          const sent = await sendNotification(supabase, {
+            userId: property.user_id as string,
             kind: alert.kind,
             title: alert.title,
             body: alert.body,
             url: "/dashboard",
           });
-          if (!insertError) created += 1;
+          if (sent) created += 1;
         } catch {
           // One property's failure shouldn't stop the rest of the batch.
         }

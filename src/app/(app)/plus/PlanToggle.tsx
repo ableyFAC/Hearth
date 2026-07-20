@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { startPlusCheckoutAction } from "./actions";
 import AutoRenewalTerms from "@/components/AutoRenewalTerms";
+import SubmitButton from "@/components/SubmitButton";
 import { PLUS_PLAN } from "@/lib/constants";
 
 type Plan = "weekly" | "monthly" | "yearly";
@@ -139,9 +140,9 @@ export default function PlanToggle({
       <form action={startPlusCheckoutAction} className="space-y-3">
         <input type="hidden" name="plan" value={plan} />
         <AutoRenewalTerms plan={plan} introEligible={trialEligible} />
-        <button className="btn-primary w-full">
+        <SubmitButton className="btn-primary w-full" pendingLabel="Starting checkout…">
           {trialEligible ? "Start my 3 days free" : "Subscribe"}
-        </button>
+        </SubmitButton>
         {/* Restates the cancellation right at the point of consent. The
             button label is the affirmative act; this line makes clear what is
             being agreed to. */}
