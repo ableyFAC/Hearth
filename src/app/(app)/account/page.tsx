@@ -1,11 +1,12 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getUserProfile } from "@/lib/user";
 import { getUser } from "@/lib/auth";
 import ProfileInfoForm from "./ProfileInfoForm";
+import AccountTabs from "./AccountTabs";
 
 // Edit profile: identity only (name, phone). Everything security-shaped -
-// email, password, sessions, deletion - lives at /account/security, so each
+// email, password, sessions, deletion - still lives at /account/security, now
+// presented as a sibling tab of Edit profile (see AccountTabs), so each
 // setting exists in exactly one place.
 export default async function AccountPage() {
   const profile = await getUserProfile();
@@ -18,20 +19,7 @@ export default async function AccountPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Edit profile</h1>
-        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-          Your personal details. To edit your home, use Home Profile. For your
-          email, password, or account deletion, see{" "}
-          <Link
-            href="/account/security"
-            className="font-medium text-bark-700 hover:underline dark:text-stone-300"
-          >
-            Account security
-          </Link>
-          .
-        </p>
-      </div>
+      <AccountTabs active="profile" />
       <ProfileInfoForm profile={profile} name={name} />
     </div>
   );

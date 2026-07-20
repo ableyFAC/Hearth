@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getUserProfile } from "@/lib/user";
 import { getUser } from "@/lib/auth";
 import AccountSecurityPanel from "@/components/AccountSecurityPanel";
+import AccountTabs from "../AccountTabs";
 import {
   updateEmailAction,
   updatePasswordAction,
@@ -11,7 +12,9 @@ import {
 
 // The only home of account security for homeowners: email, password,
 // sessions, data export, and deletion. Identity (name, phone) lives at
-// /account, so nothing here is duplicated there.
+// /account, so nothing here is duplicated there. Rendered as the second tab
+// of the Edit profile shell (see AccountTabs), but kept at its own URL so
+// deep links and redirect("/account/security") calls still resolve.
 export default async function AccountSecurityPage() {
   const profile = await getUserProfile();
   if (!profile) redirect("/signin");
@@ -21,12 +24,7 @@ export default async function AccountSecurityPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Account security</h1>
-        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-          Your sign-in email, password, sessions, and account deletion.
-        </p>
-      </div>
+      <AccountTabs active="security" />
       <AccountSecurityPanel
         email={email}
         updateEmailAction={updateEmailAction}

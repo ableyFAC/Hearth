@@ -88,9 +88,10 @@ export default function Nav({
             </svg>
           </Link>
           <NotificationBell />
-          {/* Account-only menu (profile, household, notifications, security,
-              help, log out). Navigation destinations live in ToolsMenu -
-              including Emergency, which used to be duplicated here too. */}
+          {/* Account-only menu (profile, household, notifications, help, log
+              out; account security is reached via Edit profile's tabs).
+              Navigation destinations live in ToolsMenu - including Emergency,
+              which used to be duplicated here too. */}
           <ProfileMenu
             name={name}
             hasPlus={hasPlus}
@@ -99,7 +100,6 @@ export default function Nav({
               { href: "/account", label: "Edit profile" },
               { href: "/account/household", label: "Household" },
               { href: "/account/notifications", label: "Notifications" },
-              { href: "/account/security", label: "Account security" },
               { href: "/account/privacy", label: "Your privacy rights" },
               { href: "/account/help", label: "Help" },
             ]}
