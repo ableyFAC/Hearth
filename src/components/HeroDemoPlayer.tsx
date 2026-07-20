@@ -2394,7 +2394,7 @@ export default function HeroDemoPlayer() {
                 <AppNav logoX />
                 <div className="mx-auto max-w-5xl px-6 py-5">
                   <h1 className="text-xl font-semibold text-stone-900">
-                    <span aria-hidden>🏠</span> 123 Maple St, Your City
+                    123 Maple St, Your City
                   </h1>
                   <p className="mt-0.5 text-sm text-stone-500">Built 1978 · 1640 sqft · 3 bd / 2 ba</p>
                   <p className="mt-0.5 text-sm text-red-600" data-x="brokenLink">Something broken right now?</p>
@@ -2432,7 +2432,7 @@ export default function HeroDemoPlayer() {
                   <h2 className="mt-5 text-lg font-semibold text-stone-900">This month</h2>
                   <div className="card mt-2" data-x="briefing">
                     <p className="stat-label">
-                      <span aria-hidden>✨</span> Hearth&apos;s briefing
+                      Hearth&apos;s briefing
                     </p>
                     <div className="mt-2 space-y-1.5 text-sm text-stone-700">
                       <p>
@@ -2514,7 +2514,7 @@ export default function HeroDemoPlayer() {
                       </div>
                       <div className="px-4 py-3">
                         <p className="text-sm text-stone-700">
-                          <span aria-hidden>✨</span> Ask Hearth
+                          Ask Hearth
                         </p>
                         <p className="text-xs text-stone-500">Your home assistant</p>
                       </div>

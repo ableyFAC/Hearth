@@ -222,7 +222,7 @@ export default function NotificationBell() {
         aria-label={
           unread > 0 ? `Notifications, ${unread} unread` : "Notifications"
         }
-        className="relative flex h-9 w-9 items-center justify-center rounded-full text-stone-500 hover:bg-hearth-50 hover:text-hearth-700 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-hearth-300"
+        className="relative flex h-9 w-9 items-center justify-center rounded-full text-stone-500 hover:bg-bark-50 hover:text-bark-700 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300"
       >
         <svg
           viewBox="0 0 24 24"
@@ -257,7 +257,7 @@ export default function NotificationBell() {
               <button
                 type="button"
                 onClick={markAllRead}
-                className="text-xs font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+                className="text-xs font-medium text-bark-700 hover:underline dark:text-stone-300"
               >
                 Mark all read
               </button>
@@ -297,7 +297,7 @@ export default function NotificationBell() {
                         <Link
                           href={n.url}
                           onClick={() => setOpen(false)}
-                          className="block px-4 py-3 hover:bg-hearth-50 dark:hover:bg-stone-600"
+                          className="block px-4 py-3 hover:bg-bark-50 dark:hover:bg-stone-600"
                         >
                           {content}
                         </Link>
@@ -314,7 +314,7 @@ export default function NotificationBell() {
             <button
               type="button"
               onClick={showMore}
-              className="block w-full border-t border-stone-100 px-4 py-2 text-center text-xs font-medium text-hearth-700 hover:bg-hearth-50 hover:underline dark:border-white/10 dark:text-hearth-300 dark:hover:bg-stone-600"
+              className="block w-full border-t border-stone-100 px-4 py-2 text-center text-xs font-medium text-bark-700 hover:bg-bark-50 hover:underline dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-600"
             >
               Show more
             </button>

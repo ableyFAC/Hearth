@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ACTIVE_HOME_COOKIE, getProperties } from "@/lib/property";
 import { lookupParcel, type ParcelFacts } from "@/lib/parcel";
+import { deriveOwnershipStatus } from "@/lib/ownershipMatch";
 import { DEFAULT_LIFESPANS } from "@/lib/health";
 import { hasPlus } from "@/lib/subscription";
 import { setFlash } from "@/lib/flash";
@@ -231,15 +232,21 @@ export async function claimPropertyAction(formData: FormData) {
     address_line1: addressLine1,
     city: (formData.get("city") as string) || null,
     state: (formData.get("state") as string) || null,
-    zip: (formData.get("zip") as string) || null,
+    // claimZip, not the raw form field: it's already trimmed/sliced to 5
+    // digits (the same value the launch-restriction gate above checked and
+    // the ownership check below looks up with), so the persisted zip and
+    // the ownership-check input can never diverge.
+    zip: claimZip || null,
     year_built: num("year_built"),
     sqft: num("sqft"),
     beds: num("beds"),
     baths: num("baths"),
     lot_size_sqft: num("lot_size_sqft"),
     property_type: (formData.get("property_type") as string) || null,
-    // Self-attestation for MVP. Tighten later (postcard / utility-bill check).
-    ownership_verified: true,
+    // ownership_verified was self-attested for MVP and is now dead: it's
+    // server-locked to false by migration 0093's trigger regardless of what
+    // this insert asks for. ownership_status (set below, after the insert,
+    // via the server-side assessor-record check) supersedes it.
     purchase_date: str("purchase_date"),
     purchase_price: num("purchase_price"),
     assessed_value: num("assessed_value"),
@@ -285,6 +292,40 @@ export async function claimPropertyAction(formData: FormData) {
 
   if (error || !created) {
     throw new Error(`Could not claim property: ${error?.message ?? "unknown"}`);
+  }
+
+  // Ownership verification (migration 0093): re-run the same street/zip
+  // lookup lookupParcelAction just did moments ago, which hits the fresh
+  // parcel_cache row it wrote (0069) instead of billing RentCast again, and
+  // match the county assessor's owner-of-record against the account
+  // holder's own name (src/lib/ownershipMatch.ts). This is the ONLY place
+  // owner data is read - the client-submitted parcel JSON above never
+  // carried it (OnboardingForm.tsx only forwards a fixed, named set of
+  // hidden fields, none of them owner_names/owner_type), so there is
+  // nothing here for a modified client to forge. Best-effort: any failure
+  // just leaves the property unverified, never blocks onboarding.
+  try {
+    const fullName =
+      (user.user_metadata?.full_name as string | undefined)?.trim() || null;
+    if (fullName) {
+      // Best-effort sync: handle_new_user() never populates users.full_name,
+      // and homeowner sign-up (src/app/homeowner-signup/page.tsx) is
+      // otherwise the only place that name is known. The "users self
+      // update" RLS policy (0002) has no column restrictions, so the
+      // ordinary user-scoped client can write it.
+      await supabase.from("users").update({ full_name: fullName }).eq("id", user.id);
+    }
+    const facts = await lookupParcel(addressLine1, claimZip);
+    const status = deriveOwnershipStatus(fullName, facts);
+    await createAdminClient().rpc("record_ownership_check", {
+      p_property_id: created.id,
+      p_status: status,
+      p_owner_names: facts.owner_names,
+      p_owner_type: facts.owner_type,
+      p_owner_occupied: facts.owner_occupied,
+    });
+  } catch (err) {
+    console.error("Ownership verification check failed:", err);
   }
 
   // Make the new home the active one.

@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { headers } from "next/headers";
 
 // The origin the BROWSER is actually on, for building same-site redirects.
 //
@@ -30,5 +31,27 @@ export function requestOrigin(request: NextRequest): string {
   const proto =
     request.headers.get("x-forwarded-proto")?.split(",")[0].trim() ||
     request.nextUrl.protocol.replace(":", "");
+  return `${proto}://${host}`;
+}
+
+// Same idea as requestOrigin() above, but for Server Actions and Server
+// Components, which get no NextRequest - only the read-only next/headers()
+// store. Used to build the absolute join URL a household QR code encodes
+// (src/app/(app)/account/household/actions.ts): NEXT_PUBLIC_SITE_URL is
+// deliberately not used there either, for the same reason as above, and a
+// QR code in particular is printed/screenshotted and read by a phone
+// camera, so it has no "current window" to fall back on the way a redirect
+// would - the Host header is the only signal available.
+export function requestOriginFromHeaders(): string {
+  const h = headers();
+  const host = (h.get("x-forwarded-host") ?? h.get("host") ?? "")
+    .split(",")[0]
+    .trim();
+  const proto = h.get("x-forwarded-proto")?.split(",")[0].trim() || "https";
+  // No hardcoded fallback host (no NEXT_PUBLIC_SITE_URL, no "localhost"): a
+  // real HTTP request always carries a Host header, so a missing one means
+  // something is genuinely wrong with the request, not a case to paper over
+  // with a guessed origin that would silently produce a broken QR code.
+  if (!host) throw new Error("requestOriginFromHeaders: no Host header on request");
   return `${proto}://${host}`;
 }

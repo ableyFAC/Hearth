@@ -200,7 +200,7 @@ function NotReadyCard() {
       <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-white/10 dark:bg-stone-800">
         {/* Flat warm banner strip, no gradient: hearth-100 in light, a
             translucent hearth tint over the stone-800 card in dark. */}
-        <div className="h-20 bg-hearth-100 dark:bg-hearth-900/30" />
+        <div className="h-20 bg-bark-100 dark:bg-bark-700/30" />
         <div className="px-6 pb-8 pt-2">
           <h1 className="text-xl font-semibold text-stone-900 dark:text-stone-100">
             This page is not ready yet
@@ -213,7 +213,7 @@ function NotReadyCard() {
       </div>
       <a
         href="/pros"
-        className="mt-6 inline-block text-sm font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+        className="mt-6 inline-block text-sm font-medium text-bark-700 hover:underline dark:text-stone-300"
       >
         Powered by Hearth
       </a>
@@ -312,7 +312,7 @@ export default async function PublicProPage({
       <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-white/10 dark:bg-stone-800">
         {/* Flat warm banner strip, no gradient: hearth-100 in light, a
             translucent hearth tint over the stone-800 card in dark. */}
-        <div className="h-20 bg-hearth-100 dark:bg-hearth-900/30" />
+        <div className="h-20 bg-bark-100 dark:bg-bark-700/30" />
         <div className="px-6 pb-6">
           {/* Logo (Pro members) or a neutral monogram */}
           <div className="-mt-8 mb-4">
@@ -566,7 +566,7 @@ export default async function PublicProPage({
       <p className="mt-6 text-center text-sm text-stone-500 dark:text-stone-400">
         <a
           href="/pros"
-          className="inline-flex items-center gap-1.5 hover:text-hearth-700 hover:underline dark:hover:text-hearth-300"
+          className="inline-flex items-center gap-1.5 hover:text-bark-700 hover:underline dark:hover:text-stone-300"
         >
           <Logo className="h-4 w-4" /> Powered by Hearth
         </a>

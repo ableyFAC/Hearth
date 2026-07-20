@@ -54,7 +54,7 @@ export default function ContractorReviews({
       <button
         type="button"
         onClick={toggle}
-        className="text-xs font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+        className="text-xs font-medium text-bark-700 hover:underline dark:text-stone-300"
       >
         {open ? "Hide reviews" : `Read ${count} review${count === 1 ? "" : "s"}`}
       </button>

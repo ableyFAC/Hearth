@@ -25,7 +25,7 @@ export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-2xl px-6 pb-16 pt-10">
       <p className="text-sm">
-        <a href="/" className="text-stone-500 hover:text-hearth-700 dark:text-stone-400 dark:hover:text-hearth-300">
+        <a href="/" className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
           ← Hearth
         </a>
       </p>
@@ -233,6 +233,14 @@ export default function PrivacyPage() {
             stored in our database, hosted by Supabase. Access is restricted
             to your own account.
           </p>
+          <p className="mt-2 leading-relaxed">
+            When you add a property, we check public county assessor records
+            (through our property data provider, RentCast) to see whether the
+            name on your account matches the name the county has on file for
+            that address. We store the result as a simple verified or
+            unverified flag on your property. We do not show the county&apos;s
+            owner names to other users, including pros you contact.
+          </p>
         </section>
 
         <section>
@@ -297,7 +305,7 @@ export default function PrivacyPage() {
             content. That is Google&apos;s policy for the free tier, not
             Hearth&apos;s choice. We plan to move to Google&apos;s paid tier,
             under which Google does not use your data this way. See{" "}
-            <a href="/ai-disclosure" className="text-hearth-700 hover:underline dark:text-hearth-300">
+            <a href="/ai-disclosure" className="text-bark-700 hover:underline dark:text-stone-300">
               How Hearth Uses AI
             </a>{" "}
             for the fuller explanation.
@@ -468,10 +476,10 @@ export default function PrivacyPage() {
             deleting your account, and correcting your profile, live in your
             account settings once you&apos;re signed in, under Account &gt;
             Your privacy rights. See{" "}
-            <a href="/account/privacy" className="text-hearth-700 hover:underline dark:text-hearth-300">
+            <a href="/account/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
               Your privacy rights
             </a>{" "}
-            for those controls, or email{" "}
+            for those controls, or reach us through{" "}
             <LegalContact />
             {" "}for anything they don&apos;t cover.
           </p>
@@ -500,7 +508,7 @@ export default function PrivacyPage() {
         <section>
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Questions</h2>
           <p className="mt-2 leading-relaxed">
-            Questions about this policy or your data can be sent to{" "}
+            Questions about this policy or your data can be sent through{" "}
             <LegalContact />
             . If you have an account, you can also reach us from the Help
             page.

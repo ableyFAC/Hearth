@@ -1,36 +1,29 @@
-import { FOUNDER } from "@/lib/constants";
-
-// Contact address rendered on the legal pages (/privacy, /terms,
-// /ai-disclosure). Deliberately NOT the same treatment as the marketing
-// surfaces: the landing page and /pros guard on `FOUNDER.email` and simply drop
-// the contact link when it is blank, which is fine for a "questions?" prompt.
+// Contact link rendered on the legal pages (/privacy, /terms, /ai-disclosure,
+// /pro-terms). Used to render a mailto: to FOUNDER.email, with a visible
+// [TODO(legal): contact email to be provided] placeholder while that field
+// was blank - a legal page can't just silently drop a contact link the way
+// the marketing pages did, since the arbitration notice-of-dispute and
+// opt-out clauses carry hard deadlines that run against whatever address is
+// published.
 //
-// A legal page cannot do that. A privacy contact is expected, and the
-// arbitration notice-of-dispute and opt-out addresses carry hard deadlines that
-// run against whatever address is published. Silently rendering nothing there
-// would leave a clause pointing at no one. So while `FOUNDER.email` is blank
-// this renders a VISIBLE placeholder, matching how /dmca surfaces its
-// designated-agent TODOs, so the page cannot ship looking finished when it
-// isn't.
-export function LegalContact({ subject }: { subject?: string }) {
-  if (!FOUNDER.email) {
-    return (
-      <span className="text-stone-500 dark:text-stone-400">
-        [TODO(legal): contact email to be provided]
-      </span>
-    );
-  }
-
-  const href = subject
-    ? `mailto:${FOUNDER.email}?subject=${encodeURIComponent(subject)}`
-    : `mailto:${FOUNDER.email}`;
+// A raw mailto: on a handful of the site's highest-traffic public pages got
+// scraped for spam almost immediately, which is the whole reason /contact
+// exists (see src/app/contact/page.tsx). This now points there instead:
+// submissions land in the same support_messages table and inbox the team
+// already reads (src/app/(app)/account/help), and - unlike the old mailto -
+// it works even while FOUNDER.email is blank, so the old placeholder branch
+// is gone too.
+//
+// `topic` is optional context carried as a query param (e.g. "Arbitration
+// opt-out"), shown back to the visitor on the /contact page so they know
+// what they're writing about. It is not a legal "designated address" any
+// more than the old mailto's subject line was.
+export function LegalContact({ topic }: { topic?: string }) {
+  const href = topic ? `/contact?topic=${encodeURIComponent(topic)}` : "/contact";
 
   return (
-    <a
-      href={href}
-      className="text-hearth-700 hover:underline dark:text-hearth-300"
-    >
-      {FOUNDER.email}
+    <a href={href} className="text-bark-700 hover:underline dark:text-stone-300">
+      our contact form
     </a>
   );
 }

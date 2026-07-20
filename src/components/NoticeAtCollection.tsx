@@ -32,7 +32,7 @@ export default function NoticeAtCollection({
   // in-page rather than only on /privacy keeps it "at or before" collection.
   return (
     <details className="group text-xs leading-relaxed text-stone-600 dark:text-stone-400">
-      <summary className="inline-flex cursor-pointer list-none items-center gap-1 font-medium text-hearth-700 hover:underline dark:text-hearth-300 [&::-webkit-details-marker]:hidden">
+      <summary className="inline-flex cursor-pointer list-none items-center gap-1 font-medium text-bark-700 hover:underline dark:text-stone-300 [&::-webkit-details-marker]:hidden">
         What we collect here and why
         <span aria-hidden className="text-stone-400 transition-transform group-open:rotate-180 dark:text-stone-500">
           &#9662;
@@ -49,7 +49,7 @@ export default function NoticeAtCollection({
           your account.{" "}
           <Link
             href="/privacy"
-            className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+            className="font-medium text-bark-700 hover:underline dark:text-stone-300"
           >
             Privacy Policy
           </Link>

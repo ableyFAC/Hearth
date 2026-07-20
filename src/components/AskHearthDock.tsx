@@ -108,7 +108,7 @@ export default function AskHearthDock({
               href="/chats?lead=ask-hearth"
               onClick={close}
               title="Open full screen in Messages"
-              className="leading-none hover:text-hearth-700 dark:hover:text-hearth-300"
+              className="leading-none hover:text-bark-700 dark:hover:text-stone-300"
             >
               ⤢
             </Link>
@@ -147,7 +147,7 @@ export default function AskHearthDock({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-hearth-600 text-lg font-semibold text-white shadow-pop hover:bg-hearth-700 sm:h-auto sm:w-auto sm:px-4 sm:py-3 sm:text-sm"
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-bark-600 text-lg font-semibold text-white shadow-pop hover:bg-bark-700 dark:bg-bark-500 dark:hover:bg-bark-600 sm:h-auto sm:w-auto sm:px-4 sm:py-3 sm:text-sm"
         >
           <span aria-hidden="true" className="sm:hidden">
             <Sparkles className="h-5 w-5" />

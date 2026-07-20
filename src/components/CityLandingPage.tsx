@@ -104,19 +104,19 @@ export default async function CityLandingPage({
           href="/"
           className="flex items-center gap-2 font-semibold text-stone-900 dark:text-stone-100"
         >
-          <Logo className="h-6 w-6 text-hearth-700 dark:text-hearth-400" /> Hearth
+          <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> Hearth
         </a>
         {user ? (
           <a
             href="/dashboard"
-            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:text-stone-300 dark:hover:text-hearth-300"
+            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-300 dark:hover:text-stone-300"
           >
             Open your dashboard
           </a>
         ) : (
           <a
             href="/homeowner-signup"
-            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:text-stone-300 dark:hover:text-hearth-300"
+            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-300 dark:hover:text-stone-300"
           >
             Get started free
           </a>
@@ -176,7 +176,7 @@ export default async function CityLandingPage({
               <li key={g.href}>
                 <a
                   href={g.href}
-                  className="card block transition hover:border-hearth-400 hover:shadow-md"
+                  className="card block transition hover:border-bark-500 hover:shadow-md"
                 >
                   <h3 className="font-semibold text-stone-900 dark:text-stone-100">{g.title}</h3>
                   <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">{g.blurb}</p>
@@ -191,12 +191,12 @@ export default async function CityLandingPage({
 
       <footer className="mx-auto max-w-2xl border-t border-stone-200 px-6 py-6 text-center dark:border-white/10">
         <p className="inline-flex w-full items-center justify-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
-          <Logo className="h-4 w-4 text-hearth-700 dark:text-hearth-400" /> Hearth · Your home, looked after
+          <Logo className="h-4 w-4 text-bark-700 dark:text-stone-400" /> Hearth · Your home, looked after
         </p>
         <p className="mt-2 text-xs">
           <a
             href="/guides"
-            className="text-stone-500 hover:text-hearth-700 hover:underline dark:text-stone-400 dark:hover:text-hearth-300"
+            className="text-stone-500 hover:text-bark-700 hover:underline dark:text-stone-400 dark:hover:text-stone-300"
           >
             All guides
           </a>

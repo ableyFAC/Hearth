@@ -121,7 +121,7 @@ export default function SignInForm({
             <p className="mt-1.5 text-right text-xs">
               <a
                 href="/reset-password"
-                className="text-hearth-700 hover:underline dark:text-hearth-300"
+                className="text-bark-700 hover:underline dark:text-stone-300"
               >
                 Forgot password?
               </a>
@@ -133,7 +133,7 @@ export default function SignInForm({
         </form>
 
         {status && (
-          <p className="mt-4 rounded-lg bg-hearth-50 p-3 text-center text-sm text-hearth-800 dark:bg-hearth-900/40 dark:text-hearth-200">
+          <p className="mt-4 rounded-lg bg-bark-50 p-3 text-center text-sm text-bark-700 dark:bg-bark-700/40 dark:text-stone-300">
             {status}
           </p>
         )}

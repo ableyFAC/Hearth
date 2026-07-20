@@ -4,6 +4,7 @@ import { getProperties } from "@/lib/property";
 import type { HouseholdMember } from "@/lib/database.types";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
 import SubmitButton from "@/components/SubmitButton";
+import HouseholdQrCode from "./HouseholdQrCode";
 import {
   inviteMemberAction,
   removeMemberAction,
@@ -189,17 +190,29 @@ export default async function HouseholdPage() {
                 Remove someone to invite another person.
               </p>
             ) : (
-              <form action={inviteMemberAction} className="mt-4 flex gap-2">
-                <input type="hidden" name="property_id" value={home.id} />
-                <input
-                  name="email"
-                  type="email"
-                  required
-                  placeholder="name@example.com"
-                  className="input flex-1"
-                />
-                <SubmitButton className="btn-secondary">Invite</SubmitButton>
-              </form>
+              <>
+                <form action={inviteMemberAction} className="mt-4 flex gap-2">
+                  <input type="hidden" name="property_id" value={home.id} />
+                  <input
+                    name="email"
+                    type="email"
+                    required
+                    placeholder="name@example.com"
+                    className="input flex-1"
+                  />
+                  <SubmitButton className="btn-secondary">Invite</SubmitButton>
+                </form>
+
+                <p className="mt-4 text-center text-xs text-stone-400 dark:text-stone-500">
+                  or
+                </p>
+                {/* Fresh QR token minted client-side (migration 0095), a
+                    second way to reach the same membership the email invite
+                    above creates. Key on home.id so a new HouseholdQrCode
+                    mounts (and mints its own token) per home instead of one
+                    instance being reused across homes. */}
+                <HouseholdQrCode key={home.id} propertyId={home.id} />
+              </>
             )}
           </div>
         );

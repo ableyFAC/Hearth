@@ -106,6 +106,13 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/ai-disclosure/") ||
     path === "/dmca" ||
     path.startsWith("/dmca/") ||
+    // Public contact form (src/app/contact): the whole point is to give a
+    // signed-out visitor a reachable channel now that the site no longer
+    // publishes FOUNDER.email directly (see LegalContact.tsx). A signed-out
+    // visitor is exactly who needs this - bouncing them to /signin to send a
+    // message would defeat the point of building it.
+    path === "/contact" ||
+    path.startsWith("/contact/") ||
     // SEO endpoints (src/app/sitemap.ts, robots.ts): crawlers have no
     // session, and a 307 to /signin here would hide the whole site from them.
     path === "/sitemap.xml" ||
@@ -137,7 +144,15 @@ export async function updateSession(request: NextRequest) {
     // signature, not a user session, same reasoning as the Stripe/Checkr
     // webhooks above - a 307 here would read as a failed delivery and drop
     // inbound texts (e.g. SMS opt-out/STOP handling) silently.
-    path === "/api/twilio/inbound";
+    path === "/api/twilio/inbound" ||
+    // Household QR join links (src/app/join/household/[token]): scanned by
+    // a phone camera with no session of its own. The page itself (not this
+    // middleware) has to show the sign-in-or-sign-up chooser when signed
+    // out, so it must be reachable signed out in the first place - a bounce
+    // to /signin here would only ever offer one of the two paths. The page
+    // still requires a session before it will redeem the token; this only
+    // controls whether the page renders at all.
+    path.startsWith("/join/");
 
   if (!user && !isPublic) {
     // Origin from requestOrigin, not nextUrl.clone(): nextUrl carries the

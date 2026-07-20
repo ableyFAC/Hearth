@@ -107,7 +107,7 @@ export default async function PlusPage({
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Hearth Plus</h1>
         </div>
         <div className="card-hero space-y-4 text-center">
-          <p className="text-lg font-medium text-hearth-700 dark:text-hearth-300">
+          <p className="text-lg font-medium text-bark-700 dark:text-stone-300">
             You&apos;re on Hearth Plus
           </p>
           <p className="text-sm text-stone-500 dark:text-stone-400">
@@ -272,8 +272,8 @@ export default async function PlusPage({
           on, so this banner must not show even if the URL is hit directly.
           Keep it for when the flag flips back. */}
       {!COLD_START_FREE_POSTING && searchParams.reason === "job_limit" && (
-        <div className="card border-hearth-200 bg-hearth-50 text-center dark:border-hearth-800/40 dark:bg-hearth-900/30">
-          <p className="text-sm text-hearth-800 dark:text-hearth-200">
+        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+          <p className="text-sm text-bark-700 dark:text-stone-300">
             You&apos;ve used all 3 of your free job posts. Hearth Plus lets you
             post unlimited jobs and keeps the quotes rolling.
           </p>
@@ -281,8 +281,8 @@ export default async function PlusPage({
       )}
 
       {searchParams.reason === "home_limit" && (
-        <div className="card border-hearth-200 bg-hearth-50 text-center dark:border-hearth-800/40 dark:bg-hearth-900/30">
-          <p className="text-sm text-hearth-800 dark:text-hearth-200">
+        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+          <p className="text-sm text-bark-700 dark:text-stone-300">
             You&apos;ve added your free home. Hearth Plus lets you manage up
             to 5 homes in one place.
           </p>
@@ -290,8 +290,8 @@ export default async function PlusPage({
       )}
 
       {searchParams.reason === "plan" && (
-        <div className="card border-hearth-200 bg-hearth-50 text-center dark:border-hearth-800/40 dark:bg-hearth-900/30">
-          <p className="text-sm text-hearth-800 dark:text-hearth-200">
+        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+          <p className="text-sm text-bark-700 dark:text-stone-300">
             Hearth Plus builds a maintenance plan tuned to your home&apos;s
             systems, a few tasks at a time so it never piles up.
           </p>
@@ -299,8 +299,8 @@ export default async function PlusPage({
       )}
 
       {searchParams.reason === "forecast" && (
-        <div className="card border-hearth-200 bg-hearth-50 text-center dark:border-hearth-800/40 dark:bg-hearth-900/30">
-          <p className="text-sm text-hearth-800 dark:text-hearth-200">
+        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+          <p className="text-sm text-bark-700 dark:text-stone-300">
             Hearth Plus forecasts what your home will need over the next 10
             years and the amount to set aside each month, so a big repair is a
             plan, not a panic.
@@ -309,8 +309,8 @@ export default async function PlusPage({
       )}
 
       {searchParams.reason === "quote" && (
-        <div className="card border-hearth-200 bg-hearth-50 text-center dark:border-hearth-800/40 dark:bg-hearth-900/30">
-          <p className="text-sm text-hearth-800 dark:text-hearth-200">
+        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+          <p className="text-sm text-bark-700 dark:text-stone-300">
             You&apos;ve used your free quote check. Plus reads every quote you
             get, flags padding, and writes the negotiation message, unlimited.
           </p>
@@ -318,8 +318,8 @@ export default async function PlusPage({
       )}
 
       {searchParams.reason === "report" && (
-        <div className="card border-hearth-200 bg-hearth-50 text-center dark:border-hearth-800/40 dark:bg-hearth-900/30">
-          <p className="text-sm text-hearth-800 dark:text-hearth-200">
+        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+          <p className="text-sm text-bark-700 dark:text-stone-300">
             Hearth Plus builds a shareable home report of your systems,
             documents, and upkeep history, ready for insurers or buyers.
           </p>
@@ -327,8 +327,8 @@ export default async function PlusPage({
       )}
 
       {searchParams.reason === "tax" && (
-        <div className="card border-hearth-200 bg-hearth-50 text-center dark:border-hearth-800/40 dark:bg-hearth-900/30">
-          <p className="text-sm text-hearth-800 dark:text-hearth-200">
+        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+          <p className="text-sm text-bark-700 dark:text-stone-300">
             Your assessment looks high. Plus drafts the appeal letter for
             you, ready to file with your county.
           </p>
@@ -336,8 +336,8 @@ export default async function PlusPage({
       )}
 
       {searchParams.reason === "insurance" && (
-        <div className="card border-hearth-200 bg-hearth-50 text-center dark:border-hearth-800/40 dark:bg-hearth-900/30">
-          <p className="text-sm text-hearth-800 dark:text-hearth-200">
+        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+          <p className="text-sm text-bark-700 dark:text-stone-300">
             Plus builds your requote packet: your home&apos;s facts, upkeep
             record, and the questions to ask, ready to hand to insurance
             agents so they compete for you.
@@ -352,7 +352,7 @@ export default async function PlusPage({
         <h1 className="text-3xl font-semibold text-stone-900 dark:text-stone-100">
           Know what&apos;s coming before it costs you
         </h1>
-        <p className="mt-2 text-sm font-medium text-hearth-700 dark:text-hearth-300">
+        <p className="mt-2 text-sm font-medium text-bark-700 dark:text-stone-300">
           {trialEligible
             ? "Free for 3 days, then $4.99/mo or $39.99/yr. Cancel anytime."
             : "$1.99/wk, $4.99/mo, or $39.99/yr. Cancel anytime."}
@@ -396,7 +396,7 @@ export default async function PlusPage({
               <tr className="border-b border-stone-200 text-left text-stone-500 dark:border-stone-700 dark:text-stone-400">
                 <th className="px-2 py-3 font-medium sm:px-4"> </th>
                 <th className="px-2 py-3 font-medium sm:px-4">Free</th>
-                <th className="px-2 py-3 font-medium text-hearth-700 sm:px-4 dark:text-hearth-300">
+                <th className="px-2 py-3 font-medium text-bark-700 sm:px-4 dark:text-stone-300">
                   Hearth Plus
                 </th>
               </tr>
@@ -406,7 +406,7 @@ export default async function PlusPage({
                 <tr key={row.label} className="border-b border-stone-100 last:border-0 dark:border-white/10">
                   <td className="px-2 py-3 text-stone-700 sm:px-4 dark:text-stone-300">{row.label}</td>
                   <td className="px-2 py-3 text-stone-500 sm:px-4 dark:text-stone-400">{row.free}</td>
-                  <td className="px-2 py-3 font-medium text-hearth-700 sm:px-4 dark:text-hearth-300">
+                  <td className="px-2 py-3 font-medium text-bark-700 sm:px-4 dark:text-stone-300">
                     {row.plus}
                   </td>
                 </tr>

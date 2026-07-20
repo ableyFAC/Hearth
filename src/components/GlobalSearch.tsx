@@ -83,7 +83,7 @@ export default function GlobalSearch() {
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search"
           aria-label="Search"
-          className="w-32 rounded-full border border-stone-200 bg-white py-1.5 pl-8 pr-3 text-sm text-stone-700 transition-all placeholder:text-stone-500 focus:w-48 focus:border-hearth-400 focus:outline-none dark:border-white/10 dark:bg-stone-900 dark:text-stone-200 dark:focus:border-hearth-400"
+          className="w-32 rounded-full border border-stone-200 bg-white py-1.5 pl-8 pr-3 text-sm text-stone-700 transition-all placeholder:text-stone-500 focus:w-48 focus:border-bark-500 focus:outline-none dark:border-white/10 dark:bg-stone-900 dark:text-stone-200 dark:focus:border-bark-500"
         />
       </form>
 
@@ -104,7 +104,7 @@ export default function GlobalSearch() {
               // this panel.
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => go(ex)}
-              className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-stone-700 hover:bg-hearth-50 dark:text-stone-300 dark:hover:bg-stone-600"
+              className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-stone-700 hover:bg-bark-50 dark:text-stone-300 dark:hover:bg-stone-600"
             >
               {ex}
             </button>

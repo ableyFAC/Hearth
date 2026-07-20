@@ -30,19 +30,19 @@ export default async function GuidesLayout({
           href="/"
           className="flex items-center gap-2 font-semibold text-stone-900 dark:text-stone-100"
         >
-          <Logo className="h-6 w-6 text-hearth-700 dark:text-hearth-400" /> Hearth
+          <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> Hearth
         </a>
         {user ? (
           <a
             href="/dashboard"
-            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:text-stone-300 dark:hover:text-hearth-300"
+            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-300 dark:hover:text-stone-300"
           >
             Open your dashboard
           </a>
         ) : (
           <a
             href="/get-started"
-            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:text-stone-300 dark:hover:text-hearth-300"
+            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-300 dark:hover:text-stone-300"
           >
             Get started free
           </a>
@@ -53,26 +53,26 @@ export default async function GuidesLayout({
 
       <footer className="mx-auto mt-16 max-w-2xl border-t border-stone-200 px-6 py-6 text-center dark:border-white/10">
         <p className="inline-flex w-full items-center justify-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
-          <Logo className="h-4 w-4 text-hearth-700 dark:text-hearth-400" /> Hearth · Your home, looked after
+          <Logo className="h-4 w-4 text-bark-700 dark:text-stone-400" /> Hearth · Your home, looked after
         </p>
         <p className="mt-2 text-xs">
           <a
             href="/guides"
-            className="text-stone-500 hover:text-hearth-700 hover:underline dark:text-stone-400 dark:hover:text-hearth-300"
+            className="text-stone-500 hover:text-bark-700 hover:underline dark:text-stone-400 dark:hover:text-stone-300"
           >
             All guides
           </a>{" "}
           ·{" "}
           <a
             href="/privacy"
-            className="text-stone-500 hover:text-hearth-700 hover:underline dark:text-stone-400 dark:hover:text-hearth-300"
+            className="text-stone-500 hover:text-bark-700 hover:underline dark:text-stone-400 dark:hover:text-stone-300"
           >
             Privacy
           </a>{" "}
           ·{" "}
           <a
             href="/terms"
-            className="text-stone-500 hover:text-hearth-700 hover:underline dark:text-stone-400 dark:hover:text-hearth-300"
+            className="text-stone-500 hover:text-bark-700 hover:underline dark:text-stone-400 dark:hover:text-stone-300"
           >
             Terms
           </a>

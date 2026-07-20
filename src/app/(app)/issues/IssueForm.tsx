@@ -18,8 +18,14 @@ export default function IssueForm({
   const [open, setOpen] = useState(false);
 
   if (!open) {
+    // Deliberately NOT .btn-primary: this reads as an alert action (like the
+    // destructive buttons), so it keeps the old ember styling instead of
+    // following the primary CTA color to green.
     return (
-      <button className="btn-primary" onClick={() => setOpen(true)}>
+      <button
+        className="btn bg-hearth-600 text-white shadow-card hover:bg-hearth-700 hover:shadow-lift"
+        onClick={() => setOpen(true)}
+      >
         + Report an issue
       </button>
     );

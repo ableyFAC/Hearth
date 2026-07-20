@@ -338,7 +338,7 @@ export function scoreBreakdown(
 
 export function scoreBand(score: number): { label: string; tone: string } {
   if (score >= 85) return { label: "Great shape", tone: "text-green-700 bg-green-50 border-green-200 dark:text-green-200 dark:bg-green-950/40 dark:border-green-900" };
-  if (score >= 65) return { label: "Generally healthy", tone: "text-hearth-700 bg-hearth-50 border-hearth-200 dark:text-hearth-200 dark:bg-hearth-900/40 dark:border-hearth-800" };
+  if (score >= 65) return { label: "Generally healthy", tone: "text-bark-700 bg-bark-50 border-bark-100 dark:text-stone-300 dark:bg-bark-700/40 dark:border-bark-700" };
   if (score >= 45) return { label: "Needs attention", tone: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-300 dark:bg-amber-500/15 dark:border-amber-500/30" };
   return { label: "Several items overdue", tone: "text-red-700 bg-red-50 border-red-200 dark:text-red-200 dark:bg-red-950/40 dark:border-red-900" };
 }

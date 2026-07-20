@@ -51,6 +51,11 @@ export default function PrepPhotoUpload({
       setErr("That file's too big or isn't a supported image type (PNG, JPEG, WEBP).");
       return;
     }
+    // Local preview right away, before the upload finishes, so the owner can
+    // see what they picked. Swapped for the real (signed) URL once the
+    // upload lands; revoked either way so it never lingers.
+    const localUrl = URL.createObjectURL(file);
+    setPreview(localUrl);
     setBusy(true);
     setErr(null);
     const ext = file.name.split(".").pop() || "jpg";
@@ -60,11 +65,14 @@ export default function PrepPhotoUpload({
       .upload(path, file, { upsert: false });
     setBusy(false);
     if (error) {
+      URL.revokeObjectURL(localUrl);
+      setPreview(initialPhotoSrc);
       setErr("Couldn't upload that photo (is the home-photos bucket created?). Try again.");
       return;
     }
     const { data } = supabase.storage.from("home-photos").getPublicUrl(path);
     setPhotoUrl(data.publicUrl);
+    URL.revokeObjectURL(localUrl);
     setPreview(imgSrc(data.publicUrl));
   }
 
@@ -92,7 +100,7 @@ export default function PrepPhotoUpload({
         type="file"
         accept="image/png,image/jpeg,image/webp"
         onChange={onPick}
-        className="block w-full text-xs text-stone-500 file:mr-2 file:rounded-md file:border-0 file:bg-hearth-100 file:px-2 file:py-1 file:text-hearth-800 dark:text-stone-400 dark:file:bg-hearth-900 dark:file:text-hearth-300"
+        className="block w-full text-xs text-stone-500 file:mr-2 file:rounded-md file:border-0 file:bg-bark-100 file:px-2 file:py-1 file:text-bark-700 dark:text-stone-400 dark:file:bg-bark-700 dark:file:text-stone-300"
       />
       {busy && <p className="text-xs text-stone-500 dark:text-stone-400">Uploading…</p>}
       {err && <p className="text-xs text-amber-600 dark:text-amber-400">{err}</p>}

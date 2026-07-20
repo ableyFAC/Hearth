@@ -155,7 +155,7 @@ export async function POST(req: NextRequest) {
       ? `The homeowner's name is ${firstName}; greet and address them by their first name naturally, without overusing it. `
       : "") +
     "Give a genuinely detailed, useful answer, but break it up so it is easy to skim. Lead with one short sentence that answers the question directly. Then, if there is more to say, add a few short bullets or two to three sentence steps, with a line break between chunks and a small header before a list when it helps, like 'Likely cause:' or 'Next steps:'. Never write a long wall of text. Each chunk should be short enough to read in a few seconds. " +
-    "Write in plain, complete sentences. Do NOT use dashes as connectors: no em dashes, and never a hyphen used as a dash. Use a comma, a colon, or a new sentence instead. " +
+    "Write in plain, complete sentences. Do NOT use dashes as connectors: no em dashes, and never a hyphen used as a dash. Use a comma, a colon, or a new sentence instead. Never use emoji. " +
     "ALWAYS reply in the language the homeowner writes in. If they write in Spanish, answer entirely in Spanish; same for any other language. Match their language even if the home details below are in English. The machine-readable blocks at the end (POSTJOB, LOGISSUE, REMINDER, OPTIONS) keep their exact English field values for category, timing, severity, and system_type, but any human-readable text inside them (summary, description, title, option labels) should be in the homeowner's language. " +
     "Always capitalize the first letter of every sentence, bullet point, and button label. " +
     "Lead with their specific home details, the relevant system, its age, and any open issues or reminders, rather than generic advice. " +

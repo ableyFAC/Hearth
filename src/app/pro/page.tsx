@@ -511,6 +511,14 @@ export default async function ProDashboard({
                         {j.issue_severity}
                       </span>
                     )}
+                    {j.ownership_verified && (
+                      <span
+                        className="chip-ok"
+                        title="The poster's account name matches the county assessor's owner record for this address."
+                      >
+                        Ownership verified
+                      </span>
+                    )}
                     <span className="ml-auto flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-300">
                       {off > 0 && (
                         <span className="chip border border-amber-200 bg-amber-100 font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">

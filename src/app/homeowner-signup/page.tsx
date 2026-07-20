@@ -184,7 +184,7 @@ export default function HomeownerSignUpPage({
           {notice && (
             <p
               aria-live="polite"
-              className="mt-4 rounded-lg bg-hearth-50 p-3 text-center text-sm text-hearth-800 dark:bg-hearth-900/40 dark:text-hearth-200"
+              className="mt-4 rounded-lg bg-bark-50 p-3 text-center text-sm text-bark-700 dark:bg-bark-700/40 dark:text-stone-300"
             >
               {notice}
             </p>
@@ -192,11 +192,11 @@ export default function HomeownerSignUpPage({
 
           <p className="mt-6 border-t border-stone-100 pt-4 text-center text-xs text-stone-500 dark:border-white/10 dark:text-stone-400">
             Already confirmed, or used the wrong email?{" "}
-            <a href={`/signin${nextQuery}`} className="text-hearth-700 hover:underline dark:text-hearth-300">
+            <a href={`/signin${nextQuery}`} className="text-bark-700 hover:underline dark:text-stone-300">
               Sign in
             </a>{" "}
             or{" "}
-            <a href="/reset-password" className="text-hearth-700 hover:underline dark:text-hearth-300">
+            <a href="/reset-password" className="text-bark-700 hover:underline dark:text-stone-300">
               reset your password
             </a>
             .
@@ -278,11 +278,11 @@ export default function HomeownerSignUpPage({
             />
             <span>
               I am at least 18 years old and I have read and agree to the{" "}
-              <a href="/terms" className="text-hearth-700 hover:underline dark:text-hearth-300">
+              <a href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
                 Terms
               </a>{" "}
               and{" "}
-              <a href="/privacy" className="text-hearth-700 hover:underline dark:text-hearth-300">
+              <a href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
                 Privacy Policy
               </a>
               .
@@ -312,7 +312,7 @@ export default function HomeownerSignUpPage({
         {notice && (
           <p
             aria-live="polite"
-            className="mt-4 rounded-lg bg-hearth-50 p-3 text-center text-sm text-hearth-800 dark:bg-hearth-900/40 dark:text-hearth-200"
+            className="mt-4 rounded-lg bg-bark-50 p-3 text-center text-sm text-bark-700 dark:bg-bark-700/40 dark:text-stone-300"
           >
             {notice}
           </p>
@@ -333,7 +333,7 @@ export default function HomeownerSignUpPage({
         Are you a contractor?{" "}
         <a
           href={`/contractor-signup${nextQuery}`}
-          className="text-hearth-700 hover:underline dark:text-hearth-300"
+          className="text-bark-700 hover:underline dark:text-stone-300"
         >
           Sign up for Hearth for Pros
         </a>

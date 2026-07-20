@@ -52,8 +52,8 @@ export default async function QuoteCheckPage() {
       </header>
 
       {freeTaste && (
-        <div className="card border-hearth-200 bg-hearth-50 text-center dark:border-hearth-800/40 dark:bg-hearth-900/30">
-          <p className="text-sm text-hearth-800 dark:text-hearth-300">
+        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+          <p className="text-sm text-bark-700 dark:text-stone-300">
             This one&apos;s on us. Your first quote check is free, Hearth Plus
             makes it unlimited. It only counts as used once an analysis
             actually succeeds, so a failed upload never burns it.

@@ -24,7 +24,7 @@ export default function DmcaPage() {
   return (
     <main className="mx-auto max-w-2xl px-6 pb-16 pt-10">
       <p className="text-sm">
-        <a href="/" className="text-stone-500 hover:text-hearth-700 dark:text-stone-400 dark:hover:text-hearth-300">
+        <a href="/" className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
           ← Hearth
         </a>
       </p>
@@ -134,6 +134,16 @@ export default function DmcaPage() {
             and with the Copyright Office, and the registration must be renewed
             every three years. Do not ship this page publicly with placeholders.
           */}
+          {/*
+            NOTE(legal): once that registration happens, 17 U.S.C. § 512(c)(2)
+            requires the agent's real, public name, address, phone number, and
+            email to be posted on the service in a location accessible to the
+            public (this page) - a contact form is not a substitute for that
+            posted email address once an agent is designated. Until
+            registration happens, /contact below is only an interim reachable
+            channel for anyone who can't wait on the TODOs above; it is not
+            itself a designated-agent address.
+          */}
           <div className="mt-3 rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm leading-relaxed dark:border-stone-700 dark:bg-stone-800/50">
             <p className="font-semibold text-stone-900 dark:text-stone-100">
               Designated Copyright Agent
@@ -149,8 +159,16 @@ export default function DmcaPage() {
             </p>
           </div>
           <p className="mt-3 leading-relaxed">
-            Please send copyright notices only to this address. Notices sent
-            elsewhere may be delayed.
+            Please send copyright notices only to this address once it&apos;s
+            filled in. Notices sent elsewhere may be delayed.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            In the meantime, you can reach us through{" "}
+            <a href="/contact" className="text-bark-700 hover:underline dark:text-stone-300">
+              our contact form
+            </a>
+            . Note that this does not replace the designated-agent process
+            above once it&apos;s complete.
           </p>
         </section>
 
@@ -220,7 +238,7 @@ export default function DmcaPage() {
             contractor&apos;s public page taken down, after repeated valid
             takedown notices. This is in addition to the account termination
             rights described in the{" "}
-            <a href="/terms" className="text-hearth-700 hover:underline dark:text-hearth-300">
+            <a href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
               Terms of Service
             </a>
             .
@@ -250,11 +268,11 @@ export default function DmcaPage() {
           </h2>
           <p className="mt-2 leading-relaxed">
             See the{" "}
-            <a href="/terms" className="text-hearth-700 hover:underline dark:text-hearth-300">
+            <a href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
               Terms of Service
             </a>{" "}
             for the rules on using Hearth, and the{" "}
-            <a href="/privacy" className="text-hearth-700 hover:underline dark:text-hearth-300">
+            <a href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
               Privacy Policy
             </a>{" "}
             for what we collect and how uploaded photos and documents are

@@ -83,7 +83,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex items-center gap-1 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium text-stone-600 hover:bg-hearth-50 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
+        className="flex items-center gap-1 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium text-stone-600 hover:bg-bark-50 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
       >
         Tools
         <svg
@@ -129,7 +129,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
                 key={l.href}
                 href={l.href}
                 onClick={() => setOpen(false)}
-                className="mx-1 flex items-center rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-hearth-50 dark:text-stone-300 dark:hover:bg-stone-600"
+                className="mx-1 flex items-center rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-bark-50 dark:text-stone-300 dark:hover:bg-stone-600"
               >
                 {l.label}
               </Link>
@@ -144,7 +144,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
                 key={l.href}
                 href={l.href}
                 onClick={() => setOpen(false)}
-                className={`mx-1 flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm hover:bg-hearth-50 dark:hover:bg-stone-600 ${
+                className={`mx-1 flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm hover:bg-bark-50 dark:hover:bg-stone-600 ${
                   hasPlus
                     ? "text-stone-700 dark:text-stone-300"
                     : "text-stone-500 dark:text-stone-400"
@@ -154,7 +154,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
                 {!hasPlus && (
                   <>
                     {/* Matches the dashboard's Plus chip. */}
-                    <span className="rounded bg-hearth-100 px-1.5 text-[11px] font-medium text-hearth-700 dark:bg-hearth-900 dark:text-hearth-300">
+                    <span className="rounded bg-bark-100 px-1.5 text-[11px] font-medium text-bark-700 dark:bg-bark-700 dark:text-stone-300">
                       Plus
                     </span>
                     <span className="sr-only">(requires Hearth Plus)</span>

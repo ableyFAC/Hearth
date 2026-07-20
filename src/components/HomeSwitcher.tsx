@@ -65,7 +65,7 @@ export default function HomeSwitcher({
           {homes.map((h) => (
             <div
               key={h.id}
-              className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-hearth-50 dark:hover:bg-stone-600"
+              className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-bark-50 dark:hover:bg-stone-600"
             >
               {h.id === active?.id ? (
                 <span className="flex-1 truncate text-sm font-medium text-stone-900 dark:text-stone-100">
@@ -79,7 +79,7 @@ export default function HomeSwitcher({
               ) : (
                 <form action={setActiveHomeAction} className="min-w-0 flex-1">
                   <input type="hidden" name="id" value={h.id} />
-                  <button className="w-full truncate text-left text-sm text-stone-700 hover:text-hearth-700 dark:text-stone-300 dark:hover:text-hearth-300">
+                  <button className="w-full truncate text-left text-sm text-stone-700 hover:text-bark-700 dark:text-stone-300 dark:hover:text-stone-300">
                     {h.address_line1}
                     {h.isShared && (
                       <span className="ml-1 text-xs font-normal text-stone-500 dark:text-stone-400">
@@ -96,7 +96,7 @@ export default function HomeSwitcher({
 
           <a
             href="/onboarding"
-            className="mt-1 block rounded-md px-2 py-1.5 text-sm font-medium text-hearth-700 hover:bg-hearth-50 dark:text-hearth-300 dark:hover:bg-stone-600"
+            className="mt-1 block rounded-md px-2 py-1.5 text-sm font-medium text-bark-700 hover:bg-bark-50 dark:text-stone-300 dark:hover:bg-stone-600"
           >
             + Add a home
           </a>

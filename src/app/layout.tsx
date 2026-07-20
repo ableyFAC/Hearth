@@ -1,15 +1,12 @@
 import type { Metadata } from "next";
-import { Hanken_Grotesk } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import Toaster from "@/components/Toaster";
 import { readFlash } from "@/lib/flash";
 
 // Self-hosted via next/font, exposed as a CSS variable so Tailwind's
-// font-sans (see tailwind.config.ts) picks it up everywhere. Hanken Grotesk
-// is a warm humanist grotesque, chosen deliberately over the default-looking
-// Inter/Geist; its tabular figures keep health scores and dollar amounts
-// aligned in columns.
-const sans = Hanken_Grotesk({ subsets: ["latin"], variable: "--font-sans" });
+// font-sans (see tailwind.config.ts) picks it up everywhere.
+const sans = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 // Runs before first paint so a saved dark theme never flashes light. Kept as
 // a plain string (not a component) because it must execute synchronously in

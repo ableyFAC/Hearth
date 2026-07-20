@@ -24,7 +24,7 @@ export default function EditJobForm({ job }: { job: any }) {
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="text-xs font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+          className="text-xs font-medium text-bark-700 hover:underline dark:text-stone-300"
         >
           Edit job
         </button>

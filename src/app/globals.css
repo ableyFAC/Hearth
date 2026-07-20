@@ -48,13 +48,13 @@ body {
        on focus; sm:text-sm keeps the compact 14px look on desktop. Dark:
        fields sit one step BELOW .card's stone-800 (inset into stone-900, the
        same tone as the page) so they read as a recessed field, not a card
-       twin; the focus ring moves to hearth-400, the lighter/desaturated end
-       of the accent ramp, so it doesn't turn muddy on a dark surface. */
+       twin; the focus ring uses the bark accent instead of the red-leaning
+       hearth ember. */
     @apply w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-base
-           sm:text-sm shadow-sm focus:border-hearth-500 focus:outline-none
-           focus:ring-1 focus:ring-hearth-500 dark:border-white/10
+           sm:text-sm shadow-sm focus:border-bark-600 focus:outline-none
+           focus:ring-1 focus:ring-bark-600 dark:border-white/10
            dark:bg-stone-900 dark:text-stone-100 dark:placeholder:text-stone-500
-           dark:focus:border-hearth-400 dark:focus:ring-hearth-400;
+           dark:focus:border-bark-500 dark:focus:ring-bark-500;
   }
   .btn {
     /* min-h-[44px] keeps every .btn at or above the 44px thumb minimum even
@@ -63,12 +63,17 @@ body {
     @apply inline-flex min-h-[44px] items-center justify-center gap-2
            rounded-lg px-4 py-2 text-sm font-medium transition
            focus-visible:outline-none focus-visible:ring-2
-           focus-visible:ring-hearth-500 focus-visible:ring-offset-1
+           focus-visible:ring-bark-600 focus-visible:ring-offset-1
            active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed
-           dark:focus-visible:ring-hearth-400 dark:focus-visible:ring-offset-stone-900;
+           dark:focus-visible:ring-bark-500 dark:focus-visible:ring-offset-stone-900;
   }
   .btn-primary {
-    @apply btn bg-hearth-600 text-white shadow-card hover:bg-hearth-700 hover:shadow-lift;
+    /* Primary/CTA buttons use bark, the pre-redesign hearth brown, instead
+       of the current red-leaning hearth accent. Focus ring follows the
+       button color instead of inheriting .btn's ember ring. */
+    @apply btn bg-bark-600 text-white shadow-card hover:bg-bark-700
+           hover:shadow-lift focus-visible:ring-bark-600 dark:bg-bark-500
+           dark:hover:bg-bark-600 dark:focus-visible:ring-bark-500;
   }
   .btn-secondary {
     /* Elevated tier (stone-700, one step lighter than .card's stone-800) so
@@ -89,21 +94,21 @@ body {
   /* Clickable card: gentle lift on hover, calm again for reduced motion. */
   .card-link {
     @apply card block transition-all duration-150 hover:-translate-y-0.5
-           hover:border-hearth-300 hover:shadow-lift motion-reduce:transform-none
-           motion-reduce:transition-none dark:hover:border-hearth-400;
+           hover:border-bark-500 hover:shadow-lift motion-reduce:transform-none
+           motion-reduce:transition-none dark:hover:border-bark-500;
   }
   /* Hero variant of .card: one warm, elevated surface per screen. Flat now,
      no gradient - a plain white surface (stone-700 in dark) lifted by the
-     shadow and set apart by the warm hearth border, so it still reads as the
+     shadow and set apart by the warm bark border, so it still reads as the
      one brand-tinted card on the screen without the gradient. */
   .card-hero {
-    @apply rounded-xl border border-hearth-200 bg-white p-5 shadow-lift
-           dark:border-hearth-600/40 dark:bg-stone-700;
+    @apply rounded-xl border border-bark-100 bg-white p-5 shadow-lift
+           dark:border-bark-600/40 dark:bg-stone-700;
   }
   /* Round container for emoji-as-icon so glyphs sit in a consistent chip. */
   .icon-chip {
     @apply inline-flex h-10 w-10 shrink-0 items-center justify-center
-           rounded-full bg-hearth-100 text-lg dark:bg-hearth-900;
+           rounded-full bg-bark-100 text-lg dark:bg-bark-700;
   }
   /* Stat pairs: quiet caption over a tight number (size set per use). */
   .stat-label {
@@ -141,7 +146,7 @@ body {
   /* Shared focus recipe for non-button interactives; same ring as .btn. */
   .focus-ring {
     @apply rounded focus-visible:outline-none focus-visible:ring-2
-           focus-visible:ring-hearth-500 focus-visible:ring-offset-1
-           dark:focus-visible:ring-hearth-400 dark:focus-visible:ring-offset-stone-900;
+           focus-visible:ring-bark-600 focus-visible:ring-offset-1
+           dark:focus-visible:ring-bark-500 dark:focus-visible:ring-offset-stone-900;
   }
 }

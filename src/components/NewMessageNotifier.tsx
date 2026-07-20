@@ -107,7 +107,7 @@ export default function NewMessageNotifier({
           key={t.id}
           href={t.href}
           onClick={() => dismiss(t.id)}
-          className="block w-72 rounded-xl border border-stone-200 bg-white p-3 shadow-pop transition hover:border-hearth-300 dark:border-white/10 dark:bg-stone-800 dark:hover:border-hearth-400"
+          className="block w-72 rounded-xl border border-stone-200 bg-white p-3 shadow-pop transition hover:border-bark-500 dark:border-white/10 dark:bg-stone-800 dark:hover:border-bark-500"
         >
           <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">{t.name}</p>
           <p className="truncate text-xs text-stone-500 dark:text-stone-400">{t.body}</p>

@@ -149,7 +149,7 @@ export default async function SearchPage({
             autoFocus={!q}
             placeholder="Search your home and Hearth"
             aria-label="Search"
-            className="w-full rounded-xl border border-stone-200 bg-white py-2.5 pl-9 pr-3 text-base sm:text-sm text-stone-900 placeholder:text-stone-500 focus:border-hearth-400 focus:outline-none dark:border-white/10 dark:bg-stone-800 dark:text-stone-100"
+            className="w-full rounded-xl border border-stone-200 bg-white py-2.5 pl-9 pr-3 text-base sm:text-sm text-stone-900 placeholder:text-stone-500 focus:border-bark-500 focus:outline-none dark:border-white/10 dark:bg-stone-800 dark:text-stone-100"
           />
         </form>
 
@@ -185,7 +185,7 @@ export default async function SearchPage({
               <li key={`${r.href}-${i}`}>
                 <Link
                   href={r.href}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-hearth-50 dark:hover:bg-stone-700"
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-bark-50 dark:hover:bg-stone-700"
                 >
                   {r.icon && (
                     <span className="text-stone-500 dark:text-stone-400">

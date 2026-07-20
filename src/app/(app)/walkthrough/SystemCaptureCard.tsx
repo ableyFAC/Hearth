@@ -214,8 +214,7 @@ export default function SystemCaptureCard({
 
       {phase !== "review" && (
         <>
-          <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-stone-200 px-4 py-6 text-center hover:border-hearth-300 hover:bg-hearth-50 dark:border-stone-700 dark:hover:bg-hearth-900/30">
-            <span className="text-2xl">📷</span>
+          <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-stone-200 px-4 py-6 text-center hover:border-bark-500 hover:bg-bark-50 dark:border-stone-700 dark:hover:bg-bark-700/30">
             <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
               Snap the data plate
             </span>
@@ -250,7 +249,6 @@ export default function SystemCaptureCard({
 
       {note && (
         <p className="text-xs text-stone-500 dark:text-stone-400">
-          {phase === "working" ? "⏳ " : ""}
           {note}
         </p>
       )}

@@ -263,7 +263,7 @@ function MessageActions({
               <span className="text-sm font-semibold">
                 Get 3 free quotes
               </span>
-              <span className="text-[11px] font-normal text-hearth-100">
+              <span className="text-[11px] font-normal text-bark-100">
                 License-checked local pros compete for your job
               </span>
             </Link>
@@ -654,7 +654,7 @@ export default function AskHearth({
           <span
             className={`block max-w-[85%] break-words rounded-lg px-3 py-1.5 text-sm ${
               m.role === "user"
-                ? "whitespace-pre-wrap bg-hearth-600 text-white"
+                ? "whitespace-pre-wrap bg-bark-600 text-white"
                 : "border border-stone-200 bg-white text-stone-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-200"
             }`}
           >
@@ -683,7 +683,7 @@ export default function AskHearth({
                   type="button"
                   onClick={() => submit(opt)}
                   disabled={loading}
-                  className="rounded-full border border-hearth-300 bg-white px-3 py-2 text-xs font-medium text-hearth-800 hover:bg-hearth-50 disabled:opacity-50 dark:border-hearth-800 dark:bg-stone-800 dark:text-hearth-200 dark:hover:bg-stone-700"
+                  className="rounded-full border border-bark-500 bg-white px-3 py-2 text-xs font-medium text-bark-700 hover:bg-bark-50 disabled:opacity-50 dark:border-bark-700 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
                 >
                   {opt}
                 </button>
@@ -750,7 +750,7 @@ export default function AskHearth({
       <form onSubmit={send} className="flex gap-2">
         <label
           title="Attach a photo"
-          className="flex cursor-pointer items-center rounded-lg border border-stone-200 px-2 text-stone-500 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-hearth-300"
+          className="flex cursor-pointer items-center rounded-lg border border-stone-200 px-2 text-stone-500 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-stone-300"
         >
           <svg
             viewBox="0 0 24 24"
@@ -816,9 +816,9 @@ export default function AskHearth({
     );
     const hasConversation = displayed.length > 0;
     return (
-      <div className="card border-hearth-200 bg-hearth-50 dark:border-hearth-900 dark:bg-hearth-900/20">
-        <p className="text-sm font-semibold text-hearth-900 dark:text-hearth-200">{headingTitle}</p>
-        <p className="text-xs text-hearth-700 dark:text-hearth-300">{headingSubtitle}</p>
+      <div className="card border-bark-100 bg-bark-50 dark:border-bark-700 dark:bg-bark-700/20">
+        <p className="text-sm font-semibold text-bark-700 dark:text-stone-300">{headingTitle}</p>
+        <p className="text-xs text-bark-700 dark:text-stone-300">{headingSubtitle}</p>
 
         {(hasConversation || loading) && (
           <div className="mt-3 max-h-80 space-y-2 overflow-y-auto rounded-lg border border-stone-200 bg-white p-3 dark:border-white/10 dark:bg-stone-800">
@@ -842,7 +842,7 @@ export default function AskHearth({
                 type="button"
                 onClick={() => submit(q)}
                 disabled={loading}
-                className="rounded-full border border-hearth-200 bg-white px-3 py-1 text-xs text-hearth-800 hover:border-hearth-400 disabled:opacity-50 dark:border-hearth-800 dark:bg-stone-800 dark:text-hearth-200"
+                className="rounded-full border border-bark-100 bg-white px-3 py-1 text-xs text-bark-700 hover:border-bark-500 disabled:opacity-50 dark:border-bark-700 dark:bg-stone-800 dark:text-stone-300"
               >
                 {q}
               </button>
@@ -871,8 +871,8 @@ export default function AskHearth({
     <div className="flex h-full flex-col">
       <div className="flex items-start justify-between gap-2 pb-2">
         <div>
-          <p className="text-sm font-semibold text-hearth-900 dark:text-hearth-200">{headingTitle}</p>
-          <p className="text-xs text-hearth-700 dark:text-hearth-300">{headingSubtitle}</p>
+          <p className="text-sm font-semibold text-bark-700 dark:text-stone-300">{headingTitle}</p>
+          <p className="text-xs text-bark-700 dark:text-stone-300">{headingSubtitle}</p>
         </div>
         {/* Surfaced here (next to Clear) instead of only below the input: */}
         {/* the dock is short and scrollable, and buried at the bottom it */}

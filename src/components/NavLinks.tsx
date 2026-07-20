@@ -73,7 +73,7 @@ export default function NavLinks({
               aria-current={active ? "page" : undefined}
               className={`flex min-h-[48px] flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1 text-[11px] ${
                 active
-                  ? "font-semibold text-hearth-700 dark:text-hearth-300"
+                  ? "font-semibold text-bark-700 dark:text-stone-300"
                   : "font-medium text-stone-500 dark:text-stone-400"
               }`}
             >
@@ -105,8 +105,8 @@ export default function NavLinks({
             aria-current={active ? "page" : undefined}
             className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ${
               active
-                ? "bg-hearth-100 text-hearth-800 dark:bg-hearth-900 dark:text-hearth-200"
-                : "text-stone-600 hover:bg-hearth-50 hover:text-hearth-700 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-hearth-300"
+                ? "bg-bark-100 text-bark-700 dark:bg-bark-700 dark:text-stone-300"
+                : "text-stone-600 hover:bg-bark-50 hover:text-bark-700 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300"
             }`}
           >
             {l.label}

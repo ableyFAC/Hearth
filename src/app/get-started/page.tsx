@@ -56,9 +56,9 @@ export default async function GetStarted({
       <div className="mt-10 grid w-full grid-cols-1 gap-4 sm:grid-cols-2">
         <a
           href={`/homeowner-signup${nextQuery}`}
-          className="flex flex-col items-center justify-center rounded-2xl border border-stone-200 bg-white px-6 py-12 shadow-sm transition hover:border-hearth-400 hover:shadow-md dark:border-white/10 dark:bg-stone-800"
+          className="flex flex-col items-center justify-center rounded-2xl border border-stone-200 bg-white px-6 py-12 shadow-sm transition hover:border-bark-500 hover:shadow-md dark:border-white/10 dark:bg-stone-800"
         >
-          <Home className="h-9 w-9 text-hearth-700 dark:text-hearth-400" aria-hidden="true" />
+          <Home className="h-9 w-9 text-bark-700 dark:text-stone-400" aria-hidden="true" />
           <div className="mt-4 text-lg font-medium text-stone-900 dark:text-stone-100">
             I&apos;m a homeowner
           </div>
@@ -69,9 +69,9 @@ export default async function GetStarted({
 
         <a
           href={`/contractor-signup${nextQuery}`}
-          className="flex flex-col items-center justify-center rounded-2xl border border-stone-200 bg-white px-6 py-12 shadow-sm transition hover:border-hearth-400 hover:shadow-md dark:border-white/10 dark:bg-stone-800"
+          className="flex flex-col items-center justify-center rounded-2xl border border-stone-200 bg-white px-6 py-12 shadow-sm transition hover:border-bark-500 hover:shadow-md dark:border-white/10 dark:bg-stone-800"
         >
-          <Hammer className="h-9 w-9 text-hearth-700 dark:text-hearth-400" aria-hidden="true" />
+          <Hammer className="h-9 w-9 text-bark-700 dark:text-stone-400" aria-hidden="true" />
           <div className="mt-4 text-lg font-medium text-stone-900 dark:text-stone-100">
             I&apos;m a contractor
           </div>
@@ -85,7 +85,7 @@ export default async function GetStarted({
         Already have an account?{" "}
         <a
           href={`/signin${nextQuery}`}
-          className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+          className="font-medium text-bark-700 hover:underline dark:text-stone-300"
         >
           Sign in
         </a>

@@ -75,7 +75,7 @@ export default async function Home({
           what&apos;s needed to quote it. The full details are in the{" "}
           <a
             href="/privacy"
-            className="text-hearth-700 hover:underline dark:text-hearth-300"
+            className="text-bark-700 hover:underline dark:text-stone-300"
           >
             privacy policy
           </a>
@@ -128,18 +128,18 @@ export default async function Home({
       {/* Warm band wraps header, hero, and the product preview: a single
           flat fill, hearth-50 in light and stone-900 in dark (matching the
           body), no gradient. */}
-      <div className="bg-hearth-50 dark:bg-stone-900">
+      <div className="bg-bark-50 dark:bg-stone-900">
         <div className="mx-auto max-w-3xl px-6 pt-6">
           {/* Slim header: wordmark left, theme switch + quiet pro door right */}
           <header className="flex items-center justify-between">
             <span className="inline-flex items-center gap-2 font-semibold text-stone-900 dark:text-stone-100">
-              <Logo className="h-6 w-6 text-hearth-700 dark:text-hearth-400" /> Hearth
+              <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> Hearth
             </span>
             <div className="flex items-center gap-2">
               <ThemeToggle />
               <a
                 href="/pros"
-                className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:text-stone-300 dark:hover:border-hearth-400 dark:hover:text-hearth-300"
+                className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-300 dark:hover:border-bark-500 dark:hover:text-stone-300"
               >
                 Hearth for Pros
               </a>
@@ -193,7 +193,7 @@ export default async function Home({
               ))}
             </div>
             <div className="mt-4 flex justify-center text-sm">
-              <a href="/signin" className="text-hearth-700 hover:underline dark:text-hearth-300">
+              <a href="/signin" className="text-bark-700 hover:underline dark:text-stone-300">
                 Already have an account? Sign in
               </a>
             </div>
@@ -219,7 +219,7 @@ export default async function Home({
         <ol className="mx-auto mt-6 max-w-md space-y-4">
           {STEPS.map((s) => (
             <li key={s.n} className="flex items-start gap-3">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-hearth-600 text-sm font-semibold text-white">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-bark-600 text-sm font-semibold text-white">
                 {s.n}
               </span>
               <p className="pt-0.5 text-stone-600 dark:text-stone-400">{s.text}</p>
@@ -257,7 +257,7 @@ export default async function Home({
             : "Built by homeowners in Orange County"}
         </h2>
         <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-stone-300">
-          Real people, real answers: email us and we&apos;ll reply ourselves.
+          Real people, real answers: message us and we&apos;ll reply ourselves.
           Pros see only what you choose to share.
         </p>
         <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-stone-300">
@@ -265,36 +265,38 @@ export default async function Home({
           for{" "}
           <a
             href="/fountain-valley"
-            className="text-hearth-300 hover:underline"
+            className="text-bark-500 hover:underline"
           >
             Fountain Valley
           </a>{" "}
           and{" "}
           <a
             href="/huntington-beach"
-            className="text-hearth-300 hover:underline"
+            className="text-bark-500 hover:underline"
           >
             Huntington Beach
           </a>{" "}
           homeowners.
         </p>
-        {/* Contact renders only from owner-fillable FOUNDER fields, same
-            reasoning as /pros: no link beats a link that bounces. */}
-        {FOUNDER.email ? (
-          <a
-            href={`mailto:${FOUNDER.email}`}
-            className="mt-4 inline-block text-sm text-hearth-300 hover:underline"
-          >
-            Questions? Email {FOUNDER.email} →
-          </a>
-        ) : FOUNDER.cellPhone ? (
+        {/* Contact form works with no session and no owner-fillable fields,
+            unlike the old mailto/tel here, so it's always shown - see
+            src/app/contact/page.tsx and the note in LegalContact.tsx for why
+            this changed. The cell-phone line is still owner-fillable and
+            still drops out entirely when blank. */}
+        <a
+          href="/contact"
+          className="mt-4 inline-block text-sm text-bark-500 hover:underline"
+        >
+          Questions? Contact us →
+        </a>
+        {FOUNDER.cellPhone && (
           <a
             href={`tel:${FOUNDER.cellPhone.replace(/[^\d+]/g, "")}`}
-            className="mt-4 inline-block text-sm text-hearth-300 hover:underline"
+            className="mt-1 block text-sm text-bark-500 hover:underline"
           >
-            Questions? Call or text {FOUNDER.cellPhone} →
+            Or call or text {FOUNDER.cellPhone} →
           </a>
-        ) : null}
+        )}
       </section>
 
       {/* FAQ: the questions people actually ask, answered from what the
@@ -367,14 +369,14 @@ export default async function Home({
               </p>
               <ul className="mt-2 space-y-1.5 text-sm text-stone-600 dark:text-stone-400">
                 <li>
-                  <a href="/guides" className="hover:text-hearth-700 hover:underline dark:hover:text-hearth-300">
+                  <a href="/guides" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
                     All guides
                   </a>
                 </li>
                 <li>
                   <a
                     href="/guides/water-heater-replacement-cost"
-                    className="hover:text-hearth-700 hover:underline dark:hover:text-hearth-300"
+                    className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
                   >
                     Water heater replacement cost
                   </a>
@@ -382,7 +384,7 @@ export default async function Home({
                 <li>
                   <a
                     href="/guides/hvac-replacement-cost"
-                    className="hover:text-hearth-700 hover:underline dark:hover:text-hearth-300"
+                    className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
                   >
                     HVAC replacement cost
                   </a>
@@ -390,7 +392,7 @@ export default async function Home({
                 <li>
                   <a
                     href="/guides/socal-home-maintenance-calendar"
-                    className="hover:text-hearth-700 hover:underline dark:hover:text-hearth-300"
+                    className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
                   >
                     SoCal maintenance calendar
                   </a>
@@ -405,7 +407,7 @@ export default async function Home({
                 <li>
                   <a
                     href="/fountain-valley"
-                    className="hover:text-hearth-700 hover:underline dark:hover:text-hearth-300"
+                    className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
                   >
                     Fountain Valley
                   </a>
@@ -413,7 +415,7 @@ export default async function Home({
                 <li>
                   <a
                     href="/huntington-beach"
-                    className="hover:text-hearth-700 hover:underline dark:hover:text-hearth-300"
+                    className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
                   >
                     Huntington Beach
                   </a>
@@ -426,12 +428,12 @@ export default async function Home({
               </p>
               <ul className="mt-2 space-y-1.5 text-sm text-stone-600 dark:text-stone-400">
                 <li>
-                  <a href="/pros" className="hover:text-hearth-700 hover:underline dark:hover:text-hearth-300">
+                  <a href="/pros" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
                     For Pros
                   </a>
                 </li>
                 <li>
-                  <a href="/signin" className="hover:text-hearth-700 hover:underline dark:hover:text-hearth-300">
+                  <a href="/signin" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
                     Sign in
                   </a>
                 </li>
@@ -443,35 +445,38 @@ export default async function Home({
               </p>
               <ul className="mt-2 space-y-1.5 text-sm text-stone-600 dark:text-stone-400">
                 <li>
-                  <a href="/privacy" className="hover:text-hearth-700 hover:underline dark:hover:text-hearth-300">
+                  <a href="/privacy" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
                     Privacy
                   </a>
                 </li>
                 <li>
-                  <a href="/terms" className="hover:text-hearth-700 hover:underline dark:hover:text-hearth-300">
+                  <a href="/terms" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
                     Terms
                   </a>
                 </li>
                 <li>
-                  <a href="/ai-disclosure" className="hover:text-hearth-700 hover:underline dark:hover:text-hearth-300">
+                  <a href="/ai-disclosure" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
                     How we use AI
                   </a>
                 </li>
-                {FOUNDER.email && (
-                  <li>
-                    <a
-                      href={`mailto:${FOUNDER.email}`}
-                      className="break-all hover:text-hearth-700 hover:underline dark:hover:text-hearth-300"
-                    >
-                      {FOUNDER.email}
-                    </a>
-                  </li>
-                )}
+                {/* Was a mailto: to FOUNDER.email; a raw address in a
+                    site-wide footer is exactly the kind of thing spam
+                    scrapers find first. Always rendered now, unlike the old
+                    conditional, since the contact form needs no owner-fillable
+                    field to work. */}
+                <li>
+                  <a
+                    href="/contact"
+                    className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
+                  >
+                    Contact us
+                  </a>
+                </li>
               </ul>
             </div>
           </div>
           <p className="mt-8 inline-flex w-full items-center justify-center gap-2 pb-2 text-xs text-stone-500 dark:text-stone-400">
-            <Logo className="h-6 w-6 text-hearth-700 dark:text-hearth-400" /> Hearth · Your home,
+            <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> Hearth · Your home,
             looked after
           </p>
         </footer>

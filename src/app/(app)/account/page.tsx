@@ -25,7 +25,7 @@ export default async function AccountPage() {
           email, password, or account deletion, see{" "}
           <Link
             href="/account/security"
-            className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+            className="font-medium text-bark-700 hover:underline dark:text-stone-300"
           >
             Account security
           </Link>

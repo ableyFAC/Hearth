@@ -11,7 +11,7 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        // Hanken Grotesk is loaded in app/layout.tsx via next/font and exposed
+        // Inter is loaded in app/layout.tsx via next/font and exposed
         // as --font-sans; the system stack covers the flash before it resolves.
         sans: [
           "var(--font-sans)",
@@ -87,6 +87,16 @@ const config: Config = {
           700: "#98371f",
           800: "#7d2f1b",
           900: "#682816",
+        },
+        // The pre-redesign hearth brown, revived for buttons. 50/100 are
+        // light tints added for the homeowner/landing sweep off the ember
+        // accent, matched to the same pre-redesign ramp as 500-700.
+        bark: {
+          50: "#fbf7f2",
+          100: "#f3e9dd",
+          500: "#a9743f",
+          600: "#915d32",
+          700: "#73482b",
         },
       },
     },

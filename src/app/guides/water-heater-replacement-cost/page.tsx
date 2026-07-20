@@ -64,7 +64,7 @@ export default function WaterHeaterReplacementCostGuide() {
       />
 
       <p className="text-sm">
-        <a href="/guides" className="text-stone-500 hover:text-hearth-700 dark:text-stone-400 dark:hover:text-hearth-300">
+        <a href="/guides" className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
           ← All guides
         </a>
       </p>
@@ -164,7 +164,7 @@ export default function WaterHeaterReplacementCostGuide() {
             the tank on a regular schedule (see our{" "}
             <a
               href="/guides/home-maintenance-schedule"
-              className="text-hearth-700 hover:underline dark:text-hearth-300"
+              className="text-bark-700 hover:underline dark:text-stone-300"
             >
               home maintenance schedule guide
             </a>

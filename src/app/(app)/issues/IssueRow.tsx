@@ -8,6 +8,8 @@ import {
   labelFor,
 } from "@/lib/constants";
 import CategoryIcon from "@/components/CategoryIcon";
+import { imgSrc } from "@/lib/storage";
+import { StoredPhotoGrid } from "@/components/FilePreview";
 import {
   updateIssueAction,
   checkResolveIssueAction,
@@ -23,12 +25,15 @@ const SEVERITY_STYLE: Record<string, string> = {
 export default function IssueRow({
   issue,
   initialResolved = false,
+  photos = [],
 }: {
   issue: any;
   initialResolved?: boolean;
+  photos?: string[];
 }) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [showPhotos, setShowPhotos] = useState(false);
   // The checkbox follows the issue's real status (initialResolved), with an
   // optimistic override only while a toggle is in flight. Using the prop as the
   // source of truth - instead of a one-time useState init - means a row that
@@ -179,6 +184,28 @@ export default function IssueRow({
                 {issue.description}
               </p>
             )}
+            {photos.length > 0 && (
+              <div className="mt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowPhotos((v) => !v)}
+                  className="text-xs font-medium text-bark-700 hover:underline dark:text-stone-300"
+                >
+                  {showPhotos
+                    ? "Hide photos"
+                    : `Show photo${photos.length === 1 ? "" : "s"} (${photos.length})`}
+                </button>
+                {showPhotos && (
+                  <StoredPhotoGrid
+                    photos={photos.map((u) => ({
+                      key: u,
+                      src: imgSrc(u) ?? u,
+                      alt: "Issue photo",
+                    }))}
+                  />
+                )}
+              </div>
+            )}
           </div>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
@@ -187,7 +214,7 @@ export default function IssueRow({
               type="button"
               disabled={busy}
               onClick={toggleResolved}
-              className="text-xs font-medium text-hearth-700 hover:underline disabled:opacity-50 dark:text-hearth-300"
+              className="text-xs font-medium text-bark-700 hover:underline disabled:opacity-50 dark:text-stone-300"
             >
               {busy ? "…" : "Undo"}
             </button>
@@ -195,7 +222,7 @@ export default function IssueRow({
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="text-xs font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+              className="text-xs font-medium text-bark-700 hover:underline dark:text-stone-300"
             >
               Edit
             </button>
@@ -205,7 +232,7 @@ export default function IssueRow({
       {!issue.converted_to_lead && !resolved && (
         <Link
           href={`/contractors?issue=${issue.id}&category=${issue.category}`}
-          className="inline-block text-sm font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+          className="inline-block text-sm font-medium text-bark-700 hover:underline dark:text-stone-300"
         >
           Connect me with a local pro →
         </Link>

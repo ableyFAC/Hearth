@@ -68,9 +68,6 @@ export default async function WalkthroughPage() {
           </ul>
         ) : (
           <div className="rounded-xl border border-dashed border-stone-300 p-6 text-center dark:border-stone-700">
-            <div className="flex justify-center">
-              <span className="icon-chip">🎉</span>
-            </div>
             <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
               Every system is confirmed. Nice work.
             </p>

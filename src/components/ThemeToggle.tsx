@@ -72,7 +72,7 @@ export default function ThemeToggle({
         onClick={toggle}
         role="switch"
         aria-checked={dark}
-        className="mx-1 flex w-[calc(100%-0.5rem)] items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm text-stone-700 hover:bg-hearth-50 dark:text-stone-300 dark:hover:bg-stone-600"
+        className="mx-1 flex w-[calc(100%-0.5rem)] items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm text-stone-700 hover:bg-bark-50 dark:text-stone-300 dark:hover:bg-stone-600"
       >
         <span className="flex items-center gap-2">
           <span className="text-stone-500 dark:text-stone-400">
@@ -84,7 +84,7 @@ export default function ThemeToggle({
         <span
           aria-hidden="true"
           className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
-            dark ? "bg-hearth-600" : "bg-stone-300"
+            dark ? "bg-bark-600" : "bg-stone-300"
           }`}
         >
           <span
@@ -102,7 +102,7 @@ export default function ThemeToggle({
       type="button"
       onClick={toggle}
       aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-      className="focus-ring flex h-9 w-9 items-center justify-center rounded-full text-stone-500 hover:bg-hearth-50 hover:text-hearth-700 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-hearth-300"
+      className="focus-ring flex h-9 w-9 items-center justify-center rounded-full text-stone-500 hover:bg-bark-50 hover:text-bark-700 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300"
     >
       {dark ? sun : moon}
     </button>

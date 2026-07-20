@@ -120,14 +120,14 @@ export default async function ValuePage() {
         <>
           <div className="card-hero space-y-2 text-center">
             <p className="stat-label">Estimated value today</p>
-            <p className="stat-number text-4xl text-hearth-800 dark:text-hearth-200">
+            <p className="stat-number text-4xl text-bark-700 dark:text-stone-300">
               {money(estimatedValue)}{" "}
-              <span className="align-middle rounded-full border border-hearth-200 bg-hearth-50 px-2 py-0.5 text-xs font-medium text-hearth-700 dark:border-hearth-800/40 dark:bg-hearth-900/30 dark:text-hearth-300">
+              <span className="align-middle rounded-full border border-bark-100 bg-bark-50 px-2 py-0.5 text-xs font-medium text-bark-700 dark:border-bark-700/40 dark:bg-bark-700/30 dark:text-stone-300">
                 Estimate
               </span>
             </p>
             {hasPurchaseData ? (
-              <p className="text-xs text-hearth-700 dark:text-hearth-300">
+              <p className="text-xs text-bark-700 dark:text-stone-300">
                 Bought for {money(purchasePrice!)} in {purchaseYear}
                 {appreciationGained != null && appreciationGained !== 0 && (
                   <>
@@ -147,12 +147,12 @@ export default async function ValuePage() {
                 )}
               </p>
             ) : (
-              <p className="text-xs text-hearth-700 dark:text-hearth-300">
+              <p className="text-xs text-bark-700 dark:text-stone-300">
                 Add what you paid to see how much you&apos;ve gained since you
                 bought it.
               </p>
             )}
-            <p className="text-xs text-hearth-600 dark:text-hearth-400">
+            <p className="text-xs text-bark-600 dark:text-stone-400">
               {usingMarketValue
                 ? "Based on recent comparable sales near you, not a full appraisal."
                 : region
@@ -214,8 +214,8 @@ export default async function ValuePage() {
                         <div
                           className={`w-7 rounded-t-md ${
                             p.year === currentYear
-                              ? "bg-hearth-600 dark:bg-hearth-500"
-                              : "bg-hearth-400 dark:bg-hearth-500/60"
+                              ? "bg-bark-600 dark:bg-bark-600"
+                              : "bg-bark-500 dark:bg-bark-600/60"
                           }`}
                           style={{ height: `${height}px` }}
                         />

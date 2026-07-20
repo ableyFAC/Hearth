@@ -93,13 +93,13 @@ export default function ProfileMenu({
         }}
         aria-expanded={open}
         aria-label={name ? `Account menu for ${name}` : "Account menu"}
-        className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 text-sm font-medium text-stone-700 hover:bg-hearth-50 dark:text-stone-200 dark:hover:bg-stone-800"
+        className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 text-sm font-medium text-stone-700 hover:bg-bark-50 dark:text-stone-200 dark:hover:bg-stone-800"
       >
         {name ? (
           // Initials monogram - the first letter of the name in brand colors.
           <span
             aria-hidden="true"
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-hearth-100 font-semibold text-hearth-700 dark:bg-hearth-900 dark:text-hearth-300"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-bark-100 font-semibold text-bark-700 dark:bg-bark-700 dark:text-stone-300"
           >
             {name.trim().charAt(0).toUpperCase()}
           </span>
@@ -153,7 +153,7 @@ export default function ProfileMenu({
               className={
                 hasPlus
                   ? "block border-b border-stone-100 px-4 py-2 text-sm text-stone-500 dark:border-white/10 dark:text-stone-400"
-                  : "block border-b border-stone-100 bg-hearth-50 px-4 py-2 text-sm font-medium text-hearth-700 hover:bg-hearth-100 dark:border-white/10 dark:bg-hearth-900/40 dark:text-hearth-300 dark:hover:bg-hearth-900/60"
+                  : "block border-b border-stone-100 bg-bark-50 px-4 py-2 text-sm font-medium text-bark-700 hover:bg-bark-100 dark:border-white/10 dark:bg-bark-700/40 dark:text-stone-300 dark:hover:bg-bark-700/60"
               }
             >
               {hasPlus ? "Hearth Plus ✓" : "Upgrade to Hearth Plus"}
@@ -173,7 +173,7 @@ export default function ProfileMenu({
                 className={
                   l.accent === "red"
                     ? "mx-1 flex items-center rounded-md px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/15"
-                    : "mx-1 flex items-center rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-hearth-50 dark:text-stone-300 dark:hover:bg-stone-600"
+                    : "mx-1 flex items-center rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-bark-50 dark:text-stone-300 dark:hover:bg-stone-600"
                 }
               >
                 {l.label}
@@ -184,7 +184,7 @@ export default function ProfileMenu({
             <button
               type="button"
               onClick={() => setShowMore(true)}
-              className="mx-1 flex w-[calc(100%-0.5rem)] items-center gap-1 rounded-md px-3 py-2 text-left text-sm text-stone-500 hover:bg-hearth-50 hover:text-stone-600 dark:text-stone-400 dark:hover:bg-stone-600 dark:hover:text-stone-300"
+              className="mx-1 flex w-[calc(100%-0.5rem)] items-center gap-1 rounded-md px-3 py-2 text-left text-sm text-stone-500 hover:bg-bark-50 hover:text-stone-600 dark:text-stone-400 dark:hover:bg-stone-600 dark:hover:text-stone-300"
             >
               More
               <svg
@@ -208,7 +208,7 @@ export default function ProfileMenu({
                 key={l.href}
                 href={l.href}
                 onClick={() => setOpen(false)}
-                className="mx-1 flex items-center rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-hearth-50 dark:text-stone-300 dark:hover:bg-stone-600"
+                className="mx-1 flex items-center rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-bark-50 dark:text-stone-300 dark:hover:bg-stone-600"
               >
                 {l.label}
               </Link>

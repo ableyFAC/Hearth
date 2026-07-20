@@ -44,7 +44,7 @@ export default function PrivacyRightsPanel({
           delete it. For the full policy, see our{" "}
           <Link
             href="/privacy"
-            className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+            className="font-medium text-bark-700 hover:underline dark:text-stone-300"
           >
             Privacy Policy
           </Link>
@@ -63,16 +63,23 @@ export default function PrivacyRightsPanel({
               Download your data
             </p>
             <p className="mt-0.5 text-sm text-stone-500 dark:text-stone-400">
-              Everything we hold for your account, as a JSON file you can keep
-              or take elsewhere. Generated fresh when you click.
+              Everything we hold for your account, as a PDF you can read or
+              print. Generated fresh when you click.
             </p>
+            <a
+              href="/api/privacy/export?format=json"
+              download
+              className="mt-1 inline-block text-xs font-medium text-bark-700 hover:underline dark:text-stone-300"
+            >
+              Also available as JSON
+            </a>
           </div>
           <a
-            href="/api/privacy/export"
+            href="/api/privacy/export?format=pdf"
             download
             className="btn-secondary whitespace-nowrap"
           >
-            Download my data
+            Download my data (PDF)
           </a>
         </div>
       </div>
@@ -91,7 +98,7 @@ export default function PrivacyRightsPanel({
           />
           <Right
             term="Get a copy you can take with you"
-            detail="Receive your information in a portable, machine-readable format. That's the JSON download above."
+            detail="Receive your information in a portable, machine-readable format. That's the JSON download above, next to the PDF."
           />
           <Right
             term="Delete your information"
@@ -101,7 +108,7 @@ export default function PrivacyRightsPanel({
                 You can do this yourself from{" "}
                 <Link
                   href={securityHref}
-                  className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+                  className="font-medium text-bark-700 hover:underline dark:text-stone-300"
                 >
                   Account security
                 </Link>
@@ -118,7 +125,7 @@ export default function PrivacyRightsPanel({
                 directly:{" "}
                 <Link
                   href={profileHref}
-                  className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+                  className="font-medium text-bark-700 hover:underline dark:text-stone-300"
                 >
                   {profileLabel}
                 </Link>{" "}

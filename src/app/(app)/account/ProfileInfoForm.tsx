@@ -75,7 +75,7 @@ export default function ProfileInfoForm({
             type="checkbox"
             name="sms_consent"
             defaultChecked={smsConsent}
-            className="mt-1 h-4 w-4 shrink-0 rounded border-stone-300 text-hearth-600 focus:ring-hearth-500 dark:border-white/20"
+            className="mt-1 h-4 w-4 shrink-0 rounded border-stone-300 text-bark-600 focus:ring-bark-600 dark:border-white/20"
           />
           <span className="text-xs text-stone-500 dark:text-stone-400">
             Text me at this number for account and job-related messages (like

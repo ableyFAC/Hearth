@@ -29,7 +29,7 @@ export default function ProTermsPage() {
   return (
     <main className="mx-auto max-w-2xl px-6 pb-16 pt-10">
       <p className="text-sm">
-        <a href="/" className="text-stone-500 hover:text-hearth-700 dark:text-stone-400 dark:hover:text-hearth-300">
+        <a href="/" className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
           ← Hearth
         </a>
       </p>
@@ -52,11 +52,11 @@ export default function ProTermsPage() {
             contractor, tradesperson, or company (&quot;pro&quot;) to receive
             leads, message homeowners, or get paid through Hearth for Pros.
             They supplement, and don&apos;t replace, the general{" "}
-            <a href="/terms" className="text-hearth-700 hover:underline dark:text-hearth-300">
+            <a href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
               Terms of Service
             </a>{" "}
             and{" "}
-            <a href="/privacy" className="text-hearth-700 hover:underline dark:text-hearth-300">
+            <a href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
               Privacy Policy
             </a>
             , which still govern everything about your account that isn&apos;t
@@ -90,7 +90,7 @@ export default function ProTermsPage() {
             Where Hearth shows your license as verified, that means we checked
             the license number against the CSLB public registry at that point
             in time, as described in the general{" "}
-            <a href="/terms" className="text-hearth-700 hover:underline dark:text-hearth-300">
+            <a href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
               Terms of Service
             </a>
             . It is a point-in-time public-records check, not an ongoing
@@ -218,8 +218,8 @@ export default function ProTermsPage() {
             the law allows shortening the claims period by agreement.
           </p>
           <p className="mt-3 leading-relaxed">
-            Questions about this section? Contact{" "}
-            <LegalContact subject="Contractor terms question" />.
+            Questions about this section? Reach us through{" "}
+            <LegalContact topic="Contractor terms question" />.
           </p>
         </section>
 
@@ -229,13 +229,13 @@ export default function ProTermsPage() {
           </h2>
           <p className="mt-2 leading-relaxed">
             See the general{" "}
-            <a href="/terms" className="text-hearth-700 hover:underline dark:text-hearth-300">
+            <a href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
               Terms of Service
             </a>{" "}
             for account-level terms (acceptable use, content, disputes and
             arbitration, and governing law) that apply to every Hearth user,
             including pros, and the{" "}
-            <a href="/privacy" className="text-hearth-700 hover:underline dark:text-hearth-300">
+            <a href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
               Privacy Policy
             </a>{" "}
             for what we collect and how it&apos;s used.

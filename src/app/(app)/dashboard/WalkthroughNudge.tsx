@@ -40,7 +40,7 @@ export default function WalkthroughNudge({ count }: { count: number }) {
   }
 
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-hearth-200 bg-hearth-50 p-4 dark:border-hearth-800/40 dark:bg-hearth-900/30">
+    <div className="flex items-start gap-3 rounded-xl border border-bark-100 bg-bark-50 p-4 dark:border-bark-700/40 dark:bg-bark-700/30">
       <span className="icon-chip shrink-0">
         <Footprints className="h-5 w-5" aria-hidden="true" />
       </span>
@@ -60,7 +60,7 @@ export default function WalkthroughNudge({ count }: { count: number }) {
         type="button"
         onClick={dismiss}
         aria-label="Dismiss"
-        className="shrink-0 -m-2 p-2 text-hearth-400 hover:text-hearth-700 dark:text-hearth-500 dark:hover:text-hearth-300"
+        className="shrink-0 -m-2 p-2 text-bark-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300"
       >
         <X className="h-4 w-4" aria-hidden="true" />
       </button>

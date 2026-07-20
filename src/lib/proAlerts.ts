@@ -40,6 +40,15 @@ export type NewLeadAlertInput = {
   // Property's two-letter state, for the cold-start path's null-safe locality
   // check. Missing data never hides a pro (0046's rule).
   property_state?: string | null;
+  // Fan-out-cannon gate (migration 0093): when false, every pro still gets
+  // the in-app notification row below, but email/SMS are held back by
+  // simply not handing sendNotification any contact details - its own
+  // "no email/phone, nothing to send" guards do the rest, so this file
+  // never needs to know Resend/Twilio's specifics. Required, not optional:
+  // an implicit default here previously fell open (any caller that forgot
+  // to pass it got full email/SMS), so every call site must now name its
+  // choice explicitly.
+  externalChannels: boolean;
 };
 
 // Returns the user ids that were alerted (empty on any failure), so the caller
@@ -55,6 +64,7 @@ export async function alertProsForNewLead(
     if (!/^[a-z0-9_-]+$/i.test(lead.category)) return alerted;
 
     const admin = createAdminClient();
+    const externalChannels = lead.externalChannels;
 
     // COLD START: the same null-safe state predicate the JS filter below
     // applies, computed once up front so it can be pushed into the query
@@ -243,9 +253,15 @@ export async function alertProsForNewLead(
             title: `New ${categoryLabel} job just posted`,
             body,
             url: "/pro",
-            email: contact?.email ?? null,
-            phone: contactPhoneByUser.get(userId) ?? contact?.phone ?? null,
-            smsConsent: contact?.sms_consent === true,
+            // Withholding email/phone (rather than skipping the call) is what
+            // keeps the in-app row firing even when externalChannels is
+            // false - sendNotification always writes it, and only reaches
+            // for email/SMS when it actually has contact details to use.
+            email: externalChannels ? contact?.email ?? null : null,
+            phone: externalChannels
+              ? contactPhoneByUser.get(userId) ?? contact?.phone ?? null
+              : null,
+            smsConsent: externalChannels && contact?.sms_consent === true,
           });
           if (sent) alerted.add(userId);
         })

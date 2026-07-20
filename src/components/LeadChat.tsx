@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Image as ImageIcon } from "lucide-react";
+import { FilePreviewThumb } from "@/components/FilePreview";
 import { createClient } from "@/lib/supabase/client";
 import { censor } from "@/lib/censor";
 import { extractQuote, formatUSD, dollarsToCents, formatUSDCents } from "@/lib/quotes";
@@ -184,6 +185,10 @@ export default function LeadChat({
   );
   const [otherReadAt, setOtherReadAt] = useState<string | null>(null);
   const [failed, setFailed] = useState<{ tempId: string; body: string }[]>([]);
+  // The photo just picked from the attach button, shown as a small preview
+  // while it uploads (sendImage posts it as a message immediately - there's
+  // no separate "attach then send" step to preview it in otherwise).
+  const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
   const uidRef = useRef<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -537,6 +542,7 @@ export default function LeadChat({
   async function sendImage(file: File) {
     if (!file.type.startsWith("image/")) return;
     setBusy(true);
+    setPendingPhoto(file);
     try {
       const uid = await ensureUid();
       const ext = file.name.split(".").pop() || "jpg";
@@ -556,9 +562,11 @@ export default function LeadChat({
       });
       if (error) throw error;
       setBusy(false);
+      setPendingPhoto(null);
       load();
     } catch {
       setBusy(false);
+      setPendingPhoto(null);
       setNotice("Could not send the photo. Please try again.");
     }
   }
@@ -964,7 +972,7 @@ export default function LeadChat({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-sm font-medium text-hearth-700 hover:underline"
+        className="text-sm font-medium text-bark-700 hover:underline"
       >
         Messages{messages.length ? ` (${messages.length})` : ""}
       </button>
@@ -1012,7 +1020,7 @@ export default function LeadChat({
                   type="button"
                   onClick={() => postSystem(REOPEN_BODY)}
                   disabled={busy}
-                  className="text-xs font-medium text-hearth-700 hover:underline disabled:opacity-50"
+                  className="text-xs font-medium text-bark-700 hover:underline disabled:opacity-50"
                 >
                   Reopen
                 </button>
@@ -1184,14 +1192,14 @@ export default function LeadChat({
                       <button
                         type="button"
                         onClick={() => startReply(m)}
-                        className="px-1 text-xs text-stone-500 hover:text-hearth-700 dark:text-stone-400 dark:hover:text-hearth-300"
+                        className="px-1 text-xs text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300"
                       >
                         Reply
                       </button>
                       <button
                         type="button"
                         onClick={() => copyText(m.body)}
-                        className="px-1 text-xs text-stone-500 hover:text-hearth-700 dark:text-stone-400 dark:hover:text-hearth-300"
+                        className="px-1 text-xs text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300"
                       >
                         Copy
                       </button>
@@ -1241,7 +1249,7 @@ export default function LeadChat({
                   </button>
 
                   {quote != null && (
-                    <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-hearth-50 px-2 py-0.5 text-[10px] font-semibold text-hearth-700 dark:bg-hearth-900/40 dark:text-hearth-300">
+                    <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-bark-50 px-2 py-0.5 text-[10px] font-semibold text-bark-700 dark:bg-bark-700/40 dark:text-stone-300">
                       Quoted {formatUSD(quote)}
                     </span>
                   )}
@@ -1264,7 +1272,7 @@ export default function LeadChat({
                     <span
                       className={`block whitespace-pre-wrap break-words rounded-lg px-3 py-1.5 text-sm ${
                         mine
-                          ? "bg-hearth-600 text-white"
+                          ? "bg-bark-600 text-white"
                           : "border border-stone-200 bg-white text-stone-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-200"
                       }`}
                     >
@@ -1310,7 +1318,7 @@ export default function LeadChat({
                 type="button"
                 onClick={() => retryFailed(f.tempId, f.body)}
                 disabled={busy}
-                className="font-medium text-hearth-700 hover:underline disabled:opacity-50 dark:text-hearth-300"
+                className="font-medium text-bark-700 hover:underline disabled:opacity-50 dark:text-stone-300"
               >
                 Retry
               </button>
@@ -1373,7 +1381,7 @@ export default function LeadChat({
               <button
                 type="button"
                 onClick={addQuoteRow}
-                className="text-xs font-medium text-hearth-700 hover:underline"
+                className="text-xs font-medium text-bark-700 hover:underline"
               >
                 + Add line item
               </button>
@@ -1457,7 +1465,7 @@ export default function LeadChat({
               <button
                 type="button"
                 onClick={addInvoiceRow}
-                className="text-xs font-medium text-hearth-700 hover:underline"
+                className="text-xs font-medium text-bark-700 hover:underline"
               >
                 + Add line item
               </button>
@@ -1499,7 +1507,7 @@ export default function LeadChat({
                 <button
                   type="button"
                   onClick={() => setShowQuoteForm(true)}
-                  className="text-sm font-medium text-hearth-700 hover:underline"
+                  className="text-sm font-medium text-bark-700 hover:underline"
                 >
                   Send a quote
                 </button>
@@ -1508,7 +1516,7 @@ export default function LeadChat({
                 <button
                   type="button"
                   onClick={openInvoiceForm}
-                  className="text-sm font-medium text-hearth-700 hover:underline"
+                  className="text-sm font-medium text-bark-700 hover:underline"
                 >
                   Create invoice from this chat
                 </button>
@@ -1528,7 +1536,7 @@ export default function LeadChat({
       ) : (
         <div className="mt-2 space-y-2">
           {replyingTo && (
-            <div className="flex items-center justify-between rounded-lg border-l-2 border-hearth-400 bg-stone-50 px-2 py-1 text-xs text-stone-500 dark:bg-stone-800 dark:text-stone-400">
+            <div className="flex items-center justify-between rounded-lg border-l-2 border-bark-500 bg-stone-50 px-2 py-1 text-xs text-stone-500 dark:bg-stone-800 dark:text-stone-400">
               <span className="truncate">
                 ↩︎ {replyingTo.body.replace(/\n/g, " ").slice(0, 50)}
               </span>
@@ -1541,10 +1549,16 @@ export default function LeadChat({
               </button>
             </div>
           )}
+          {pendingPhoto && (
+            <div className="flex items-center gap-2">
+              <FilePreviewThumb file={pendingPhoto} size="h-10 w-10" />
+              <span className="text-xs text-stone-500 dark:text-stone-400">Sending photo…</span>
+            </div>
+          )}
           <form onSubmit={send} className="flex gap-2">
             <label
               title="Send a photo"
-              className="flex cursor-pointer items-center rounded-lg border border-stone-200 px-3 text-stone-500 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-hearth-300"
+              className="flex cursor-pointer items-center rounded-lg border border-stone-200 px-3 text-stone-500 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-stone-300"
             >
               <ImageIcon className="h-5 w-5" aria-hidden="true" />
               <input
@@ -1642,7 +1656,7 @@ const STATUS_LABEL: Record<Quote["status"], string> = {
 };
 
 const STATUS_PILL_CLASS: Record<Quote["status"], string> = {
-  sent: "bg-hearth-50 text-hearth-700 dark:bg-hearth-900/40 dark:text-hearth-300",
+  sent: "bg-bark-50 text-bark-700 dark:bg-bark-700/40 dark:text-stone-300",
   accepted: "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-200",
   declined: "bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300",
   withdrawn: "bg-stone-200 text-stone-500 dark:bg-stone-700 dark:text-stone-400",
@@ -1791,7 +1805,7 @@ const INVOICE_STATUS_LABEL: Record<Invoice["status"], string> = {
 };
 
 const INVOICE_STATUS_PILL_CLASS: Record<Invoice["status"], string> = {
-  sent: "bg-hearth-50 text-hearth-700 dark:bg-hearth-900/40 dark:text-hearth-300",
+  sent: "bg-bark-50 text-bark-700 dark:bg-bark-700/40 dark:text-stone-300",
   signed: "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-200",
   void: "bg-stone-200 text-stone-500 dark:bg-stone-700 dark:text-stone-400",
 };
@@ -1912,7 +1926,7 @@ function InvoiceCard({
                     type="button"
                     onClick={() => onSignInPerson?.()}
                     disabled={busy}
-                    className="text-xs font-semibold text-hearth-700 hover:text-hearth-800 disabled:opacity-50 dark:text-hearth-300 dark:hover:text-hearth-200"
+                    className="text-xs font-semibold text-bark-700 hover:text-bark-700 disabled:opacity-50 dark:text-stone-300 dark:hover:text-stone-300"
                   >
                     Confirm
                   </button>

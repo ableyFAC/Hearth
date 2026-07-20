@@ -261,7 +261,7 @@ export default async function HomeownerChatsPage({
               >
                 <Link
                   href={`/chats?lead=${q.id}`}
-                  className="truncate text-sm text-stone-700 hover:text-hearth-700 hover:underline dark:text-stone-300"
+                  className="truncate text-sm text-stone-700 hover:text-bark-700 hover:underline dark:text-stone-300"
                 >
                   {q.name}
                 </Link>
@@ -294,7 +294,7 @@ export default async function HomeownerChatsPage({
               href="/chats?lead=ask-hearth"
               className={`block border-l-4 px-4 py-3 transition ${
                 askSelected
-                  ? "border-hearth-500 bg-hearth-50 dark:bg-hearth-900/40"
+                  ? "border-bark-600 bg-bark-50 dark:bg-bark-700/40"
                   : "border-transparent hover:bg-stone-50 dark:hover:bg-stone-700"
               }`}
             >
@@ -317,9 +317,9 @@ export default async function HomeownerChatsPage({
                     href={`/chats?lead=${l.id}`}
                     className={`block border-l-4 px-4 py-3 transition ${
                       isActive
-                        ? "border-hearth-500 bg-hearth-50 dark:bg-hearth-900/40"
+                        ? "border-bark-600 bg-bark-50 dark:bg-bark-700/40"
                         : unread
-                          ? "border-hearth-400 bg-hearth-50/60 hover:bg-hearth-50 dark:bg-hearth-900/30 dark:hover:bg-hearth-900/40"
+                          ? "border-bark-500 bg-bark-50/60 hover:bg-bark-50 dark:bg-bark-700/30 dark:hover:bg-bark-700/40"
                           : "border-transparent hover:bg-stone-50 dark:hover:bg-stone-700"
                     }`}
                   >
@@ -334,7 +334,7 @@ export default async function HomeownerChatsPage({
                         {nameOf(l)}
                       </span>
                       {unread ? (
-                        <span className="shrink-0 rounded-full bg-hearth-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                        <span className="shrink-0 rounded-full bg-bark-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
                           New
                         </span>
                       ) : (
@@ -357,7 +357,7 @@ export default async function HomeownerChatsPage({
                         : labelFor(JOB_CATEGORIES, l.category)}
                     </p>
                     {quoteByLead.has(l.id) && (
-                      <span className="mt-1 inline-block rounded-full bg-hearth-50 px-2 py-0.5 text-[10px] font-semibold text-hearth-700 dark:bg-hearth-900/40 dark:text-hearth-300">
+                      <span className="mt-1 inline-block rounded-full bg-bark-50 px-2 py-0.5 text-[10px] font-semibold text-bark-700 dark:bg-bark-700/40 dark:text-stone-300">
                         Quote {formatUSDCents(quoteByLead.get(l.id)!)}
                       </span>
                     )}
@@ -376,7 +376,7 @@ export default async function HomeownerChatsPage({
             >
               <Link
                 href="/chats"
-                className="mb-2 inline-flex w-fit shrink-0 items-center gap-1 text-sm font-medium text-hearth-700 hover:underline md:hidden"
+                className="mb-2 inline-flex w-fit shrink-0 items-center gap-1 text-sm font-medium text-bark-700 hover:underline md:hidden"
               >
                 <span aria-hidden="true">←</span> All conversations
               </Link>
@@ -392,7 +392,7 @@ export default async function HomeownerChatsPage({
             >
               <Link
                 href="/chats"
-                className="mb-2 inline-flex w-fit shrink-0 items-center gap-1 text-sm font-medium text-hearth-700 hover:underline md:hidden"
+                className="mb-2 inline-flex w-fit shrink-0 items-center gap-1 text-sm font-medium text-bark-700 hover:underline md:hidden"
               >
                 <span aria-hidden="true">←</span> All conversations
               </Link>
@@ -452,7 +452,7 @@ export default async function HomeownerChatsPage({
               Select a conversation
               <Link
                 href="/chats"
-                className="text-sm font-medium text-hearth-700 hover:underline md:hidden"
+                className="text-sm font-medium text-bark-700 hover:underline md:hidden"
               >
                 <span aria-hidden="true">←</span> All conversations
               </Link>

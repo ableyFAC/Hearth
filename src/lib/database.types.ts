@@ -109,7 +109,19 @@ export interface Database {
           lot_size_sqft: number | null;
           property_type: string | null;
           purchase_date: string | null;
+          // Self-attested at claim time (MVP-era), superseded by
+          // ownership_status below. Server-locked (migration 0093) - a
+          // client write is silently reverted, never trusted.
           ownership_verified: boolean;
+          // Server-verified ownership match against the county assessor
+          // record (migration 0093, src/lib/ownershipMatch.ts). Locked
+          // against client writes the same way; only
+          // record_ownership_check() (a service-role RPC) may set these.
+          ownership_status: string;
+          ownership_owner_names: Json | null;
+          ownership_owner_type: string | null;
+          ownership_owner_occupied: boolean | null;
+          ownership_checked_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -128,6 +140,11 @@ export interface Database {
           property_type?: string | null;
           purchase_date?: string | null;
           ownership_verified?: boolean;
+          ownership_status?: string;
+          ownership_owner_names?: Json | null;
+          ownership_owner_type?: string | null;
+          ownership_owner_occupied?: boolean | null;
+          ownership_checked_at?: string | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["properties"]["Insert"]>;
@@ -737,6 +754,28 @@ export interface Database {
         >;
         Relationships: [];
       };
+      household_invite_tokens: {
+        Row: {
+          token: string;
+          property_id: string;
+          created_by: string;
+          created_at: string;
+          expires_at: string;
+          scanned_at: string | null;
+        };
+        Insert: {
+          token?: string;
+          property_id: string;
+          created_by: string;
+          created_at?: string;
+          expires_at: string;
+          scanned_at?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["household_invite_tokens"]["Insert"]
+        >;
+        Relationships: [];
+      };
       pro_clients: {
         Row: {
           id: string;
@@ -1100,6 +1139,44 @@ export interface Database {
         Args: { p_key: string };
         Returns: boolean;
       };
+      record_ownership_check: {
+        Args: {
+          p_property_id: string;
+          p_status: string;
+          p_owner_names: Json | null;
+          p_owner_type: string | null;
+          p_owner_occupied: boolean | null;
+        };
+        Returns: undefined;
+      };
+      open_jobs_for_me: {
+        Args: Record<string, never>;
+        Returns: {
+          id: string;
+          category: string;
+          timing: string | null;
+          issue_description: string | null;
+          issue_severity: string | null;
+          payout_amount: number | null;
+          created_at: string;
+          application_count: number;
+          has_photos: boolean;
+          plus_poster: boolean;
+          budget_range: string | null;
+          city: string | null;
+          ownership_verified: boolean;
+        }[];
+      };
+      redeem_household_invite_token: {
+        Args: { p_token: string };
+        Returns: {
+          ok: boolean;
+          property_id: string | null;
+          member_id: string | null;
+          already_member: boolean | null;
+          reason: string | null;
+        }[];
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
@@ -1118,6 +1195,7 @@ export type ContractorLead = T["contractor_leads"]["Row"];
 export type SystemLifespan = T["system_lifespans"]["Row"];
 export type Subscription = T["subscriptions"]["Row"];
 export type HouseholdMember = T["household_members"]["Row"];
+export type HouseholdInviteToken = T["household_invite_tokens"]["Row"];
 export type ProClient = T["pro_clients"]["Row"];
 export type ProClientNote = T["pro_client_notes"]["Row"];
 export type ProPastJob = T["pro_past_jobs"]["Row"];

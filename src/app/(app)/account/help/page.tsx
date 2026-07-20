@@ -72,7 +72,7 @@ export default async function HelpPage() {
               {f.href && (
                 <a
                   href={f.href}
-                  className="mt-2 inline-block text-sm font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+                  className="mt-2 inline-block text-sm font-medium text-bark-700 hover:underline dark:text-stone-300"
                 >
                   {f.hrefLabel} →
                 </a>
@@ -96,7 +96,7 @@ export default async function HelpPage() {
           </p>
           <a
             href={`mailto:${FOUNDER.email}?subject=${encodeURIComponent("I found a bug")}`}
-            className="mt-3 inline-block text-sm font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+            className="mt-3 inline-block text-sm font-medium text-bark-700 hover:underline dark:text-stone-300"
           >
             Report a bug
           </a>

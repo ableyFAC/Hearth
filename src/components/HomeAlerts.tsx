@@ -74,7 +74,7 @@ export default function HomeAlerts() {
                   href={a.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-0.5 inline-block font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+                  className="mt-0.5 inline-block font-medium text-bark-700 hover:underline dark:text-stone-300"
                 >
                   View the official notice →
                 </a>

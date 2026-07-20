@@ -211,7 +211,7 @@ export default function AccountSecurityPanel({
             </p>
             <p className="mt-0.5 text-sm text-stone-500 dark:text-stone-400">
               Download everything we hold for your account as a JSON file.{" "}
-              <a href={privacyHref} className="font-medium text-hearth-700 hover:underline dark:text-hearth-300">
+              <a href={privacyHref} className="font-medium text-bark-700 hover:underline dark:text-stone-300">
                 Your privacy rights
               </a>{" "}
               explains what&apos;s in it.

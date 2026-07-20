@@ -80,8 +80,8 @@ export default function LearnGuides({ guides }: { guides: GuideData[] }) {
                 aria-pressed={category === c}
                 className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                   category === c
-                    ? "border-hearth-600 bg-hearth-600 text-white"
-                    : "border-stone-200 bg-white text-stone-600 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300"
+                    ? "border-bark-600 bg-bark-600 text-white"
+                    : "border-stone-200 bg-white text-stone-600 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300"
                 }`}
               >
                 {c}

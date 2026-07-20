@@ -71,7 +71,7 @@ export default function GuidesIndex() {
           <li key={g.href}>
             <a
               href={g.href}
-              className="card block transition hover:border-hearth-400 hover:shadow-md"
+              className="card block transition hover:border-bark-500 hover:shadow-md"
             >
               <div className="flex items-start gap-3">
                 <span className="icon-chip" aria-hidden>

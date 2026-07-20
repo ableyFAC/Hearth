@@ -119,7 +119,7 @@ export default function PlusWelcome({
         }`}
       >
         <div
-          className={`flex justify-center text-hearth-600 dark:text-hearth-400 ${step === 0 ? "motion-safe:animate-bounce" : ""}`}
+          className={`flex justify-center text-bark-600 dark:text-stone-400 ${step === 0 ? "motion-safe:animate-bounce" : ""}`}
         >
           <current.icon className="h-16 w-16" aria-hidden="true" />
         </div>
@@ -132,7 +132,7 @@ export default function PlusWelcome({
         {current.href && current.cta && (
           <Link
             href={current.href}
-            className="inline-block text-sm text-hearth-700 hover:underline dark:text-hearth-300"
+            className="inline-block text-sm text-bark-700 hover:underline dark:text-stone-300"
           >
             {current.cta} →
           </Link>
@@ -144,7 +144,7 @@ export default function PlusWelcome({
           <span
             key={s.title}
             className={`h-2 w-2 rounded-full transition-colors ${
-              i === step ? "bg-hearth-600" : "bg-stone-200 dark:bg-stone-700"
+              i === step ? "bg-bark-600" : "bg-stone-200 dark:bg-stone-700"
             }`}
           />
         ))}

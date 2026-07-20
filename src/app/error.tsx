@@ -13,7 +13,7 @@ export default function Error({
   return (
     <main className="flex min-h-screen items-center justify-center px-6">
       <div className="card w-full max-w-md text-center">
-        <Logo className="mx-auto h-10 w-10 text-hearth-600 dark:text-hearth-400" />
+        <Logo className="mx-auto h-10 w-10 text-bark-600 dark:text-stone-400" />
         <h1 className="mt-4 text-xl font-semibold text-stone-900 dark:text-stone-100">
           Something went sideways
         </h1>

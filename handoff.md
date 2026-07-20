@@ -1,5 +1,46 @@
 # Hearth handoff - 2026-07-19 (session 3, evening)
 
+## SESSION 4 ADDENDUM (2026-07-19/20, late night)
+All built by Sonnet workers with adversarial verifiers (security work double-verified,
+PDF fix independently confirmed live). Live DB verified through 0093 + the 0096 backfill;
+migrations 0094/0095/0096 bundled at supabase/APPLY_0094_0095_0096.sql for the SQL editor
+(move to applied-bundles/ after running, never commit it).
+- Ownership verification (Redfin-style): RentCast assessor owner names matched at
+  onboarding + lazily at job post; ownership_status locked server-side (0093, applied
+  live); unverified owners get in-app-only pro alerts (no email/SMS blast); pro job board
+  badge via 0094. HONEST LIMIT documented: public assessor names + user-editable
+  full_name = gameable by a motivated attacker; soft signal only.
+- Fixed: RentCast double-billing on ZIP drift (dual cache write), 0.0.0.0 redirects
+  (requestOrigin), onboarding + pro-shell escape hatches (accounts were hard-stuck),
+  serves_orange_county dropped at signup (0083 grant gap; 28 live rows backfilled TRUE,
+  job boards were EMPTY for all of them), PDF data export (emoji crashed WinAnsi font;
+  sanitizer + logging; independently confirmed live).
+- Features: PDF as primary data export (JSON secondary); QR household invites (0095:
+  10-min rotating tokens, sign-in/sign-up branching join page, cap-race lock, live JWT
+  email; QR renders once 0095 is pasted); upload previews everywhere + expandable saved
+  photos on system/issue rows + job-post photo pre-attach with removal.
+- Design: buttons now bark brown (old pre-redesign ramp, tailwind `bark`), Report-an-issue
+  stays ember, destructive stays red; font back to Inter; homeowner/landing emojis
+  removed (chat reaction picker kept); Ask Hearth dock bark.
+- Split: owner works landing+homeowner, friend owns pro side. Pro touched this session
+  only with explicit permission (badge, escape hatch, OC fix, shared proAlerts param).
+- Late additions same session: red-only-if-destructive sweep (all ember accents on
+  landing+homeowner now bark/stone; kept red: destructive, danger/overdue, Report-an-issue
+  per owner; bark ramp gained 50/100 tints); Find a Pro page reorder (heading, post-a-job,
+  my pros, rest); QR now 5-min TTL + one-time 30-min scan grace (0097 applied live,
+  countdown UI removed); public /contact form (support_messages, honeypot + IP rate limit,
+  all public emails replaced with Contact us links, no migration needed); friend's
+  contractor row had serves_orange_county=false from the bug window (flipped live, zero
+  false rows remain).
+- PLATFORM GAP found empirically: supabase postgres_changes realtime delivers NOTHING to
+  authenticated-scoped subscribers in this project (even own-row updates), only to
+  service-role. Every live UI works via polling fallbacks today. Investigate the realtime
+  publication / project settings when realtime matters.
+- Known leftovers: two green .btn CTAs in src/app/pro/tools/ProToolsClient.tsx (friend's
+  side); profile form still does not render serves_orange_county; sanitizer cache keyed
+  by char not (font,char) - matters only if a non-WinAnsi font is ever added; one hearth
+  accent left in account/household/page.tsx (file was locked during the sweep).
+
 ## LATE SESSION 3 ADDENDUM (QA sweep + fix wave + legal review + design)
 
 ### Full-app QA/security sweep (11 agents) - DONE

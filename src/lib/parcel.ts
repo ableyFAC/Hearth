@@ -43,7 +43,27 @@ export interface ParcelFacts {
   // record, so the starter-seeded rows aren't left blank when RentCast
   // actually knows the roof/foundation/HVAC.
   system_facts: Record<string, string> | null;
+  // County assessor owner-of-record, for ownership verification (migration
+  // 0093, src/lib/ownershipMatch.ts). Read server-side only, in
+  // onboarding/actions.ts and contractors/actions.ts - never trust a
+  // client-submitted copy of these fields, since the ParcelFacts JSON that
+  // rides through the onboarding form is otherwise re-parsed client input.
+  owner_names: string[] | null;
+  owner_type: "individual" | "organization" | null;
+  owner_occupied: boolean | null;
   source: "rentcast" | "none";
+}
+
+// Shared by lookupParcel's request key and its canonical-key dual-write
+// below: normalizes whitespace/case on the street and takes the 5-digit ZIP
+// so "123  Main St" / "123 main st" hit the same row.
+// "|v2" (migration 0093): ParcelFacts gained owner_names/owner_type/
+// owner_occupied for ownership verification, so a row cached before that
+// change has no owner data. Bumping the key makes every such row a natural
+// miss - it just refetches once instead of silently serving stale facts
+// with owner data missing.
+function parcelCacheKey(street: string, zip: string): string {
+  return street.trim().replace(/\s+/g, " ").toLowerCase() + "|" + zip.trim().slice(0, 5) + "|v2";
 }
 
 export async function lookupParcel(
@@ -51,14 +71,11 @@ export async function lookupParcel(
   zip: string
 ): Promise<ParcelFacts> {
   // A successful RentCast lookup bills one call, so serve a fresh cached
-  // result (migration 0069) instead of re-billing the same address. The key
-  // normalizes whitespace/case on the street and takes the 5-digit ZIP so
-  // "123  Main St" / "123 main st" hit the same row. All cache I/O below is
-  // wrapped so any error degrades to "just call RentCast": the cache must
-  // never break onboarding. parcel.ts is server-only, so the admin client is
-  // safe here.
-  const cacheKey =
-    street.trim().replace(/\s+/g, " ").toLowerCase() + "|" + zip.trim().slice(0, 5);
+  // result (migration 0069) instead of re-billing the same address. All
+  // cache I/O below is wrapped so any error degrades to "just call
+  // RentCast": the cache must never break onboarding. parcel.ts is
+  // server-only, so the admin client is safe here.
+  const cacheKey = parcelCacheKey(street, zip);
   const admin = createAdminClient();
 
   try {
@@ -97,6 +114,35 @@ export async function lookupParcel(
     );
   } catch (err) {
     console.error("Parcel cache write failed:", err);
+  }
+
+  // Dual-write under RentCast's own canonical address+ZIP too (read-through
+  // miss only - a fresh cache hit above already returned before reaching
+  // here). RentCast can correct the ZIP the homeowner typed (e.g. typed
+  // 92708, the record's real ZIP is 92647), and the onboarding confirm
+  // screen pre-fills that corrected ZIP (OnboardingForm.tsx), so
+  // claimPropertyAction's claim-time re-check (src/app/onboarding/actions.ts)
+  // calls lookupParcel with the CORRECTED zip, not the one this call cached
+  // under. Without this, that second call misses the cache and bills
+  // RentCast a second time for the same signup. Best-effort, same as every
+  // other cache write here.
+  if (facts.source === "rentcast" && facts.zip) {
+    const canonicalKey = parcelCacheKey(facts.address_line1, facts.zip);
+    if (canonicalKey !== cacheKey) {
+      try {
+        await admin.from("parcel_cache").upsert(
+          {
+            cache_key: canonicalKey,
+            facts: facts as unknown as Json,
+            source: facts.source,
+            fetched_at: new Date().toISOString(),
+          },
+          { onConflict: "cache_key" }
+        );
+      } catch (err) {
+        console.error("Parcel cache canonical-key write failed:", err);
+      }
+    }
   }
 
   return facts;
@@ -144,6 +190,15 @@ type RentcastTaxAssessment = { year?: number; value?: number; land?: number; imp
 type RentcastPropertyTax = { year?: number; total?: number };
 type RentcastHistoryEntry = { event?: string; date?: string; price?: number };
 
+// The assessor's owner-of-record. Optional throughout: sparse/rural records
+// can omit it entirely, and a missing owner must resolve to "can't verify",
+// never a guessed match.
+type RentcastOwner = {
+  names?: string[];
+  type?: string;
+  mailingAddress?: { addressLine1?: string; zipCode?: string };
+};
+
 type RentcastRecord = {
   id?: string;
   formattedAddress?: string;
@@ -167,7 +222,20 @@ type RentcastRecord = {
   taxAssessments?: Record<string, RentcastTaxAssessment>;
   propertyTaxes?: Record<string, RentcastPropertyTax>;
   history?: Record<string, RentcastHistoryEntry>;
+  owner?: RentcastOwner;
+  ownerOccupied?: boolean;
 };
+
+// Normalizes RentCast's owner.type ("Individual" | "Organization", per their
+// docs) to Hearth's lowercase enum. Anything unrecognized stays null rather
+// than guessed - ownershipMatch.ts treats a null owner_type as "can't
+// verify", same as a missing owner entirely.
+function normalizeOwnerType(value: string | null | undefined): "individual" | "organization" | null {
+  if (!value) return null;
+  const v = value.trim().toLowerCase();
+  if (v === "individual" || v === "organization") return v;
+  return null;
+}
 
 // RentCast returns human-readable property types ("Single Family", "Condo",
 // "Townhouse", "Multi-Family", "Apartment", "Manufactured", "Land"), but the
@@ -329,6 +397,13 @@ async function fetchFromRentcast(
       market_value_low: null,
       market_value_high: null,
       system_facts,
+      owner_names:
+        record.owner?.names && record.owner.names.length > 0
+          ? record.owner.names
+          : null,
+      owner_type: normalizeOwnerType(record.owner?.type),
+      owner_occupied:
+        typeof record.ownerOccupied === "boolean" ? record.ownerOccupied : null,
       source: "rentcast",
     };
   } catch {
@@ -490,6 +565,9 @@ function blankFacts(street: string, zip: string): ParcelFacts {
     market_value_low: null,
     market_value_high: null,
     system_facts: null,
+    owner_names: null,
+    owner_type: null,
+    owner_occupied: null,
     source: "none",
   };
 }

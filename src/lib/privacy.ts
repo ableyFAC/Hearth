@@ -140,11 +140,18 @@ async function resolveScope(
 }
 
 // Small helper so an export never dies on one bad table: a table that errors
-// or doesn't exist yields [] rather than failing the whole download.
+// or doesn't exist yields [] rather than failing the whole download. A real
+// error (missing table/column, RLS surprise, etc.) is still logged - the
+// previous version discarded `error` entirely, so a section could silently
+// come back empty with no trace of why, which is the wrong failure mode for
+// a legal-rights export (under-reporting, not just an ugly page).
 async function rows(
   q: PromiseLike<{ data: unknown[] | null; error: unknown }>
 ): Promise<unknown[]> {
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error && data == null) {
+    console.error("[privacy] section query failed, returning empty section", error);
+  }
   return data ?? [];
 }
 

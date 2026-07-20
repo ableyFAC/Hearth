@@ -29,7 +29,7 @@ type Mode = "photo" | "text";
 
 const VERDICT_STYLE: Record<Verdict, { label: string; classes: string }> = {
   fair: { label: "Looks fair", classes: "border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200" },
-  low: { label: "Looks low", classes: "border-hearth-200 bg-hearth-50 text-hearth-700 dark:border-hearth-900 dark:bg-hearth-900/40 dark:text-hearth-300" },
+  low: { label: "Looks low", classes: "border-bark-100 bg-bark-50 text-bark-700 dark:border-bark-700 dark:bg-bark-700/40 dark:text-stone-300" },
   high: { label: "Looks high", classes: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300" },
   unclear: { label: "Not enough info", classes: "border-stone-200 bg-stone-100 text-stone-600 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300" },
 };
@@ -270,7 +270,7 @@ export default function QuoteAnalyzer({
               className={`flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-stone-200 px-4 py-8 text-center dark:border-white/10 ${
                 loading
                   ? "cursor-not-allowed opacity-60"
-                  : "cursor-pointer hover:border-hearth-300 hover:bg-hearth-50"
+                  : "cursor-pointer hover:border-bark-500 hover:bg-bark-50"
               }`}
               aria-disabled={loading}
             >
@@ -450,7 +450,7 @@ export default function QuoteAnalyzer({
                           <button
                             type="button"
                             onClick={() => markCovered(i)}
-                            className="shrink-0 text-xs font-medium text-hearth-700 hover:text-hearth-800 dark:text-hearth-300 dark:hover:text-hearth-200"
+                            className="shrink-0 text-xs font-medium text-bark-700 hover:text-bark-700 dark:text-stone-300 dark:hover:text-stone-300"
                           >
                             It&apos;s covered
                           </button>
@@ -551,7 +551,7 @@ export default function QuoteAnalyzer({
                 <button
                   type="button"
                   onClick={() => setShowAdd(true)}
-                  className="text-xs font-medium text-hearth-700 hover:text-hearth-800 dark:text-hearth-300 dark:hover:text-hearth-200"
+                  className="text-xs font-medium text-bark-700 hover:text-bark-700 dark:text-stone-300 dark:hover:text-stone-300"
                 >
                   + Add something the quote includes
                 </button>
@@ -566,7 +566,7 @@ export default function QuoteAnalyzer({
                 <button
                   type="button"
                   onClick={copyNegotiation}
-                  className="text-xs font-medium text-hearth-700 hover:text-hearth-800 dark:text-hearth-300 dark:hover:text-hearth-200"
+                  className="text-xs font-medium text-bark-700 hover:text-bark-700 dark:text-stone-300 dark:hover:text-stone-300"
                 >
                   {copied ? "Copied" : "Copy"}
                 </button>
@@ -592,8 +592,8 @@ export default function QuoteAnalyzer({
       )}
 
       {result && freeTaste && (
-        <div className="card space-y-3 border-hearth-200 bg-hearth-50 text-center dark:border-hearth-900 dark:bg-hearth-900/40">
-          <p className="text-sm text-hearth-800 dark:text-hearth-200">
+        <div className="card space-y-3 border-bark-100 bg-bark-50 text-center dark:border-bark-700 dark:bg-bark-700/40">
+          <p className="text-sm text-bark-700 dark:text-stone-300">
             That was your free check. Get every quote checked with Hearth Plus,
             $4.99/mo (first month free for new members).
           </p>

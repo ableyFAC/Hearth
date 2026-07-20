@@ -75,7 +75,7 @@ export default async function PreviewPage() {
               <div className="flex items-center gap-2 rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-500 dark:bg-stone-800 dark:text-stone-400">
                 <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 Homeowner contact -{" "}
-                <Link href="/contractor-signup" className="text-hearth-700 hover:underline dark:text-hearth-300">
+                <Link href="/contractor-signup" className="text-bark-700 hover:underline dark:text-stone-300">
                   sign up to unlock
                 </Link>
               </div>

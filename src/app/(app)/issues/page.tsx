@@ -28,6 +28,26 @@ export default async function IssuesPage() {
   const open = (issues ?? []).filter((i) => i.status === "open");
   const resolved = (issues ?? []).filter((i) => i.status === "resolved");
 
+  // Photos an owner attached when reporting an issue (or posting a job from
+  // one) live in the polymorphic photos table, keyed by issue id - same
+  // pattern the dashboard uses for system photos. Grouped here so each row
+  // can show its own "Show photos" disclosure.
+  const issueIds = (issues ?? []).map((i) => i.id);
+  const photosByIssue = new Map<string, string[]>();
+  if (issueIds.length) {
+    const { data: pics } = await supabase
+      .from("photos")
+      .select("related_id, url")
+      .eq("property_id", property.id)
+      .eq("related_type", "issue")
+      .in("related_id", issueIds);
+    for (const p of pics ?? []) {
+      const list = photosByIssue.get(p.related_id) ?? [];
+      list.push(p.url);
+      photosByIssue.set(p.related_id, list);
+    }
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -52,7 +72,11 @@ export default async function IssuesPage() {
         {open.length ? (
           <ul className="space-y-2">
             {open.map((i) => (
-              <IssueRow key={`${i.id}-${i.status}`} issue={i} />
+              <IssueRow
+                key={`${i.id}-${i.status}`}
+                issue={i}
+                photos={photosByIssue.get(i.id) ?? []}
+              />
             ))}
           </ul>
         ) : (
@@ -67,7 +91,12 @@ export default async function IssuesPage() {
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Resolved</h2>
           <ul className="space-y-2">
             {resolved.map((i) => (
-              <IssueRow key={`${i.id}-${i.status}`} issue={i} initialResolved />
+              <IssueRow
+                key={`${i.id}-${i.status}`}
+                issue={i}
+                initialResolved
+                photos={photosByIssue.get(i.id) ?? []}
+              />
             ))}
           </ul>
         </section>

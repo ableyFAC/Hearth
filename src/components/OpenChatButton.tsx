@@ -18,7 +18,7 @@ export default function OpenChatButton({
           new CustomEvent("hearth:open-chat", { detail: { leadId, name } })
         )
       }
-      className="text-sm font-medium text-hearth-700 hover:underline"
+      className="text-sm font-medium text-bark-700 hover:underline"
     >
       {label}
     </button>

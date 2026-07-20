@@ -373,7 +373,7 @@ export default function VoiceButton({
         className={`flex items-center rounded-lg border px-2 text-lg disabled:opacity-50 ${
           listening
             ? "animate-pulse border-red-300 bg-red-50 text-red-600 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300"
-            : "border-stone-200 text-stone-500 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-hearth-300"
+            : "border-stone-200 text-stone-500 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-stone-300"
         }`}
       >
         <Mic className="h-5 w-5" aria-hidden="true" />

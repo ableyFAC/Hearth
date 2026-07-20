@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveProperty } from "@/lib/property";
+import { lookupParcel } from "@/lib/parcel";
+import { deriveOwnershipStatus } from "@/lib/ownershipMatch";
 import {
   leadFeeFor,
   labelFor,
@@ -117,10 +119,73 @@ export async function postJobAction(formData: FormData) {
     redirect("/contractors");
   }
 
+  // Lazy ownership check (migration 0093): a property claimed before this
+  // feature shipped never got an assessor-record check at claim time, so
+  // ownership_checked_at is null forever unless something runs it. Run the
+  // same check onboarding does (src/app/onboarding/actions.ts) once, here,
+  // best-effort, so the fan-out gate below has a real answer instead of
+  // treating every legacy property as permanently unverified. A property
+  // already checked (checked_at set, verified or not) is never re-checked
+  // here - onboarding's check is the source of truth going forward.
+  let ownershipStatus = property.ownership_status;
+  // `== null` (not `=== null`) on purpose: if this deploys before migration
+  // 0093 has run against the live DB, ownership_checked_at simply is not a
+  // selected column, so it reads back as undefined, not null. A strict
+  // `=== null` check would silently never fire in that window, and every
+  // job post would fall through to withholding email/SMS forever (see the
+  // fail-safe default of ownershipStatus below) instead of at least
+  // attempting the check - `== null` catches both and the try/catch below
+  // still fails safe if the RPC or column genuinely doesn't exist yet.
+  if (property.ownership_checked_at == null && property.zip) {
+    try {
+      const metaName = (user.user_metadata?.full_name as string | undefined)?.trim();
+      let fullName = metaName || null;
+      if (!fullName) {
+        const { data: profile } = await supabase
+          .from("users")
+          .select("full_name")
+          .eq("id", user.id)
+          .maybeSingle();
+        fullName = profile?.full_name?.trim() || null;
+      }
+      const facts = await lookupParcel(property.address_line1, property.zip);
+      ownershipStatus = deriveOwnershipStatus(fullName, facts);
+      await admin.rpc("record_ownership_check", {
+        p_property_id: property.id,
+        p_status: ownershipStatus,
+        p_owner_names: facts.owner_names,
+        p_owner_type: facts.owner_type,
+        p_owner_occupied: facts.owner_occupied,
+      });
+    } catch (err) {
+      console.error("Lazy ownership verification check failed:", err);
+    }
+  }
+
   const category = formData.get("category") as string;
   const issueId = (formData.get("issue_id") as string) || null;
   const timing = (formData.get("timing") as string) || null;
   const message = ((formData.get("message") as string) || "").trim() || null;
+
+  // Existing issue photos the owner removed from the pre-attached preview
+  // before posting (ExistingJobPhotos.tsx). Since a job posted from an issue
+  // reuses that SAME issue_id for its photos (see photoIssueId below), a
+  // "remove" here is a real delete of that photo row, scoped to this exact
+  // issue and property so the form can't be used to touch anything else. Runs
+  // before the description-length gate below so a removal always takes
+  // effect even if the rest of the post is rejected and the owner retries.
+  const removePhotoIds = (formData.getAll("remove_photo_ids") as string[]).filter(
+    (id) => typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id)
+  );
+  if (removePhotoIds.length && issueId) {
+    await supabase
+      .from("photos")
+      .delete()
+      .eq("property_id", property.id)
+      .eq("related_type", "issue")
+      .eq("related_id", issueId)
+      .in("id", removePhotoIds);
+  }
 
   // Optional budget band: a signal for pros, never a commitment. Only accept a
   // known band value; never write arbitrary client input.
@@ -381,6 +446,12 @@ export async function postJobAction(formData: FormData) {
     // For the cold-start free-alerts path's state-level locality check
     // (null-safe, mirroring 0046: missing data never hides a job).
     property_state: property.state ?? null,
+    // Fan-out-cannon gate (migration 0093): an unverified property must not
+    // be able to trigger up to 200 real emails/texts to pros on someone
+    // else's say-so. In-app notifications still go out either way - only
+    // the external channels are held back until the assessor-record match
+    // says this poster is plausibly who they claim to be.
+    externalChannels: ownershipStatus === "verified",
   });
 
   // Nudge matching pros that a fresh job just came in, so they see it while

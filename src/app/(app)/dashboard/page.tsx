@@ -460,13 +460,13 @@ export default async function HomePage({
       {searchParams.welcome && (
         <>
           <Confetti />
-          <div className="rounded-xl border border-hearth-200 bg-hearth-50 p-4 dark:border-hearth-800/40 dark:bg-hearth-900/30">
+          <div className="rounded-xl border border-bark-100 bg-bark-50 p-4 dark:border-bark-700/40 dark:bg-bark-700/30">
             {sys.length > 0 ? (
               <>
                 <p className="font-medium text-stone-900 dark:text-stone-100">
                   Your home is claimed.
                 </p>
-                <p className="mt-1 text-sm text-hearth-800 dark:text-hearth-200">
+                <p className="mt-1 text-sm text-bark-700 dark:text-stone-300">
                   We started {sys.length} system
                   {sys.length === 1 ? "" : "s"} with estimated details based on
                   your home&apos;s age:
@@ -475,7 +475,7 @@ export default async function HomePage({
                   {sys.map((s) => (
                     <li
                       key={s.id}
-                      className="chip border border-hearth-200 bg-white text-stone-700 dark:border-hearth-800 dark:bg-stone-800 dark:text-stone-300"
+                      className="chip border border-bark-100 bg-white text-stone-700 dark:border-bark-700 dark:bg-stone-800 dark:text-stone-300"
                     >
                       <CategoryIcon
                         list={SYSTEM_TYPES}
@@ -494,7 +494,7 @@ export default async function HomePage({
                 </Link>
               </>
             ) : (
-              <p className="text-sm text-hearth-800 dark:text-hearth-200">
+              <p className="text-sm text-bark-700 dark:text-stone-300">
                 Your home is claimed. Add your systems below. It&apos;s what
                 powers your maintenance reminders and your Home Health Score.
               </p>
@@ -590,7 +590,7 @@ export default async function HomePage({
               </p>
               <Link
                 href="/contractors"
-                className="text-sm text-hearth-700 hover:underline dark:text-hearth-300"
+                className="text-sm text-bark-700 hover:underline dark:text-stone-300"
               >
                 View job postings →
               </Link>
@@ -605,7 +605,7 @@ export default async function HomePage({
               </p>
               <Link
                 href="/contractors"
-                className="text-sm text-hearth-700 hover:underline dark:text-hearth-300"
+                className="text-sm text-bark-700 hover:underline dark:text-stone-300"
               >
                 Find a pro →
               </Link>
@@ -670,7 +670,7 @@ export default async function HomePage({
                 (plus ? (
                   <Link
                     href="/forecast"
-                    className="mt-1 block text-xs text-hearth-700 hover:underline dark:text-hearth-300"
+                    className="mt-1 block text-xs text-bark-700 hover:underline dark:text-stone-300"
                   >
                     Your HVAC is {upgradeSavings.hvacAge} years old. A new unit
                     could save ~${upgradeSavings.low.toLocaleString()}-
@@ -679,10 +679,10 @@ export default async function HomePage({
                 ) : (
                   <Link
                     href="/plus?reason=forecast"
-                    className="mt-1 block text-xs text-hearth-700 hover:underline dark:text-hearth-300"
+                    className="mt-1 block text-xs text-bark-700 hover:underline dark:text-stone-300"
                   >
                     See what a new unit would save
-                    <span className="chip mx-1.5 bg-hearth-100 text-hearth-700 dark:bg-hearth-900 dark:text-hearth-300">
+                    <span className="chip mx-1.5 bg-bark-100 text-bark-700 dark:bg-bark-700 dark:text-stone-300">
                       Plus
                     </span>
                     →
@@ -700,7 +700,7 @@ export default async function HomePage({
               </p>
               <Link
                 href="/profile"
-                className="text-sm text-hearth-700 hover:underline dark:text-hearth-300"
+                className="text-sm text-bark-700 hover:underline dark:text-stone-300"
               >
                 Finish your home profile →
               </Link>
@@ -714,14 +714,14 @@ export default async function HomePage({
         <h2 className="flex items-center text-lg font-semibold text-stone-900 dark:text-stone-100">This month</h2>
         <WalkthroughNudge count={unconfirmedCount} />
         <div className="card space-y-3">
-          <div className="rounded-lg bg-hearth-50 p-3 dark:bg-hearth-900/30">
-            <p className="text-xs font-semibold uppercase tracking-wide text-hearth-700 dark:text-hearth-300">
+          <div className="rounded-lg bg-bark-50 p-3 dark:bg-bark-700/30">
+            <p className="text-xs font-semibold uppercase tracking-wide text-bark-700 dark:text-stone-300">
               Hearth&apos;s briefing
             </p>
             <ul className="mt-1.5 space-y-1.5">
               {briefing.map((b, i) => (
                 <li key={i} className="text-sm text-stone-900 dark:text-stone-100">
-                  <span className="text-hearth-700 dark:text-hearth-300">•</span>{" "}
+                  <span className="text-bark-700 dark:text-stone-300">•</span>{" "}
                   {b.urgent && (
                     <span className="chip-danger mr-1 py-0 align-middle">Urgent</span>
                   )}
@@ -729,7 +729,7 @@ export default async function HomePage({
                   {b.href && (
                     <Link
                       href={b.href}
-                      className="ml-1 font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+                      className="ml-1 font-medium text-bark-700 hover:underline dark:text-stone-300"
                     >
                       {b.cta} →
                     </Link>
@@ -782,7 +782,7 @@ export default async function HomePage({
                     className="text-sm font-medium hover:underline"
                   >
                     Plan my next round
-                    <span className="chip mx-1.5 bg-hearth-100 text-hearth-700 dark:bg-hearth-900 dark:text-hearth-300">
+                    <span className="chip mx-1.5 bg-bark-100 text-bark-700 dark:bg-bark-700 dark:text-stone-300">
                       Plus
                     </span>
                     →
@@ -900,7 +900,7 @@ export default async function HomePage({
                 </ul>
                 <p className="mt-1.5 text-xs text-stone-500 dark:text-stone-400">
                   Pulled from your{" "}
-                  <Link href="/documents" className="text-hearth-700 hover:underline dark:text-hearth-300">
+                  <Link href="/documents" className="text-bark-700 hover:underline dark:text-stone-300">
                     documents
                   </Link>
                   .
@@ -955,7 +955,7 @@ export default async function HomePage({
               className="btn-secondary whitespace-nowrap text-center"
             >
               Get my maintenance plan
-              <span className="chip ml-1.5 bg-hearth-100 text-hearth-700 dark:bg-hearth-900 dark:text-hearth-300">
+              <span className="chip ml-1.5 bg-bark-100 text-bark-700 dark:bg-bark-700 dark:text-stone-300">
                 Plus
               </span>
             </Link>
@@ -994,7 +994,7 @@ export default async function HomePage({
               <p className="mt-1 font-medium text-stone-900 dark:text-stone-100">
                 {t.title}
                 {!plus && (
-                  <span className="chip ml-1.5 bg-hearth-100 text-hearth-700 dark:bg-hearth-900 dark:text-hearth-300">
+                  <span className="chip ml-1.5 bg-bark-100 text-bark-700 dark:bg-bark-700 dark:text-stone-300">
                     Plus
                   </span>
                 )}
@@ -1057,7 +1057,7 @@ export default async function HomePage({
               ].map((q) => (
                 <form key={q.type} action={addSystemFormAction}>
                   <input type="hidden" name="system_type" value={q.type} />
-                  <button className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-hearth-500 dark:hover:text-hearth-300">
+                  <button className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-600 dark:hover:text-stone-300">
                     {q.label}
                   </button>
                 </form>
@@ -1082,7 +1082,7 @@ export default async function HomePage({
             <Link
               key={p.label}
               href={`/contractors?category=${p.category}`}
-              className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-hearth-500 dark:hover:text-hearth-300"
+              className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-600 dark:hover:text-stone-300"
             >
               <p.icon className="mr-1 inline-block h-3.5 w-3.5 align-[-2px]" aria-hidden="true" />
               {p.label}
@@ -1090,7 +1090,7 @@ export default async function HomePage({
           ))}
           <Link
             href="/contractors?category=other"
-            className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-hearth-500 dark:hover:text-hearth-300"
+            className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-600 dark:hover:text-stone-300"
           >
             Other
           </Link>

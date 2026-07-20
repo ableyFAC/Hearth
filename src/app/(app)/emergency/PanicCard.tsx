@@ -58,13 +58,13 @@ export default function PanicCard({
         className="flex w-full items-center gap-3 px-5 py-4 text-left"
       >
         {Icon && (
-          <Icon className="h-6 w-6 shrink-0 text-hearth-600 dark:text-hearth-400" aria-hidden="true" />
+          <Icon className="h-6 w-6 shrink-0 text-bark-600 dark:text-stone-400" aria-hidden="true" />
         )}
         <span className="flex-1">
           <span className="block font-semibold text-stone-900 dark:text-stone-100">{flow.title}</span>
           <span className="block text-sm text-stone-500 dark:text-stone-400">{flow.subtitle}</span>
         </span>
-        <span className="text-sm font-medium text-hearth-700 dark:text-hearth-300">
+        <span className="text-sm font-medium text-bark-700 dark:text-stone-300">
           {open ? "Hide steps" : "See steps"}
         </span>
       </button>
@@ -74,14 +74,14 @@ export default function PanicCard({
           <ol className="space-y-3">
             {flow.steps.map((step, i) => (
               <li key={i} className="flex gap-3">
-                <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-hearth-100 text-sm font-semibold text-hearth-800 dark:bg-hearth-900 dark:text-hearth-300">
+                <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-bark-100 text-sm font-semibold text-bark-700 dark:bg-bark-700 dark:text-stone-300">
                   {i + 1}
                 </span>
                 <div className="flex-1">
                   <p className="text-stone-800 dark:text-stone-200">{step}</p>
                   {i === 0 && prepPhotoSrc && (
-                    <div className="mt-2 rounded-md bg-hearth-50 p-2 dark:bg-hearth-900/30">
-                      <p className="mb-1 text-xs font-medium text-hearth-700 dark:text-hearth-300">
+                    <div className="mt-2 rounded-md bg-bark-50 p-2 dark:bg-bark-700/30">
+                      <p className="mb-1 text-xs font-medium text-bark-700 dark:text-stone-300">
                         Your shutoff is here:
                       </p>
                       {/* eslint-disable-next-line @next/next/no-img-element */}

@@ -26,7 +26,7 @@ export default async function GuideCta({
 
   if (user) {
     return (
-      <section className="mt-12 rounded-2xl border border-hearth-200 bg-hearth-50 p-6 text-center shadow-sm dark:border-hearth-900 dark:bg-hearth-900/20">
+      <section className="mt-12 rounded-2xl border border-bark-100 bg-bark-50 p-6 text-center shadow-sm dark:border-bark-700 dark:bg-bark-700/20">
         <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
           See this for YOUR home
         </h2>
@@ -45,7 +45,7 @@ export default async function GuideCta({
   }
 
   return (
-    <section className="mt-12 rounded-2xl border border-hearth-200 bg-hearth-50 p-6 text-center shadow-sm dark:border-hearth-900 dark:bg-hearth-900/20">
+    <section className="mt-12 rounded-2xl border border-bark-100 bg-bark-50 p-6 text-center shadow-sm dark:border-bark-700 dark:bg-bark-700/20">
       <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
         Get the answer for YOUR home
       </h2>

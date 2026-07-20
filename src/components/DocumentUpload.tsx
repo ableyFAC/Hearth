@@ -6,6 +6,7 @@ import { SYSTEM_TYPES } from "@/lib/constants";
 import { saveDocumentAction } from "@/lib/document-actions";
 import TakePhotoButton from "@/components/TakePhotoButton";
 import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
+import { FilePreviewThumb } from "@/components/FilePreview";
 
 const DOC_TYPES = [
   { value: "warranty", label: "Warranty" },
@@ -117,10 +118,11 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
     // Local preview only, no storage object: a blob URL renders directly, no
     // signing needed, and it never touches the (private) home-photos bucket.
     // Kept in a local too (not just state) so the timeout path below revokes
-    // THIS call's URL, not a stale `preview` from before the await.
-    const objectUrl = picked.type.startsWith("image/")
-      ? URL.createObjectURL(picked)
-      : null;
+    // THIS call's URL, not a stale `preview` from before the await. Covers
+    // both images and PDFs now (previously images only) - the review step
+    // below picks the right render for whichever `file.type` this turns out
+    // to be.
+    const objectUrl = URL.createObjectURL(picked);
     setPreview(objectUrl);
 
     // Ask Hearth to read the facts off it. The controller lets the Cancel
@@ -258,8 +260,7 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
     <div className="rounded-xl border border-stone-200 bg-white p-4 dark:border-white/10 dark:bg-stone-800">
       {phase !== "review" && (
         <>
-          <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-stone-200 px-4 py-8 text-center hover:border-hearth-300 hover:bg-hearth-50 dark:border-white/10">
-            <span className="text-2xl">📄</span>
+          <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-stone-200 px-4 py-8 text-center hover:border-bark-500 hover:bg-bark-50 dark:border-white/10">
             <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
               Add a warranty, manual, receipt, or a photo of a model label
             </span>
@@ -303,20 +304,23 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
                 : "text-stone-500 dark:text-stone-400"
           }`}
         >
-          {phase === "working" ? "⏳ " : ""}
           {note.text}
         </p>
       )}
 
       {phase === "review" && fields && (
         <form action={save} className="mt-3 space-y-3">
-          {preview && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={preview}
-              alt="Document preview"
-              className="mb-1 max-h-40 rounded-lg border border-stone-200 object-contain dark:border-white/10"
-            />
+          {preview && file && (
+            file.type === "application/pdf" ? (
+              <FilePreviewThumb file={file} size="mb-1 h-28 w-28" />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={preview}
+                alt="Document preview"
+                className="mb-1 max-h-40 rounded-lg border border-stone-200 object-contain dark:border-white/10"
+              />
+            )
           )}
 
           <div>

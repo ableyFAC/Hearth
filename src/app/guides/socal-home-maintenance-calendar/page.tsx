@@ -278,7 +278,7 @@ export default function SocalHomeMaintenanceCalendarGuide() {
       />
 
       <p className="text-sm">
-        <a href="/guides" className="text-stone-500 hover:text-hearth-700 dark:text-stone-400 dark:hover:text-hearth-300">
+        <a href="/guides" className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
           ← All guides
         </a>
       </p>
@@ -299,7 +299,7 @@ export default function SocalHomeMaintenanceCalendarGuide() {
           <section key={m.month} className="card">
             <div className="flex items-baseline justify-between">
               <h2 className="font-semibold text-stone-900 dark:text-stone-100">{m.month}</h2>
-              <span className="text-xs font-medium text-hearth-700 dark:text-hearth-300">
+              <span className="text-xs font-medium text-bark-700 dark:text-stone-300">
                 {m.theme}
               </span>
             </div>

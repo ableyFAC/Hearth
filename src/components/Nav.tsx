@@ -38,14 +38,14 @@ export default function Nav({
 
   return (
     <>
-    <header className="sticky top-0 z-30 border-b border-stone-200 bg-hearth-50 dark:border-white/10 dark:bg-stone-900">
+    <header className="sticky top-0 z-30 border-b border-stone-200 bg-bark-50 dark:border-white/10 dark:bg-stone-900">
       <div className="mx-auto flex max-w-5xl flex-col gap-3 px-6 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <Link
             href="/dashboard"
             className="flex items-center gap-2 text-lg font-semibold text-stone-900 dark:text-stone-100"
           >
-            <Logo className="h-6 w-6 text-hearth-700 dark:text-hearth-400" />
+            <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" />
             Hearth
           </Link>
           <span className="hidden text-stone-300 sm:inline dark:text-stone-500">·</span>
@@ -71,7 +71,7 @@ export default function Nav({
           <Link
             href="/search"
             aria-label="Search"
-            className="flex h-11 w-11 items-center justify-center rounded-full text-stone-500 hover:bg-hearth-50 hover:text-hearth-700 sm:hidden dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-hearth-300"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-stone-500 hover:bg-bark-50 hover:text-bark-700 sm:hidden dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300"
           >
             <svg
               viewBox="0 0 24 24"
@@ -116,7 +116,7 @@ export default function Nav({
         dock and the toast notifier above this bar on the same breakpoint. */}
     <nav
       aria-label="Primary"
-      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-stone-200 bg-hearth-50 pb-[env(safe-area-inset-bottom)] sm:hidden dark:border-white/10 dark:bg-stone-900"
+      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-stone-200 bg-bark-50 pb-[env(safe-area-inset-bottom)] sm:hidden dark:border-white/10 dark:bg-stone-900"
     >
       <NavLinks links={LINKS} variant="bottom" />
     </nav>

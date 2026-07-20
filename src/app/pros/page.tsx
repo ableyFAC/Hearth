@@ -143,20 +143,20 @@ export default async function ProsLanding({
     <main className="pb-16">
       {/* Warm band wraps header and hero: a single flat fill, hearth-50 in
           light and stone-900 in dark (matching the body), no gradient. */}
-      <div className="bg-hearth-50 dark:bg-stone-900">
+      <div className="bg-bark-50 dark:bg-stone-900">
         <div className="mx-auto max-w-3xl px-6 pt-6">
           <header className="flex items-center justify-between">
             <a
               href="/"
               className="inline-flex items-center gap-2 font-semibold text-stone-900 dark:text-stone-100"
             >
-              <Logo className="h-6 w-6 text-hearth-700 dark:text-hearth-400" /> Hearth
+              <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> Hearth
             </a>
             {/* Same bordered-button treatment as the landing page's "Hearth
                 for Pros" cross-link, so the two doors read as one system. */}
             <a
               href="/"
-              className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-hearth-400 hover:text-hearth-700 dark:border-white/10 dark:text-stone-300 dark:hover:border-hearth-400 dark:hover:text-hearth-300"
+              className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-300 dark:hover:border-bark-500 dark:hover:text-stone-300"
             >
               For Homeowners
             </a>
@@ -180,7 +180,7 @@ export default async function ProsLanding({
             </a>
             <a
               href="/signin"
-              className="mt-3 text-sm text-hearth-700 hover:underline dark:text-hearth-300"
+              className="mt-3 text-sm text-bark-700 hover:underline dark:text-stone-300"
             >
               Already have an account? Sign in
             </a>
@@ -193,7 +193,7 @@ export default async function ProsLanding({
           billing, side by side: they are the two promises no lead-platform
           competitor keeps. */}
       <div className="mt-14 grid gap-4 sm:grid-cols-2">
-        <section className="rounded-2xl border border-hearth-200 bg-hearth-50 p-6 text-center shadow-sm dark:border-hearth-900 dark:bg-hearth-900/20">
+        <section className="rounded-2xl border border-bark-100 bg-bark-50 p-6 text-center shadow-sm dark:border-bark-700 dark:bg-bark-700/20">
           <h2 className="text-xl font-semibold text-stone-900 dark:text-stone-100">
             Ghost protection: if the lead is dead, you get your fee back.
           </h2>
@@ -203,7 +203,7 @@ export default async function ProsLanding({
             support ticket, no arguing.
           </p>
         </section>
-        <section className="rounded-2xl border border-hearth-200 bg-hearth-50 p-6 text-center shadow-sm dark:border-hearth-900 dark:bg-hearth-900/20">
+        <section className="rounded-2xl border border-bark-100 bg-bark-50 p-6 text-center shadow-sm dark:border-bark-700 dark:bg-bark-700/20">
           <h2 className="text-xl font-semibold text-stone-900 dark:text-stone-100">
             Your first application is protected.
           </h2>
@@ -223,7 +223,7 @@ export default async function ProsLanding({
         </h2>
         <p className="mx-auto mt-2 max-w-md text-sm text-stone-300">
           {FOUNDER_CREDIT
-            ? `Hearth is built by ${FOUNDER_CREDIT}. Real people, real answers: email us and we'll reply ourselves.`
+            ? `Hearth is built by ${FOUNDER_CREDIT}. Real people, real answers: message us and we'll reply ourselves.`
             : "Hearth is built by homeowners in Orange County. Real people, real answers."}
         </p>
         {FOUNDER.name && FOUNDER.cellPhone && (
@@ -233,24 +233,16 @@ export default async function ProsLanding({
         )}
         {/* The in-app help page requires an onboarded contractor account, so
             it is exactly wrong for the signed-out prospective pros this page
-            targets. Contact renders only from owner-fillable FOUNDER fields:
-            an email (mailto) or phone (tel), and NOTHING when both are blank:
-            no link beats a link that bounces to /signin. */}
-        {FOUNDER.email ? (
-          <a
-            href={`mailto:${FOUNDER.email}`}
-            className="mt-4 inline-block text-sm text-hearth-300 hover:underline"
-          >
-            Questions? Email {FOUNDER.email} →
-          </a>
-        ) : FOUNDER.cellPhone ? (
-          <a
-            href={`tel:${FOUNDER.cellPhone.replace(/[^\d+]/g, "")}`}
-            className="mt-4 inline-block text-sm text-hearth-300 hover:underline"
-          >
-            Questions? Call or text {FOUNDER.cellPhone} →
-          </a>
-        ) : null}
+            targets. Contact form needs no session and no owner-fillable
+            fields, unlike the old mailto/tel here, so it's always shown - see
+            src/app/contact/page.tsx. The cell-phone line above is still
+            owner-fillable and still drops out entirely when blank. */}
+        <a
+          href="/contact"
+          className="mt-4 inline-block text-sm text-bark-500 hover:underline"
+        >
+          Questions? Contact us →
+        </a>
       </section>
 
       {/* The promises */}
@@ -354,7 +346,7 @@ export default async function ProsLanding({
           A Pro membership adds an AI back office on top: draft estimates,
           invoices, follow-up messages, review replies, and overdue-invoice
           reminders in seconds.{" "}
-          <a href="/pro/plus" className="text-hearth-700 hover:underline dark:text-hearth-300">
+          <a href="/pro/plus" className="text-bark-700 hover:underline dark:text-stone-300">
             See what&apos;s included
           </a>
           .
@@ -369,7 +361,7 @@ export default async function ProsLanding({
         <ol className="mx-auto mt-6 max-w-md space-y-4">
           {STEPS.map((s) => (
             <li key={s.n} className="flex items-start gap-3">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-hearth-600 text-sm font-semibold text-white">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-bark-600 text-sm font-semibold text-white">
                 {s.n}
               </span>
               <p className="pt-0.5 text-stone-600 dark:text-stone-400">{s.text}</p>
@@ -426,15 +418,15 @@ export default async function ProsLanding({
       </p>
 
       <footer className="mt-16 border-t border-stone-200 pt-6 text-center dark:border-white/10">
-        <a href="/" className="text-sm text-stone-500 hover:text-hearth-700 dark:text-stone-400 dark:hover:text-hearth-300">
+        <a href="/" className="text-sm text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
           Looking after your own home instead? Hearth for Homeowners →
         </a>
         <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
-          <a href="/privacy" className="hover:text-hearth-700 hover:underline dark:hover:text-hearth-300">
+          <a href="/privacy" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
             Privacy
           </a>{" "}
           ·{" "}
-          <a href="/terms" className="hover:text-hearth-700 hover:underline dark:hover:text-hearth-300">
+          <a href="/terms" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
             Terms
           </a>
         </p>

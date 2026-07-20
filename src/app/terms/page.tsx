@@ -23,7 +23,7 @@ export default function TermsPage() {
   return (
     <main className="mx-auto max-w-2xl px-6 pb-16 pt-10">
       <p className="text-sm">
-        <a href="/" className="text-stone-500 hover:text-hearth-700 dark:text-stone-400 dark:hover:text-hearth-300">
+        <a href="/" className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
           ← Hearth
         </a>
       </p>
@@ -214,7 +214,7 @@ export default function TermsPage() {
           </p>
           <p className="mt-3 leading-relaxed">
             Think content on Hearth infringes your copyright? Use our{" "}
-            <a href="/dmca" className="text-hearth-700 hover:underline dark:text-hearth-300">
+            <a href="/dmca" className="text-bark-700 hover:underline dark:text-stone-300">
               DMCA takedown process
             </a>
             .
@@ -251,9 +251,9 @@ export default function TermsPage() {
           <p className="mt-2 leading-relaxed">
             Before either of us starts an arbitration, the side with the
             complaint sends the other a written notice describing the problem
-            and what would resolve it. Send yours to{" "}
+            and what would resolve it. Send yours through{" "}
             <LegalContact />
-            . {/* TODO(legal): confirm the notice-of-dispute address and whether a mailing address must also be accepted. */}
+            . {/* TODO(legal): confirm the contact-form submission satisfies the notice-of-dispute requirement and whether a mailing address must also be accepted. */}
             We&apos;ll do the same for you, at the email on your account. Both
             sides then have 30 days to work it out in good faith. Only after
             those 30 days can either side file. This step is required of
@@ -352,14 +352,14 @@ export default function TermsPage() {
           <p className="mt-3 leading-relaxed">
             To opt out, send us a written notice that says you&apos;re opting
             out of arbitration and includes your name, the email address on
-            your Hearth account, and your signature. Email it to{" "}
-            <LegalContact subject="Arbitration opt-out" />{" "}
+            your Hearth account, and your signature. Send it through{" "}
+            <LegalContact topic="Arbitration opt-out" />{" "}
             or mail it to{" "}
             {/* TODO(legal): opt-out mailing address — insert the registered entity name and full mailing address for arbitration opt-out notices. */}
             <span className="text-stone-500 dark:text-stone-400">
               [mailing address to be provided]
             </span>
-            . {/* TODO(legal): confirm the opt-out email address is monitored and retained; a missed opt-out is treated as no opt-out. */}
+            . {/* TODO(legal): confirm the contact-form submission is monitored and retained, and whether a typed name in a web form satisfies the "signature" requirement above or an actual e-signature/wet signature is needed; a missed opt-out is treated as no opt-out. */}
           </p>
           <p className="mt-3 leading-relaxed">
             That&apos;s all it takes. Opting out doesn&apos;t affect your
@@ -487,7 +487,7 @@ export default function TermsPage() {
           </h2>
           <p className="mt-2 leading-relaxed">
             See the{" "}
-            <a href="/privacy" className="text-hearth-700 hover:underline dark:text-hearth-300">
+            <a href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
               Privacy Policy
             </a>{" "}
             for what we collect and how it&apos;s used.

@@ -21,6 +21,7 @@ import CategoryIcon from "@/components/CategoryIcon";
 import type { HomeSystem } from "@/lib/database.types";
 import { updateSystemAction, deleteSystemAction } from "./actions";
 import PhotoUpload from "@/components/PhotoUpload";
+import { StoredPhotoGrid } from "@/components/FilePreview";
 import MonthYearInput from "@/components/MonthYearInput";
 import MaterialSelect from "@/components/MaterialSelect";
 import SubmitButton from "@/components/SubmitButton";
@@ -363,10 +364,15 @@ export default function SystemRow({
             e.stopPropagation();
             setEditing(true);
           }}
-          className="mt-0.5 text-xs font-medium text-hearth-700 hover:underline"
+          className="mt-0.5 text-xs font-medium text-bark-700 hover:underline"
         >
           Edit
         </button>
+        {photos.length > 0 && !expanded && (
+          <span className="ml-2 text-xs text-stone-500 dark:text-stone-400">
+            {photos.length} photo{photos.length === 1 ? "" : "s"} · tap to view
+          </span>
+        )}
         {expanded && (
           <dl
             onClick={(e) => e.stopPropagation()}
@@ -416,6 +422,22 @@ export default function SystemRow({
               <dt className="font-medium text-stone-800 dark:text-stone-200">Maintenance tip</dt>
               <dd className="text-stone-500 dark:text-stone-400">{tipForSystem(s.system_type)}</dd>
             </div>
+            {photos.length > 0 && (
+              <div className="col-span-2">
+                <dt className="font-medium text-stone-800 dark:text-stone-200">
+                  Photo{photos.length === 1 ? "" : "s"}
+                </dt>
+                <dd>
+                  <StoredPhotoGrid
+                    photos={photos.map((u) => ({
+                      key: u,
+                      src: imgSrc(u) ?? u,
+                      alt: `${labelFor(SYSTEM_TYPES, s.system_type)} photo`,
+                    }))}
+                  />
+                </dd>
+              </div>
+            )}
             {cost && (
               <div className="col-span-2 mt-1 border-t border-stone-200 pt-2 text-right dark:border-white/10">
                 <dt className="font-medium text-stone-800 dark:text-stone-200">
@@ -452,19 +474,6 @@ export default function SystemRow({
             {labelFor(ISSUE_CATEGORIES, openIssue.category)} issue
             {openIssue.description ? `: ${openIssue.description}` : ""}.
           </p>
-        )}
-        {photos.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {photos.map((u) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={u}
-                src={imgSrc(u) ?? u}
-                alt={`${labelFor(SYSTEM_TYPES, s.system_type)} photo`}
-                className="h-16 w-16 rounded-md object-cover"
-              />
-            ))}
-          </div>
         )}
       </div>
 

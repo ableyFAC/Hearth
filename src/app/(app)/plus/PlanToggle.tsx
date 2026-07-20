@@ -68,12 +68,12 @@ export default function PlanToggle({
               aria-pressed={selected}
               className={`relative rounded-xl border p-3 text-center transition-colors ${
                 selected
-                  ? "border-hearth-600 bg-hearth-50 dark:border-hearth-500 dark:bg-hearth-900/30"
+                  ? "border-bark-600 bg-bark-50 dark:border-bark-600 dark:bg-bark-700/30"
                   : "border-stone-200 bg-white hover:border-stone-300 dark:border-white/10 dark:bg-stone-900 dark:hover:border-white/20"
               }`}
             >
               {key === "yearly" && (
-                <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-hearth-600 px-2 py-0.5 text-[10px] font-medium text-white">
+                <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-bark-600 px-2 py-0.5 text-[10px] font-medium text-white">
                   Best value
                 </span>
               )}
@@ -110,7 +110,7 @@ export default function PlanToggle({
 
       <div className="space-y-0.5">
         {trialEligible && (
-          <p className="text-sm font-medium text-hearth-700 dark:text-hearth-300">
+          <p className="text-sm font-medium text-bark-700 dark:text-stone-300">
             Free for 3 days
           </p>
         )}

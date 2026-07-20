@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { collectUserData } from "@/lib/privacy";
+import { buildExportPdf } from "@/lib/privacyPdf";
 
 export const runtime = "nodejs";
 // The payload is built per-request from live data; never cache it.
@@ -16,7 +17,12 @@ export const dynamic = "force-dynamic";
 // version of that, and it is why this returns the CALLER'S data only - the
 // user id comes from getUser(), never from a query parameter, so there is no
 // id to tamper with.
-export async function GET() {
+// The PDF is the primary, human-readable copy; ?format=json keeps the
+// original machine-readable one for people who actually want to move their
+// data somewhere else. Both read the exact same collectUserData() payload -
+// only the serialization at the bottom of this function differs, so the two
+// downloads can never say different things about what Hearth holds.
+export async function GET(request: Request) {
   const supabase = createClient();
   const {
     data: { user },
@@ -25,11 +31,17 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const format = new URL(request.url).searchParams.get("format") === "json"
+    ? "json"
+    : "pdf";
+
   let payload: Record<string, unknown>;
   try {
     payload = await collectUserData(user.id);
-  } catch {
-    // Don't leak the underlying database error to the browser.
+  } catch (err) {
+    // Don't leak the underlying database error to the browser, but do not
+    // swallow it either - without this, an export failure is invisible.
+    console.error("[privacy/export] collectUserData failed", err);
     return NextResponse.json(
       { error: "Couldn't build your export. Please try again." },
       { status: 500 }
@@ -37,12 +49,33 @@ export async function GET() {
   }
 
   const stamp = new Date().toISOString().slice(0, 10);
-  return new NextResponse(JSON.stringify(payload, null, 2), {
-    status: 200,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      "Content-Disposition": `attachment; filename="hearth-data-${stamp}.json"`,
-      "Cache-Control": "no-store",
-    },
-  });
+
+  if (format === "json") {
+    return new NextResponse(JSON.stringify(payload, null, 2), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Content-Disposition": `attachment; filename="hearth-data-${stamp}.json"`,
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
+  try {
+    const pdfBytes = await buildExportPdf(payload);
+    return new NextResponse(Buffer.from(pdfBytes), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="hearth-data-${stamp}.pdf"`,
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (err) {
+    console.error("[privacy/export] buildExportPdf failed", err);
+    return NextResponse.json(
+      { error: "Couldn't build your export. Please try again." },
+      { status: 500 }
+    );
+  }
 }

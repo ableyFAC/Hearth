@@ -177,7 +177,7 @@ export default async function DocumentsPage() {
                     href={imgSrc(d.file_url) ?? undefined}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="truncate font-medium text-stone-900 hover:text-hearth-700 hover:underline dark:text-stone-100"
+                    className="truncate font-medium text-stone-900 hover:text-bark-700 hover:underline dark:text-stone-100"
                   >
                     {d.title || "Home document"}
                   </a>
@@ -185,7 +185,7 @@ export default async function DocumentsPage() {
                     {DOC_TYPE_LABEL[d.doc_type ?? "other"] ?? "Document"}
                   </span>
                   {d.system_type && (
-                    <span className="chip bg-hearth-50 text-hearth-700 dark:bg-hearth-900/40 dark:text-hearth-300">
+                    <span className="chip bg-bark-50 text-bark-700 dark:bg-bark-700/40 dark:text-stone-300">
                       {labelFor(SYSTEM_TYPES, d.system_type)}
                     </span>
                   )}

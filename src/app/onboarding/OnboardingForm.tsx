@@ -145,7 +145,7 @@ export default function OnboardingForm({
             </p>
           </div>
 
-          <ul className="space-y-1.5 rounded-lg bg-hearth-50 p-3 text-sm text-hearth-800 dark:bg-hearth-900/40 dark:text-hearth-200">
+          <ul className="space-y-1.5 rounded-lg bg-bark-50 p-3 text-sm text-bark-700 dark:bg-bark-700/40 dark:text-stone-300">
             <li className="flex items-start gap-2">
               <Hammer className="h-4 w-4 shrink-0 translate-y-0.5" aria-hidden="true" />
               <span>Track every system and know what needs attention</span>
@@ -399,7 +399,7 @@ export default function OnboardingForm({
             </div>
           </div>
 
-          <p className="rounded-lg bg-hearth-50 p-3 text-xs text-hearth-800 dark:bg-hearth-900/40 dark:text-hearth-200">
+          <p className="rounded-lg bg-bark-50 p-3 text-xs text-bark-700 dark:bg-bark-700/40 dark:text-stone-300">
             By claiming this home you&apos;re confirming you own or manage it.
           </p>
 

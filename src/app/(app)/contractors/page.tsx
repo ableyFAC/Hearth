@@ -32,6 +32,7 @@ import PostJobButton from "./PostJobButton";
 import StrongPostMeter from "./StrongPostMeter";
 import PhotoUpload from "@/components/PhotoUpload";
 import PhotoTips from "@/components/PhotoTips";
+import ExistingJobPhotos from "./ExistingJobPhotos";
 import ReviewButton from "./ReviewButton";
 import ContractorReviews from "./ContractorReviews";
 import HireAgainButton from "./HireAgainButton";
@@ -61,6 +62,24 @@ export default async function ContractorsPage({
 
   const category = searchParams.category ?? "";
   const issueId = searchParams.issue ?? "";
+
+  // If this job is about an issue that already has photos on file (the
+  // "Connect me with a local pro" link from the Issues page carries
+  // ?issue=<id>), fetch them so the form can show what will ride along
+  // automatically. postJobAction reuses this same issue_id for the lead, so
+  // photos already tied to it are already visible to pros with no extra
+  // upload step - this is purely about letting the owner SEE that before
+  // posting, and remove one if they don't want it sent.
+  let existingIssuePhotos: { id: string; url: string }[] = [];
+  if (issueId) {
+    const { data: pics } = await supabase
+      .from("photos")
+      .select("id, url")
+      .eq("property_id", property.id)
+      .eq("related_type", "issue")
+      .eq("related_id", issueId);
+    existingIssuePhotos = pics ?? [];
+  }
 
   // Prefill the contact fields from the owner's saved profile.
   const {
@@ -203,6 +222,146 @@ export default async function ContractorsPage({
         </p>
       </div>
 
+      <form
+        key={searchParams.posted ?? "new"}
+        action={postJobAction}
+        className="card space-y-4"
+      >
+        <input type="hidden" name="issue_id" value={issueId} />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="label" htmlFor="job-category">
+              What do you need?
+            </label>
+            <CategoryFilter category={category} id="job-category" />
+          </div>
+          <div>
+            <label className="label" htmlFor="job-timing">
+              Preferred timing
+            </label>
+            <select
+              name="timing"
+              id="job-timing"
+              className="select"
+              defaultValue={searchParams.timing || "few_weeks"}
+            >
+              {TIMING_OPTIONS.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <label className="label" htmlFor="homeowner-name">
+              First and last name
+            </label>
+            <input
+              name="homeowner_name"
+              id="homeowner-name"
+              className="input"
+              placeholder="Jane Doe"
+              defaultValue={profile?.full_name ?? ""}
+              required
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="homeowner-email">
+              Email (optional)
+            </label>
+            <input
+              name="homeowner_email"
+              id="homeowner-email"
+              type="email"
+              className="input"
+              placeholder="you@example.com"
+              defaultValue={profile?.email ?? user?.email ?? ""}
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="homeowner-phone">
+              Phone (optional)
+            </label>
+            <PhoneInput
+              name="homeowner_phone"
+              id="homeowner-phone"
+              defaultValue={profile?.phone ?? ""}
+            />
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+              So pros can reach you faster (optional).
+            </p>
+          </div>
+        </div>
+
+        <div>
+          {/* Not labeled optional: postJobAction enforces a 20-character floor
+              on the description for a standalone post (a post linked to an
+              issue can fall back to the issue's own description). minLength
+              surfaces that floor in the browser before the action rejects it. */}
+          <label className="label" htmlFor="job-details">
+            Details about your project
+          </label>
+          <textarea
+            name="message"
+            id="job-details"
+            className="textarea"
+            rows={3}
+            minLength={20}
+            defaultValue={searchParams.desc ?? ""}
+            placeholder="What needs doing?"
+          />
+          <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+            A sentence or two helps pros quote accurately (20 characters
+            minimum).
+          </p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            {existingIssuePhotos.length > 0 && (
+              <ExistingJobPhotos photos={existingIssuePhotos} />
+            )}
+            <PhotoUpload propertyId={property.id} id="job-photos" />
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+              Pros quote more accurately when they can see the job.
+            </p>
+            <PhotoTips />
+          </div>
+          <div>
+            <label className="label" htmlFor="job-budget">
+              Rough budget (optional)
+            </label>
+            <select
+              name="budget_range"
+              id="job-budget"
+              className="select"
+              defaultValue=""
+            >
+              <option value="">Prefer not to say</option>
+              {BUDGET_RANGES.map((b) => (
+                <option key={b.value} value={b.value}>
+                  {b.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+              Helps pros give realistic quotes. Not a commitment.
+            </p>
+          </div>
+        </div>
+
+        <StrongPostMeter />
+
+        <PostJobButton />
+        <p className="text-xs text-stone-500 dark:text-stone-400">
+          Your contact stays private. Only the pro you choose from the applicants
+          gets your name, address, and contact details.
+        </p>
+      </form>
+
       {myPros.length > 0 && (
         <section className="space-y-3">
           <div>
@@ -252,12 +411,12 @@ export default async function ContractorsPage({
           "3 open jobs" upsell would be false advertising, so it stays hidden.
           Flip COLD_START_FREE_POSTING to bring it back with the cap. */}
       {!COLD_START_FREE_POSTING && !plus && (
-        <div className="card flex items-center justify-between gap-4 border-hearth-200 bg-hearth-50 dark:border-hearth-800/40 dark:bg-hearth-900/30">
+        <div className="card flex items-center justify-between gap-4 border-bark-100 bg-bark-50 dark:border-bark-700/40 dark:bg-bark-700/30">
           <div>
-            <p className="font-medium text-hearth-800 dark:text-hearth-200">
+            <p className="font-medium text-bark-700 dark:text-stone-300">
               Juggling more than one project?
             </p>
-            <p className="text-sm text-hearth-700 dark:text-hearth-300">
+            <p className="text-sm text-bark-700 dark:text-stone-300">
               Free covers 3 open jobs at a time. Hearth Plus is unlimited, plus
               priority matching so pros see yours first. Free first month, then
               $4.99.
@@ -282,10 +441,8 @@ export default async function ContractorsPage({
         </FadingBanner>
       )}
 
-      {/* Returning homeowners with live jobs see them first: applications
-          and chats are what they came back for, so they should not have to
-          scroll past a blank form to reach them. With no jobs yet, the
-          post-a-job form leads instead (the jobs section renders nothing). */}
+      {/* Renders nothing when there are no jobs yet; posting the first one
+          is handled by the form above, not this section. */}
       {leads && leads.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Your jobs</h2>
@@ -437,7 +594,7 @@ export default async function ContractorsPage({
                             directly, and use the{" "}
                             <Link
                               href="/emergency"
-                              className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+                              className="font-medium text-bark-700 hover:underline dark:text-stone-300"
                             >
                               Emergency page
                             </Link>{" "}
@@ -547,143 +704,6 @@ export default async function ContractorsPage({
           </ul>
         </section>
       )}
-
-      <form
-        key={searchParams.posted ?? "new"}
-        action={postJobAction}
-        className="card space-y-4"
-      >
-        <input type="hidden" name="issue_id" value={issueId} />
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="label" htmlFor="job-category">
-              What do you need?
-            </label>
-            <CategoryFilter category={category} id="job-category" />
-          </div>
-          <div>
-            <label className="label" htmlFor="job-timing">
-              Preferred timing
-            </label>
-            <select
-              name="timing"
-              id="job-timing"
-              className="select"
-              defaultValue={searchParams.timing || "few_weeks"}
-            >
-              {TIMING_OPTIONS.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div>
-            <label className="label" htmlFor="homeowner-name">
-              First and last name
-            </label>
-            <input
-              name="homeowner_name"
-              id="homeowner-name"
-              className="input"
-              placeholder="Jane Doe"
-              defaultValue={profile?.full_name ?? ""}
-              required
-            />
-          </div>
-          <div>
-            <label className="label" htmlFor="homeowner-email">
-              Email (optional)
-            </label>
-            <input
-              name="homeowner_email"
-              id="homeowner-email"
-              type="email"
-              className="input"
-              placeholder="you@example.com"
-              defaultValue={profile?.email ?? user?.email ?? ""}
-            />
-          </div>
-          <div>
-            <label className="label" htmlFor="homeowner-phone">
-              Phone (optional)
-            </label>
-            <PhoneInput
-              name="homeowner_phone"
-              id="homeowner-phone"
-              defaultValue={profile?.phone ?? ""}
-            />
-            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-              So pros can reach you faster (optional).
-            </p>
-          </div>
-        </div>
-
-        <div>
-          {/* Not labeled optional: postJobAction enforces a 20-character floor
-              on the description for a standalone post (a post linked to an
-              issue can fall back to the issue's own description). minLength
-              surfaces that floor in the browser before the action rejects it. */}
-          <label className="label" htmlFor="job-details">
-            Details about your project
-          </label>
-          <textarea
-            name="message"
-            id="job-details"
-            className="textarea"
-            rows={3}
-            minLength={20}
-            defaultValue={searchParams.desc ?? ""}
-            placeholder="What needs doing?"
-          />
-          <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-            A sentence or two helps pros quote accurately (20 characters
-            minimum).
-          </p>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <PhotoUpload propertyId={property.id} id="job-photos" />
-            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-              Pros quote more accurately when they can see the job.
-            </p>
-            <PhotoTips />
-          </div>
-          <div>
-            <label className="label" htmlFor="job-budget">
-              Rough budget (optional)
-            </label>
-            <select
-              name="budget_range"
-              id="job-budget"
-              className="select"
-              defaultValue=""
-            >
-              <option value="">Prefer not to say</option>
-              {BUDGET_RANGES.map((b) => (
-                <option key={b.value} value={b.value}>
-                  {b.label}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-              Helps pros give realistic quotes. Not a commitment.
-            </p>
-          </div>
-        </div>
-
-        <StrongPostMeter />
-
-        <PostJobButton />
-        <p className="text-xs text-stone-500 dark:text-stone-400">
-          Your contact stays private. Only the pro you choose from the applicants
-          gets your name, address, and contact details.
-        </p>
-      </form>
 
       <p className="text-center text-sm text-stone-500 dark:text-stone-400">
         <Link href="/issues" className="hover:underline">

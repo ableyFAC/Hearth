@@ -423,7 +423,7 @@ export default function InspectionUpload() {
 
       {mode === "photo" ? (
         <div>
-          <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-stone-200 px-4 py-8 text-center hover:border-hearth-300 hover:bg-hearth-50 dark:border-stone-700 dark:hover:bg-hearth-900/30">
+          <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-stone-200 px-4 py-8 text-center hover:border-bark-500 hover:bg-bark-50 dark:border-stone-700 dark:hover:bg-bark-700/30">
             <Search className="h-8 w-8 text-stone-400 dark:text-stone-500" aria-hidden="true" />
             <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
               {previews.length ? "Add more pages" : "Upload photos of the inspection report"}

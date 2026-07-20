@@ -1,0 +1,85 @@
+"use client";
+
+import SubmitButton from "@/components/SubmitButton";
+import { sendContactMessageAction } from "./actions";
+
+// Public contact form: no login required, so it needs its own spam defenses
+// (a signed-in form, like account/help/SupportForm.tsx, gets those for free
+// from requiring a session). Two of the three live here; the third, IP rate
+// limiting, lives server-side in ./actions.ts where it can't be bypassed by
+// skipping the client.
+export default function ContactForm({ topic }: { topic: string | null }) {
+  return (
+    <form action={sendContactMessageAction} className="card">
+      {topic && (
+        <p className="mb-4 text-sm text-stone-500 dark:text-stone-400">
+          Regarding:{" "}
+          <span className="font-medium text-stone-700 dark:text-stone-300">
+            {topic}
+          </span>
+        </p>
+      )}
+
+      {/* Honeypot. A real visitor never sees or reaches this field: it sits
+          off-screen (not display:none - some bots specifically skip
+          display:none fields to evade that trick) and is skipped by keyboard
+          tabbing. A script that fills every input in the form fills this one
+          too. See ./actions.ts for what happens when it's non-empty. */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          left: "-9999px",
+          width: 1,
+          height: 1,
+          overflow: "hidden",
+        }}
+      >
+        <label htmlFor="company_website">Leave this field blank</label>
+        <input
+          type="text"
+          id="company_website"
+          name="company_website"
+          tabIndex={-1}
+          autoComplete="off"
+        />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className="label">Name</label>
+          <input name="name" className="input" maxLength={200} />
+        </div>
+        <div>
+          <label className="label">Email</label>
+          <input name="email" type="email" className="input" maxLength={254} />
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <label className="label">Phone</label>
+        <input name="phone" className="input" maxLength={40} />
+      </div>
+      <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+        Add an email or a phone number so we know how to reply.
+      </p>
+
+      <div className="mt-4">
+        <label className="label">Message</label>
+        <textarea
+          name="message"
+          rows={5}
+          required
+          minLength={10}
+          maxLength={5000}
+          className="input"
+          placeholder="What can we help with?"
+        />
+      </div>
+
+      <div className="mt-4">
+        <SubmitButton>Send message</SubmitButton>
+      </div>
+    </form>
+  );
+}

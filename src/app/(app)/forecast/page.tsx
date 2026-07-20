@@ -144,19 +144,19 @@ export default async function ForecastPage() {
       {forecast && (
         <>
           <div className="card-hero space-y-2 text-center">
-            <p className="text-sm text-hearth-800 dark:text-hearth-200">
+            <p className="text-sm text-bark-700 dark:text-stone-300">
               Over the next {forecast.horizonYears} years, plan for about{" "}
               <span className="font-semibold">
                 {money(forecast.totalMidCost)}
               </span>
             </p>
-            <p className="stat-number text-4xl text-hearth-800 dark:text-hearth-200">
+            <p className="stat-number text-4xl text-bark-700 dark:text-stone-300">
               Set aside about {money(forecast.monthlySetAside)}/month
             </p>
-            <p className="text-xs text-hearth-700 dark:text-hearth-300">
+            <p className="text-xs text-bark-700 dark:text-stone-300">
               So a big repair is a plan, not a panic.
             </p>
-            <p className="text-xs text-hearth-600 dark:text-hearth-400">
+            <p className="text-xs text-bark-600 dark:text-stone-400">
               Ballpark from{" "}
               {region
                 ? `statewide ${region} price trends`
@@ -164,7 +164,7 @@ export default async function ForecastPage() {
               , adjusted for future prices, not just today&apos;s.
             </p>
             {forecast.estimatedTimingCount > 0 && (
-              <p className="text-xs text-hearth-600 dark:text-hearth-400">
+              <p className="text-xs text-bark-600 dark:text-stone-400">
                 {forecast.estimatedTimingCount === 1
                   ? "1 of your systems has no install year, so its timing here is a rough placement."
                   : `${forecast.estimatedTimingCount} of your systems have no install year, so their timing here is a rough placement.`}{" "}
@@ -242,8 +242,8 @@ export default async function ForecastPage() {
                         className={`w-7 rounded-t-md ${
                           y.amount > 0
                             ? y.amount === max
-                              ? "bg-hearth-600 dark:bg-hearth-500"
-                              : "bg-hearth-400 dark:bg-hearth-500/60"
+                              ? "bg-bark-600 dark:bg-bark-600"
+                              : "bg-bark-500 dark:bg-bark-600/60"
                             : "bg-stone-100 dark:bg-stone-700"
                         }`}
                         style={{ height: `${height}px` }}
@@ -283,8 +283,8 @@ export default async function ForecastPage() {
                 .
               </p>
               {upgradeSavings && (
-                <div className="rounded-lg bg-hearth-50 p-3 dark:bg-hearth-900/30">
-                  <p className="text-sm text-hearth-800 dark:text-hearth-200">
+                <div className="rounded-lg bg-bark-50 p-3 dark:bg-bark-700/30">
+                  <p className="text-sm text-bark-700 dark:text-stone-300">
                     Your HVAC is about {upgradeSavings.hvacAge} years old, and
                     older units waste energy. A modern high-efficiency unit
                     could trim roughly{" "}
@@ -297,7 +297,7 @@ export default async function ForecastPage() {
                   </p>
                   <Link
                     href={`/contractors?category=${categoryForSystem("hvac")}`}
-                    className="mt-1 inline-block text-xs font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+                    className="mt-1 inline-block text-xs font-medium text-bark-700 hover:underline dark:text-stone-300"
                   >
                     Get replacement quotes →
                   </Link>
@@ -344,7 +344,7 @@ export default async function ForecastPage() {
                       </p>
                       <Link
                         href={`/contractors?category=${categoryForSystem(item.system_type)}`}
-                        className="text-xs font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+                        className="text-xs font-medium text-bark-700 hover:underline dark:text-stone-300"
                       >
                         Get quotes →
                       </Link>

@@ -32,7 +32,7 @@ export default function AiDisclosurePage() {
   return (
     <main className="mx-auto max-w-2xl px-6 pb-16 pt-10">
       <p className="text-sm">
-        <a href="/" className="text-stone-500 hover:text-hearth-700 dark:text-stone-400 dark:hover:text-hearth-300">
+        <a href="/" className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
           ← Hearth
         </a>
       </p>
@@ -247,7 +247,7 @@ export default function AiDisclosurePage() {
           </p>
           <p className="mt-3 leading-relaxed">
             The{" "}
-            <a href="/privacy" className="text-hearth-700 hover:underline dark:text-hearth-300">
+            <a href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
               Privacy Policy
             </a>{" "}
             is the full account of what is collected, what gets sent where, how
@@ -262,7 +262,7 @@ export default function AiDisclosurePage() {
           </h2>
           <p className="mt-2 leading-relaxed">
             If an AI feature told you something wrong, or you have a question
-            about how any of this works, email{" "}
+            about how any of this works, reach us through{" "}
             <LegalContact />
             . If you have an account, you can also reach us from the Help page.
           </p>
@@ -277,11 +277,11 @@ export default function AiDisclosurePage() {
           </h2>
           <p className="mt-2 leading-relaxed">
             See the{" "}
-            <a href="/terms" className="text-hearth-700 hover:underline dark:text-hearth-300">
+            <a href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
               Terms of Service
             </a>{" "}
             for what Hearth is and isn&apos;t responsible for, and the{" "}
-            <a href="/privacy" className="text-hearth-700 hover:underline dark:text-hearth-300">
+            <a href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
               Privacy Policy
             </a>{" "}
             for what we collect and how it&apos;s used.

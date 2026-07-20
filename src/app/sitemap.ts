@@ -4,8 +4,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 // Sitemap for crawlers: the public landing pages, the two city landing pages
 // (src/app/fountain-valley, src/app/huntington-beach), the Privacy/Terms/DMCA
 // pages (src/app/privacy, src/app/terms, src/app/pro-terms, src/app/dmca),
-// the AI disclosure
-// (src/app/ai-disclosure), the public guide pages
+// the AI disclosure (src/app/ai-disclosure), the public contact form
+// (src/app/contact - the replacement for the FOUNDER.email mailto links
+// those legal pages used to show), the public guide pages
 // (src/app/guides/..., anon-readable, see the middleware allowlist), plus
 // every pro's public page (/p/..., anon-readable by design). The contractors
 // table is NOT publicly readable, so the list comes from the service-role
@@ -71,6 +72,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
     {
       url: `${SITE_URL}/dmca`,
+      changeFrequency: "monthly",
+      priority: 0.3,
+    },
+    {
+      url: `${SITE_URL}/contact`,
       changeFrequency: "monthly",
       priority: 0.3,
     },
