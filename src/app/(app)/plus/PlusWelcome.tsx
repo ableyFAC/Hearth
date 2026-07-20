@@ -110,9 +110,16 @@ export default function PlusWelcome({
 
   return (
     <div className="mx-auto max-w-lg space-y-6 py-6 text-center">
+      {/* min-h keeps the progress dots and Next/Back/Skip row at the same
+          vertical spot on every step: each step's title + benefit copy (and
+          the optional "Try it" link, present on some steps but not others)
+          is a different height, so without a floor here the button row
+          would jump up and down as the tour advances. The steps are all
+          short, one-sentence blurbs, so this floor never opens a large gap
+          on the shorter ones. */}
       <div
         key={step}
-        className={`space-y-4 motion-safe:transition-all motion-safe:duration-300 motion-safe:ease-out ${
+        className={`flex min-h-56 flex-col justify-center space-y-4 motion-safe:transition-all motion-safe:duration-300 motion-safe:ease-out ${
           visible
             ? "opacity-100 translate-y-0"
             : "motion-safe:opacity-0 motion-safe:translate-y-2"

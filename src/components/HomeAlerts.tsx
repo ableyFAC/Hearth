@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Snowflake, Thermometer, AlertTriangle, type LucideIcon } from "lucide-react";
+import { Skeleton } from "@/components/Skeleton";
 
 type Alert = {
   kind: "freeze" | "heat" | "recall";
@@ -29,6 +30,7 @@ const ICON_STYLE: Record<Alert["kind"], string> = {
 export default function HomeAlerts() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [expanded, setExpanded] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
@@ -39,11 +41,29 @@ export default function HomeAlerts() {
         const all = [...(d.weather ?? []), ...(d.recalls ?? [])];
         setAlerts(all);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
     return () => {
       alive = false;
     };
   }, []);
+
+  // Brief skeleton only while the first fetch is in flight, sized like one
+  // alert row - most loads resolve to zero alerts, so this must not linger
+  // or reserve space once we know there's nothing to show.
+  if (loading) {
+    return (
+      <div className="flex items-start gap-2 rounded-lg border border-stone-200 p-3 dark:border-white/10" aria-hidden="true">
+        <Skeleton className="h-5 w-5 shrink-0 rounded-full" />
+        <div className="flex-1 space-y-1.5">
+          <Skeleton className="h-4 w-1/3" />
+          <Skeleton className="h-3 w-2/3" />
+        </div>
+      </div>
+    );
+  }
 
   if (alerts.length === 0) return null;
 

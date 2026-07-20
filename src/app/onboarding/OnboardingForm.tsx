@@ -198,16 +198,6 @@ export default function OnboardingForm({
             We ask so we can personalize maintenance and local pricing for
             your home, it takes about 30 seconds.
           </p>
-          {/* RentCast IS wired up as the parcel source (src/lib/parcel.ts) -
-              it just needs RENTCAST_API_KEY set in the environment. Without
-              a key (or on a lookup miss), lookupParcelAction quietly falls
-              back to parsing the typed address into the next form instead of
-              a real records lookup, so the button stays "Continue" rather
-              than "Find my home" / "Looking up…": promising a search that
-              might silently not happen would be dishonest. */}
-          <button className="btn-primary w-full" disabled={busy}>
-            {busy ? "One moment…" : "Continue"}
-          </button>
           {/* Notice at collection. This is the screen where the address goes
               in, and the address is what the parcel lookup turns into stored
               latitude/longitude - precise geolocation, which the CPRA treats
@@ -226,6 +216,20 @@ export default function OnboardingForm({
               {error}
             </p>
           )}
+          {/* RentCast IS wired up as the parcel source (src/lib/parcel.ts) -
+              it just needs RENTCAST_API_KEY set in the environment. Without
+              a key (or on a lookup miss), lookupParcelAction quietly falls
+              back to parsing the typed address into the next form instead of
+              a real records lookup, so the button stays "Continue" rather
+              than "Find my home" / "Looking up…": promising a search that
+              might silently not happen would be dishonest.
+              Kept as the LAST element in the form (same as the confirm
+              step's button row below) so the action button sits in the same
+              structural spot - after all fields and messaging - on every
+              step of this flow. */}
+          <button className="btn-primary w-full" disabled={busy}>
+            {busy ? "One moment…" : "Continue"}
+          </button>
         </form>
       )}
 
