@@ -57,13 +57,16 @@ export default async function ProLayout({
 
   const contractor = await getCurrentContractor();
 
-  // No company yet → the user is still onboarding. Show a bare, link-free top bar
-  // so they can't navigate into pages that assume a set-up company exists.
+  // No company yet → the user is still onboarding. Show a bare top bar with no
+  // app links, so they can't navigate into pages that assume a set-up company
+  // exists. Sign-out stays: without it, an account stuck at company setup had
+  // no way out of this shell at all (same trap the homeowner /onboarding page
+  // had before its escape hatch).
   if (!contractor) {
     return (
       <div className="min-h-screen">
         <header className="border-b border-stone-200 bg-white dark:border-white/10 dark:bg-stone-900">
-          <div className="mx-auto flex max-w-5xl items-center px-6 py-3">
+          <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
             <span className="flex items-center gap-2 text-lg font-semibold text-stone-900 dark:text-stone-100">
               <Logo className="h-6 w-6 text-hearth-700 dark:text-hearth-400" />
               <span>
@@ -71,6 +74,14 @@ export default async function ProLayout({
                 <span className="font-normal text-stone-500 dark:text-stone-400">for Pros</span>
               </span>
             </span>
+            <form action="/auth/signout" method="post">
+              <button
+                type="submit"
+                className="text-sm text-stone-500 underline hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
+              >
+                Sign out
+              </button>
+            </form>
           </div>
         </header>
         <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
