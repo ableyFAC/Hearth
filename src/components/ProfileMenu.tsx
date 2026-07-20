@@ -22,26 +22,21 @@ export default function ProfileMenu({
   links,
   linksLabel,
   hasPlus,
-  moreLinks,
   themeToggle,
 }: {
   name: string | null;
   links: MenuLink[];
-  // Optional section label rendered above `links` (contractor passes "Grow").
-  // Omitted on the homeowner side, which renders links plain.
+  // Optional section label rendered above `links`. Omitted on both navs today,
+  // which render links plain; kept as a harmless generic hook.
   linksLabel?: string;
   // Homeowner-only: whether the signed-in user has Hearth Plus. Undefined on
   // the contractor side (ProNav), which has no Plus entry to show.
   hasPlus?: boolean;
-  // Secondary links tucked behind a "More" row so the menu opens showing only
-  // the handful people reach for daily. Log out always stays visible.
-  moreLinks?: MenuLink[];
   // When true, a "Dark mode" row (with a visible on/off switch) renders above
   // Log out so signed-in users can always change theme from either nav.
   themeToggle?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const [showMore, setShowMore] = useState(false);
   // Plays the exit animation instead of an instant unmount: on the open ->
   // closed transition the panel stays mounted for one more tick with
   // fade-scale-out, then drops.
@@ -87,10 +82,7 @@ export default function ProfileMenu({
       <button
         ref={btnRef}
         type="button"
-        onClick={() => {
-          setOpen((v) => !v);
-          setShowMore(false);
-        }}
+        onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-label={name ? `Account menu for ${name}` : "Account menu"}
         className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 text-sm font-medium text-stone-700 hover:bg-bark-50 dark:text-stone-200 dark:hover:bg-stone-800"
@@ -180,39 +172,6 @@ export default function ProfileMenu({
               </Link>
             ))}
           </div>
-          {moreLinks && moreLinks.length > 0 && !showMore && (
-            <button
-              type="button"
-              onClick={() => setShowMore(true)}
-              className="mx-1 flex w-[calc(100%-0.5rem)] items-center gap-1 rounded-md px-3 py-2 text-left text-sm text-stone-500 hover:bg-bark-50 hover:text-stone-600 dark:text-stone-400 dark:hover:bg-stone-600 dark:hover:text-stone-300"
-            >
-              More
-              <svg
-                viewBox="0 0 20 20"
-                className="h-3.5 w-3.5"
-                fill="currentColor"
-                aria-hidden="true"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </button>
-          )}
-          {moreLinks &&
-            showMore &&
-            moreLinks.map((l) => (
-              <Link
-                key={l.href}
-                href={l.href}
-                onClick={() => setOpen(false)}
-                className="mx-1 flex items-center rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-bark-50 dark:text-stone-300 dark:hover:bg-stone-600"
-              >
-                {l.label}
-              </Link>
-            ))}
           {themeToggle && <ThemeToggle variant="row" />}
           <form
             action="/auth/signout"

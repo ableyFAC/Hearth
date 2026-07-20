@@ -53,17 +53,14 @@ export default function ProNav({ company }: { company: string | null }) {
           <NotificationBell />
           <ProfileMenu
             name={company}
-            linksLabel="Grow"
             themeToggle
             links={[
-              // Company profile is the pro's storefront: top-level, never
-              // buried under "More". "Edit business" says what you DO here.
+              // Company profile is the pro's storefront: top-level. "Edit
+              // business" says what you DO here.
               { href: "/pro/profile", label: "Edit business profile" },
               { href: "/pro/playbook", label: "Playbook" },
               { href: "/pro/tools", label: "AI back office" },
               { href: "/pro/plus", label: "Membership" },
-            ]}
-            moreLinks={[
               { href: "/pro/billing", label: "Billing" },
               { href: "/pro/privacy", label: "Your privacy rights" },
               { href: "/pro/help", label: "Help" },
