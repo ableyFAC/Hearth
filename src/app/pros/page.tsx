@@ -10,6 +10,7 @@ import {
 } from "@/lib/constants";
 import { AGING_LEAD_TIERS } from "@/lib/leadPricing";
 import Logo from "@/components/Logo";
+import ThemeToggle from "@/components/ThemeToggle";
 import {
   Tag,
   MousePointerClick,
@@ -152,14 +153,17 @@ export default async function ProsLanding({
             >
               <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> Hearth
             </a>
-            {/* Same bordered-button treatment as the landing page's "Hearth
-                for Pros" cross-link, so the two doors read as one system. */}
-            <a
-              href="/"
-              className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-300 dark:hover:border-bark-500 dark:hover:text-stone-300"
-            >
-              For Homeowners
-            </a>
+            {/* Theme switch + bordered cross-link, mirroring the landing
+                page's header exactly so the two doors read as one system. */}
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <a
+                href="/"
+                className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-300 dark:hover:border-bark-500 dark:hover:text-stone-300"
+              >
+                For Homeowners
+              </a>
+            </div>
           </header>
 
           {/* Hero */}
