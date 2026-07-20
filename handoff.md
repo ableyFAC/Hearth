@@ -37,8 +37,11 @@ Fable built a visual direction mockup (published artifact: https://claude.ai/cod
 
 
 ## TL;DR / current state
-- Branch `feature/2026-07-19-app-update`. Everything from the last two sessions is still
-  UNCOMMITTED (owner holds the commit word; ask before commit/push, always).
+- Branch `feature/2026-07-19-app-update`. EVERYTHING IS NOW COMMITTED AND PUSHED
+  (2026-07-19, owner asked): `dea448f` security remediation + redesign, then `cd597a7`
+  audit fix wave + 0.0.0.0 redirect fix (new src/lib/requestOrigin.ts) + migrations
+  0091/0092. Working tree clean. Still NOT merged to main; PR can be opened at
+  github.com/r3dhoodi3/Hearth. (Ask before commit/push remains the standing rule.)
 - **THE LIVE DB IS FULLY CAUGHT UP: migrations 0001-0088 applied and probe-verified.**
   This was the day's big win; details and the probe method below.
 - App runs in DEV: `npm run dev -- -H 0.0.0.0 -p 3000`, open http://localhost:3000 (HTTP).
