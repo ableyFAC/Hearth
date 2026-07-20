@@ -371,10 +371,25 @@ export async function saveCompanyAction(formData: FormData) {
   // gated on the missing-column fingerprint specifically: retrying on a
   // transient error would silently drop referral attribution on an insert
   // that might succeed the second time.
+  // ocWrite rides the creating insert: the pro just answered the Orange
+  // County question, and dropping it here left the row on 0074's FALSE
+  // default, which hard-hides the whole job board from them. Requires
+  // 0096's INSERT grant on serves_orange_county (0083's allowlist missed
+  // it); the 42501 fallback below keeps signup alive on a live DB that
+  // has not run 0096 yet (old dropped-answer behavior, loudly logged).
   let { error } = await supabase
     .from("contractors")
-    .insert({ ...base, ...referral, ...stateWrite } as any);
-  if (error && (referredBy || hasStateWrite)) {
+    .insert({ ...base, ...referral, ...stateWrite, ...ocWrite } as any);
+  if (error && hasOcWrite && error.code === "42501") {
+    console.error(
+      "contractors insert: serves_orange_county INSERT grant missing (run migration 0096); retrying without it:",
+      error.message
+    );
+    ({ error } = await supabase
+      .from("contractors")
+      .insert({ ...base, ...referral, ...stateWrite } as any));
+  }
+  if (error && (referredBy || hasStateWrite || hasOcWrite)) {
     // isMissingSchemaError, not a hand-rolled regex: PostgREST reports a
     // missing INSERT column as PGRST204 "schema cache", which the old
     // pattern here missed, hard-500ing every new pro signup on a live DB
