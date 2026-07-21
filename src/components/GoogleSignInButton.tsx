@@ -63,7 +63,14 @@ export default function GoogleSignInButton({
     }`;
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo },
+      options: {
+        redirectTo,
+        // Always show Google's account chooser. Without this, a browser signed
+        // into a single Google account that already authorized Hearth gets
+        // silently logged straight in with no chance to pick a different
+        // account.
+        queryParams: { prompt: "select_account" },
+      },
     });
     if (error) {
       setBusy(false);
