@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 // Public top-level page, same pattern as src/app/terms/page.tsx and
 // src/app/privacy/page.tsx: see src/lib/supabase/middleware.ts for the
@@ -24,9 +25,9 @@ export default function DmcaPage() {
   return (
     <main className="mx-auto max-w-2xl px-6 pb-16 pt-10">
       <p className="text-sm">
-        <a href="/" className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
+        <Link href="/" className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
           ← Hearth
-        </a>
+        </Link>
       </p>
 
       <h1 className="mt-4 text-2xl font-bold text-stone-900 sm:text-3xl dark:text-stone-100">
@@ -164,9 +165,9 @@ export default function DmcaPage() {
           </p>
           <p className="mt-3 leading-relaxed">
             In the meantime, you can reach us through{" "}
-            <a href="/contact" className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href="/contact" className="text-bark-700 hover:underline dark:text-stone-300">
               our contact form
-            </a>
+            </Link>
             . Note that this does not replace the designated-agent process
             above once it&apos;s complete.
           </p>
@@ -238,9 +239,9 @@ export default function DmcaPage() {
             contractor&apos;s public page taken down, after repeated valid
             takedown notices. This is in addition to the account termination
             rights described in the{" "}
-            <a href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
               Terms of Service
-            </a>
+            </Link>
             .
           </p>
         </section>
@@ -268,13 +269,13 @@ export default function DmcaPage() {
           </h2>
           <p className="mt-2 leading-relaxed">
             See the{" "}
-            <a href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
               Terms of Service
-            </a>{" "}
+            </Link>{" "}
             for the rules on using Hearth, and the{" "}
-            <a href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
               Privacy Policy
-            </a>{" "}
+            </Link>{" "}
             for what we collect and how uploaded photos and documents are
             stored.
           </p>

@@ -1,11 +1,11 @@
 import { cookies } from "next/headers";
 
 // Lightweight "flash" toast that survives a server action + revalidate/redirect.
-// setFlash() drops a short-lived, non-httpOnly cookie (so the client Toaster can
-// clear it); readFlash() is called once in the root layout each render.
+// setFlash() drops a short-lived, non-httpOnly cookie (so the client FlashBridge
+// can clear it); readFlash() is called once in the root layout each render.
 export const FLASH_COOKIE = "hearth_flash";
 
-export type FlashType = "success" | "error" | "info";
+export type FlashType = "success" | "error" | "info" | "warning";
 export interface Flash {
   message: string;
   type: FlashType;

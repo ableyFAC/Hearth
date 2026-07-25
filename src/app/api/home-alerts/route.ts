@@ -22,6 +22,18 @@ type Alert = {
   url?: string;
 };
 
+// Small "weather app" snapshot for the dashboard's always-on strip. Rides on
+// the SAME Open-Meteo forecast call the freeze/heat alerts already make (the
+// `current=` params below), so it costs zero extra upstream requests. Null
+// whenever anything about the lookup fails - the strip renders nothing then.
+type CurrentWeather = {
+  tempF: number;
+  code: number;
+  highF: number;
+  lowF: number;
+  city: string;
+};
+
 // revalidateSec, when given, lets Next's fetch data cache serve repeat calls
 // to the SAME upstream URL without re-hitting the third-party API - this is
 // a per-URL cache on the outgoing fetch, not on this route's own response
@@ -83,7 +95,7 @@ function whenLabel(i: number): string {
 // brand lookups inside the recalls leg via their own Promise.all) so a slow
 // upstream costs latency once, not once per call.
 export async function GET() {
-  const empty = NextResponse.json({ weather: [], recalls: [] });
+  const empty = NextResponse.json({ weather: [], recalls: [], current: null });
   let property: any = null;
   let systems: any[] = [];
   try {
@@ -99,17 +111,21 @@ export async function GET() {
     return empty;
   }
 
-  const [weather, recalls] = await Promise.all([
+  const [{ alerts: weather, current }, recalls] = await Promise.all([
     fetchWeather(property, systems),
     fetchRecalls(systems),
   ]);
 
-  return NextResponse.json({ weather, recalls });
+  return NextResponse.json({ weather, recalls, current });
 }
 
 // --- Weather (Open-Meteo, no key) ---
-async function fetchWeather(property: any, systems: any[]): Promise<Alert[]> {
+async function fetchWeather(
+  property: any,
+  systems: any[]
+): Promise<{ alerts: Alert[]; current: CurrentWeather | null }> {
   const weather: Alert[] = [];
+  let current: CurrentWeather | null = null;
   try {
     const place = [property.city, property.state].filter(Boolean).join(", ");
     if (place) {
@@ -149,14 +165,39 @@ async function fetchWeather(property: any, systems: any[]): Promise<Alert[]> {
         // result (already quantized by Open-Meteo's geocoder, so this doesn't
         // fragment the cache across near-identical coordinates for the same
         // city), so two homeowners in the same city share one upstream call.
+        // `current=temperature_2m,weather_code` piggybacks the dashboard's
+        // weather strip onto this same request: one upstream call feeds both
+        // the freeze/heat alerts (daily arrays) and the current-conditions
+        // snapshot. The 30 min cache means "current" can lag by up to that
+        // much, which is fine for a glanceable temperature.
         const fc = await fetchJson(
           `https://api.open-meteo.com/v1/forecast?latitude=${loc.latitude}&longitude=${loc.longitude}` +
-            `&daily=temperature_2m_min,temperature_2m_max&forecast_days=4&temperature_unit=fahrenheit&timezone=auto`,
+            `&daily=temperature_2m_min,temperature_2m_max&current=temperature_2m,weather_code` +
+            `&forecast_days=4&temperature_unit=fahrenheit&timezone=auto`,
           4000,
           1800 // 30 min
         );
         const mins: number[] = fc?.daily?.temperature_2m_min ?? [];
         const maxs: number[] = fc?.daily?.temperature_2m_max ?? [];
+
+        // Today's snapshot for the strip. Only assembled when every piece is
+        // a real number - a partial reading renders as nothing, not as NaN.
+        const nowTemp = fc?.current?.temperature_2m;
+        const nowCode = fc?.current?.weather_code;
+        if (
+          typeof nowTemp === "number" &&
+          typeof nowCode === "number" &&
+          typeof maxs[0] === "number" &&
+          typeof mins[0] === "number"
+        ) {
+          current = {
+            tempF: Math.round(nowTemp),
+            code: nowCode,
+            highF: Math.round(maxs[0]),
+            lowF: Math.round(mins[0]),
+            city: property.city ?? loc.name ?? "",
+          };
+        }
 
         // System context for tailored advice.
         const plumbing = systems.find((s) =>
@@ -198,7 +239,7 @@ async function fetchWeather(property: any, systems: any[]): Promise<Alert[]> {
   } catch {
     /* leave weather empty */
   }
-  return weather;
+  return { alerts: weather, current };
 }
 
 // --- Recalls (CPSC SaferProducts, no key) ---

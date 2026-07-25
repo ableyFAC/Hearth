@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 
 // Shared closing CTA for the public /guides pages. Every guide page ends with
@@ -34,12 +35,12 @@ export default async function GuideCta({
           Everything above is a general, national range. Hearth already
           knows your home&apos;s actual age, size, and systems.
         </p>
-        <a
+        <Link
           href={signedInHref}
           className="btn-primary mt-5 inline-block px-6 py-2.5"
         >
           {signedInLabel}
-        </a>
+        </Link>
       </section>
     );
   }
@@ -54,12 +55,12 @@ export default async function GuideCta({
         home&apos;s actual age, size, and systems, and turns that into a
         house-specific answer, free.
       </p>
-      <a
+      <Link
         href="/homeowner-signup"
         className="btn-primary mt-5 inline-block px-6 py-2.5"
       >
         Get started free
-      </a>
+      </Link>
     </section>
   );
 }

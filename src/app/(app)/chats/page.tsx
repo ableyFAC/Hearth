@@ -144,10 +144,10 @@ export default async function HomeownerChatsPage({
   // instead of "generous enough in practice."
   const MESSAGES_SCAN_LIMIT = 2000;
 
-  // None of these three depend on each other - only on `ids` (already known)
+  // None of these depend on each other - only on `ids` (already known)
   // and, for the cross-home lookup, on searchParams.lead - so they run as one
-  // parallel wave instead of three stacked round trips.
-  const [msgs, structuredQuotes, crossHomeLead] = await Promise.all([
+  // parallel wave instead of stacked round trips.
+  const [msgs, structuredQuotes, crossHomeLead, allReadableLeads] = await Promise.all([
     ids.length
       ? supabase
           .from("messages")
@@ -186,6 +186,36 @@ export default async function HomeownerChatsPage({
           .maybeSingle()
           .then((r) => r.data)
       : Promise.resolve(null),
+    // Every lead id on this user's OWN homes, across ALL of them and
+    // including leads with no pro currently assigned. The nav badge
+    // (UnreadProvider) counts contractor messages on those leads, so the
+    // badge clear on inbox open must stamp this same universe: stamping only
+    // the active home's chosen-pro list left messages on other homes (or on
+    // unassigned leads) permanently unread, a badge count the user could
+    // never clear. Deliberately scoped to the user's readable properties
+    // rather than every readable contractor_leads row: a dual-role
+    // (homeowner + pro) account can also read leads where they are the
+    // ASSIGNED CONTRACTOR, and stamping those from the homeowner inbox
+    // silently cleared the contractor-side badge for threads they never
+    // opened. The properties select is RLS-scoped (household membership
+    // included), so its ids are exactly the owner-side universe; a user's
+    // home count is small, so one .in() list is plenty. Note the Ask Hearth
+    // assistant is not involved here at all: it lives in localStorage only
+    // and never writes to the messages table.
+    supabase
+      .from("properties")
+      .select("id")
+      .then((r) => {
+        const propertyIds = ((r.data ?? []) as { id: string }[]).map(
+          (p) => p.id
+        );
+        if (!propertyIds.length) return null;
+        return supabase
+          .from("contractor_leads")
+          .select("id")
+          .in("property_id", propertyIds)
+          .then((rr) => rr.data);
+      }),
   ]);
 
   for (const m of msgs ?? []) {
@@ -263,9 +293,20 @@ export default async function HomeownerChatsPage({
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Messages</h1>
 
-      {/* Opening the inbox clears the nav badge, even on the Ask Hearth pane. */}
+      {/* Opening the inbox clears the nav badge, even on the Ask Hearth pane.
+          The stamped set is the union of the listed conversations and every
+          other lead on the user's own homes (other homes, unassigned leads;
+          never pro-side leads a dual-role account is the assigned contractor
+          on), so the clear covers the homeowner badge without touching the
+          contractor one. localStorage-only: the server action stays a no-op
+          and the per-thread "New" indicators (cookie based) are untouched. */}
       <MarkChatsSeen
-        leadIds={convos.map((l) => l.id)}
+        leadIds={Array.from(
+          new Set([
+            ...convos.map((l) => l.id),
+            ...(allReadableLeads ?? []).map((l) => l.id),
+          ])
+        )}
         action={markAllChatsSeenAction}
       />
 

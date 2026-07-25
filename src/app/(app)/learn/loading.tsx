@@ -1,8 +1,9 @@
-import { Skeleton, SkeletonLine, SkeletonCard, SkeletonRow } from "@/components/Skeleton";
+import { Skeleton, SkeletonLine, SkeletonRow } from "@/components/Skeleton";
 
-// Mirrors learn/page.tsx: heading, the Ask Hearth block, and a few guide
-// rows (each guide row has an icon, label, and a status chip - SkeletonRow's
-// shape).
+// Mirrors learn/page.tsx: heading, the Ask Hearth card (bark-tinted, with a
+// title, subtitle, starter chips, and a composer input), then the
+// "Maintenance basics" block - its search box, category filter chips, and a
+// few guide rows (each guide is an icon + label + status chip card).
 export default function Loading() {
   return (
     <div className="space-y-6" aria-hidden="true">
@@ -11,12 +12,34 @@ export default function Loading() {
         <SkeletonLine width="w-full" />
         <SkeletonLine width="w-2/3" />
       </div>
-      <SkeletonCard lines={3} />
-      <div className="space-y-2">
+
+      <div className="card space-y-3 border-bark-100 bg-bark-50 dark:border-bark-700 dark:bg-bark-700/20">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-3 w-2/3" />
+        <div className="flex flex-wrap gap-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-7 w-40 rounded-full" />
+          ))}
+        </div>
+        <Skeleton className="h-10 w-full rounded-lg" />
+      </div>
+
+      <div className="space-y-4">
         <Skeleton className="h-4 w-40" />
-        <SkeletonRow />
-        <SkeletonRow />
-        <SkeletonRow />
+        <div className="space-y-1.5">
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-10 w-full rounded-lg" />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-7 w-24 rounded-full" />
+          ))}
+        </div>
+        <div className="space-y-2">
+          <SkeletonRow />
+          <SkeletonRow />
+          <SkeletonRow />
+        </div>
       </div>
     </div>
   );

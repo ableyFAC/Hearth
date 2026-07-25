@@ -24,9 +24,15 @@ export default function MarkChatsSeen({
       /* localStorage unavailable */
     }
     window.dispatchEvent(new Event("hearth:chat-seen"));
-    action(leadIds).then(() => {
-      window.dispatchEvent(new Event("hearth:chat-seen"));
-    });
+    action(leadIds)
+      .then(() => {
+        window.dispatchEvent(new Event("hearth:chat-seen"));
+      })
+      .catch(() => {
+        // Fail soft: the local seen-times above already cleared the badge, and
+        // a rejected background write (network blip, server down) must not
+        // surface as an unhandled rejection.
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   return null;

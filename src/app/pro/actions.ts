@@ -6,8 +6,15 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentContractor } from "@/lib/contractor";
+import { sendNotification } from "@/lib/notify";
 import { setFlash } from "@/lib/flash";
-import { labelFor, JOB_CATEGORIES, LEAD_STATUSES } from "@/lib/constants";
+import {
+  labelFor,
+  JOB_CATEGORIES,
+  LEAD_STATUSES,
+  MAJOR_INTRO_FEE,
+  isMajorCategory,
+} from "@/lib/constants";
 import { agingLeadFee } from "@/lib/leadPricing";
 import { hasProPlan } from "@/lib/subscription";
 import { requestReviewForWonLead } from "@/lib/reviewRequest";
@@ -15,6 +22,7 @@ import { lookupCslbLicense, type CslbLookupResult } from "@/lib/cslb";
 import { createCandidateAndInvite } from "@/lib/checkr";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import { findActiveJobConflicts } from "@/lib/activeJobConflicts";
+import { validateYelpUrl, validateGoogleReviewsUrl } from "@/lib/reviewLinks";
 import type { Json } from "@/lib/database.types";
 
 // Server-side counterpart to src/lib/analytics.ts's track(): that helper
@@ -203,6 +211,38 @@ export async function saveCompanyAction(formData: FormData) {
 
   const existing = await getCurrentContractor();
 
+  // Optional outbound review-page links (0110). Same missing-column-safe
+  // pattern as service_state / serves_orange_county above: only write a field
+  // when the submitting form actually carried it, so a lean form can't wipe a
+  // stored value. Each URL is validated server-side (reviewLinks.ts); an empty
+  // string clears the field. A bad link surfaces via the existing flash/error
+  // pattern (setFlash + redirect back to the form the pro submitted from),
+  // exactly like the "Profile saved." / waitlist redirects below, and nothing
+  // is written when validation fails. Kept out of `fields` and written via the
+  // (as any) casts below because the columns land in 0110 and aren't in the
+  // generated types.
+  const reviewLinkBack = existing ? "/pro/profile" : "/pro/onboarding";
+  const yelpEntry = formData.get("yelp_url");
+  const googleEntry = formData.get("google_reviews_url");
+  const hasReviewLinkWrite = yelpEntry !== null || googleEntry !== null;
+  const reviewLinkWrite: Record<string, string | null> = {};
+  if (yelpEntry !== null) {
+    const r = validateYelpUrl(String(yelpEntry));
+    if (!r.ok) {
+      setFlash(r.error, "error");
+      redirect(reviewLinkBack);
+    }
+    reviewLinkWrite.yelp_url = r.value;
+  }
+  if (googleEntry !== null) {
+    const r = validateGoogleReviewsUrl(String(googleEntry));
+    if (!r.ok) {
+      setFlash(r.error, "error");
+      redirect(reviewLinkBack);
+    }
+    reviewLinkWrite.google_reviews_url = r.value;
+  }
+
   if (existing) {
     // The license is a legal identifier: locked once VERIFIED (0037), not
     // before. Until a check confirms the number, the pro can still correct a
@@ -234,12 +274,16 @@ export async function saveCompanyAction(formData: FormData) {
       : {};
     let { error } = await supabase
       .from("contractors")
-      .update({ ...fields, ...stateWrite, ...ocWrite } as any)
+      .update({ ...fields, ...stateWrite, ...ocWrite, ...reviewLinkWrite } as any)
       .eq("id", existing.id);
     // Same graceful missing-column retry as the insert path below: if 0046
-    // (or 0074) hasn't run yet, save everything else rather than failing the
-    // whole form.
-    if (error && (hasStateWrite || hasOcWrite) && isMissingSchemaError(error)) {
+    // (or 0074, or 0110's review-link columns) hasn't run yet, save everything
+    // else rather than failing the whole form.
+    if (
+      error &&
+      (hasStateWrite || hasOcWrite || hasReviewLinkWrite) &&
+      isMissingSchemaError(error)
+    ) {
       ({ error } = await supabase
         .from("contractors")
         .update(fields)
@@ -379,7 +423,7 @@ export async function saveCompanyAction(formData: FormData) {
   // has not run 0096 yet (old dropped-answer behavior, loudly logged).
   let { error } = await supabase
     .from("contractors")
-    .insert({ ...base, ...referral, ...stateWrite, ...ocWrite } as any);
+    .insert({ ...base, ...referral, ...stateWrite, ...ocWrite, ...reviewLinkWrite } as any);
   if (error && hasOcWrite && error.code === "42501") {
     console.error(
       "contractors insert: serves_orange_county INSERT grant missing (run migration 0096); retrying without it:",
@@ -387,9 +431,9 @@ export async function saveCompanyAction(formData: FormData) {
     );
     ({ error } = await supabase
       .from("contractors")
-      .insert({ ...base, ...referral, ...stateWrite } as any));
+      .insert({ ...base, ...referral, ...stateWrite, ...reviewLinkWrite } as any));
   }
-  if (error && (referredBy || hasStateWrite || hasOcWrite)) {
+  if (error && (referredBy || hasStateWrite || hasOcWrite || hasReviewLinkWrite)) {
     // isMissingSchemaError, not a hand-rolled regex: PostgREST reports a
     // missing INSERT column as PGRST204 "schema cache", which the old
     // pattern here missed, hard-500ing every new pro signup on a live DB
@@ -734,6 +778,64 @@ export async function updateLeadStatusAction(formData: FormData) {
   revalidatePath("/pro");
 }
 
+// Dollar string for a fee in cents, matching the board's money() formatting
+// ($99, not $99.00; $49.99 keeps its cents).
+function feeString(cents: number) {
+  const fee = cents / 100;
+  return Number.isInteger(fee) ? `$${fee}` : `$${fee.toFixed(2)}`;
+}
+
+// Stale-tab price guard shared by applyToJobAction and
+// unlockDirectRequestAction. The confirm form posts the fee it DISPLAYED
+// (fee_cents); this recomputes what the charge RPC will derive right now:
+// the aging price from the lead row (agingLeadFee mirrors the DB's
+// lead_fee_cents) with the first big-ticket intro (0113) applied on top,
+// using the same my_applications-based check page.tsx uses for
+// hasPaidMajor, run fresh here. Returns an error message when the live
+// price is HIGHER than what the pro saw, so a tab rendered before the intro
+// was consumed elsewhere can't confirm $49.99 and silently charge $99.
+// Never blocks when the live price is lower or equal to the displayed one,
+// and fails open (null) whenever an input is unreadable: the DB still
+// derives the true price under the wallet lock either way, this only closes
+// the minutes-long stale-display window (the few-ms race between this check
+// and the RPC is acceptable).
+async function staleDisplayedFeeError(
+  supabase: any,
+  displayedEntry: FormDataEntryValue | null,
+  lead: {
+    payout_amount: number | string | null;
+    created_at: string | null;
+    category: string | null;
+  } | null
+): Promise<string | null> {
+  const displayedCents = Number(displayedEntry);
+  if (!lead || !lead.created_at || !Number.isFinite(displayedCents) || displayedCents <= 0) {
+    return null;
+  }
+  let currentCents = Math.round(
+    agingLeadFee(Number(lead.payout_amount ?? 0), lead.created_at).fee * 100
+  );
+  const major = isMajorCategory(lead.category ?? "");
+  if (major) {
+    const { data: myApps, error } = await supabase.rpc("my_applications");
+    // Fail open on a read hiccup: without the payment history we can't tell
+    // whether the intro still applies, and assuming it doesn't would block a
+    // legit intro-priced apply (the one thing this guard must never do).
+    if (error) return null;
+    const hasPaidMajor = ((myApps ?? []) as any[]).some(
+      (a) => Number(a.fee_cents ?? 0) > 0 && isMajorCategory(a.category)
+    );
+    const introCents = Math.round(MAJOR_INTRO_FEE * 100);
+    if (!hasPaidMajor && introCents < currentCents) currentCents = introCents;
+  }
+  if (currentCents > displayedCents) {
+    return major
+      ? `The price for this lead is now ${feeString(currentCents)} (your first big-ticket discount was already used). Refresh to see the current price.`
+      : `The price for this lead is now ${feeString(currentCents)}. Refresh to see the current price.`;
+  }
+  return null;
+}
+
 // Apply to an open job. The DB function charges the per-category fee from the
 // wallet (cash first, then bonus) and records the application. Returns false if
 // the wallet balance is short.
@@ -779,10 +881,12 @@ export async function applyToJobAction(formData: FormData) {
   // a race between this check and the RPC below is acceptable (ghost
   // protection still refunds an apply fee paid in that window), and this
   // never touches apply_to_lead's own SQL or any money logic.
+  // payout_amount/created_at/category ride along for the stale-price guard
+  // below, so it costs no extra query.
   const admin = createAdminClient();
   const { data: leadClosedCheck, error: leadClosedError } = await admin
     .from("contractor_leads")
-    .select("owner_closed_at")
+    .select("owner_closed_at, payout_amount, created_at, category")
     .eq("id", leadId)
     .maybeSingle();
   if (leadClosedError && !isMissingSchemaError(leadClosedError)) {
@@ -803,7 +907,47 @@ export async function applyToJobAction(formData: FormData) {
   // and lets apply_to_lead run exactly as it did before this check existed:
   // this pre-check is advisory only and must never itself block a legit apply.
 
+  // Replay guard: apply_to_lead returns true idempotently when this pro
+  // already applied, and the success branch below would then re-send the
+  // "Application sent. $X was charged" receipt for money that was never
+  // charged a second time. Same posture as unlockDirectRequestAction's
+  // guard: check for the existing application row BEFORE the RPC and return
+  // a neutral flash with no receipt. Best-effort dedupe, not a correctness
+  // guarantee: a truly concurrent double-submit can still reach the RPC's
+  // own idempotent true, and a read hiccup falls through as before.
+  try {
+    const { data: existingApp, error: existingAppError } = await admin
+      .from("lead_applications")
+      .select("id")
+      .eq("lead_id", leadId)
+      .eq("contractor_id", contractor.id)
+      .maybeSingle();
+    if (!existingAppError && existingApp) {
+      setFlash("You already applied to this job.");
+      revalidatePath("/pro");
+      return;
+    }
+  } catch {
+    // Best-effort: on a read hiccup, fall through to the RPC as before.
+  }
+
   const supabase = createClient() as any;
+
+  // Stale-tab price guard (staleDisplayedFeeError above): if the live price
+  // is now HIGHER than the fee this confirm form displayed (typically the
+  // first big-ticket intro was consumed in another tab), refuse to charge
+  // and ask for a refresh instead of silently billing the higher amount.
+  const staleError = await staleDisplayedFeeError(
+    supabase,
+    formData.get("fee_cents"),
+    leadClosedError ? null : ((leadClosedCheck as any) ?? null)
+  );
+  if (staleError) {
+    setFlash(staleError, "error");
+    revalidatePath("/pro");
+    return;
+  }
+
   const { data, error } = await supabase.rpc("apply_to_lead", {
     p_lead: leadId,
     p_message: message,
@@ -832,26 +976,40 @@ export async function applyToJobAction(formData: FormData) {
       if (contractor.user_id) {
         // Reuses the admin client created for the owner_closed_at pre-check
         // above, rather than opening a second one.
-        const { data: lead } = await admin
-          .from("contractor_leads")
-          .select("category, payout_amount, created_at")
-          .eq("id", leadId)
-          .maybeSingle();
+        const [{ data: lead }, { data: appRow }] = await Promise.all([
+          admin
+            .from("contractor_leads")
+            .select("category")
+            .eq("id", leadId)
+            .maybeSingle(),
+          // The application row the RPC just wrote holds the EXACT amount
+          // charged (fee_cents), including the first big-ticket intro price
+          // (migration 0113) and any aging markdown, so the receipt can
+          // never misquote what the wallet actually paid.
+          admin
+            .from("lead_applications")
+            .select("fee_cents")
+            .eq("lead_id", leadId)
+            .eq("contractor_id", contractor.id)
+            .maybeSingle(),
+        ]);
         if (lead) {
-          // Same markdown math the leads board shows and the DB charges
-          // (leadPricing.ts mirrors 0025_aging_lead_deals.sql).
-          const { fee } = agingLeadFee(
-            Number(lead.payout_amount ?? 0),
-            lead.created_at
-          );
-          const feeStr = Number.isInteger(fee)
-            ? `$${fee}`
-            : `$${fee.toFixed(2)}`;
+          const chargedCents = Number((appRow as any)?.fee_cents);
+          // The dollar amount comes ONLY from the application row the RPC
+          // just wrote. If that read fails, omit the amount entirely rather
+          // than guessing: the aging-tier math would misquote an
+          // intro-priced (0113) charge.
+          const feeStr =
+            Number.isFinite(chargedCents) && chargedCents > 0
+              ? feeString(chargedCents)
+              : null;
           await admin.from("notifications").insert({
             user_id: contractor.user_id,
             kind: "apply_receipt",
             title: "Application sent",
-            body: `You applied to a ${labelFor(JOB_CATEGORIES, lead.category)} job. ${feeStr} was charged to your wallet.`,
+            body: feeStr
+              ? `You applied to a ${labelFor(JOB_CATEGORIES, lead.category)} job. ${feeStr} was charged to your wallet.`
+              : `You applied to a ${labelFor(JOB_CATEGORIES, lead.category)} job. The fee was charged to your wallet.`,
             url: "/pro",
           });
           // "pro_apply" (src/app/api/track/route.ts): fires once per
@@ -867,6 +1025,210 @@ export async function applyToJobAction(formData: FormData) {
   }
   revalidatePath("/pro");
   revalidatePath("/pro/billing");
+}
+
+// Unlock (= accept) a direct request a homeowner aimed at this pro. The DB
+// function unlock_direct_request (0104) charges the per-category lead fee from
+// the wallet exactly like apply_to_lead (cash first, then bonus), assigns the
+// lead, and opens the chat. It returns false ONLY for a short wallet, so that
+// path drives the deposit prompt (the card's Unlock button already routes a
+// short wallet to billing before this runs; this is the backstop for a balance
+// that changed between render and submit). Any other non-unlockable state
+// raises, and an already-unlocked lead returns true (idempotent).
+export async function unlockDirectRequestAction(formData: FormData) {
+  const contractor = await assertContractor();
+  const leadId = String(formData.get("id"));
+
+  // Replay guard: unlock_direct_request is idempotent and returns true for BOTH
+  // a fresh unlock and a repeat one, so a replayed POST would otherwise re-fire
+  // the "accepted your request" notification to the homeowner. Read
+  // direct_unlocked_at BEFORE the RPC; if this lead was already unlocked, skip
+  // the notification below (but still redirect the pro into the chat, the way a
+  // normal unlock lands them there). The read goes through the admin client:
+  // until the unlock sets contractor_id the pro isn't the lead's contractor, so
+  // a user-scoped read of a still-pending request would be blocked by RLS.
+  // Best-effort dedupe, not a correctness guarantee: a truly concurrent
+  // double-submit can still slip a second notice through.
+  // payout_amount/created_at/category ride along for the stale-price guard
+  // below, so it costs no extra query.
+  const admin = createAdminClient();
+  let alreadyUnlocked = false;
+  let leadRow: any = null;
+  try {
+    const { data: pre } = await (admin.from("contractor_leads") as any)
+      .select("direct_unlocked_at, payout_amount, created_at, category")
+      .eq("id", leadId)
+      .maybeSingle();
+    alreadyUnlocked = Boolean(pre?.direct_unlocked_at);
+    leadRow = pre ?? null;
+  } catch {
+    // Best-effort: on a read hiccup, fall through and notify as before.
+  }
+
+  const supabase = createClient() as any;
+
+  // Stale-tab price guard (staleDisplayedFeeError above): if the live price
+  // is now HIGHER than the fee this confirm form displayed (typically the
+  // first big-ticket intro was consumed in another tab), refuse to charge
+  // and ask for a refresh instead of silently billing the higher amount.
+  // Skipped on the idempotent repeat unlock: it was already paid, so no new
+  // charge can happen.
+  if (!alreadyUnlocked) {
+    const staleError = await staleDisplayedFeeError(
+      supabase,
+      formData.get("fee_cents"),
+      leadRow
+    );
+    if (staleError) {
+      setFlash(staleError, "error");
+      revalidatePath("/pro");
+      return;
+    }
+  }
+
+  const { data, error } = await supabase.rpc("unlock_direct_request", {
+    p_lead: leadId,
+  });
+  if (error) {
+    setFlash(error.message, "error");
+    revalidatePath("/pro");
+    return;
+  }
+  if (data === false) {
+    setFlash("Not enough balance. Add funds to unlock.", "error");
+    revalidatePath("/pro");
+    revalidatePath("/pro/billing");
+    return;
+  }
+
+  // Unlocked. Tell the homeowner their pro is in and the chat is open.
+  // Best-effort: a notification hiccup must never undo a paid unlock. The pro
+  // isn't the lead's contractor until the unlock above sets contractor_id, and
+  // the owner-contact read is service-role either way, so this goes through the
+  // admin client (reused from the replay-guard read above), same posture as the
+  // pro-side quote/invoice notifications. Skipped on the idempotent repeat
+  // unlock so a replayed POST doesn't re-notify (see the guard above).
+  if (!alreadyUnlocked) try {
+    const { data: lead } = await admin
+      .from("contractor_leads")
+      .select("property_id")
+      .eq("id", leadId)
+      .maybeSingle();
+    if (lead?.property_id) {
+      const { data: property } = await admin
+        .from("properties")
+        .select("user_id")
+        .eq("id", lead.property_id)
+        .maybeSingle();
+      if (property?.user_id) {
+        // "Messages from pros" (pro_messages) gates the email/SMS channels
+        // only, never the in-app row: an unset pref reads as enabled.
+        const { data: owner } = await admin
+          .from("users")
+          .select("email, phone, sms_consent, notification_prefs")
+          .eq("id", property.user_id)
+          .maybeSingle();
+        const wantsProMessages = owner?.notification_prefs?.pro_messages ?? true;
+        await sendNotification(admin, {
+          userId: property.user_id,
+          kind: "direct_accepted",
+          title: `${contractor.name} accepted your request`,
+          body: "They can see your details now and the chat is open. Message them to get started.",
+          url: `/chats?lead=${leadId}`,
+          email: wantsProMessages ? owner?.email ?? null : null,
+          phone: wantsProMessages ? owner?.phone ?? null : null,
+          smsConsent: wantsProMessages ? owner?.sms_consent === true : false,
+        });
+      }
+    }
+  } catch (err) {
+    console.error(
+      "direct accept notification:",
+      err instanceof Error ? err.message : err
+    );
+  }
+
+  revalidatePath("/pro");
+  revalidatePath("/pro/billing");
+  // Land the pro in the chat for the lead they just unlocked, the way choosing
+  // or rehiring drops the homeowner straight into the thread.
+  redirect(`/pro/chats?lead=${leadId}`);
+}
+
+// Pass on a direct request (free). decline_direct_request (0104) stamps
+// direct_declined_at and is idempotent. The homeowner is nudged to post the job
+// to every local pro instead. The pro is not the lead's contractor on a pending
+// request (contractor_id is null), so the owner lookup goes through the admin
+// client, resolved before the decline so the row is still readable.
+export async function declineDirectRequestAction(formData: FormData) {
+  const contractor = await assertContractor();
+  const leadId = String(formData.get("id"));
+
+  const admin = createAdminClient();
+  let ownerUserId: string | null = null;
+  // Replay guard: decline_direct_request is idempotent (returns void whether it
+  // stamped direct_declined_at now or it was already stamped), so a replayed
+  // POST would otherwise re-notify the homeowner. Read the stamp BEFORE the RPC
+  // and skip the notification when the request was already declined. Best-effort
+  // dedupe, not a correctness guarantee: a truly concurrent double-submit can
+  // still slip a second notice through, but the common replay case is covered.
+  let alreadyDeclined = false;
+  try {
+    const { data: lead } = await (admin.from("contractor_leads") as any)
+      .select("property_id, direct_declined_at")
+      .eq("id", leadId)
+      .maybeSingle();
+    if (lead?.property_id) {
+      const { data: property } = await admin
+        .from("properties")
+        .select("user_id")
+        .eq("id", lead.property_id)
+        .maybeSingle();
+      ownerUserId = property?.user_id ?? null;
+    }
+    alreadyDeclined = Boolean(lead?.direct_declined_at);
+  } catch {
+    // Best-effort: a lookup hiccup just means no homeowner notification.
+  }
+
+  const supabase = createClient() as any;
+  const { error } = await supabase.rpc("decline_direct_request", {
+    p_lead: leadId,
+  });
+  if (error) {
+    setFlash(error.message, "error");
+    revalidatePath("/pro");
+    return;
+  }
+
+  if (ownerUserId && !alreadyDeclined) {
+    try {
+      const { data: owner } = await admin
+        .from("users")
+        .select("email, phone, sms_consent, notification_prefs")
+        .eq("id", ownerUserId)
+        .maybeSingle();
+      const wantsProMessages = owner?.notification_prefs?.pro_messages ?? true;
+      await sendNotification(admin, {
+        userId: ownerUserId,
+        kind: "direct_declined",
+        title: `${contractor.name} passed on your request`,
+        body: "You can post this job to all local pros instead and get more options.",
+        url: "/contractors",
+        email: wantsProMessages ? owner?.email ?? null : null,
+        phone: wantsProMessages ? owner?.phone ?? null : null,
+        smsConsent: wantsProMessages ? owner?.sms_consent === true : false,
+      });
+    } catch (err) {
+      console.error(
+        "direct decline notification:",
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+
+  setFlash("You passed on this request.");
+  revalidatePath("/pro");
 }
 
 // NOTE: a markLeadPaidAction used to live here that wrote the client-supplied

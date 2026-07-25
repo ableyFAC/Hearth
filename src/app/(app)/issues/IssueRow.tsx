@@ -139,7 +139,7 @@ export default function IssueRow({
             title={resolved ? "Reopen" : "Mark resolved"}
             // Padding + matching negative margin: a finger-sized tap target
             // on the phone without moving the 16px box visually.
-            className="-m-2.5 flex shrink-0 p-2.5"
+            className="-m-3.5 flex shrink-0 p-3.5 sm:-m-2.5 sm:p-2.5"
           >
             <span
               className={`mt-0.5 flex h-4 w-4 items-center justify-center rounded border text-[10px] ${
@@ -190,7 +190,7 @@ export default function IssueRow({
                 <button
                   type="button"
                   onClick={() => setShowPhotos((v) => !v)}
-                  className="text-xs font-medium text-bark-700 hover:underline dark:text-stone-300"
+                  className="inline-flex min-h-11 items-center text-xs font-medium text-bark-700 hover:underline sm:inline-block sm:min-h-0 dark:text-stone-300"
                 >
                   {showPhotos
                     ? "Hide photos"
@@ -215,7 +215,7 @@ export default function IssueRow({
               type="button"
               disabled={busy}
               onClick={toggleResolved}
-              className="text-xs font-medium text-bark-700 hover:underline disabled:opacity-50 dark:text-stone-300"
+              className="inline-flex min-h-11 items-center text-xs font-medium text-bark-700 hover:underline disabled:opacity-50 sm:inline-block sm:min-h-0 dark:text-stone-300"
             >
               {busy ? "…" : "Undo"}
             </button>
@@ -223,7 +223,7 @@ export default function IssueRow({
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="text-xs font-medium text-bark-700 hover:underline dark:text-stone-300"
+              className="inline-flex min-h-11 items-center text-xs font-medium text-bark-700 hover:underline sm:inline-block sm:min-h-0 dark:text-stone-300"
             >
               Edit
             </button>

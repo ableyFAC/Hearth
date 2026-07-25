@@ -9,6 +9,7 @@ import VoiceButton from "@/components/VoiceButton";
 import Markdown from "@/components/Markdown";
 import AiNotice from "@/components/AiNotice";
 import Lightbox from "@/components/Lightbox";
+import InlineSpinner from "@/components/InlineSpinner";
 import { track } from "@/lib/analytics";
 import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
 
@@ -814,6 +815,7 @@ export default function AskHearth({
           placeholder="Ask, speak, or attach a photo…"
         />
         <button className="btn-primary" disabled={loading}>
+          {loading && <InlineSpinner />}
           {fill ? "Send" : "Ask"}
         </button>
       </form>

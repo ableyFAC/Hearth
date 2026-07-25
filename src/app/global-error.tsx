@@ -5,9 +5,7 @@
 // Must render its own <html> and <body>, and can't rely on Tailwind or any
 // shared component: if the layout crashed, none of that is guaranteed to
 // load. Inline styles only, on purpose.
-export default function GlobalError({
-  reset,
-}: {
+export default function GlobalError({}: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
@@ -50,7 +48,11 @@ export default function GlobalError({
             happening, give it a minute and come back.
           </p>
           <button
-            onClick={() => reset()}
+            // A full page reload, not reset(): if the whole site was down or
+            // a deploy replaced the JS chunks, the code this page is running
+            // may be stale, and reset() would just re-render the same broken
+            // tree. Reloading pulls everything fresh once the server is back.
+            onClick={() => window.location.reload()}
             style={{
               marginTop: "20px",
               padding: "10px 20px",
@@ -67,6 +69,19 @@ export default function GlobalError({
           >
             Try again
           </button>
+          <div style={{ marginTop: "12px" }}>
+            {/* Plain anchor on purpose: the Next router may be broken here. */}
+            <a
+              href="/"
+              style={{
+                fontSize: "14px",
+                color: "#57534e",
+                textDecoration: "underline",
+              }}
+            >
+              Go to the home page
+            </a>
+          </div>
         </div>
       </body>
     </html>

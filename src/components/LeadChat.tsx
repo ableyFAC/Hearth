@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Image as ImageIcon } from "lucide-react";
 import { FilePreviewThumb } from "@/components/FilePreview";
 import Lightbox from "@/components/Lightbox";
+import InlineSpinner from "@/components/InlineSpinner";
 import { createClient } from "@/lib/supabase/client";
 import { censor } from "@/lib/censor";
 import { extractQuote, formatUSD, dollarsToCents, formatUSDCents } from "@/lib/quotes";
@@ -206,12 +208,16 @@ export default function LeadChat({
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
-    const { data } = await supabase
+    // If the fetch itself failed (network blip, Supabase down), keep whatever
+    // is on screen instead of wiping the thread to empty; the realtime
+    // subscription and the poll below both re-run load(), so the thread
+    // heals itself once the connection is back.
+    const { data, error: msgErr } = await supabase
       .from("messages")
       .select("id, sender_role, body, created_at")
       .eq("lead_id", leadId)
       .order("created_at", { ascending: true });
-    setMessages(data ?? []);
+    if (!msgErr) setMessages(data ?? []);
 
     // Structured quotes sent in this thread. If the table isn't set up yet,
     // keep whatever's on screen (optimistic) instead of wiping it.
@@ -576,7 +582,10 @@ export default function LeadChat({
     setPendingPhoto(file);
     try {
       const uid = await ensureUid();
-      const ext = file.name.split(".").pop() || "jpg";
+      // Sanitize the derived extension to a safe charset so no ".." or path
+      // fragment from a crafted filename can enter the storage key.
+      const rawExt = file.name.split(".").pop()?.toLowerCase() ?? "";
+      const ext = /^[a-z0-9]{1,5}$/.test(rawExt) ? rawExt : "jpg";
       const path = `chat/${leadId}/${crypto.randomUUID()}.${ext}`;
       const { error: upErr } = await supabase.storage
         .from("home-photos")
@@ -1666,6 +1675,7 @@ export default function LeadChat({
               placeholder="Type a message…"
             />
             <button className="btn-primary" disabled={busy}>
+              {busy && <InlineSpinner />}
               Send
             </button>
           </form>
@@ -1839,9 +1849,9 @@ function QuoteCard({
         {role === "homeowner" && quote.status === "accepted" && (
           <p className="mt-3 rounded-md bg-green-50 px-2 py-1.5 text-xs text-green-700 dark:bg-green-950/40 dark:text-green-200">
             Quote accepted. Head to your{" "}
-            <a href="/contractors" className="font-medium underline">
+            <Link href="/contractors" className="font-medium underline">
               Contractors page
-            </a>{" "}
+            </Link>{" "}
             to keep this job moving.
           </p>
         )}

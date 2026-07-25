@@ -173,13 +173,13 @@ export default function SystemRow({
                 <button
                   type="button"
                   onClick={() => setConfirmRemove(false)}
-                  className="text-xs text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
+                  className="inline-flex min-h-11 items-center text-xs text-stone-500 hover:text-stone-700 sm:inline-block sm:min-h-0 dark:text-stone-400 dark:hover:text-stone-200"
                 >
                   Cancel
                 </button>
                 <SubmitButton
                   pendingLabel="Removing…"
-                  className="text-xs font-semibold text-red-600 hover:text-red-700"
+                  className="inline-flex min-h-11 items-center text-xs font-semibold text-red-600 hover:text-red-700 sm:inline-block sm:min-h-0"
                 >
                   Confirm remove?
                 </SubmitButton>
@@ -188,7 +188,7 @@ export default function SystemRow({
               <button
                 type="button"
                 onClick={() => setConfirmRemove(true)}
-                className="text-xs text-stone-500 hover:text-red-600 dark:text-stone-400"
+                className="inline-flex min-h-11 items-center text-xs text-stone-500 hover:text-red-600 sm:inline-block sm:min-h-0 dark:text-stone-400"
               >
                 Remove
               </button>
@@ -209,7 +209,7 @@ export default function SystemRow({
         >
           <input type="hidden" name="id" value={s.id} />
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="label">Install year</label>
               <input
@@ -385,7 +385,7 @@ export default function SystemRow({
             e.stopPropagation();
             setEditing(true);
           }}
-          className="mt-0.5 text-xs font-medium text-bark-700 hover:underline"
+          className="mt-0.5 inline-flex min-h-11 items-center text-xs font-medium text-bark-700 hover:underline sm:inline-block sm:min-h-0"
         >
           Edit
         </button>
@@ -397,9 +397,9 @@ export default function SystemRow({
         {expanded && (
           <dl
             onClick={(e) => e.stopPropagation()}
-            className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg bg-stone-50 p-3 text-xs dark:bg-stone-900"
+            className="mt-3 grid grid-cols-1 gap-x-4 gap-y-2 rounded-lg bg-stone-50 p-3 text-xs sm:grid-cols-2 dark:bg-stone-900"
           >
-            <div className="col-span-2 mb-2 border-b border-stone-200 pb-3 dark:border-white/10">
+            <div className="col-span-1 sm:col-span-2 mb-2 border-b border-stone-200 pb-3 dark:border-white/10">
               <dt className="font-medium text-stone-800 dark:text-stone-200">Why this status</dt>
               <dd className="mt-1 text-stone-500 dark:text-stone-400">{whyText}</dd>
             </div>
@@ -426,7 +426,7 @@ export default function SystemRow({
               <dd className="text-stone-500 dark:text-stone-400">{conditionText}</dd>
             </div>
             {s.material_or_model && (
-              <div className="col-span-2">
+              <div className="col-span-1 sm:col-span-2">
                 <dt className="font-medium text-stone-800 dark:text-stone-200">{materialLabel(s.system_type)}</dt>
                 <dd className="text-stone-500 dark:text-stone-400">
                   {s.material_or_model}
@@ -450,17 +450,17 @@ export default function SystemRow({
               </div>
             )}
             {s.notes && s.notes !== STARTER_SYSTEM_NOTE && (
-              <div className="col-span-2">
+              <div className="col-span-1 sm:col-span-2">
                 <dt className="font-medium text-stone-800 dark:text-stone-200">Notes</dt>
                 <dd className="text-stone-500 dark:text-stone-400">{s.notes}</dd>
               </div>
             )}
-            <div className="col-span-2">
+            <div className="col-span-1 sm:col-span-2">
               <dt className="font-medium text-stone-800 dark:text-stone-200">Maintenance tip</dt>
               <dd className="text-stone-500 dark:text-stone-400">{tipForSystem(s.system_type)}</dd>
             </div>
             {photos.length > 0 && (
-              <div className="col-span-2">
+              <div className="col-span-1 sm:col-span-2">
                 <dt className="font-medium text-stone-800 dark:text-stone-200">
                   Photo{photos.length === 1 ? "" : "s"}
                 </dt>
@@ -476,7 +476,7 @@ export default function SystemRow({
               </div>
             )}
             {cost && (
-              <div className="col-span-2 mt-1 border-t border-stone-200 pt-2 text-right dark:border-white/10">
+              <div className="col-span-1 sm:col-span-2 mt-1 border-t border-stone-200 pt-2 text-right dark:border-white/10">
                 <dt className="font-medium text-stone-800 dark:text-stone-200">
                   Estimated replacement cost
                 </dt>

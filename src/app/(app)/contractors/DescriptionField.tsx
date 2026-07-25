@@ -2,7 +2,16 @@
 
 import { useState } from "react";
 import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
+import ProgressBar, { useStagedProgress } from "@/components/ProgressBar";
 import { useDraftJob } from "./DraftJobContext";
+
+// What /api/draft-job actually does with the photo: read it, write a project
+// description from it, and guess which trade the job belongs to.
+const DRAFT_STAGES = [
+  "Looking at your photo",
+  "Writing a description",
+  "Picking the trade",
+];
 
 // The "Details about your project" field, plus a photo-to-draft helper. When a
 // photo is attached and the description is still empty or hasn't been typed by
@@ -31,6 +40,8 @@ export default function DescriptionField({
   // "Try again". A retry is never fired automatically: rate-limit and
   // no-key failures leave this false since retrying can't help them.
   const [retryable, setRetryable] = useState(false);
+  // Progress bar for the draft-from-photo call while it's in flight.
+  const progress = useStagedProgress(DRAFT_STAGES, 12000);
 
   const photoUrl = ctx?.photoUrls[0] ?? null;
   const offerDraft = Boolean(photoUrl) && !handTyped;
@@ -40,6 +51,7 @@ export default function DescriptionField({
     setDrafting(true);
     setError(null);
     setRetryable(false);
+    progress.start();
     try {
       const resp = await fetchWithTimeout(
         "/api/draft-job",
@@ -107,6 +119,7 @@ export default function DescriptionField({
       }
       setRetryable(true);
     } finally {
+      progress.finish();
       setDrafting(false);
     }
   }
@@ -145,6 +158,15 @@ export default function DescriptionField({
         }}
         placeholder="What needs doing?"
       />
+      {drafting && (
+        <ProgressBar
+          className="mt-2"
+          value={progress.value}
+          stages={DRAFT_STAGES}
+          stageIndex={progress.stageIndex}
+          ariaLabel="Drafting a description from your photo"
+        />
+      )}
       {error && (
         <div className="mt-1">
           <p role="alert" className="text-xs font-medium text-red-600 dark:text-red-400">

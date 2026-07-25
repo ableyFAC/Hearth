@@ -102,6 +102,7 @@ export async function POST(req: NextRequest) {
     "Write the description in the homeowner's own plain voice, as if they are telling the pro what they see. " +
     "Describe only what is visible in the photo: what the thing is, where it is if that is clear, the rough size or extent, and any obvious signs such as a stain, crack, leak, rust, or wear. " +
     "Keep it to one to three short sentences. Do not diagnose the cause with certainty, do not promise what the fix is, and do not invent details that are not in the photo. " +
+    "First, judge whether you can actually use the photo. If it is too blurry, dark, cropped, or low resolution to describe, or it is clearly not a home problem or project (for example a selfie, a screenshot, or an unrelated image), set description to an empty string rather than guessing at what it might show. " +
     "If you genuinely cannot tell what the photo shows, or it is too blurry or dark to describe, set description to an empty string. " +
     "Also guess the trade category and a rough severity when you can, and leave them empty when you are not sure. " +
     "For category_guess use exactly one of these values, or leave it empty: " +

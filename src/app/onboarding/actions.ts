@@ -9,7 +9,7 @@ import { ACTIVE_HOME_COOKIE, getProperties } from "@/lib/property";
 import { lookupParcel, type ParcelFacts } from "@/lib/parcel";
 import { deriveOwnershipStatus } from "@/lib/ownershipMatch";
 import { DEFAULT_LIFESPANS } from "@/lib/health";
-import { hasPlus } from "@/lib/subscription";
+import { hasPlus, getExtraHomeSlots } from "@/lib/subscription";
 import { setFlash } from "@/lib/flash";
 import { safeNextPath } from "@/lib/safeNext";
 import { isMissingSchemaError } from "@/lib/dbErrors";
@@ -152,17 +152,31 @@ export async function claimPropertyAction(formData: FormData) {
   if (!user) redirect("/signin");
 
   // Free vs Plus home limits: a free homeowner may claim 1 home; Plus unlocks
-  // up to 5 so a landlord/multi-property owner can track them all in one place.
+  // up to 5 so a landlord/multi-property owner can track them all in one place,
+  // plus any paid extra-home slots the member bought on top (the Plus-only
+  // pay-per-extra-home add-on, see setExtraHomesAction/getExtraHomeSlots).
   // Homes merely shared with the user as a household member do not count
-  // against their own limit, so only owned homes are tallied here.
-  const [existingHomes, plus] = await Promise.all([getProperties(), hasPlus()]);
+  // against their own limit, so only owned homes are tallied here. This mirrors
+  // the DB backstop in supabase/migrations/0108_extra_home_slots.sql, which
+  // must agree on the same formula.
+  const [existingHomes, plus, extraSlots] = await Promise.all([
+    getProperties(),
+    hasPlus(),
+    getExtraHomeSlots(),
+  ]);
   const ownedHomes = existingHomes.filter((h) => !h.isShared);
-  if (!plus && ownedHomes.length >= 1) {
-    redirect("/plus?reason=home_limit");
-  }
-  if (plus && ownedHomes.length >= 5) {
-    setFlash("Hearth Plus covers up to 5 homes.", "error");
-    redirect("/dashboard");
+  // getExtraHomeSlots already returns 0 unless Plus is live, so the free-tier
+  // cap of 1 can never be inflated by a stale slot count.
+  const cap = plus ? 5 + extraSlots : 1;
+  if (ownedHomes.length >= cap) {
+    if (!plus) {
+      redirect("/plus?reason=home_limit");
+    }
+    setFlash(
+      `You're using all ${cap} of your homes. You can add more homes anytime from the Plus page.`,
+      "error"
+    );
+    redirect("/plus");
   }
 
   // The authoritative address check: an <input required> alone is not enough
@@ -305,15 +319,29 @@ export async function claimPropertyAction(formData: FormData) {
   // nothing here for a modified client to forge. Best-effort: any failure
   // just leaves the property unverified, never blocks onboarding.
   try {
+    // The name is collected on the confirm step now (OnboardingForm.tsx's
+    // full_name field), not at sign-up. Prefer that submitted value; fall back
+    // to whatever is already on the account (a Google user's backfilled
+    // metadata, or a name set in account settings) if the field somehow came
+    // through empty.
+    const submittedName = ((formData.get("full_name") as string) ?? "").trim();
     const fullName =
-      (user.user_metadata?.full_name as string | undefined)?.trim() || null;
+      submittedName ||
+      (user.user_metadata?.full_name as string | undefined)?.trim() ||
+      null;
     if (fullName) {
-      // Best-effort sync: handle_new_user() never populates users.full_name,
-      // and homeowner sign-up (src/app/homeowner-signup/page.tsx) is
-      // otherwise the only place that name is known. The "users self
-      // update" RLS policy (0002) has no column restrictions, so the
-      // ordinary user-scoped client can write it.
+      // Persist to BOTH stores so every later reader sees the same name:
+      // users.full_name (the greeting and account settings read it; the "users
+      // self update" RLS policy from 0002 has no column restrictions, so the
+      // ordinary user-scoped client can write it) AND the auth metadata (what
+      // auth/callback backfills for Google users and what account settings
+      // keeps in sync). Only touch metadata when it actually changed.
       await supabase.from("users").update({ full_name: fullName }).eq("id", user.id);
+      const metaName =
+        (user.user_metadata?.full_name as string | undefined)?.trim() || "";
+      if (fullName !== metaName) {
+        await supabase.auth.updateUser({ data: { full_name: fullName } });
+      }
     }
     const facts = await lookupParcel(addressLine1, claimZip);
     const status = deriveOwnershipStatus(fullName, facts);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import InlineSpinner from "@/components/InlineSpinner";
 
 // "Invite a neighbor" card on /account. Shows the homeowner's personal invite
 // link (their referral code, migration 0099) with a copy button and a native
@@ -19,6 +20,7 @@ export default function InviteNeighbor({ code }: { code: string }) {
   const [shareState, setShareState] = useState<"idle" | "copied" | "show-link">(
     "idle"
   );
+  const [pending, setPending] = useState(false);
 
   function inviteUrl(): string {
     const path = `/homeowner-signup?ref=${code}`;
@@ -28,29 +30,34 @@ export default function InviteNeighbor({ code }: { code: string }) {
   }
 
   async function handleShare() {
-    const url = inviteUrl();
-    const shareData = {
-      title: "Hearth",
-      text: "I've been using Hearth to keep on top of my house. Thought you might find it handy for yours:",
-      url,
-    };
-    if (typeof navigator !== "undefined" && navigator.share) {
-      try {
-        await navigator.share(shareData);
-        return;
-      } catch (err) {
-        // Closing the share sheet is a choice, not a failure.
-        if (err instanceof Error && err.name === "AbortError") return;
-      }
-    }
+    setPending(true);
     try {
-      await navigator.clipboard.writeText(url);
-      setShareState("copied");
-      setTimeout(() => setShareState("idle"), 2000);
-    } catch {
-      // No clipboard (permissions, insecure origin): show the link as
-      // selectable text so there is always some way to grab it.
-      setShareState("show-link");
+      const url = inviteUrl();
+      const shareData = {
+        title: "Hearth",
+        text: "I've been using Hearth to keep on top of my house. Thought you might find it handy for yours:",
+        url,
+      };
+      if (typeof navigator !== "undefined" && navigator.share) {
+        try {
+          await navigator.share(shareData);
+          return;
+        } catch (err) {
+          // Closing the share sheet is a choice, not a failure.
+          if (err instanceof Error && err.name === "AbortError") return;
+        }
+      }
+      try {
+        await navigator.clipboard.writeText(url);
+        setShareState("copied");
+        setTimeout(() => setShareState("idle"), 2000);
+      } catch {
+        // No clipboard (permissions, insecure origin): show the link as
+        // selectable text so there is always some way to grab it.
+        setShareState("show-link");
+      }
+    } finally {
+      setPending(false);
     }
   }
 
@@ -75,8 +82,10 @@ export default function InviteNeighbor({ code }: { code: string }) {
         <button
           type="button"
           onClick={handleShare}
+          disabled={pending}
           className="btn-primary text-sm sm:shrink-0"
         >
+          {pending && <InlineSpinner />}
           {shareState === "copied" ? "Link copied" : "Copy link"}
         </button>
       </div>

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { mintHouseholdQrTokenAction } from "./actions";
+import InlineSpinner from "@/components/InlineSpinner";
 
 const REFRESH_LABEL = "This code refreshes every 5 minutes.";
 
@@ -23,10 +24,12 @@ export default function HouseholdQrCode({ propertyId }: { propertyId: string }) 
   const [joinUrl, setJoinUrl] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
   const mountedRef = useRef(true);
 
   const mint = useCallback(async () => {
     setError(null);
+    setPending(true);
     // mintHouseholdQrTokenAction returns a typed ActionResult
     // (src/lib/actionResult.ts) rather than throwing, so a DB-side failure
     // comes back as { ok: false, error } instead of a thrown exception.
@@ -62,6 +65,8 @@ export default function HouseholdQrCode({ propertyId }: { propertyId: string }) 
     } catch {
       if (!mountedRef.current) return;
       setError("Couldn't create an invite code. Try again.");
+    } finally {
+      if (mountedRef.current) setPending(false);
     }
   }, [propertyId]);
 
@@ -113,8 +118,10 @@ export default function HouseholdQrCode({ propertyId }: { propertyId: string }) 
           <button
             type="button"
             onClick={() => mint()}
-            className="font-medium underline"
+            disabled={pending}
+            className="inline-flex items-center justify-center gap-1.5 font-medium underline"
           >
+            {pending && <InlineSpinner size={12} />}
             Try again
           </button>
         </p>

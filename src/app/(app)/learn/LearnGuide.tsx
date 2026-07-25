@@ -117,7 +117,7 @@ export default function LearnGuide({
                   type="button"
                   onClick={() => toggle(i)}
                   tabIndex={open ? 0 : -1}
-                  className="flex items-start gap-2 text-left text-sm"
+                  className="flex min-h-11 items-start gap-2 text-left text-sm sm:min-h-0"
                 >
                   <span
                     className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
@@ -159,7 +159,7 @@ export default function LearnGuide({
                 )
               }
               tabIndex={open ? 0 : -1}
-              className="rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-300"
+              className="inline-flex min-h-11 items-center rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:border-bark-500 hover:text-bark-700 sm:inline-block sm:min-h-0 dark:border-white/10 dark:text-stone-300"
             >
               Something wrong?
             </button>

@@ -2,12 +2,27 @@
 
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { useFormStatus } from "react-dom";
 import { Hammer } from "lucide-react";
 import { saveCompanyAction } from "../actions";
 import CategoryPicker from "../CategoryPicker";
 import FieldIcon from "../FieldIcon";
 import PhoneInput from "@/components/PhoneInput";
-import { STATE_NAMES } from "@/lib/forecast";
+import ServiceAreaInput from "@/components/ServiceAreaInput";
+import InlineSpinner from "@/components/InlineSpinner";
+
+// Needs its own component because useFormStatus only reports pending state
+// inside a descendant of the <form> it belongs to, not the component
+// rendering the form itself.
+function SeeOpenJobsButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button type="submit" disabled={pending} className="btn-primary px-5 py-2.5">
+      {pending && <InlineSpinner />}
+      See open jobs
+    </button>
+  );
+}
 
 // Honest end state for a pro who answers "No" to the Orange County question:
 // saveCompanyAction (../actions.ts) redirects here with ?waitlisted=1 instead
@@ -19,7 +34,7 @@ function WaitlistedPanel() {
   return (
     <div className="space-y-4 overflow-hidden rounded-2xl border border-stone-200 bg-white px-6 py-10 text-center shadow-sm dark:border-white/10 dark:bg-stone-800">
       <div className="flex justify-center">
-        <Hammer className="h-8 w-8 text-hearth-700 dark:text-hearth-400" aria-hidden="true" />
+        <Hammer className="h-8 w-8 text-bark-700 dark:text-bark-400" aria-hidden="true" />
       </div>
       <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
         You&apos;re on the waitlist
@@ -73,7 +88,7 @@ function OnboardingCompanyFormInner({
       {/* White header, matching the contractor signup card */}
       <div className="px-6 pt-8 text-center">
         <div className="flex justify-center">
-          <Hammer className="h-8 w-8 text-hearth-700 dark:text-hearth-400" aria-hidden="true" />
+          <Hammer className="h-8 w-8 text-bark-700 dark:text-bark-400" aria-hidden="true" />
         </div>
         <h1 className="mt-2 text-2xl font-semibold text-stone-900 dark:text-stone-100">
           Set up your company
@@ -146,14 +161,15 @@ function OnboardingCompanyFormInner({
                     <path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0118 0z" />
                     <circle cx="12" cy="10" r="3" />
                   </FieldIcon>
-                  <input
+                  <ServiceAreaInput
                     name="service_area"
                     className="input pl-9"
-                    placeholder="e.g. San Francisco Bay Area"
+                    placeholder="e.g. Irvine, Tustin, Costa Mesa"
                   />
                 </div>
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  Where you are willing to travel for jobs.
+                  Where you are willing to travel for jobs. Start typing a city
+                  (even initials like &quot;fv&quot;) and pick from the list.
                 </p>
               </div>
 
@@ -163,24 +179,17 @@ function OnboardingCompanyFormInner({
                   <FieldIcon>
                     <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15" />
                   </FieldIcon>
-                  <select
-                    name="service_state"
-                    className="input pl-9"
-                    required
-                    defaultValue=""
-                  >
-                    <option value="" disabled>
-                      Select a state
-                    </option>
-                    {Object.entries(STATE_NAMES).map(([code, name]) => (
-                      <option key={code} value={code}>
-                        {name.replace(/^the /, "")} ({code})
-                      </option>
-                    ))}
-                  </select>
+                  {/* Locked to California while Hearth serves CA only. The
+                      hidden input still posts service_state=CA, the two-letter
+                      code saveCompanyAction and the CSLB check expect. */}
+                  <div className="input cursor-not-allowed select-none bg-stone-100 pl-9 text-stone-500 dark:bg-stone-700 dark:text-stone-400">
+                    California (CA)
+                  </div>
+                  <input type="hidden" name="service_state" value="CA" />
                 </div>
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  Your job board only shows homeowner jobs in this state.
+                  Hearth serves California only right now, so this is set for
+                  you. Your job board shows homeowner jobs in California.
                 </p>
               </div>
 
@@ -196,7 +205,7 @@ function OnboardingCompanyFormInner({
                         name="serves_orange_county"
                         value="true"
                         required
-                        className="mt-0.5 h-4 w-4 border-stone-300 text-hearth-600 focus:ring-hearth-500 dark:border-white/20"
+                        className="mt-0.5 h-4 w-4 border-stone-300 text-bark-600 focus:ring-bark-500 dark:border-white/20"
                       />
                       <span>Yes, I serve Orange County.</span>
                     </label>
@@ -206,7 +215,7 @@ function OnboardingCompanyFormInner({
                         name="serves_orange_county"
                         value="false"
                         required
-                        className="mt-0.5 h-4 w-4 border-stone-300 text-hearth-600 focus:ring-hearth-500 dark:border-white/20"
+                        className="mt-0.5 h-4 w-4 border-stone-300 text-bark-600 focus:ring-bark-500 dark:border-white/20"
                       />
                       <span>No, notify me when you expand to my area.</span>
                     </label>
@@ -235,6 +244,45 @@ function OnboardingCompanyFormInner({
                   We keep this on file, show homeowners a &quot;license on
                   file&quot; badge, and flag it for verification. Locked once
                   verified. Typo? You can correct it until then.
+                </p>
+              </div>
+
+              {/* Optional outbound review-page links (0110). Plain links only:
+                  the public page shows a "See our reviews" button, never
+                  imported review content or star counts. */}
+              <div>
+                <label className="label">Yelp page (optional)</label>
+                <div className="relative">
+                  <FieldIcon>
+                    <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+                    <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+                  </FieldIcon>
+                  <input
+                    name="yelp_url"
+                    type="url"
+                    className="input pl-9"
+                    placeholder="https://www.yelp.com/biz/your-business"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="label">Google reviews link (optional)</label>
+                <div className="relative">
+                  <FieldIcon>
+                    <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+                    <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+                  </FieldIcon>
+                  <input
+                    name="google_reviews_url"
+                    type="url"
+                    className="input pl-9"
+                    placeholder="https://g.page/your-business"
+                  />
+                </div>
+                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                  Homeowners see a &quot;See our reviews&quot; button on your
+                  public page.
                 </p>
               </div>
 
@@ -278,9 +326,7 @@ function OnboardingCompanyFormInner({
 
         {/* Footer */}
         <div className="mt-8 flex justify-end border-t border-stone-100 pt-5 dark:border-white/10">
-          <button type="submit" className="btn-primary px-5 py-2.5">
-            See open jobs
-          </button>
+          <SeeOpenJobsButton />
         </div>
       </div>
     </form>

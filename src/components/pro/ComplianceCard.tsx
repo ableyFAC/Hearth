@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { complianceStatus, type ComplianceStatus } from "@/lib/proCompliance";
 import AiNotice from "@/components/AiNotice";
+import InlineSpinner from "@/components/InlineSpinner";
+import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
 
 type DocState = {
   expires: string | null;
@@ -112,7 +114,9 @@ function ComplianceRow({
     setBusy(true);
     setErr(null);
     try {
-      const res = await fetch("/api/pro-compliance", {
+      // Timeout-guarded: a hung upload/parse call must not strand the card
+      // in its busy state with no way to retry.
+      const res = await fetchWithTimeout("/api/pro-compliance", {
         method: "POST",
         body: fd,
       });
@@ -128,8 +132,12 @@ function ComplianceRow({
       });
       setManualDate(nextExpires ?? "");
       setNeedsManual(Boolean(data.needs_manual_date));
-    } catch {
-      setErr("That didn't go through. Please try again.");
+    } catch (e) {
+      setErr(
+        isTimeoutError(e)
+          ? "That took too long. Try again."
+          : "That didn't go through. Please try again."
+      );
     } finally {
       setBusy(false);
     }
@@ -206,7 +214,7 @@ function ComplianceRow({
             type="date"
             value={manualDate}
             onChange={(e) => setManualDate(e.target.value)}
-            className="input h-9 w-auto text-sm"
+            className="input h-9 w-auto text-base sm:text-sm"
           />
           <button
             type="button"
@@ -214,6 +222,7 @@ function ComplianceRow({
             disabled={busy || !manualDate}
             className="btn-secondary text-xs"
           >
+            {busy && <InlineSpinner size={12} />}
             Save date
           </button>
         </div>

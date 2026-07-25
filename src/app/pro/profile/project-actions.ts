@@ -150,9 +150,7 @@ export async function saveProjectAction(formData: FormData) {
       .select("id")
       .single();
     if (error || !created) {
-      fail(
-        "Couldn't create the project (is migration 0045 applied?). Please try again."
-      );
+      fail("Couldn't save that project just now. Please try again.");
     }
     savedId = created.id as string;
   }

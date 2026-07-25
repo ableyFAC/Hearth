@@ -79,7 +79,7 @@ export default function LearnGuides({ guides }: { guides: GuideData[] }) {
                 type="button"
                 onClick={() => setCategory(c)}
                 aria-pressed={category === c}
-                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                className={`inline-flex min-h-11 items-center rounded-full border px-3 py-1 text-xs font-medium transition-colors sm:inline-block sm:min-h-0 ${
                   category === c
                     ? "border-bark-600 bg-bark-600 text-white"
                     : "border-stone-200 bg-white text-stone-600 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300"

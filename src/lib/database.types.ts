@@ -320,6 +320,9 @@ export interface Database {
           background_check_detail: BackgroundCheckDetail | null;
           categories: string[] | null;
           service_area: string | null;
+          // Launch-market gate: open_jobs_for_me / browse_pros / apply paths
+          // all filter on it, and requestProAction re-checks it app-side.
+          serves_orange_county: boolean | null;
           contact_email: string | null;
           contact_phone: string | null;
           vetted: boolean;
@@ -520,6 +523,9 @@ export interface Database {
           timing: string | null;
           paid: boolean;
           paid_at: string | null;
+          direct_to: string | null;
+          direct_declined_at: string | null;
+          direct_unlocked_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -539,6 +545,9 @@ export interface Database {
           timing?: string | null;
           paid?: boolean;
           paid_at?: string | null;
+          direct_to?: string | null;
+          direct_declined_at?: string | null;
+          direct_unlocked_at?: string | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["contractor_leads"]["Insert"]>;
@@ -1162,6 +1171,52 @@ export interface Database {
       ghost_refund_application: {
         Args: { p_application: string };
         Returns: boolean;
+      };
+      ghost_refund_direct: {
+        Args: { p_lead: string };
+        Returns: boolean;
+      };
+      my_direct_requests: {
+        Args: Record<string, never>;
+        Returns: {
+          id: string;
+          category: string;
+          timing: string | null;
+          issue_description: string | null;
+          issue_severity: string | null;
+          payout_amount: number | null;
+          fee_cents: number;
+          budget_range: string | null;
+          city: string | null;
+          has_photos: boolean;
+          photo_urls: string[] | null;
+          created_at: string;
+        }[];
+      };
+      unlock_direct_request: {
+        Args: { p_lead: string };
+        Returns: boolean;
+      };
+      decline_direct_request: {
+        Args: { p_lead: string };
+        Returns: undefined;
+      };
+      browse_pros: {
+        Args: { p_category?: string | null };
+        Returns: {
+          id: string;
+          slug: string | null;
+          name: string;
+          categories: string[];
+          rating: number | null;
+          review_count: number;
+          has_license: boolean;
+          license_verified_at: string | null;
+          background_checked_at: string | null;
+          logo_url: string | null;
+          service_area: string | null;
+          project_count: number;
+        }[];
       };
       resolve_referral_code: {
         Args: { p_code: string };

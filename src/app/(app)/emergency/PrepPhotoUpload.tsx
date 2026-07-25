@@ -60,7 +60,10 @@ export default function PrepPhotoUpload({
     setPreview(localUrl);
     setBusy(true);
     setErr(null);
-    const ext = file.name.split(".").pop() || "jpg";
+    // Sanitize the derived extension to a safe charset so no ".." or path
+    // fragment from a crafted filename can enter the storage key.
+    const rawExt = file.name.split(".").pop()?.toLowerCase() ?? "";
+    const ext = /^[a-z0-9]{1,5}$/.test(rawExt) ? rawExt : "jpg";
     const path = `${propertyId}/emergency-${itemKey}-${crypto.randomUUID()}.${ext}`;
     const { error } = await supabase.storage
       .from("home-photos")
@@ -69,7 +72,7 @@ export default function PrepPhotoUpload({
     if (error) {
       URL.revokeObjectURL(localUrl);
       setPreview(initialPhotoSrc);
-      setErr("Couldn't upload that photo (is the home-photos bucket created?). Try again.");
+      setErr("That photo didn't upload. Check your connection and try again.");
       return;
     }
     const { data } = supabase.storage.from("home-photos").getPublicUrl(path);

@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/notify";
@@ -9,10 +10,12 @@ export const runtime = "nodejs";
 // Daily job (Vercel Cron, see vercel.json) that warns paying members BEFORE a
 // charge they might not be expecting. Four cases:
 //
-//   1. Trial ending. Every brand-new Hearth Plus subscriber, on any cadence
-//      (weekly, monthly, yearly), starts with a 3-day Stripe free trial, and
-//      the notice fires about a day before that trial ends and the first
-//      real charge lands. California's Automatic Renewal Law 3-to-21-day
+//   1. Trial ending. Every brand-new Hearth Plus subscriber (monthly or
+//      yearly - weekly is grandfathered-only and no longer sold) starts with a
+//      3-day Stripe free trial, and the notice fires about a day before that
+//      trial ends and the first real charge lands. A legacy weekly trial, if
+//      any remain, is handled the same way. California's Automatic Renewal Law
+//      3-to-21-day
 //      window for free periods only kicks in past 31 days, so for this
 //      3-day trial the 1-day lead is not a statutory requirement, it is a
 //      best-practice heads-up and a chargeback defense. A legacy month-long
@@ -120,14 +123,22 @@ function isAuthorized(req: NextRequest): boolean {
   if (!expected) return false;
   // Vercel Cron automatically sends "Authorization: Bearer <CRON_SECRET>" when
   // the CRON_SECRET env var is set. Also accept an explicit x-cron-secret
-  // header or ?secret= for manual runs / other schedulers.
+  // header for manual runs / other schedulers.
   const auth = req.headers.get("authorization");
   const bearer = auth?.startsWith("Bearer ") ? auth.slice(7) : null;
-  const provided =
-    bearer ??
-    req.headers.get("x-cron-secret") ??
-    req.nextUrl.searchParams.get("secret");
-  return provided === expected;
+  const provided = bearer ?? req.headers.get("x-cron-secret");
+  if (!provided) return false;
+  // Constant-time compare (mirrors src/lib/checkr.ts / the twilio inbound
+  // webhook): only call timingSafeEqual once both buffers are a confirmed
+  // equal length, since it throws on a length mismatch.
+  const providedBuf = Buffer.from(provided, "utf8");
+  const expectedBuf = Buffer.from(expected, "utf8");
+  if (providedBuf.length !== expectedBuf.length) return false;
+  try {
+    return timingSafeEqual(providedBuf, expectedBuf);
+  } catch {
+    return false;
+  }
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -185,12 +196,14 @@ async function runCron(req: NextRequest) {
   )
     .select("user_id, plan, status, stripe_subscription_id, current_period_end")
     .in("status", ["active", "trialing"])
-    // An ACTIVE weekly sub never gets a notice (weekly is deliberately not
-    // covered outside its trial), but its current_period_end is always
-    // inside this query's short horizon, so it would sit in the window
-    // forever, crowding out monthly/yearly candidates against MAX_SUBSCRIPTIONS
-    // and burning a Stripe retrieve every run for nothing. Only a TRIALING
-    // weekly sub can be due, so only that one is fetched.
+    // Weekly is grandfathered-only now (no longer sold), but any legacy weekly
+    // row still needs correct handling. An ACTIVE weekly sub never gets a
+    // notice (weekly is deliberately not covered outside its trial), yet its
+    // current_period_end is always inside this query's short horizon, so it
+    // would sit in the window forever, crowding out monthly/yearly candidates
+    // against MAX_SUBSCRIPTIONS and burning a Stripe retrieve every run for
+    // nothing. Only a TRIALING weekly sub can be due, so only that one is
+    // fetched. This stays as inert protection for the grandfathered rows.
     .or("plan.neq.weekly,status.eq.trialing")
     .not("stripe_subscription_id", "is", null)
     .not("current_period_end", "is", null)

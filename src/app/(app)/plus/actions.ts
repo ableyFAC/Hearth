@@ -6,23 +6,61 @@ import { redirect } from "next/navigation";
 import { stripe } from "@/lib/stripe";
 import { getUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getSubscription, getProSubscription } from "@/lib/subscription";
 import { billingTermsText } from "@/lib/billingTerms";
-import { PLUS_PLAN } from "@/lib/constants";
+import { PLUS_PLAN, EXTRA_HOME, extraHomeUnitPrice } from "@/lib/constants";
 import { setFlash } from "@/lib/flash";
 
 const siteUrl = () =>
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
+// Identify the extra-home add-on subscription item vs the base plan item, the
+// same way the Stripe webhook's isHomeSlotItem/baseItem do (route.ts). A plan
+// switch (monthly<->yearly) has to carry the add-on along at the matching
+// interval instead of dropping it or leaving a mixed-interval subscription
+// Stripe would reject. Matched by our metadata tag or the configured price id.
+function homeSlotPriceIds(): string[] {
+  return [
+    process.env.STRIPE_PRICE_HOME_SLOT_MONTHLY,
+    process.env.STRIPE_PRICE_HOME_SLOT_YEARLY,
+  ].filter((id): id is string => Boolean(id));
+}
 
-// Start a Hearth Plus checkout (weekly, monthly, or yearly). Uses the
-// pre-created Stripe Price if one is configured, otherwise falls back to
+function isHomeSlotItem(item: Stripe.SubscriptionItem): boolean {
+  if (!item) return false;
+  if ((item.metadata as Record<string, string> | null)?.hearth_addon === "home_slots") {
+    return true;
+  }
+  const priceId = item.price?.id;
+  return priceId ? homeSlotPriceIds().includes(priceId) : false;
+}
+
+// The BASE plan item on a subscription: the one that is NOT the extra-home
+// add-on. Falls back to the first item when nothing matches (a subscription
+// with no add-on).
+function baseSubItem(sub: Stripe.Subscription): Stripe.SubscriptionItem {
+  return sub.items.data.find((i) => !isHomeSlotItem(i)) ?? sub.items.data[0];
+}
+
+// The Stripe product id backing a subscription item's price, for the inline
+// price_data fallback paths (which need a product reference).
+function productIdOf(item: Stripe.SubscriptionItem): string {
+  return typeof item.price.product === "string"
+    ? item.price.product
+    : item.price.product.id;
+}
+
+
+// Start a Hearth Plus checkout (monthly or yearly). Weekly was retired as a
+// new-checkout option and is no longer offered here; existing weekly
+// subscribers keep their plan (see PLUS_PLAN.weekly, grandfathered-only). Uses
+// the pre-created Stripe Price if one is configured, otherwise falls back to
 // inline price_data so the flow works before Products/Prices are set up in
 // Stripe.
 export async function startPlusCheckoutAction(formData: FormData) {
   const rawPlan = formData.get("plan") as string;
-  const plan =
-    rawPlan === "weekly" || rawPlan === "yearly" ? rawPlan : "monthly";
+  const plan = rawPlan === "yearly" ? "yearly" : "monthly";
 
   // Deliberately NOT src/lib/auth.ts's getUser(): that helper trusts
   // getSession(), which reads the user id straight off the (unverified)
@@ -38,20 +76,13 @@ export async function startPlusCheckoutAction(formData: FormData) {
   if (!user) redirect("/signin");
 
   const priceId =
-    plan === "weekly"
-      ? process.env.STRIPE_PRICE_PLUS_WEEKLY
-      : plan === "yearly"
-        ? process.env.STRIPE_PRICE_PLUS_YEARLY
-        : process.env.STRIPE_PRICE_PLUS_MONTHLY;
+    plan === "yearly"
+      ? process.env.STRIPE_PRICE_PLUS_YEARLY
+      : process.env.STRIPE_PRICE_PLUS_MONTHLY;
 
-  const planAmount =
-    plan === "weekly"
-      ? PLUS_PLAN.weekly
-      : plan === "yearly"
-        ? PLUS_PLAN.yearly
-        : PLUS_PLAN.monthly;
+  const planAmount = plan === "yearly" ? PLUS_PLAN.yearly : PLUS_PLAN.monthly;
   const planInterval =
-    plan === "weekly" ? ("week" as const) : plan === "yearly" ? ("year" as const) : ("month" as const);
+    plan === "yearly" ? ("year" as const) : ("month" as const);
 
   const lineItem = priceId
     ? { price: priceId, quantity: 1 }
@@ -107,10 +138,10 @@ export async function startPlusCheckoutAction(formData: FormData) {
     }
   }
 
-  // Every brand-new subscriber gets a free trial (PLUS_PLAN.trialDays), no
-  // matter which cadence they pick - weekly, monthly, or yearly. `existing`
-  // already scopes to a homeowner-side Plus subscription, so a returning
-  // subscriber switching cadence never gets a second trial.
+  // Every brand-new subscriber gets a free trial (PLUS_PLAN.trialDays), on
+  // either cadence they can pick (monthly or yearly). `existing` already scopes
+  // to a homeowner-side Plus subscription, so a returning subscriber switching
+  // cadence never gets a second trial.
   const freeTrial = !existing;
 
   // Consent record. California's Automatic Renewal Law requires keeping proof
@@ -178,6 +209,159 @@ export async function startPlusCheckoutAction(formData: FormData) {
   redirect("/plus");
 }
 
+// Set the number of paid extra homes on a live Plus subscription (0 to
+// EXTRA_HOME.maxExtra). Extra homes are a Plus-only add-on: only a monthly or
+// yearly Plus member can buy them. A grandfathered weekly subscriber can't -
+// they're told to switch to monthly or yearly first. If Plus lapses, the slots
+// lapse with it (the webhook zeroes the column on cancellation).
+//
+// Implemented as a SECOND subscription item alongside the base Plus item.
+// Prefers the pre-created tiered volume Price (STRIPE_PRICE_HOME_SLOT_MONTHLY /
+// _YEARLY) when configured; otherwise falls back to inline price_data with the
+// correct volume-discounted unit price computed from EXTRA_HOME - the same
+// env-then-inline shape startPlusCheckoutAction uses. The item is tagged with
+// metadata hearth_addon="home_slots" so the webhook identifies it as the
+// add-on (not the base plan) regardless of which price path created it.
+//
+// Proration uses Stripe's default. The webhook (customer.subscription.updated)
+// is the source of truth for extra_home_slots; the optimistic DB write here
+// just makes the new count visible before the webhook lands.
+export async function setExtraHomesAction(formData: FormData) {
+  const user = await getUser();
+  if (!user) redirect("/signin");
+
+  const sub = await getSubscription();
+  if (!sub?.stripe_subscription_id) {
+    setFlash("Start Hearth Plus first, then you can add extra homes.", "error");
+    redirect("/plus");
+  }
+
+  // Liveness guard: a past_due / unpaid / incomplete row still has a
+  // subscription id, but hasPlus() won't honor it and the DB cap trigger won't
+  // count its slots, so charging for an add-on here would add capacity the app
+  // never grants. Reject before any Stripe call, mirroring the same
+  // active/trialing + period check hasPlus()/isLive use elsewhere.
+  const subLive =
+    (sub.status === "active" || sub.status === "trialing") &&
+    (!sub.current_period_end || new Date(sub.current_period_end) > new Date());
+  if (!subLive) {
+    setFlash(
+      "Fix your payment method first, then you can add extra homes.",
+      "error"
+    );
+    redirect("/plus");
+  }
+
+  // Grandfathered weekly rows can't buy the add-on: the volume Prices are
+  // monthly/yearly only, and the interval has to match the base plan. Tell
+  // them to switch cadence first.
+  if (sub.plan !== "monthly" && sub.plan !== "yearly") {
+    setFlash(
+      "Extra homes come with the monthly and yearly plans. Switch your plan first, then add homes.",
+      "error"
+    );
+    redirect("/plus");
+  }
+  const interval: "monthly" | "yearly" =
+    sub.plan === "yearly" ? "yearly" : "monthly";
+
+  // Clamp to the allowed range and to a whole number of homes.
+  const raw = Number(formData.get("quantity"));
+  const quantity = Math.max(
+    0,
+    Math.min(EXTRA_HOME.maxExtra, Math.floor(Number.isFinite(raw) ? raw : 0))
+  );
+
+  let stripeSub: Stripe.Subscription;
+  try {
+    stripeSub = await stripe.subscriptions.retrieve(sub.stripe_subscription_id);
+  } catch {
+    setFlash(
+      "Something went sideways talking to Stripe. Try Manage billing instead.",
+      "error"
+    );
+    redirect("/plus");
+  }
+
+  const homeSlotPriceId =
+    interval === "yearly"
+      ? process.env.STRIPE_PRICE_HOME_SLOT_YEARLY
+      : process.env.STRIPE_PRICE_HOME_SLOT_MONTHLY;
+
+  // The existing add-on item, if any: matched by our metadata tag or the
+  // configured price id. Everything else on the subscription is the base plan.
+  const addonItem = stripeSub.items.data.find(
+    (i) =>
+      (i as any).metadata?.hearth_addon === "home_slots" ||
+      (homeSlotPriceId && i.price.id === homeSlotPriceId)
+  );
+
+  const stripeInterval = interval === "yearly" ? ("year" as const) : ("month" as const);
+
+  try {
+    if (quantity <= 0) {
+      // Remove the add-on entirely. Nothing to do if it was never added.
+      if (addonItem) {
+        await stripe.subscriptions.update(sub.stripe_subscription_id, {
+          items: [{ id: addonItem.id, deleted: true }],
+        });
+      }
+    } else {
+      // Inline fallback charges a flat per-slot unit_amount from the volume
+      // tier for THIS quantity (every slot at the crossed-tier price), which
+      // matches how the pre-created Stripe volume Price would bill.
+      const unitAmount = Math.round(
+        extraHomeUnitPrice(interval, quantity) * 100
+      );
+      const pricePart = homeSlotPriceId
+        ? { price: homeSlotPriceId }
+        : {
+            price_data: {
+              currency: "usd",
+              unit_amount: unitAmount,
+              recurring: { interval: stripeInterval },
+              product_data: { name: "Extra Hearth home" },
+            },
+          };
+      const itemPayload = {
+        ...(addonItem ? { id: addonItem.id } : {}),
+        ...pricePart,
+        quantity,
+        metadata: { hearth_addon: "home_slots" },
+      };
+      await stripe.subscriptions.update(sub.stripe_subscription_id, {
+        items: [itemPayload as any],
+      });
+    }
+  } catch {
+    setFlash(
+      "We couldn't update your homes. Please try again, or use Manage billing.",
+      "error"
+    );
+    redirect("/plus");
+  }
+
+  // Optimistic write so the new count shows immediately; the webhook
+  // reconciles it as source of truth. Best-effort: if the column isn't there
+  // yet (0108 not applied) or the write fails, the webhook still corrects it.
+  try {
+    const admin = createAdminClient();
+    await (admin as any)
+      .from("subscriptions")
+      .update({ extra_home_slots: quantity })
+      .eq("stripe_subscription_id", sub.stripe_subscription_id);
+  } catch {
+    // Ignore: the webhook is the source of truth.
+  }
+
+  setFlash(
+    quantity > 0
+      ? `Done. You can now track up to ${5 + quantity} homes.`
+      : "Done. Your extra homes were removed."
+  );
+  revalidatePath("/plus");
+}
+
 // Switch a monthly subscriber to yearly, effective immediately. Stripe swaps
 // the subscription item to the yearly price and invoices right away with
 // proration, so unused monthly time comes off the yearly charge as a credit.
@@ -210,29 +394,64 @@ export async function upgradeToYearlyAction() {
     );
     redirect("/plus");
   }
-  const item = stripeSub.items.data[0];
+  // Convert the BASE plan item (never the add-on) to yearly.
+  const base = baseSubItem(stripeSub);
   const yearlyPriceId = process.env.STRIPE_PRICE_PLUS_YEARLY;
-  const productId =
-    typeof item.price.product === "string"
-      ? item.price.product
-      : item.price.product.id;
+  const productId = productIdOf(base);
+
+  // Stripe requires every item on a subscription to share one interval, so a
+  // member holding a monthly extra-home add-on must have that item converted to
+  // the yearly home-slot price in the SAME update - otherwise the switch either
+  // errors (mixed intervals) or silently drops their paid homes. Keep the same
+  // quantity, priced at the yearly volume tier, and preserve the metadata tag
+  // so the webhook still recognizes it as the add-on.
+  const addon = stripeSub.items.data.find(isHomeSlotItem);
+  const addonQty = addon?.quantity ?? 0;
+  const yearlyHomeSlotPriceId = process.env.STRIPE_PRICE_HOME_SLOT_YEARLY;
+
+  type ItemUpdate = Stripe.SubscriptionUpdateParams.Item;
+  const items: ItemUpdate[] = [
+    yearlyPriceId
+      ? { id: base.id, price: yearlyPriceId, quantity: 1 }
+      : {
+          id: base.id,
+          quantity: 1,
+          price_data: {
+            currency: "usd",
+            unit_amount: 3999,
+            recurring: { interval: "year" as const },
+            product: productId,
+          },
+        },
+  ];
+  if (addon && addonQty > 0) {
+    items.push(
+      yearlyHomeSlotPriceId
+        ? {
+            id: addon.id,
+            price: yearlyHomeSlotPriceId,
+            quantity: addonQty,
+            metadata: { hearth_addon: "home_slots" },
+          }
+        : {
+            id: addon.id,
+            quantity: addonQty,
+            price_data: {
+              currency: "usd",
+              unit_amount: Math.round(
+                extraHomeUnitPrice("yearly", addonQty) * 100
+              ),
+              recurring: { interval: "year" as const },
+              product: productIdOf(addon),
+            },
+            metadata: { hearth_addon: "home_slots" },
+          }
+    );
+  }
 
   try {
     await stripe.subscriptions.update(sub.stripe_subscription_id, {
-      items: [
-        yearlyPriceId
-          ? { id: item.id, price: yearlyPriceId, quantity: 1 }
-          : {
-              id: item.id,
-              quantity: 1,
-              price_data: {
-                currency: "usd",
-                unit_amount: 3999,
-                recurring: { interval: "year" as const },
-                product: productId,
-              },
-            },
-      ],
+      items,
       // Bill the yearly price today; unused monthly time becomes a credit.
       proration_behavior: "always_invoice",
       // A free-month trial doesn't carry over - yearly starts (and bills) now.
@@ -251,12 +470,14 @@ export async function upgradeToYearlyAction() {
   revalidatePath("/plus");
 }
 
-// Schedule a yearly subscriber's switch to monthly at renewal. Nothing is
-// charged or refunded now: they keep the yearly access they already paid for,
-// and the subscription simply renews at $4.99/mo instead. Implemented as a
-// Stripe subscription schedule - phase 1 mirrors the rest of the current paid
-// year, phase 2 is one month of the monthly price (no trial, no proration),
-// then the schedule releases and the subscription renews monthly on its own.
+// Schedule a switch to monthly at renewal, for a yearly subscriber OR a
+// grandfathered weekly one. Nothing is charged or refunded now: they keep the
+// access they already paid for (the rest of their yearly term, or their
+// current weekly period), and the subscription simply renews at $4.99/mo
+// instead. Implemented as a Stripe subscription schedule - phase 1 mirrors the
+// rest of the current paid period, phase 2 is one month of the monthly price
+// (no trial, no proration), then the schedule releases and the subscription
+// renews monthly on its own. Same pattern regardless of the starting cadence.
 export async function downgradeToMonthlyAction() {
   const user = await getUser();
   if (!user) redirect("/signin");
@@ -266,7 +487,9 @@ export async function downgradeToMonthlyAction() {
     setFlash("No active subscription to change.", "error");
     redirect("/plus");
   }
-  if (sub.plan !== "yearly") {
+  // Only monthly subscribers have nothing to switch to. Yearly and legacy
+  // weekly rows both switch to monthly through the same schedule below.
+  if (sub.plan === "monthly") {
     setFlash("You're already on the monthly plan.", "info");
     redirect("/plus");
   }
@@ -304,12 +527,73 @@ export async function downgradeToMonthlyAction() {
   // from_subscription yields a single phase covering the current (already
   // paid) period. Re-send it unchanged and append the monthly phase after it.
   const current = schedule.phases[0];
-  const item = stripeSub.items.data[0];
+  const base = baseSubItem(stripeSub);
   const monthlyPriceId = process.env.STRIPE_PRICE_PLUS_MONTHLY;
-  const productId =
-    typeof item.price.product === "string"
-      ? item.price.product
-      : item.price.product.id;
+  const productId = productIdOf(base);
+
+  // The extra-home add-on, if any, must ride into the monthly phase too, priced
+  // at the monthly volume tier - otherwise phase 2 lists only the base item and
+  // the member silently loses their paid homes at renewal. Preserve the same
+  // quantity and the metadata tag so the webhook still recognizes it. The
+  // add-on's current price id lets us re-tag it in phase 1 as well.
+  const addon = stripeSub.items.data.find(isHomeSlotItem);
+  const addonQty = addon?.quantity ?? 0;
+  const addonCurrentPriceId = addon?.price?.id ?? null;
+  const monthlyHomeSlotPriceId = process.env.STRIPE_PRICE_HOME_SLOT_MONTHLY;
+
+  type PhaseItem = Stripe.SubscriptionScheduleUpdateParams.Phase.Item;
+
+  // Phase 1 mirrors the current paid period unchanged, but keeps the add-on's
+  // metadata tag on its item so it stays identifiable even without env prices.
+  const phase1Items: PhaseItem[] = current.items.map((i) => {
+    const priceId = typeof i.price === "string" ? i.price : i.price.id;
+    const isAddon = addonCurrentPriceId != null && priceId === addonCurrentPriceId;
+    return {
+      price: priceId,
+      quantity: i.quantity ?? undefined,
+      ...(isAddon ? { metadata: { hearth_addon: "home_slots" } } : {}),
+    };
+  });
+
+  // Phase 2: the base plan at the monthly price, plus the add-on at the monthly
+  // tier when present.
+  const phase2Items: PhaseItem[] = [
+    monthlyPriceId
+      ? { price: monthlyPriceId, quantity: 1 }
+      : {
+          quantity: 1,
+          price_data: {
+            currency: "usd",
+            unit_amount: 499,
+            recurring: { interval: "month" as const },
+            product: productId,
+          },
+        },
+  ];
+  if (addon && addonQty > 0) {
+    phase2Items.push(
+      monthlyHomeSlotPriceId
+        ? {
+            price: monthlyHomeSlotPriceId,
+            quantity: addonQty,
+            metadata: { hearth_addon: "home_slots" },
+          }
+        : {
+            quantity: addonQty,
+            price_data: {
+              currency: "usd",
+              unit_amount: Math.round(
+                extraHomeUnitPrice("monthly", addonQty) * 100
+              ),
+              recurring: { interval: "month" as const },
+              // Schedule phase price_data takes a product id (not product_data),
+              // so reuse the add-on's own Stripe product.
+              product: productIdOf(addon),
+            },
+            metadata: { hearth_addon: "home_slots" },
+          }
+    );
+  }
 
   try {
     await stripe.subscriptionSchedules.update(schedule.id, {
@@ -317,27 +601,12 @@ export async function downgradeToMonthlyAction() {
       proration_behavior: "none",
       phases: [
         {
-          items: current.items.map((i) => ({
-            price: typeof i.price === "string" ? i.price : i.price.id,
-            quantity: i.quantity ?? undefined,
-          })),
+          items: phase1Items,
           start_date: current.start_date,
           end_date: current.end_date,
         },
         {
-          items: [
-            monthlyPriceId
-              ? { price: monthlyPriceId, quantity: 1 }
-              : {
-                  quantity: 1,
-                  price_data: {
-                    currency: "usd",
-                    unit_amount: 499,
-                    recurring: { interval: "month" as const },
-                    product: productId,
-                  },
-                },
-          ],
+          items: phase2Items,
           // One month at the new price, then release: the subscription
           // carries on renewing monthly by itself.
           duration: { interval: "month" as const, interval_count: 1 },

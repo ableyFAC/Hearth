@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { startBackgroundCheckAction } from "../actions";
 import type { Contractor } from "@/lib/database.types";
 
@@ -63,9 +64,9 @@ export default function BackgroundCheckCard({
           <p className="text-xs text-red-500 dark:text-red-400">
             The check did not clear. This is never shown publicly - only you
             can see this. Questions?{" "}
-            <a href="/pro/help" className="underline hover:text-red-600 dark:hover:text-red-300">
+            <Link href="/pro/help" className="underline hover:text-red-600 dark:hover:text-red-300">
               Contact support
-            </a>
+            </Link>
             .
           </p>
         </div>
@@ -89,14 +90,14 @@ export default function BackgroundCheckCard({
               required
               maxLength={80}
               placeholder="Legal first name"
-              className="input max-w-[180px] text-xs"
+              className="input max-w-[180px] text-base sm:text-xs"
             />
             <input
               name="legal_last_name"
               required
               maxLength={80}
               placeholder="Legal last name"
-              className="input max-w-[180px] text-xs"
+              className="input max-w-[180px] text-base sm:text-xs"
             />
           </div>
           <p className="text-xs text-stone-500 dark:text-stone-400">

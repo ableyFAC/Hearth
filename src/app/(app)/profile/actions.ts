@@ -113,8 +113,8 @@ export async function addSystemAction(
 ): Promise<ActionResult<{ id: string }>> {
   const property = await getActiveProperty();
   if (!property) {
-    setFlash("Couldn't add that system. Try again.", "error");
-    return err("No active property");
+    setFlash("Add your home first, then you can add its systems.", "error");
+    return err("Add your home first, then you can add its systems.");
   }
   const supabase = createClient();
 
@@ -171,7 +171,7 @@ export async function addSystemAction(
     // true orphans (the owner gives up instead of retrying) is left to
     // future janitor work, not built here.
     setFlash("Couldn't add that system. Try again.", "error");
-    return err(error?.message ?? "insert failed");
+    return err("Couldn't add that system just now. Please try again.");
   }
   await attachPhotos(formData, property.id, row.id);
   setFlash(`Added ${labelFor(SYSTEM_TYPES, systemType)}`);
@@ -277,7 +277,7 @@ export async function updateSystemAction(
     // Simple path: report the error, keep the edit form open so the owner
     // can retry (same photo URLs re-attach on success). Orphan cleanup is
     // future janitor work, not built here.
-    return err(error.message);
+    return err("Couldn't save those changes just now. Please try again.");
   }
 
   const property = await getActiveProperty();

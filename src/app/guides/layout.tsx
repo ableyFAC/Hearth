@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import Logo from "@/components/Logo";
 
@@ -26,26 +27,26 @@ export default async function GuidesLayout({
   return (
     <div className="min-h-screen">
       <header className="mx-auto flex max-w-2xl items-center justify-between px-6 pt-6">
-        <a
+        <Link
           href="/"
           className="flex items-center gap-2 font-semibold text-stone-900 dark:text-stone-100"
         >
           <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> Hearth
-        </a>
+        </Link>
         {user ? (
-          <a
+          <Link
             href="/dashboard"
             className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-300 dark:hover:text-stone-300"
           >
             Open your dashboard
-          </a>
+          </Link>
         ) : (
-          <a
+          <Link
             href="/get-started"
             className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-300 dark:hover:text-stone-300"
           >
             Get started free
-          </a>
+          </Link>
         )}
       </header>
 
@@ -56,26 +57,26 @@ export default async function GuidesLayout({
           <Logo className="h-4 w-4 text-bark-700 dark:text-stone-400" /> Hearth · Your home, looked after
         </p>
         <p className="mt-2 text-xs">
-          <a
+          <Link
             href="/guides"
             className="text-stone-500 hover:text-bark-700 hover:underline dark:text-stone-400 dark:hover:text-stone-300"
           >
             All guides
-          </a>{" "}
+          </Link>{" "}
           ·{" "}
-          <a
+          <Link
             href="/privacy"
             className="text-stone-500 hover:text-bark-700 hover:underline dark:text-stone-400 dark:hover:text-stone-300"
           >
             Privacy
-          </a>{" "}
+          </Link>{" "}
           ·{" "}
-          <a
+          <Link
             href="/terms"
             className="text-stone-500 hover:text-bark-700 hover:underline dark:text-stone-400 dark:hover:text-stone-300"
           >
             Terms
-          </a>
+          </Link>
         </p>
       </footer>
     </div>

@@ -35,7 +35,7 @@ export default function IssueForm({
     <form action={reportIssueAction} className="card space-y-4">
       <h3 className="font-semibold text-stone-900 dark:text-stone-100">Report an issue</h3>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label className="label">Category</label>
           <select name="category" className="select" required>

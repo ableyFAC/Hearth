@@ -39,7 +39,7 @@ export default function SystemForm({ propertyId }: { propertyId: string }) {
     >
       <h3 className="font-semibold text-stone-900 dark:text-stone-100">Add a system</h3>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label className="label">Type</label>
           <select

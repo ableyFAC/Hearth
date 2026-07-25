@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 // Branded 404 for public pro pages: an unknown slug or contractor id lands
 // here (see notFound() in ./page.tsx). Styled to match NotReadyCard so both
 // soft states of this route feel like the same page.
@@ -17,21 +19,21 @@ export default function ProNotFound() {
             Hearth.
           </p>
           <div className="mt-5 flex flex-wrap items-center justify-center gap-4 text-sm font-medium">
-            <a href="/pros" className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href="/pros" className="text-bark-700 hover:underline dark:text-stone-300">
               For pros
-            </a>
-            <a href="/" className="text-bark-700 hover:underline dark:text-stone-300">
+            </Link>
+            <Link href="/" className="text-bark-700 hover:underline dark:text-stone-300">
               Hearth home
-            </a>
+            </Link>
           </div>
         </div>
       </div>
-      <a
+      <Link
         href="/pros"
         className="mt-6 inline-block text-sm font-medium text-bark-700 hover:underline dark:text-stone-300"
       >
         Powered by Hearth
-      </a>
+      </Link>
     </main>
   );
 }

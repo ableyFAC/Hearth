@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasPlus } from "@/lib/subscription";
-import { countAiUsage } from "@/lib/aiUsage";
+import { countAiUsage, addAiUsage } from "@/lib/aiUsage";
 import { sendNotification } from "@/lib/notify";
 import {
   runTranscribe,
@@ -220,6 +220,13 @@ export async function POST(req: NextRequest) {
     await finish({ ok: true, analysis });
     return NextResponse.json({ analysis });
   }
+
+  // Honest fan-out counting: stage 1 was already covered by the single
+  // countAiUsage call above, but stage 2 is a SECOND paid model call, so count
+  // it too. Only reached when the document is actually a quote (the non-quote
+  // path returns above without a stage-2 call), so this never over-counts.
+  // Best-effort per-user bump; the gating decision is already made.
+  await addAiUsage(user.id, 1);
 
   // STAGE 2: diagnose using ONLY the stage-1 transcript above, never the raw
   // photo or pasted text again, so every finding traces back to a verbatim

@@ -103,7 +103,13 @@ export default async function OnboardingPage({
         )}
       </div>
 
-      <OnboardingForm next={next} referralCode={ref} />
+      <OnboardingForm
+        next={next}
+        referralCode={ref}
+        existingName={
+          (user?.user_metadata?.full_name as string | undefined)?.trim() ?? ""
+        }
+      />
 
       {!isFirst && (
         <Link
@@ -127,7 +133,7 @@ export default async function OnboardingPage({
           </p>
         )}
         <div className={roleMeta === "contractor" ? "mt-2" : undefined}>
-          <span>Signed in as {user?.email ?? "unknown"}. Wrong account? </span>
+          <span className="break-words">Signed in as {user?.email ?? "unknown"}. Wrong account? </span>
           <form action="/auth/signout" method="post" className="inline">
             <button
               type="submit"

@@ -131,12 +131,79 @@ function isOwnedStoragePath(raw: string, pathPrefix: string): boolean {
   }
 }
 
-// Save the Pro-member extras for the public page (/p/<id>): logo, about, and
-// the private license/insurance vault that powers the "on file" badge. The
-// vault details never appear publicly; public_pro_profile (0033) reduces them
-// to booleans. Everything is validated here, membership is re-checked
-// server-side, and a failed write (e.g. migration 0033 not applied yet)
-// degrades to a soft flash instead of crashing.
+// Save the free license/insurance details that power the public trust badge
+// (/p/<id>). These are a trust signal, NOT a paid perk, so there is deliberately
+// no hasProPlan() check here (0109): every pro can list a license and insurance,
+// exactly like the free CSLB and background-check badges. The details never
+// appear publicly; public_pro_profile (0033) reduces them to booleans. Follows
+// the unrestricted saveCompanyAction pattern (no plan gate). A failed write
+// (e.g. migration 0033 not applied yet) degrades to a soft flash, not a crash.
+export async function saveLicenseInsuranceAction(formData: FormData) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/signin");
+
+  const contractor = await getCurrentContractor();
+  if (!contractor) redirect("/pro/onboarding");
+
+  const str = (name: string) => String(formData.get(name) ?? "").trim();
+
+  // The license number is locked once set (same rule as the profile form), so
+  // a missing read-only field can't wipe or swap it.
+  const license_number = contractor.license_number
+    ? contractor.license_number
+    : str("license_number").slice(0, 60) || null;
+
+  const stateRaw = str("license_state").toUpperCase();
+  if (stateRaw && !/^[A-Z]{2}$/.test(stateRaw)) {
+    setFlash("License state should be a 2-letter code, like CA.", "error");
+    redirect("/pro/profile");
+  }
+
+  const insurance_carrier = str("insurance_carrier").slice(0, 120) || null;
+
+  const expiresRaw = str("insurance_expires");
+  if (expiresRaw && Number.isNaN(new Date(expiresRaw).getTime())) {
+    setFlash("That insurance expiry date doesn't look right.", "error");
+    redirect("/pro/profile");
+  }
+
+  const fields: Record<string, unknown> = {
+    license_number,
+    license_state: stateRaw || null,
+    insurance_carrier,
+    insurance_expires: expiresRaw || null,
+  };
+  // Stamp the vault whenever it holds anything, so the badge has a "when".
+  if (license_number || stateRaw || insurance_carrier || expiresRaw) {
+    fields.license_insurance_updated_at = new Date().toISOString();
+  }
+
+  // Cast: the 0033 columns aren't in the generated types (database.types.ts
+  // is not regenerated here).
+  const { error } = await (supabase.from("contractors") as any)
+    .update(fields)
+    .eq("id", contractor.id);
+  if (error) {
+    setFlash(
+      "Couldn't save your license and insurance. Please try again.",
+      "error"
+    );
+    redirect("/pro/profile");
+  }
+
+  setFlash("License and insurance saved.");
+  revalidatePath("/pro/profile");
+  redirect("/pro/profile");
+}
+
+// Save the Pro-member cosmetics for the public page (/p/<id>): logo and about.
+// These dress the page up but are NOT a safety fact, so they stay gated behind
+// membership (0109 freed only the license/insurance trust badge, handled by
+// saveLicenseInsuranceAction above). Everything is validated here, membership
+// is re-checked server-side, and a failed write degrades to a soft flash.
 export async function savePublicPageAction(formData: FormData) {
   const supabase = createClient();
   const {
@@ -173,40 +240,12 @@ export async function savePublicPageAction(formData: FormData) {
     ? logoRaw
     : null;
 
-  // Vault fields. The license number is locked once set (same rule as the
-  // profile form), so a missing read-only field can't wipe or swap it.
-  const license_number = contractor.license_number
-    ? contractor.license_number
-    : str("license_number").slice(0, 60) || null;
-
-  const stateRaw = str("license_state").toUpperCase();
-  if (stateRaw && !/^[A-Z]{2}$/.test(stateRaw)) {
-    setFlash("License state should be a 2-letter code, like CA.", "error");
-    redirect("/pro/profile");
-  }
-
-  const insurance_carrier = str("insurance_carrier").slice(0, 120) || null;
-
-  const expiresRaw = str("insurance_expires");
-  if (expiresRaw && Number.isNaN(new Date(expiresRaw).getTime())) {
-    setFlash("That insurance expiry date doesn't look right.", "error");
-    redirect("/pro/profile");
-  }
-
   const fields: Record<string, unknown> = {
     about: about || null,
-    license_number,
-    license_state: stateRaw || null,
-    insurance_carrier,
-    insurance_expires: expiresRaw || null,
   };
   // Only overwrite the logo when a new upload came through, so saving the
   // form without touching the logo never clears it.
   if (logo_url) fields.logo_url = logo_url;
-  // Stamp the vault whenever it holds anything, so the badge has a "when".
-  if (license_number || stateRaw || insurance_carrier || expiresRaw) {
-    fields.license_insurance_updated_at = new Date().toISOString();
-  }
 
   // Cast: the 0033 columns aren't in the generated types (database.types.ts
   // is not regenerated here).

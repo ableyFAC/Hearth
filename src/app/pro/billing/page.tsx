@@ -8,7 +8,9 @@ import {
   JOB_CATEGORIES,
   PRO_DEPOSIT_BOOST_PTS,
   LEAD_TIER_FEES,
+  MAJOR_INTRO_FEE,
   GHOST_PROTECTION_DAYS,
+  isMajorCategory,
 } from "@/lib/constants";
 import DepositForm from "./DepositForm";
 import FadingBanner from "@/components/FadingBanner";
@@ -31,6 +33,7 @@ const TX_LABEL: Record<string, string> = {
   ghost_refund: "Apply fee returned",
   ghost_recharge: "Apply fee re-charged: homeowner chose you after the refund",
   ghost_recharge_waived: "Re-charge waived",
+  apply_credit_back: "Apply fee returned as credit: homeowner picked another pro",
 };
 
 // Never show a raw transaction type like "apply_fee": mapped label first,
@@ -73,6 +76,16 @@ export default async function ProBillingPage({
     .select("min_cents, max_cents, bonus_pct")
     .order("min_cents", { ascending: true });
 
+  // Whether this pro still has their first big-ticket lead intro price
+  // ($49.99, migration 0113) ahead of them: no paid application on a
+  // major-tier lead yet. Mirrors the DB's own check; the intro line below
+  // only shows while it is still true, so the page never advertises a
+  // discount this pro can no longer get.
+  const { data: allApps } = await (supabase as any).rpc("my_applications");
+  const hasPaidMajor = ((allApps ?? []) as any[]).some(
+    (a) => Number(a.fee_cents ?? 0) > 0 && isMajorCategory(a.category)
+  );
+
   let txns: any[] = [];
   if ((wallet as any)?.id) {
     const { data } = await supabase
@@ -107,9 +120,11 @@ export default async function ProBillingPage({
           service: ${LEAD_TIER_FEES.light} for lighter jobs like cleaning and
           handyman work, ${LEAD_TIER_FEES.skilled} for skilled trades like
           plumbing and HVAC, ${LEAD_TIER_FEES.major} for big-ticket work like
-          roofing and remodels. Jobs that sit unclaimed get cheaper: 15% off
-          after 3 days, 30% off after 7. The discounted price is what your
-          wallet is charged.
+          roofing and remodels.
+          {!hasPaidMajor &&
+            ` Your first big-ticket lead is $${MAJOR_INTRO_FEE}, after that big-ticket leads are the normal $${LEAD_TIER_FEES.major}.`}{" "}
+          Jobs that sit unclaimed get cheaper: 15% off after 3 days, 30% off
+          after 7. The discounted price is what your wallet is charged.
         </p>
       </div>
 
@@ -238,6 +253,8 @@ export default async function ProBillingPage({
             Ghost protection: if the homeowner never responds within{" "}
             {GHOST_PROTECTION_DAYS} days, your apply fee comes back on its own.
             If they choose you after that refund, the same fee is re-charged.
+            If they pick another pro, your fee comes back as credit, good for 60
+            days.
           </p>
         )}
       </section>

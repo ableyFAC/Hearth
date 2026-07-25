@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/safeNext";
+import { friendlyAuthError } from "@/lib/friendlyAuthError";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 
 // Read ?next= straight off the browser URL (used at submit time). Guarded by
@@ -54,11 +56,7 @@ export default function SignInForm({
 
     if (error) {
       setBusy(false);
-      setStatus(
-        /invalid login credentials/i.test(error.message)
-          ? "Email or password is incorrect. New here? Get started below."
-          : error.message
-      );
+      setStatus(friendlyAuthError(error));
       return;
     }
 
@@ -120,12 +118,12 @@ export default function SignInForm({
               required
             />
             <p className="mt-1.5 text-right text-xs">
-              <a
+              <Link
                 href="/reset-password"
                 className="text-bark-700 hover:underline dark:text-stone-300"
               >
                 Forgot password?
-              </a>
+              </Link>
             </p>
           </div>
           <button className="btn-primary w-full" disabled={busy}>
@@ -134,7 +132,10 @@ export default function SignInForm({
         </form>
 
         {status && (
-          <p className="mt-4 rounded-lg bg-bark-50 p-3 text-center text-sm text-bark-700 dark:bg-bark-700/40 dark:text-stone-300">
+          <p
+            role="alert"
+            className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-center text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
+          >
             {status}
           </p>
         )}
@@ -149,12 +150,12 @@ export default function SignInForm({
 
         <div className="mt-6 border-t border-stone-100 pt-4 text-center dark:border-white/10">
           <p className="text-sm text-stone-500 dark:text-stone-400">New to Hearth?</p>
-          <a
+          <Link
             href={getStartedHref}
             className="btn-secondary mt-2 inline-block w-full"
           >
             Get started
-          </a>
+          </Link>
         </div>
       </div>
     </main>

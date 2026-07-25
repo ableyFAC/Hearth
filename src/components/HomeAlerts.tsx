@@ -3,13 +3,7 @@
 import { useEffect, useState } from "react";
 import { Snowflake, Thermometer, AlertTriangle, type LucideIcon } from "lucide-react";
 import { Skeleton } from "@/components/Skeleton";
-
-type Alert = {
-  kind: "freeze" | "heat" | "recall";
-  title: string;
-  detail: string;
-  url?: string;
-};
+import { fetchHomeAlerts, type HomeAlert as Alert } from "@/lib/homeAlertsClient";
 
 const ICON: Record<Alert["kind"], LucideIcon> = {
   freeze: Snowflake,
@@ -26,8 +20,10 @@ const ICON_STYLE: Record<Alert["kind"], string> = {
 // Proactive, time- and home-specific alerts (weather + safety recalls) fetched
 // client-side so the dashboard render isn't blocked by external APIs. Renders
 // NOTHING unless there's a real alert - kept deliberately compact so it never
-// clutters the dashboard.
-export default function HomeAlerts() {
+// clutters the dashboard. propertyId comes from the dashboard server
+// component: switching homes via HomeSwitcher soft-redirects here without
+// remounting, so the fetch effect keys on it to load the new home's alerts.
+export default function HomeAlerts({ propertyId }: { propertyId: string }) {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -50,30 +46,20 @@ export default function HomeAlerts() {
 
   useEffect(() => {
     let alive = true;
-    // Hard 6s cap: the route aggregates slow external APIs (weather,
-    // recalls), and without a timeout the skeleton row below can float on
-    // the dashboard indefinitely. Alerts are nice-to-have; past 6s we show
-    // nothing rather than a stuck placeholder.
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6_000);
-    fetch("/api/home-alerts", { signal: controller.signal })
-      .then((r) => r.json())
-      .then((d) => {
-        if (!alive) return;
-        const all = [...(d.weather ?? []), ...(d.recalls ?? [])];
-        setAlerts(all);
-      })
-      .catch(() => {})
-      .finally(() => {
-        clearTimeout(timeout);
-        if (alive) setLoading(false);
-      });
+    // fetchHomeAlerts owns the hard 6s cap (past that the skeleton row below
+    // would float on the dashboard indefinitely; alerts are nice-to-have, so
+    // we show nothing rather than a stuck placeholder) and it dedupes with
+    // WeatherStrip's call so the dashboard hits the route once per load. On
+    // any failure it resolves null, which lands here as zero alerts.
+    fetchHomeAlerts(propertyId).then((d) => {
+      if (!alive) return;
+      setAlerts([...(d?.weather ?? []), ...(d?.recalls ?? [])]);
+      setLoading(false);
+    });
     return () => {
       alive = false;
-      clearTimeout(timeout);
-      controller.abort();
     };
-  }, []);
+  }, [propertyId]);
 
   // Brief skeleton only while the first fetch is in flight AND the page
   // itself is still settling - most loads resolve to zero alerts, so this

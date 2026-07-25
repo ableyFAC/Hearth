@@ -1,6 +1,8 @@
 "use client";
 
 import { useRef } from "react";
+import { useFormStatus } from "react-dom";
+import InlineSpinner from "@/components/InlineSpinner";
 import { updateLeadStatusAction } from "./actions";
 
 // Compact outcome selector for an assigned job. Replaces the Mark won / Mark
@@ -25,22 +27,40 @@ export default function JobStatusSelect({
   return (
     <form ref={formRef} action={updateLeadStatusAction}>
       <input type="hidden" name="id" value={id} />
-      <label className="flex items-center gap-2 text-sm text-stone-500 dark:text-stone-400">
-        Status
-        <select
-          key={current}
-          name="status"
-          defaultValue={current}
-          onChange={() => formRef.current?.requestSubmit()}
-          className="select !w-auto py-1 text-sm"
-        >
-          {OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      <StatusField current={current} formRef={formRef} />
     </form>
+  );
+}
+
+// Split out from JobStatusSelect because useFormStatus only reports pending
+// state inside a descendant of the <form>, not the component rendering the
+// form itself.
+function StatusField({
+  current,
+  formRef,
+}: {
+  current: string;
+  formRef: React.RefObject<HTMLFormElement>;
+}) {
+  const { pending } = useFormStatus();
+  return (
+    <label className="flex items-center gap-2 text-sm text-stone-500 dark:text-stone-400">
+      Status
+      {pending && <InlineSpinner size={14} />}
+      <select
+        key={current}
+        name="status"
+        defaultValue={current}
+        onChange={() => formRef.current?.requestSubmit()}
+        disabled={pending}
+        className="select !w-auto py-2 sm:py-1"
+      >
+        {OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

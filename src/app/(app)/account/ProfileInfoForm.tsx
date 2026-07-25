@@ -1,7 +1,10 @@
 "use client";
 
+import Link from "next/link";
+import { useFormStatus } from "react-dom";
 import { saveAccountAction } from "./actions";
 import PhoneInput from "@/components/PhoneInput";
+import InlineSpinner from "@/components/InlineSpinner";
 import type { UserProfile } from "@/lib/database.types";
 
 function FieldIcon({ children }: { children: React.ReactNode }) {
@@ -11,6 +14,22 @@ function FieldIcon({ children }: { children: React.ReactNode }) {
         {children}
       </svg>
     </span>
+  );
+}
+
+// Local submit button (not the shared SubmitButton) so the existing save icon
+// can stay put next to the spinner instead of being swapped out.
+function SaveChangesButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button type="submit" disabled={pending} className="btn-primary">
+      {pending && <InlineSpinner />}
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
+        <path d="M17 21v-8H7v8M7 3v5h8" />
+      </svg>
+      Save Changes
+    </button>
   );
 }
 
@@ -89,22 +108,13 @@ export default function ProfileInfoForm({
 
       {/* Footer */}
       <div className="mt-8 flex items-center justify-end gap-3 border-t border-stone-100 pt-5 dark:border-white/10">
-        <a
+        <Link
           href="/dashboard"
           className="rounded-lg px-4 py-2 text-sm font-medium text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
         >
           Cancel
-        </a>
-        <button
-          type="submit"
-          className="btn-primary"
-        >
-          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
-            <path d="M17 21v-8H7v8M7 3v5h8" />
-          </svg>
-          Save Changes
-        </button>
+        </Link>
+        <SaveChangesButton />
       </div>
     </form>
   );

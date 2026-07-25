@@ -73,7 +73,7 @@ export default function ProfileTabs({
       {/* Segmented tab switcher */}
       <div
         role="tablist"
-        className="inline-flex rounded-xl border border-stone-200 bg-stone-100 p-1 dark:border-white/10 dark:bg-stone-800"
+        className="flex w-full overflow-x-auto rounded-xl border border-stone-200 bg-stone-100 p-1 sm:inline-flex sm:w-auto dark:border-white/10 dark:bg-stone-800"
       >
         {TABS.map((t) => (
           <button
@@ -81,7 +81,7 @@ export default function ProfileTabs({
             role="tab"
             aria-selected={tab === t.key}
             onClick={() => setTab(t.key)}
-            className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+            className={`shrink-0 whitespace-nowrap rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
               tab === t.key
                 ? "bg-white text-stone-900 shadow-sm dark:bg-stone-700 dark:text-stone-100"
                 : "text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"

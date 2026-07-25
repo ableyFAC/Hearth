@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import SubmitButton from "@/components/SubmitButton";
 
@@ -211,9 +212,9 @@ export default function AccountSecurityPanel({
             </p>
             <p className="mt-0.5 text-sm text-stone-500 dark:text-stone-400">
               Download everything we hold for your account as a JSON file.{" "}
-              <a href={privacyHref} className="font-medium text-bark-700 hover:underline dark:text-stone-300">
+              <Link href={privacyHref} className="font-medium text-bark-700 hover:underline dark:text-stone-300">
                 Your privacy rights
-              </a>{" "}
+              </Link>{" "}
               explains what&apos;s in it.
             </p>
           </div>

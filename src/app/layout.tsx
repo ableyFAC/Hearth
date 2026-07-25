@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import Toaster from "@/components/Toaster";
+import ToastProvider from "@/components/ToastProvider";
+import FlashBridge from "@/components/FlashBridge";
 import { readFlash } from "@/lib/flash";
 
 // Self-hosted via next/font, exposed as a CSS variable so Tailwind's
@@ -60,6 +61,17 @@ export const metadata: Metadata = {
   },
 };
 
+// viewport-fit=cover is required so env(safe-area-inset-*) resolves to a
+// non-zero value on notched iPhones. The bottom tab bars (Nav / ProNav) and
+// the floating docks pad themselves by that inset, so without cover the
+// safe-area padding silently collapses to 0 and controls sit under the notch
+// / home indicator.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -86,8 +98,10 @@ export default function RootLayout({
         />
       </head>
       <body>
-        {children}
-        <Toaster flash={flash} />
+        <ToastProvider>
+          {children}
+          <FlashBridge flash={flash} />
+        </ToastProvider>
       </body>
     </html>
   );

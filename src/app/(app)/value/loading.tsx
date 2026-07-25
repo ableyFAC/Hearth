@@ -1,15 +1,19 @@
 import { Skeleton, SkeletonLine } from "@/components/Skeleton";
 
 // Mirrors value/page.tsx: the max-w-3xl wrapper, header, the centered
-// "estimated value today" hero (dominant block), the equity card, and the
-// value-over-time bar chart card.
+// "estimated value today" hero (dominant card-hero block), the equity card,
+// and the value-over-time bar chart card (scrollable bars plus a year-label
+// row beneath them).
 export default function Loading() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-8" aria-hidden="true">
       <Skeleton className="mb-1 h-7 w-56" />
-      <SkeletonLine width="w-full" className="mb-5" />
+      <div className="mb-5 space-y-2">
+        <SkeletonLine width="w-full" />
+        <SkeletonLine width="w-2/3" />
+      </div>
 
-      <div className="card space-y-3 text-center">
+      <div className="card-hero space-y-2 text-center">
         <Skeleton className="mx-auto h-4 w-40" />
         <Skeleton className="mx-auto h-10 w-48" />
         <Skeleton className="mx-auto h-3 w-56" />
@@ -23,13 +27,20 @@ export default function Loading() {
 
       <div className="card mt-6 space-y-3">
         <Skeleton className="h-4 w-48" />
-        <div className="flex items-end gap-2">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton
-              key={i}
-              className={`w-7 rounded-t-md ${i % 2 === 0 ? "h-16" : "h-10"}`}
-            />
-          ))}
+        <div className="overflow-x-auto pb-1">
+          <div className="flex items-end gap-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton
+                key={i}
+                className={`w-7 rounded-t-md ${i % 2 === 0 ? "h-16" : "h-10"}`}
+              />
+            ))}
+          </div>
+          <div className="mt-1 flex gap-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-2 w-7" />
+            ))}
+          </div>
         </div>
       </div>
     </div>

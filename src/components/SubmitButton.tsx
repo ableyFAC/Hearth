@@ -9,14 +9,19 @@ export default function SubmitButton({
   children,
   pendingLabel,
   className = "btn-primary flex-1",
+  disabled = false,
 }: {
   children: React.ReactNode;
   pendingLabel?: string;
   className?: string;
+  // Optional caller-driven disable (e.g. "nothing changed to submit"), ORed
+  // with the in-flight pending state. Defaults to false, so existing callers
+  // are unaffected.
+  disabled?: boolean;
 }) {
   const { pending } = useFormStatus();
   return (
-    <button type="submit" disabled={pending} className={className}>
+    <button type="submit" disabled={pending || disabled} className={className}>
       {pending ? pendingLabel ?? "Saving…" : children}
     </button>
   );

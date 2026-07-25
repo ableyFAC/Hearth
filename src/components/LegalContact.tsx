@@ -18,12 +18,14 @@
 // opt-out"), shown back to the visitor on the /contact page so they know
 // what they're writing about. It is not a legal "designated address" any
 // more than the old mailto's subject line was.
+import Link from "next/link";
+
 export function LegalContact({ topic }: { topic?: string }) {
   const href = topic ? `/contact?topic=${encodeURIComponent(topic)}` : "/contact";
 
   return (
-    <a href={href} className="text-bark-700 hover:underline dark:text-stone-300">
+    <Link href={href} className="text-bark-700 hover:underline dark:text-stone-300">
       our contact form
-    </a>
+    </Link>
   );
 }

@@ -53,6 +53,26 @@ function str(v: FormDataEntryValue | null): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
+// Sanity-bound a printed expiry date. DATE_RE only checks the shape, so a
+// vision misread like "2205-01-01" or an impossible "2026-13-40" can still
+// pass it. Reject anything that is not a real calendar date or falls outside
+// a plausible window for a license or insurance document, so a bad read
+// becomes a "type the date" prompt instead of a confidently wrong date on the
+// pro's compliance calendar.
+function plausibleExpiry(dateStr: string): boolean {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (
+    dt.getUTCFullYear() !== y ||
+    dt.getUTCMonth() !== m - 1 ||
+    dt.getUTCDate() !== d
+  ) {
+    return false; // not a real calendar date (for example month 13, day 40)
+  }
+  const nowYear = new Date().getUTCFullYear();
+  return y >= nowYear - 30 && y <= nowYear + 30;
+}
+
 async function extractExpiry(
   kind: "license" | "insurance",
   base64: string,
@@ -121,7 +141,10 @@ async function extractExpiry(
       const issuerRaw =
         typeof parsed?.issuer === "string" ? parsed.issuer.trim() : "";
       return {
-        expires_on: DATE_RE.test(expiresRaw) ? expiresRaw : null,
+        expires_on:
+          DATE_RE.test(expiresRaw) && plausibleExpiry(expiresRaw)
+            ? expiresRaw
+            : null,
         issuer: issuerRaw || null,
       };
     } catch {
@@ -193,7 +216,8 @@ export async function POST(req: NextRequest) {
     // Upload first through the caller's own session, so storage RLS (the
     // pro-docs owner policies from migration 0051) is the only gate: no
     // service role, no manual ownership check needed here.
-    const ext = (uploadedFile.name.split(".").pop() || "bin").toLowerCase();
+    const rawExt = (uploadedFile.name.split(".").pop() || "").toLowerCase();
+    const ext = /^[a-z0-9]{1,5}$/.test(rawExt) ? rawExt : "bin";
     docPath = `${contractor.id}/${kind}-${Date.now()}.${ext}`;
     const { error: uploadError } = await supabase.storage
       .from("pro-docs")

@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { AI_GLOBAL_DAILY_LIMIT, AI_GLOBAL_BUCKET } from "@/lib/constants";
 
 // Shared per-user daily cap for the AI-backed routes, counted in the same
 // ai_usage table (migration 0024) and with the same limits as /api/ask, so
@@ -22,18 +23,50 @@ export async function countAiUsage(
   isPlus: boolean
 ): Promise<{ overLimit: boolean }> {
   const dailyLimit = isPlus ? DAILY_LIMIT_PLUS : DAILY_LIMIT_FREE;
+  const admin = createAdminClient();
+
+  // Per-user daily cap (unchanged). Fails CLOSED, same as before.
   try {
-    const admin = createAdminClient();
     const { data, error } = await admin.rpc("bump_ai_usage", {
       p_user: userId,
       p_delta: 1,
     });
     if (error) throw error;
-    return { overLimit: (data as number) > dailyLimit };
+    if ((data as number) > dailyLimit) return { overLimit: true };
   } catch (err) {
     console.error("bump_ai_usage failed - failing CLOSED:", err);
     return { overLimit: true };
   }
+
+  // Owner-wide daily SPEND BREAKER, on top of the per-user cap above. One
+  // shared bucket across EVERY user (AI_GLOBAL_BUCKET), so no number of free
+  // signups can fan the paid Gemini bill past AI_GLOBAL_DAILY_LIMIT in a day.
+  // Uses the same atomic fixed-window rate_limit_hit RPC (migration 0068) the
+  // rest of the abuse limits use; it returns true while inside the limit and
+  // false once tripped. FAILS CLOSED to match the per-user counter above: a
+  // broken breaker denies rather than leaving the paid model wide open. Since
+  // every AI route funnels through this helper, this single check caps them
+  // all. Counted once per request (fan-out weighting stays per-user via
+  // addAiUsage), which is the right granularity for a runaway-cost breaker.
+  try {
+    const { data: allowed, error } = await admin.rpc("rate_limit_hit", {
+      p_bucket: AI_GLOBAL_BUCKET,
+      p_limit: AI_GLOBAL_DAILY_LIMIT,
+      p_window_seconds: 86400,
+    });
+    if (error) throw error;
+    if (allowed === false) {
+      console.error(
+        `AI global spend breaker tripped (${AI_GLOBAL_BUCKET} over ${AI_GLOBAL_DAILY_LIMIT}/day) - denying to cap runaway cost`
+      );
+      return { overLimit: true };
+    }
+  } catch (err) {
+    console.error("ai-global rate_limit_hit failed - failing CLOSED:", err);
+    return { overLimit: true };
+  }
+
+  return { overLimit: false };
 }
 
 // Add N extra usages for this user today (e.g. a route that fans out to the

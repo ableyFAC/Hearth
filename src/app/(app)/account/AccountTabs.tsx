@@ -53,7 +53,7 @@ export default function AccountTabs({
             href={t.href}
             role="tab"
             aria-selected={active === t.key}
-            className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+            className={`inline-flex min-h-11 items-center justify-center rounded-lg px-4 py-1.5 text-sm font-medium transition-colors sm:inline-block sm:min-h-0 ${
               active === t.key
                 ? "bg-white text-stone-900 shadow-sm dark:bg-stone-700 dark:text-stone-100"
                 : "text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"

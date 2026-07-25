@@ -22,9 +22,15 @@ export default function MarkChatSeen({
     window.dispatchEvent(new Event("hearth:chat-seen"));
     // Persist it server-side too (the cookie survives a reload), then refresh
     // the badge once more once that write lands.
-    action(leadId).then(() => {
-      window.dispatchEvent(new Event("hearth:chat-seen"));
-    });
+    action(leadId)
+      .then(() => {
+        window.dispatchEvent(new Event("hearth:chat-seen"));
+      })
+      .catch(() => {
+        // Fail soft: the local seen-time above already cleared the badge, and
+        // a rejected background write (network blip, server down) must not
+        // surface as an unhandled rejection.
+      });
   }, [leadId, action]);
   return null;
 }

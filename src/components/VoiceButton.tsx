@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Mic } from "lucide-react";
+import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
 
 // A mic button that dictates into the Ask Hearth box. Two modes:
 //
@@ -117,6 +118,34 @@ export default function VoiceButton({
     streamRef.current = null;
   }
 
+  // The ONLY entry point into a new recording. Sets `requesting`, the pending
+  // bubble, and the MIC_REQUEST_TIMEOUT_MS cap synchronously, before
+  // startRecording's first await (getUserMedia), so a permission prompt left
+  // hanging can never strand the button - whichever path started it. Used by
+  // both the tap path in toggle() and the speech-mode "network" fallback;
+  // the requestTimerRef guard (a ref, so it's safe inside the once-wired
+  // speech handlers too) keeps a second entry from re-firing getUserMedia
+  // while the first prompt is still pending.
+  function beginRecording() {
+    if (requestTimerRef.current) return;
+    setRequesting(true);
+    requestTimedOutRef.current = false;
+    setBubble("Requesting microphone...");
+    // Cap the wait: some browsers/extensions let a permission prompt sit
+    // unanswered indefinitely rather than ever rejecting getUserMedia's
+    // promise, which would otherwise leave `requesting` (and the disabled
+    // button) stuck forever. If the promise later resolves anyway,
+    // startRecording checks requestTimedOutRef and discards the stale grant
+    // instead of entering listening.
+    requestTimerRef.current = setTimeout(() => {
+      requestTimerRef.current = null;
+      requestTimedOutRef.current = true;
+      setRequesting(false);
+      flashBubble(MIC_TIMEOUT_MSG, BLOCKED_MSG_MS);
+    }, MIC_REQUEST_TIMEOUT_MS);
+    void startRecording();
+  }
+
   async function startRecording() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -213,7 +242,9 @@ export default function VoiceButton({
     setBubble("Transcribing...");
     try {
       const audio = await blobToBase64(blob);
-      const resp = await fetch("/api/transcribe", {
+      // Timeout-guarded: a hung transcription call must not strand the
+      // bubble on "Transcribing..." forever.
+      const resp = await fetchWithTimeout("/api/transcribe", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ audio, mime }),
@@ -238,8 +269,12 @@ export default function VoiceButton({
       } else {
         flashBubble("Could not transcribe, try again.");
       }
-    } catch {
-      flashBubble("Could not transcribe, try again.");
+    } catch (e) {
+      flashBubble(
+        isTimeoutError(e)
+          ? "That took too long, try again."
+          : "Could not transcribe, try again."
+      );
     }
   }
 
@@ -318,7 +353,10 @@ export default function VoiceButton({
         }
         if (canRecordRef.current) {
           switchMode("recorder");
-          void startRecording();
+          // Through the same guarded path as a tap, never startRecording()
+          // directly: the fallback needs the identical requesting state and
+          // 15s cap, or a hung permission prompt would strand the button.
+          beginRecording();
         } else {
           setListening(false);
           flashBubble("Voice input is unavailable in this browser.");
@@ -375,30 +413,14 @@ export default function VoiceButton({
       if (listening) {
         stopRecording();
       } else if (!requesting) {
-        // Set the pending bubble synchronously, before startRecording's
-        // first await (getUserMedia). Permission prompts can take a beat -
-        // or sit waiting on the person to answer - and getUserMedia doesn't
-        // resolve until then, so without this the button shows nothing
-        // happening for that whole stretch. `!requesting` guards against a
-        // second tap re-firing getUserMedia while the first prompt is still
-        // pending.
-        setRequesting(true);
-        requestTimedOutRef.current = false;
-        setBubble("Requesting microphone...");
-        // Cap the wait: some browsers/extensions let a permission prompt
-        // sit unanswered indefinitely rather than ever rejecting
-        // getUserMedia's promise, which would otherwise leave `requesting`
-        // (and the disabled button) stuck forever. If the promise later
-        // resolves anyway, startRecording checks requestTimedOutRef and
-        // discards the stale grant instead of entering listening.
-        if (requestTimerRef.current) clearTimeout(requestTimerRef.current);
-        requestTimerRef.current = setTimeout(() => {
-          requestTimerRef.current = null;
-          requestTimedOutRef.current = true;
-          setRequesting(false);
-          flashBubble(MIC_TIMEOUT_MSG, BLOCKED_MSG_MS);
-        }, MIC_REQUEST_TIMEOUT_MS);
-        void startRecording();
+        // beginRecording sets the pending bubble synchronously, before
+        // startRecording's first await (getUserMedia). Permission prompts
+        // can take a beat - or sit waiting on the person to answer - and
+        // getUserMedia doesn't resolve until then, so without this the
+        // button shows nothing happening for that whole stretch.
+        // `!requesting` guards against a second tap re-firing getUserMedia
+        // while the first prompt is still pending.
+        beginRecording();
       }
       return;
     }

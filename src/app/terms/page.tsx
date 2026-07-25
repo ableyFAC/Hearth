@@ -1,5 +1,6 @@
 import { LegalContact } from "@/components/LegalContact";
 import type { Metadata } from "next";
+import Link from "next/link";
 
 // Public top-level page, same pattern as src/app/fountain-valley/page.tsx:
 // see src/lib/supabase/middleware.ts for the allowlist entry and
@@ -23,9 +24,9 @@ export default function TermsPage() {
   return (
     <main className="mx-auto max-w-2xl px-6 pb-16 pt-10">
       <p className="text-sm">
-        <a href="/" className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
+        <Link href="/" className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
           ← Hearth
-        </a>
+        </Link>
       </p>
 
       <h1 className="mt-4 text-2xl font-bold text-stone-900 sm:text-3xl dark:text-stone-100">
@@ -214,9 +215,9 @@ export default function TermsPage() {
           </p>
           <p className="mt-3 leading-relaxed">
             Think content on Hearth infringes your copyright? Use our{" "}
-            <a href="/dmca" className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href="/dmca" className="text-bark-700 hover:underline dark:text-stone-300">
               DMCA takedown process
-            </a>
+            </Link>
             .
           </p>
         </section>
@@ -487,9 +488,9 @@ export default function TermsPage() {
           </h2>
           <p className="mt-2 leading-relaxed">
             See the{" "}
-            <a href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
               Privacy Policy
-            </a>{" "}
+            </Link>{" "}
             for what we collect and how it&apos;s used.
           </p>
         </section>

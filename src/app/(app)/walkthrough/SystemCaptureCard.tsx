@@ -6,8 +6,13 @@ import { labelFor, iconFor, SYSTEM_TYPES } from "@/lib/constants";
 import TakePhotoButton from "@/components/TakePhotoButton";
 import Lightbox from "@/components/Lightbox";
 import AiNotice from "@/components/AiNotice";
+import ProgressBar, { useStagedProgress } from "@/components/ProgressBar";
 import type { HomeSystem } from "@/lib/database.types";
 import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
+
+// What /api/confirm-system does with the photo: read the data plate, then pull
+// the brand, model, and year off it into the editable suggestion.
+const READ_STAGES = ["Reading the data plate", "Pulling out brand, model, and year"];
 
 type Suggestion = {
   brand: string | null;
@@ -80,6 +85,8 @@ export default function SystemCaptureCard({
   // InspectionUpload.tsx.
   const abortRef = useRef<AbortController | null>(null);
   const cancelledRef = useRef(false);
+  // Progress bar for the "Reading the data plate" step.
+  const progress = useStagedProgress(READ_STAGES, 10000);
 
   const name = labelFor(SYSTEM_TYPES, system.system_type);
   const Icon = iconFor(SYSTEM_TYPES, system.system_type);
@@ -107,6 +114,7 @@ export default function SystemCaptureCard({
     // the component).
     setPreview(URL.createObjectURL(file));
     cancelledRef.current = false;
+    progress.start();
     const controller = new AbortController();
     abortRef.current = controller;
 
@@ -151,6 +159,7 @@ export default function SystemCaptureCard({
       }
     }
 
+    progress.finish();
     setSuggestion(read ?? BLANK_SUGGESTION);
     setNote(
       read
@@ -166,6 +175,7 @@ export default function SystemCaptureCard({
     cancelledRef.current = true;
     abortRef.current?.abort();
     abortRef.current = null;
+    progress.reset();
     if (preview) URL.revokeObjectURL(preview);
     setPhase("idle");
     setSuggestion(null);
@@ -257,13 +267,21 @@ export default function SystemCaptureCard({
       )}
 
       {phase === "working" && (
-        <button
-          type="button"
-          onClick={cancelCapture}
-          className="block text-xs text-stone-500 hover:text-stone-600 dark:text-stone-400 dark:hover:text-stone-300"
-        >
-          Cancel
-        </button>
+        <>
+          <ProgressBar
+            value={progress.value}
+            stages={READ_STAGES}
+            stageIndex={progress.stageIndex}
+            ariaLabel="Reading the data plate"
+          />
+          <button
+            type="button"
+            onClick={cancelCapture}
+            className="block text-xs text-stone-500 hover:text-stone-600 dark:text-stone-400 dark:hover:text-stone-300"
+          >
+            Cancel
+          </button>
+        </>
       )}
 
       {phase === "review" && suggestion && (

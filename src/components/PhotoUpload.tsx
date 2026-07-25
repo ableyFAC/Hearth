@@ -71,7 +71,10 @@ export default function PhotoUpload({
         failures++;
         continue;
       }
-      const ext = file.name.split(".").pop() || "jpg";
+      // Sanitize the derived extension to a safe charset so no ".." or path
+      // fragment from a crafted filename can enter the storage key.
+      const rawExt = file.name.split(".").pop()?.toLowerCase() ?? "";
+      const ext = /^[a-z0-9]{1,5}$/.test(rawExt) ? rawExt : "jpg";
       // Avoid Math.random/Date in this environment-agnostic path; use crypto.
       const id = crypto.randomUUID();
       const path = `${propertyId}/${id}.${ext}`;

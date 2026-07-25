@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import Link from "next/link";
 import Logo from "./Logo";
 import styles from "./HeroDemoPlayer.module.css";
 import { track } from "@/lib/analytics";
@@ -2347,14 +2348,14 @@ export default function HeroDemoPlayer() {
         Hearth
       </span>
       <span className={styles.stepChip} data-x="stepChip"></span>
-      <a
+      <Link
         href="/homeowner-signup"
         className={styles.midCta}
         data-x="midCta"
         onClick={(e) => e.stopPropagation()}
       >
         Free to try, no card needed
-      </a>
+      </Link>
 
       <div className={styles.deviceWrap} onClick={handleScreenClick}>
         <div className={styles.device} data-x="device">
@@ -2557,13 +2558,13 @@ export default function HeroDemoPlayer() {
                   <p className="text-xs text-stone-400">after one season of upkeep</p>
                   {/* A REAL link: the end card is a conversion surface, not a
                       prop. stopPropagation so the click doesn't toggle pause. */}
-                  <a
+                  <Link
                     href="/homeowner-signup"
                     className="btn-primary mt-2"
                     onClick={(e) => e.stopPropagation()}
                   >
                     Get started for free
-                  </a>
+                  </Link>
                 </div>
               </div>
 
@@ -2685,13 +2686,13 @@ export default function HeroDemoPlayer() {
 
       {started && finished && (
         <div className={styles.endOverlay} onClick={(e) => e.stopPropagation()}>
-          <a
+          <Link
             href="/homeowner-signup"
             className="btn-primary"
             onClick={(e) => e.stopPropagation()}
           >
             Get started free
-          </a>
+          </Link>
           <button
             type="button"
             className={styles.replayBtn}

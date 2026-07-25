@@ -26,6 +26,11 @@ const JOB_CATEGORY_VALUES = JOB_CATEGORIES.map((c) => c.value);
 const LINE_ITEM_CATEGORIES = ["labor", "materials", "equipment", "permit", "other"];
 const DOC_TYPES = ["invoice", "quote", "estimate", "receipt", "other"];
 
+// Upper bound on stored line items. maxOutputTokens already keeps the array
+// small, but cap it defensively so a garbage read can't stuff the pricing
+// history with hundreds of rows.
+const MAX_LINE_ITEMS = 60;
+
 // Gemini structured-output schema. Every monetary field is a STRING so the
 // model copies what is printed rather than doing arithmetic on it.
 const RESPONSE_SCHEMA = {
@@ -194,6 +199,22 @@ export async function POST(req: NextRequest) {
 // Coerce the model's output into clean, storable values. Anything off-spec (a
 // bad date, an unknown category) becomes null rather than polluting the
 // pro's pricing history. Nothing here is invented: a missing field stays null.
+// Real-calendar-date and plausible-window check for the printed document date
+// (see the call site in normalize for why the shape regex alone isn't enough).
+function plausibleDocDate(dateStr: string): boolean {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (
+    dt.getUTCFullYear() !== y ||
+    dt.getUTCMonth() !== m - 1 ||
+    dt.getUTCDate() !== d
+  ) {
+    return false; // not a real calendar date (for example month 13, day 40)
+  }
+  const nowYear = new Date().getUTCFullYear();
+  return y >= nowYear - 30 && y <= nowYear + 1;
+}
+
 function normalize(raw: any, contractorId: string) {
   const str = (v: any) => {
     const s = typeof v === "string" ? v.trim() : "";
@@ -204,9 +225,16 @@ function normalize(raw: any, contractorId: string) {
   const doc_type =
     docTypeRaw && DOC_TYPES.includes(docTypeRaw) ? docTypeRaw : "invoice";
 
+  // The shape regex still passes a misread like "2205-06-01" or an impossible
+  // "2024-13-40", so reject any value that is not a real calendar date or
+  // falls outside a plausible window for a past job document, rather than
+  // letting a bad read pollute the pro's pricing history and, through it, the
+  // estimate tool's reference lines.
   const dateRaw = str(raw?.document_date);
   const document_date =
-    dateRaw && /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? dateRaw : null;
+    dateRaw && /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) && plausibleDocDate(dateRaw)
+      ? dateRaw
+      : null;
 
   // Defense in depth on top of the prompt: a location that starts with a
   // house number reads as a street address, so drop it rather than store it.
@@ -233,6 +261,7 @@ function normalize(raw: any, contractorId: string) {
           };
         })
         .filter(Boolean)
+        .slice(0, MAX_LINE_ITEMS)
     : [];
 
   return {

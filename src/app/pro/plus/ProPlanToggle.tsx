@@ -1,9 +1,24 @@
 "use client";
 
 import { useState } from "react";
+import { useFormStatus } from "react-dom";
 import { startProCheckoutAction } from "./actions";
 import AutoRenewalTerms from "@/components/AutoRenewalTerms";
+import InlineSpinner from "@/components/InlineSpinner";
 import { PRO_PLAN } from "@/lib/constants";
+
+// Needs its own component because useFormStatus only reports pending state
+// inside a descendant of the <form> it belongs to, not the component
+// rendering the form itself.
+function CheckoutButton({ label }: { label: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <button className="btn-primary w-full" disabled={pending}>
+      {pending && <InlineSpinner />}
+      {label}
+    </button>
+  );
+}
 
 const PLANS = {
   monthly: { label: "Monthly", price: "$9.99 first mo" },
@@ -105,11 +120,13 @@ export default function ProPlanToggle() {
           plan={plan === "monthly" ? "pro_monthly" : "pro_yearly"}
           introEligible={plan === "monthly"}
         />
-        <button className="btn-primary w-full">
-          {plan === "monthly"
-            ? `Start for $${PRO_PLAN.introFirstMonth}`
-            : "Get a year of Pro"}
-        </button>
+        <CheckoutButton
+          label={
+            plan === "monthly"
+              ? `Start for $${PRO_PLAN.introFirstMonth}`
+              : "Get a year of Pro"
+          }
+        />
         <p className="text-xs text-stone-500 dark:text-stone-400">
           By continuing you agree to the automatic renewal terms above. Cancel
           anytime. Your lead access never changes either way.

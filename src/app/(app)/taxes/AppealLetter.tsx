@@ -3,6 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import AiNotice from "@/components/AiNotice";
+import ProgressBar, { useStagedProgress } from "@/components/ProgressBar";
+import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
+
+// The honest steps /api/tax-appeal works through: gather the home's facts, then
+// draft the respectful, factual appeal letter from them.
+const APPEAL_STAGES = ["Gathering your home's facts", "Drafting the letter"];
 
 // The "give me a head start" button on the "looks high" state. Plus members
 // get a Gemini-drafted appeal letter they can adapt and file themselves; free
@@ -14,6 +20,7 @@ export default function AppealLetter({ isPlus }: { isPlus: boolean }) {
   const [letter, setLetter] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const progress = useStagedProgress(APPEAL_STAGES, 16000);
 
   if (!isPlus) {
     return (
@@ -38,8 +45,11 @@ export default function AppealLetter({ isPlus }: { isPlus: boolean }) {
     setLoading(true);
     setError(null);
     setCopied(false);
+    progress.start();
     try {
-      const resp = await fetch("/api/tax-appeal", { method: "POST" });
+      // Timeout-guarded: a hung serverless call must not strand the button
+      // on "Drafting your letter..." with no way to retry.
+      const resp = await fetchWithTimeout("/api/tax-appeal", { method: "POST" });
       const data = await resp.json().catch(() => ({}));
       if (typeof data?.letter === "string" && data.letter) {
         setLetter(data.letter);
@@ -52,9 +62,14 @@ export default function AppealLetter({ isPlus }: { isPlus: boolean }) {
       } else {
         setError(data?.error || "Couldn't draft the letter right now. Please try again in a bit.");
       }
-    } catch {
-      setError("Couldn't draft the letter right now. Please try again in a bit.");
+    } catch (e) {
+      setError(
+        isTimeoutError(e)
+          ? "That took too long. Try again."
+          : "Couldn't draft the letter right now. Please try again in a bit."
+      );
     }
+    progress.finish();
     setLoading(false);
   };
 
@@ -91,6 +106,15 @@ export default function AppealLetter({ isPlus }: { isPlus: boolean }) {
         >
           {loading ? "Drafting your letter..." : "Draft my appeal letter"}
         </button>
+      )}
+
+      {loading && (
+        <ProgressBar
+          value={progress.value}
+          stages={APPEAL_STAGES}
+          stageIndex={progress.stageIndex}
+          ariaLabel="Drafting your appeal letter"
+        />
       )}
 
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}

@@ -101,7 +101,7 @@ export default function NewMessageNotifier({
   if (!toasts.length) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+    <div role="status" aria-live="polite" className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
       {toasts.map((t) => (
         <Link
           key={t.id}

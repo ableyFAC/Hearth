@@ -7,9 +7,12 @@ import { Skeleton, SkeletonLine, SkeletonCard, SkeletonRow } from "@/components/
 export default function Loading() {
   return (
     <div className="space-y-8" aria-hidden="true">
+      {/* Property header: address, the built/sqft/beds line, and the quiet
+          "something broken right now?" link. */}
       <div className="space-y-2">
         <Skeleton className="h-7 w-64" />
-        <SkeletonLine width="w-48" />
+        <SkeletonLine width="w-56" />
+        <SkeletonLine width="w-40" />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -58,10 +61,16 @@ export default function Loading() {
         <SkeletonRow />
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-8 w-24 rounded-full" />
-        ))}
+      {/* Thinking about a project? heading, one-line intro, then the
+          remodel-project chip row. */}
+      <div className="space-y-3">
+        <Skeleton className="h-5 w-56" />
+        <SkeletonLine width="w-2/3" />
+        <div className="flex flex-wrap gap-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-8 w-24 rounded-full" />
+          ))}
+        </div>
       </div>
     </div>
   );

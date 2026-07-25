@@ -643,9 +643,9 @@ export default async function ProBusinessPage() {
             {won.map((l) => (
               <li
                 key={l.id}
-                className="card flex items-center justify-between gap-3"
+                className="card flex flex-wrap items-center justify-between gap-3"
               >
-                <span className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
+                <span className="flex min-w-0 items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
                   <span className="icon-chip">
                     <CategoryIcon list={JOB_CATEGORIES} value={l.category} />
                   </span>{" "}

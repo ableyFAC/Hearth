@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import InlineSpinner from "@/components/InlineSpinner";
 
 type Review = { rating: number; comment: string | null; created_at: string };
 
@@ -54,8 +55,10 @@ export default function ContractorReviews({
       <button
         type="button"
         onClick={toggle}
-        className="text-xs font-medium text-bark-700 hover:underline dark:text-stone-300"
+        disabled={loading}
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-bark-700 hover:underline dark:text-stone-300"
       >
+        {loading && <InlineSpinner size={12} />}
         {open ? "Hide reviews" : `Read ${count} review${count === 1 ? "" : "s"}`}
       </button>
 

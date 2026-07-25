@@ -26,12 +26,20 @@ const MIN_ADDRESS_LENGTH = 5;
 export default function OnboardingForm({
   next,
   referralCode,
+  existingName,
 }: {
   next?: string | null;
   // The inviter's referral code (migration 0099), carried through from the
   // sign-up link and posted as a hidden field so claimPropertyAction can
   // attribute this first home claim. Null for the ordinary, non-invited signup.
   referralCode?: string | null;
+  // The name already on file for this account, if any. Google signups arrive
+  // with their name backfilled server-side (src/app/auth/callback/route.ts),
+  // and anyone who set a name in account settings has one too. Used to
+  // prefill the full-name field on the confirm step so a user with a name on
+  // file isn't asked for it again. Empty string for a fresh email signup,
+  // which no longer collects a name up front.
+  existingName?: string;
 }) {
   const [step, setStep] = useState<"address" | "confirm" | "out_of_area">(
     "address"
@@ -321,6 +329,32 @@ export default function OnboardingForm({
             value={JSON.stringify(facts.system_facts ?? null)}
           />
 
+          {/* Full name lives here, not on the sign-up form: this is the first
+              point it's actually used - claimPropertyAction (./actions.ts)
+              matches it against the county's owner-of-record for this address.
+              Prefilled from existingName when a name is already on file (Google
+              signups, or anyone who set one in account settings) so they aren't
+              asked twice; required, since the ownership check needs a name. */}
+          <div>
+            <label className="label" htmlFor="full_name">
+              Your full name
+            </label>
+            <input
+              id="full_name"
+              name="full_name"
+              className="input"
+              type="text"
+              autoComplete="name"
+              placeholder="e.g. Alex Rivera"
+              defaultValue={existingName ?? ""}
+              required
+            />
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+              We check this against the county&apos;s owner-of-record for this
+              address, so pros know a job here is real.
+            </p>
+          </div>
+
           <div>
             <label className="label">Address</label>
             <input
@@ -331,89 +365,107 @@ export default function OnboardingForm({
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="label">State</label>
-              <input name="state" className="input" defaultValue={facts.state ?? ""} />
-            </div>
-            <div>
-              <label className="label">City</label>
-              <input name="city" className="input" defaultValue={facts.city ?? ""} />
-            </div>
-            <div>
-              <label className="label">ZIP</label>
-              <input
-                name="zip"
-                className="input"
-                defaultValue={facts.zip ?? ""}
-                placeholder="Auto-filled from city"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Year built (optional)</label>
-              <input
-                name="year_built"
-                type="number"
-                className="input"
-                placeholder="Skip if you're not sure"
-                defaultValue={facts.year_built ?? ""}
-              />
-            </div>
-            <div>
-              <label className="label">Square feet</label>
-              <input
-                name="sqft"
-                type="number"
-                className="input"
-                defaultValue={facts.sqft ?? ""}
-              />
-            </div>
-            <div>
-              <label className="label">Beds</label>
-              <input
-                name="beds"
-                type="number"
-                className="input"
-                defaultValue={facts.beds ?? ""}
-              />
-            </div>
-            <div>
-              <label className="label">Baths</label>
-              <input
-                name="baths"
-                type="number"
-                step="0.5"
-                className="input"
-                defaultValue={facts.baths ?? ""}
-              />
-            </div>
-            <div>
-              <label className="label">Lot size (sqft)</label>
-              <input
-                name="lot_size_sqft"
-                type="number"
-                className="input"
-                defaultValue={facts.lot_size_sqft ?? ""}
-              />
-            </div>
-            <div>
-              <label className="label">Property type</label>
-              <select
-                name="property_type"
-                className="select"
-                defaultValue={facts.property_type ?? "single_family"}
+          {/* The rest of the property facts are all optional and mostly
+              auto-filled from public records. Tucked behind a disclosure (same
+              pattern as NoticeAtCollection) so the confirm screen stays short:
+              name and address are all that's actually needed to claim. */}
+          <details className="group">
+            <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-sm font-medium text-bark-700 hover:underline dark:text-stone-300 [&::-webkit-details-marker]:hidden">
+              Know more details? Add them (optional)
+              <span
+                aria-hidden
+                className="text-stone-400 transition-transform group-open:rotate-180 dark:text-stone-500"
               >
-                {PROPERTY_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
+                &#9662;
+              </span>
+            </summary>
+
+            <div className="mt-3 space-y-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="label">State</label>
+                  <input name="state" className="input" defaultValue={facts.state ?? ""} />
+                </div>
+                <div>
+                  <label className="label">City</label>
+                  <input name="city" className="input" defaultValue={facts.city ?? ""} />
+                </div>
+                <div>
+                  <label className="label">ZIP</label>
+                  <input
+                    name="zip"
+                    className="input"
+                    defaultValue={facts.zip ?? ""}
+                    placeholder="Auto-filled from city"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Year built (optional)</label>
+                  <input
+                    name="year_built"
+                    type="number"
+                    className="input"
+                    placeholder="Skip if you're not sure"
+                    defaultValue={facts.year_built ?? ""}
+                  />
+                </div>
+                <div>
+                  <label className="label">Square feet</label>
+                  <input
+                    name="sqft"
+                    type="number"
+                    className="input"
+                    defaultValue={facts.sqft ?? ""}
+                  />
+                </div>
+                <div>
+                  <label className="label">Beds</label>
+                  <input
+                    name="beds"
+                    type="number"
+                    className="input"
+                    defaultValue={facts.beds ?? ""}
+                  />
+                </div>
+                <div>
+                  <label className="label">Baths</label>
+                  <input
+                    name="baths"
+                    type="number"
+                    step="0.5"
+                    className="input"
+                    defaultValue={facts.baths ?? ""}
+                  />
+                </div>
+                <div>
+                  <label className="label">Lot size (sqft)</label>
+                  <input
+                    name="lot_size_sqft"
+                    type="number"
+                    className="input"
+                    defaultValue={facts.lot_size_sqft ?? ""}
+                  />
+                </div>
+                <div>
+                  <label className="label">Property type</label>
+                  <select
+                    name="property_type"
+                    className="select"
+                    defaultValue={facts.property_type ?? "single_family"}
+                  >
+                    {PROPERTY_TYPES.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
-          </div>
+          </details>
 
           <p className="rounded-lg bg-bark-50 p-3 text-xs text-bark-700 dark:bg-bark-700/40 dark:text-stone-300">
             By claiming this home you&apos;re confirming you own or manage it.
@@ -457,7 +509,7 @@ export default function OnboardingForm({
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Hearth isn&apos;t in your area yet
           </h2>
-          <p className="text-sm text-stone-600 dark:text-stone-300">
+          <p className="break-words text-sm text-stone-600 dark:text-stone-300">
             {waitlistSaved
               ? OC_ONLY_MESSAGE
               : `We couldn't save you to the waitlist. Email us at ${FOUNDER.email} and we'll add you by hand.`}

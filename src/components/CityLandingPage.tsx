@@ -1,3 +1,4 @@
+import Link from "next/link";
 import GuideCta from "@/components/GuideCta";
 import Logo from "@/components/Logo";
 import { createClient } from "@/lib/supabase/server";
@@ -100,26 +101,26 @@ export default async function CityLandingPage({
   return (
     <div className="min-h-screen">
       <header className="mx-auto flex max-w-2xl items-center justify-between px-6 pt-6">
-        <a
+        <Link
           href="/"
           className="flex items-center gap-2 font-semibold text-stone-900 dark:text-stone-100"
         >
           <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> Hearth
-        </a>
+        </Link>
         {user ? (
-          <a
+          <Link
             href="/dashboard"
             className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-300 dark:hover:text-stone-300"
           >
             Open your dashboard
-          </a>
+          </Link>
         ) : (
-          <a
+          <Link
             href="/homeowner-signup"
             className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-300 dark:hover:text-stone-300"
           >
             Get started free
-          </a>
+          </Link>
         )}
       </header>
 
@@ -132,19 +133,19 @@ export default async function CityLandingPage({
             {housingParagraph}
           </p>
           {user ? (
-            <a
+            <Link
               href="/dashboard"
               className="btn-primary mt-6 inline-block px-6 py-3 text-base shadow-md"
             >
               Open your dashboard
-            </a>
+            </Link>
           ) : (
-            <a
+            <Link
               href="/homeowner-signup"
               className="btn-primary mt-6 inline-block px-6 py-3 text-base shadow-md"
             >
               Get started free
-            </a>
+            </Link>
           )}
         </div>
 
@@ -174,13 +175,13 @@ export default async function CityLandingPage({
           <ul className="mt-6 space-y-3">
             {GUIDE_LINKS.map((g) => (
               <li key={g.href}>
-                <a
+                <Link
                   href={g.href}
                   className="card block transition hover:border-bark-500 hover:shadow-md"
                 >
                   <h3 className="font-semibold text-stone-900 dark:text-stone-100">{g.title}</h3>
                   <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">{g.blurb}</p>
-                </a>
+                </Link>
               </li>
             ))}
           </ul>
@@ -194,12 +195,12 @@ export default async function CityLandingPage({
           <Logo className="h-4 w-4 text-bark-700 dark:text-stone-400" /> Hearth · Your home, looked after
         </p>
         <p className="mt-2 text-xs">
-          <a
+          <Link
             href="/guides"
             className="text-stone-500 hover:text-bark-700 hover:underline dark:text-stone-400 dark:hover:text-stone-300"
           >
             All guides
-          </a>
+          </Link>
         </p>
       </footer>
     </div>

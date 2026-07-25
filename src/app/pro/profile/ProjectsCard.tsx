@@ -2,10 +2,39 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useFormStatus } from "react-dom";
 import { JOB_CATEGORIES, labelFor } from "@/lib/constants";
 import { saveProjectAction, deleteProjectAction } from "./project-actions";
 import ProjectPhotoManager from "./ProjectPhotoManager";
 import CategoryIcon from "@/components/CategoryIcon";
+import InlineSpinner from "@/components/InlineSpinner";
+
+// Small submit buttons below. Each needs its own component because
+// useFormStatus only reports pending state inside a descendant of the
+// <form> it belongs to, not the component rendering the form itself.
+function DeleteProjectButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="btn-secondary text-xs px-3 py-1.5 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+    >
+      {pending && <InlineSpinner size={12} />}
+      Delete
+    </button>
+  );
+}
+
+function SaveProjectButton({ label }: { label: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <button type="submit" disabled={pending} className="btn-primary">
+      {pending && <InlineSpinner />}
+      {label}
+    </button>
+  );
+}
 
 // "Projects" tab: the pro's portfolio of completed work, shown on their
 // public page (/p/<id>) in a section of its own, separate from reviews.
@@ -130,12 +159,7 @@ export default function ProjectsCard({
                       }}
                     >
                       <input type="hidden" name="project_id" value={p.id} />
-                      <button
-                        type="submit"
-                        className="btn-secondary text-xs px-3 py-1.5 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
-                      >
-                        Delete
-                      </button>
+                      <DeleteProjectButton />
                     </form>
                   </div>
                 </div>
@@ -280,9 +304,7 @@ function ProjectForm({
         <button type="button" onClick={onCancel} className="btn-secondary">
           Cancel
         </button>
-        <button type="submit" className="btn-primary">
-          {project ? "Save Project" : "Add Project"}
-        </button>
+        <SaveProjectButton label={project ? "Save Project" : "Add Project"} />
       </div>
     </form>
   );

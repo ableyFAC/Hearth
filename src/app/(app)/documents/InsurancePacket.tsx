@@ -3,6 +3,17 @@
 import { useState } from "react";
 import Link from "next/link";
 import AiNotice from "@/components/AiNotice";
+import ProgressBar, { useStagedProgress } from "@/components/ProgressBar";
+import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
+
+// The honest steps /api/insurance-packet works through: gather the home's saved
+// facts and upkeep, write them into a plain-language summary, then add the
+// coverage questions worth asking an agent.
+const PACKET_STAGES = [
+  "Gathering your home's facts",
+  "Writing your packet",
+  "Adding questions to ask",
+];
 
 // The "give me a head start on shopping" button on the Home insurance card.
 // Plus members get a Gemini-built requote packet: a plain-language summary of
@@ -16,6 +27,7 @@ export default function InsurancePacket({ isPlus }: { isPlus: boolean }) {
   const [packet, setPacket] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const progress = useStagedProgress(PACKET_STAGES, 16000);
 
   if (!isPlus) {
     return (
@@ -40,8 +52,13 @@ export default function InsurancePacket({ isPlus }: { isPlus: boolean }) {
     setLoading(true);
     setError(null);
     setCopied(false);
+    progress.start();
     try {
-      const resp = await fetch("/api/insurance-packet", { method: "POST" });
+      // Timeout-guarded: a hung serverless call must not strand the button
+      // on "Building your packet..." with no way to retry.
+      const resp = await fetchWithTimeout("/api/insurance-packet", {
+        method: "POST",
+      });
       const data = await resp.json().catch(() => ({}));
       if (typeof data?.packet === "string" && data.packet) {
         setPacket(data.packet);
@@ -59,11 +76,14 @@ export default function InsurancePacket({ isPlus }: { isPlus: boolean }) {
             "Couldn't build the packet right now. Please try again in a bit."
         );
       }
-    } catch {
+    } catch (e) {
       setError(
-        "Couldn't build the packet right now. Please try again in a bit."
+        isTimeoutError(e)
+          ? "That took too long. Try again."
+          : "Couldn't build the packet right now. Please try again in a bit."
       );
     }
+    progress.finish();
     setLoading(false);
   };
 
@@ -95,6 +115,15 @@ export default function InsurancePacket({ isPlus }: { isPlus: boolean }) {
         <button className="btn-primary" onClick={generate} disabled={loading}>
           {loading ? "Building your packet..." : "Build my requote packet"}
         </button>
+      )}
+
+      {loading && (
+        <ProgressBar
+          value={progress.value}
+          stages={PACKET_STAGES}
+          stageIndex={progress.stageIndex}
+          ariaLabel="Building your requote packet"
+        />
       )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}

@@ -7,7 +7,7 @@ type CookieToSet = { name: string; value: string; options: CookieOptions };
 
 // Refreshes the auth session on every request and guards app routes.
 // Public routes: "/", "/get-started", "/signin", "/reset-password", the
-// sign-up pages, "/preview", "/auth/*". Everything else requires a session.
+// sign-up pages, "/auth/*". Everything else requires a session.
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
@@ -64,8 +64,14 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/reset-password") ||
     path.startsWith("/homeowner-signup") ||
     path.startsWith("/contractor-signup") ||
-    path.startsWith("/preview") ||
     path.startsWith("/auth") ||
+    // Public, account-free emergency guidance (src/app/emergency-help): a
+    // panicking homeowner (burst pipe, gas smell) must reach the life-safety
+    // steps with no login and no claimed property. The in-app /emergency page
+    // stays gated; this is the anonymous twin. A 307 to /signin here would be
+    // exactly the wrong outcome in an emergency.
+    path === "/emergency-help" ||
+    path.startsWith("/emergency-help/") ||
     // A pro's shareable public page: readable with no account by design.
     path.startsWith("/p/") ||
     // Public pros landing page: /p/ pages link here ("Powered by Hearth"),
@@ -75,6 +81,12 @@ export async function updateSession(request: NextRequest) {
     // Public SEO guide pages (src/app/guides/...): informational content
     // meant to be read by anonymous search visitors, not gated behind login.
     path.startsWith("/guides") ||
+    // Public pricing page (src/app/pricing): every homeowner in the audit
+    // tried to see prices before signing up and hit the /signin wall, which
+    // reads as bait. The page is read-only marketing; the actual subscribe
+    // flow stays gated under /plus for signed-in users.
+    path === "/pricing" ||
+    path.startsWith("/pricing/") ||
     // City landing pages (src/app/fountain-valley, src/app/huntington-beach):
     // local SEO + Nextdoor/chamber citation targets, same reasoning as the
     // guide pages above. startsWith with the slash variant too: these pages
@@ -138,6 +150,16 @@ export async function updateSession(request: NextRequest) {
     // own website embeds it), so there is never a session on the request. It
     // serves aggregate-only public data by design.
     path.startsWith("/api/pro-widget/") ||
+    // Referral invite OG share card (src/app/api/invite-card/[code]): a PUBLIC,
+    // unauthenticated image fetched by social scrapers when a homeowner shares
+    // their invite link. WITHOUT this entry the middleware 307s the scraper to
+    // /signin, so the referral card never renders. The route carries only
+    // low-sensitivity public data (an inviter's first name + city/state) and
+    // resolves the code with the admin client precisely because there is no
+    // session. The other two share cards (win-card, review-card) deliberately
+    // stay gated: they 401 without a session and are downloaded by the
+    // authenticated pro, never fetched by a scraper.
+    path.startsWith("/api/invite-card/") ||
     // Stripe webhook authenticates via its signature, not a user session, and
     // must never be redirected: Stripe doesn't follow redirects and would treat
     // the 307 as a failed delivery, so deposits would never be credited.

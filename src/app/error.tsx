@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { startTransition } from "react";
 import Logo from "@/components/Logo";
 
 // Root error boundary. Renders outside the app shells, so it centers itself.
@@ -10,6 +12,20 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const router = useRouter();
+
+  // reset() alone only re-renders the client tree; if the error came from a
+  // server component (the common case: Supabase down, server hiccup), the
+  // failed server payload is still cached and the button would do nothing.
+  // router.refresh() refetches the server data, and running both in one
+  // transition retries the whole segment for real.
+  function tryAgain() {
+    startTransition(() => {
+      router.refresh();
+      reset();
+    });
+  }
+
   return (
     <main className="flex min-h-screen items-center justify-center px-6">
       <div className="card w-full max-w-md text-center">
@@ -22,7 +38,7 @@ export default function Error({
           happening, give it a minute and come back.
         </p>
         <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-          <button onClick={() => reset()} className="btn-primary">
+          <button onClick={tryAgain} className="btn-primary">
             Try again
           </button>
           <Link href="/" className="btn-secondary">

@@ -25,6 +25,7 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   messages: MessageCircle,
   leads: Inbox,
   clients: Users,
+  pros: Users,
   business: Building2,
 };
 
@@ -59,10 +60,13 @@ export default function NavLinks({
     <>
       {links.map((l) => {
         // Exact match, or a nested route under it (but never let an "index"
-        // link like /pro swallow its own sub-pages).
+        // link like /pro - or /contractors, whose /contractors/browse sibling
+        // is its own tab - swallow its own sub-pages).
         const active =
           pathname === l.href ||
-          (l.href !== "/pro" && pathname.startsWith(l.href + "/"));
+          (l.href !== "/pro" &&
+            l.href !== "/contractors" &&
+            pathname.startsWith(l.href + "/"));
 
         if (variant === "bottom") {
           const Icon = l.icon ? NAV_ICONS[l.icon] : undefined;

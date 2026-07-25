@@ -50,7 +50,7 @@ export async function savePrepItemAction(formData: FormData) {
   } catch (err) {
     console.error("emergency_prep save failed", err);
     setFlash(
-      "Couldn't save that yet, this feature needs a database update first. Try again soon.",
+      "Couldn't save that just now. Please try again in a bit.",
       "error"
     );
   }

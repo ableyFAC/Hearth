@@ -8,9 +8,18 @@ import { saveInspectionFindingsAction } from "./actions";
 import AiNotice from "@/components/AiNotice";
 import CategoryIcon from "@/components/CategoryIcon";
 import Lightbox from "@/components/Lightbox";
+import ProgressBar, { useStagedProgress } from "@/components/ProgressBar";
 import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
 
 type Mode = "photo" | "pdf" | "text";
+
+// The honest steps /api/ingest-inspection runs: read the report pages, pull out
+// the systems and issues it names, then organize them for the review checklist.
+const INGEST_STAGES = [
+  "Reading the report",
+  "Finding systems and issues",
+  "Organizing what it found",
+];
 
 // Cap the PDF before reading it into memory and POSTing it to the vision
 // endpoint (cost/DoS + browser OOM). The API enforces the same ceiling; this
@@ -121,6 +130,9 @@ export default function InspectionUpload() {
   // (so cancelling doesn't also flash an error message).
   const abortRef = useRef<AbortController | null>(null);
   const cancelledRef = useRef(false);
+  // A PDF is a bigger read for the model than a few photos, so pace the stage
+  // labels a little slower for it.
+  const progress = useStagedProgress(INGEST_STAGES, mode === "pdf" ? 32000 : 22000);
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const input = e.target;
@@ -194,6 +206,7 @@ export default function InspectionUpload() {
     setError(null);
     setResult(null);
     cancelledRef.current = false;
+    progress.start();
     const controller = new AbortController();
     abortRef.current = controller;
 
@@ -258,6 +271,8 @@ export default function InspectionUpload() {
           ? "That took too long. Try again."
           : "Something went wrong. Please try again."
       );
+    } finally {
+      progress.finish();
     }
   }
 
@@ -623,13 +638,21 @@ export default function InspectionUpload() {
         {phase === "working" ? "Reading the report…" : "Read this report"}
       </button>
       {phase === "working" && (
-        <button
-          type="button"
-          onClick={cancelIngest}
-          className="block w-full text-center text-sm text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-300"
-        >
-          Cancel
-        </button>
+        <>
+          <ProgressBar
+            value={progress.value}
+            stages={INGEST_STAGES}
+            stageIndex={progress.stageIndex}
+            ariaLabel="Reading your inspection report"
+          />
+          <button
+            type="button"
+            onClick={cancelIngest}
+            className="block w-full text-center text-sm text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-300"
+          >
+            Cancel
+          </button>
+        </>
       )}
     </div>
   );

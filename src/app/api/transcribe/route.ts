@@ -75,13 +75,16 @@ export async function POST(req: NextRequest) {
             text:
               "Transcribe this audio exactly as spoken. Reply with ONLY the " +
               "transcript text, no quotes, no commentary. If there is no " +
-              "intelligible speech, reply with an empty string.",
+              "intelligible speech, or the audio is too noisy, muffled, or " +
+              "garbled to make out the words, reply with an empty string " +
+              "rather than guessing at what was said.",
           },
           { inlineData: { mimeType: mime, data: audio } },
         ],
       },
     ],
-    generationConfig: { maxOutputTokens: 800 },
+    // Deterministic transcription: keep it from inventing words to fill gaps.
+    generationConfig: { temperature: 0, maxOutputTokens: 800 },
   });
 
   let rateLimited = false;

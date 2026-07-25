@@ -1,11 +1,46 @@
 "use client";
 
+import Link from "next/link";
+import { useFormStatus } from "react-dom";
+import InlineSpinner from "@/components/InlineSpinner";
 import { saveCompanyAction, verifyLicenseNowAction } from "../actions";
 import CategoryPicker from "../CategoryPicker";
 import FieldIcon from "../FieldIcon";
 import PhoneInput from "@/components/PhoneInput";
-import { STATE_NAMES } from "@/lib/forecast";
+import ServiceAreaInput from "@/components/ServiceAreaInput";
 import type { Contractor } from "@/lib/database.types";
+
+// Small submit buttons for the form below. Each needs its own component
+// because useFormStatus only reports pending state inside a descendant of
+// the <form>, not the component rendering the form itself.
+function VerifyLicenseButton({ label }: { label: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      formAction={verifyLicenseNowAction}
+      disabled={pending}
+      className="mt-2 inline-flex items-center justify-center gap-1.5 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-700"
+    >
+      {pending && <InlineSpinner size={12} />}
+      {label}
+    </button>
+  );
+}
+
+function SaveChangesButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button type="submit" disabled={pending} className="btn-primary">
+      {pending && <InlineSpinner />}
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
+        <path d="M17 21v-8H7v8M7 3v5h8" />
+      </svg>
+      Save Changes
+    </button>
+  );
+}
 
 // Redesigned contractor profile editor. Posts to the same saveCompanyAction the
 // onboarding form uses, so field names must stay: name, contact_email,
@@ -151,15 +186,16 @@ export default function PublicProfileForm({
                     <path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0118 0z" />
                     <circle cx="12" cy="10" r="3" />
                   </FieldIcon>
-                  <input
+                  <ServiceAreaInput
                     name="service_area"
                     className="input pl-9"
                     defaultValue={contractor.service_area ?? ""}
-                    placeholder="e.g. San Francisco Bay Area"
+                    placeholder="e.g. Irvine, Tustin, Costa Mesa"
                   />
                 </div>
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  Where you are willing to travel for jobs.
+                  Where you are willing to travel for jobs. Start typing a city
+                  (even initials like &quot;fv&quot;) and pick from the list.
                 </p>
               </div>
 
@@ -169,22 +205,17 @@ export default function PublicProfileForm({
                   <FieldIcon>
                     <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15" />
                   </FieldIcon>
-                  <select
-                    name="service_state"
-                    className="input pl-9"
-                    defaultValue={(contractor as any).service_state ?? ""}
-                  >
-                    <option value="">All states</option>
-                    {Object.entries(STATE_NAMES).map(([code, name]) => (
-                      <option key={code} value={code}>
-                        {name.replace(/^the /, "")} ({code})
-                      </option>
-                    ))}
-                  </select>
+                  {/* Locked to California while Hearth serves CA only. The
+                      hidden input still posts service_state=CA, the two-letter
+                      code saveCompanyAction and the CSLB check expect. */}
+                  <div className="input cursor-not-allowed select-none bg-stone-100 pl-9 text-stone-500 dark:bg-stone-700 dark:text-stone-400">
+                    California (CA)
+                  </div>
+                  <input type="hidden" name="service_state" value="CA" />
                 </div>
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  Jobs from homeowners in this state show first; leave blank to
-                  see everything.
+                  Hearth serves California only right now, so this is set for
+                  you.
                 </p>
               </div>
 
@@ -256,17 +287,9 @@ export default function PublicProfileForm({
                             : "The CSLB public database did not confirm this license."}{" "}
                           {cslbEligible
                             ? "If this is out of date, update it with the state, then reverify below."
-                            : "Set State You Serve to California and save to reverify a CSLB license."}
+                            : "State You Serve is already set to California for you, so if this is a CSLB license, save your changes and then reverify."}
                         </p>
-                        {cslbEligible && (
-                          <button
-                            type="submit"
-                            formAction={verifyLicenseNowAction}
-                            className="mt-2 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-700"
-                          >
-                            Reverify
-                          </button>
-                        )}
+                        {cslbEligible && <VerifyLicenseButton label="Reverify" />}
                       </>
                     )}
                     {hasLicense &&
@@ -279,25 +302,61 @@ export default function PublicProfileForm({
                               ? "We're checking your license against the CSLB public database. You can keep applying to jobs meanwhile."
                               : "Have a California (CSLB) license? Verify it below against the CSLB public database. Licenses from other states stay on file. You can keep applying to jobs meanwhile."}
                           </p>
-                          <button
-                            type="submit"
-                            formAction={verifyLicenseNowAction}
-                            className="mt-2 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-700"
-                          >
-                            Verify now
-                          </button>
+                          <VerifyLicenseButton label="Verify now" />
                         </>
                       ) : (
                         <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                           Automatic license checks currently cover California
                           (CSLB) licenses only, so yours stays on file as-is.
-                          If it is a CSLB license, set State You Serve to
-                          California and save, then verify. You can keep
-                          applying to jobs meanwhile.
+                          State You Serve is already set to California for
+                          you, so if it is a CSLB license, save your changes
+                          and then verify. You can keep applying to jobs
+                          meanwhile.
                         </p>
                       ))}
                   </>
                 )}
+              </div>
+
+              {/* Optional outbound review-page links (0110). Plain links only:
+                  the public page shows a "See our reviews" button, never
+                  imported review content or star counts. */}
+              <div>
+                <label className="label">Yelp page (optional)</label>
+                <div className="relative">
+                  <FieldIcon>
+                    <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+                    <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+                  </FieldIcon>
+                  <input
+                    name="yelp_url"
+                    type="url"
+                    className="input pl-9"
+                    defaultValue={(contractor as any).yelp_url ?? ""}
+                    placeholder="https://www.yelp.com/biz/your-business"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="label">Google reviews link (optional)</label>
+                <div className="relative">
+                  <FieldIcon>
+                    <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+                    <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+                  </FieldIcon>
+                  <input
+                    name="google_reviews_url"
+                    type="url"
+                    className="input pl-9"
+                    defaultValue={(contractor as any).google_reviews_url ?? ""}
+                    placeholder="https://g.page/your-business"
+                  />
+                </div>
+                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                  Homeowners see a &quot;See our reviews&quot; button on your
+                  public page.
+                </p>
               </div>
             </div>
           </div>
@@ -318,19 +377,13 @@ export default function PublicProfileForm({
 
         {/* Footer */}
         <div className="mt-8 flex items-center justify-end gap-3 border-t border-stone-100 pt-5 dark:border-white/10">
-          <a
+          <Link
             href="/pro"
             className="rounded-lg px-4 py-2 text-sm font-medium text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
           >
             Cancel
-          </a>
-          <button type="submit" className="btn-primary">
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
-              <path d="M17 21v-8H7v8M7 3v5h8" />
-            </svg>
-            Save Changes
-          </button>
+          </Link>
+          <SaveChangesButton />
         </div>
       </div>
     </form>

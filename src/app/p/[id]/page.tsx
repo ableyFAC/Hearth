@@ -1,17 +1,21 @@
 import type { Metadata } from "next";
 import { cache } from "react";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { JOB_CATEGORIES, labelFor } from "@/lib/constants";
 import CategoryIcon from "@/components/CategoryIcon";
 import Logo from "@/components/Logo";
+import RequestQuoteForm from "./RequestQuoteForm";
+import { requestProAction } from "@/app/(app)/contractors/actions";
 
 // Public, shareable business page for a pro: /p/<contractor_id> or, once
 // migration 0043 lands, /p/<slug>. No account needed. Data comes from the
 // public_pro_profile RPC (0033, extended with 'slug' in 0043), which returns
 // only safe fields: name, categories, the REAL rating/reviews (same math and
-// ordering as everywhere else, membership never touches them), and, for Pro
-// members, logo + about + "on file" booleans. Never contact info.
+// ordering as everywhere else, membership never touches them), the free
+// license/insurance "on file" booleans (0109, shown for every pro), and, for
+// Pro members only, logo + about. Never contact info.
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -54,6 +58,12 @@ type PublicProfile = {
   about: string | null;
   has_license: boolean;
   has_insurance: boolean;
+  // Optional outbound review-page links (0110): absent until migration 0110
+  // runs. Plain outbound links only - the page renders a "See our reviews"
+  // button, never imported review content or star counts. Free trust signal,
+  // never gated on Pro membership.
+  yelp_url?: string | null;
+  google_reviews_url?: string | null;
   // Optional: absent until migration 0055 runs. Real CSLB verification
   // timestamp, only ever set on an actually-confirmed license (0055) - never
   // gated behind Pro membership, unlike has_license/has_insurance above.
@@ -211,12 +221,12 @@ function NotReadyCard() {
           </p>
         </div>
       </div>
-      <a
+      <Link
         href="/pros"
         className="mt-6 inline-block text-sm font-medium text-bark-700 hover:underline dark:text-stone-300"
       >
         Powered by Hearth
-      </a>
+      </Link>
     </main>
   );
 }
@@ -240,27 +250,26 @@ export default async function PublicProPage({
 
   if (!profile) notFound();
 
-  // "Request a quote" CTA: pragmatic version, no new schema. Signed-in
-  // visitors go straight to the homeowner job-post flow with this pro's
-  // primary category prefilled, the same /contractors?category= prefill the
-  // dashboard briefing and forecast pages already use. There is no way to
-  // target one specific pro on /contractors today, so this lands them on the
-  // job board pre-filtered instead of inventing a new column to carry that.
-  // Signed-out visitors go create an account first, carrying the same
-  // destination through ?next=, same pattern as /onboarding and /signin.
+  // "Request a quote" CTA. Signed-in homeowners now get a real DIRECT REQUEST
+  // (migration 0104): the form below sends this one pro a private request only
+  // they can see and pay to accept, via requestProAction. Signed-out visitors
+  // keep the create-an-account-first behavior, carrying the pro's primary
+  // category through ?next= so the job form is prefilled after signup (same
+  // pattern as /onboarding and /signin).
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   const primaryCategory = profile.categories[0] ?? "other";
   const quoteHref = `/contractors?category=${encodeURIComponent(primaryCategory)}`;
-  const requestQuoteHref = user
-    ? quoteHref
-    : `/homeowner-signup?next=${encodeURIComponent(quoteHref)}`;
+  const requestQuoteHref = `/homeowner-signup?next=${encodeURIComponent(quoteHref)}`;
 
   const hasRating = profile.review_count > 0 && profile.rating != null;
-  const showBadge =
-    profile.member && (profile.has_license || profile.has_insurance);
+  // Trust badges are free for every pro (migration 0109): the self-reported
+  // "on file" badge shows whenever there's something on file, member or not,
+  // the same as the CSLB and background-check badges below. Membership only
+  // gates cosmetics (logo, about).
+  const showBadge = profile.has_license || profile.has_insurance;
   const badgeLabel =
     profile.has_license && profile.has_insurance
       ? "License and insurance on file"
@@ -271,10 +280,11 @@ export default async function PublicProPage({
   // Guard: the RPC only includes 'projects' once migration 0045 has run, so
   // older payloads simply render no section.
   const projects = Array.isArray(profile.projects) ? profile.projects : [];
-  // Real CSLB verification (0055): free feature, not gated behind Pro
-  // membership like showBadge/badgeLabel above. A 'failed' or 'pending'
-  // check is never shown publicly at all - this page only ever renders the
-  // positive, confirmed case, straight off a real timestamp.
+  // Real CSLB verification (0055): free feature, never gated behind Pro
+  // membership - the same policy the "on file" badge above now follows (0109).
+  // A 'failed' or 'pending' check is never shown publicly at all - this page
+  // only ever renders the positive, confirmed case, straight off a real
+  // timestamp.
   const licenseVerifiedAt = profile.license_verified_at ?? null;
   const licenseVerifiedLabel = licenseVerifiedAt
     ? new Date(licenseVerifiedAt).toLocaleDateString("en-US", {
@@ -284,7 +294,8 @@ export default async function PublicProPage({
       })
     : null;
   // Real Checkr background check (0057): same rules as license_verified_at
-  // above - free feature, not gated on membership, and a 'consider' or
+  // and the "on file" badge - free feature, not gated on membership, and a
+  // 'consider' or
   // in-progress check is never shown publicly (indistinguishable from
   // 'none'). This page only ever renders the positive, confirmed case.
   const backgroundCheckedAt = profile.background_checked_at ?? null;
@@ -419,6 +430,52 @@ export default async function PublicProPage({
             </div>
           )}
 
+          {/* Honest neutral empty state: no CSLB-verified license AND nothing
+              self-reported on file. Muted stone, not alarming - just states
+              the fact so the absence reads as neutral, not as a red flag. */}
+          {!licenseVerifiedLabel && !profile.has_license && (
+            <div className="mt-3">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-xs font-medium text-stone-500 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400">
+                No license listed
+              </span>
+            </div>
+          )}
+
+          {/* Outbound review-page links (0110). Plain links only: never
+              embeds review content or shows star counts from those sites, just
+              a button that opens the pro's own Yelp / Google page. Sits near
+              the trust badges above; the one-line disclaimer keeps clear that
+              these are not Hearth-verified. */}
+          {(profile.yelp_url || profile.google_reviews_url) && (
+            <div className="mt-3">
+              <div className="flex flex-wrap gap-2">
+                {profile.yelp_url && (
+                  <a
+                    href={profile.yelp_url}
+                    target="_blank"
+                    rel="noopener nofollow"
+                    className="btn-secondary inline-flex text-sm"
+                  >
+                    See our reviews on Yelp
+                  </a>
+                )}
+                {profile.google_reviews_url && (
+                  <a
+                    href={profile.google_reviews_url}
+                    target="_blank"
+                    rel="noopener nofollow"
+                    className="btn-secondary inline-flex text-sm"
+                  >
+                    See our reviews on Google
+                  </a>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                Reviews on outside sites are not verified by Hearth.
+              </p>
+            </div>
+          )}
+
           {profile.categories.length > 0 && (
             <div className="mt-4 flex flex-wrap gap-1.5">
               {profile.categories.map((c) => (
@@ -438,9 +495,20 @@ export default async function PublicProPage({
           )}
 
           <div className="mt-5">
-            <a href={requestQuoteHref} className="btn-primary inline-flex">
-              Request a quote
-            </a>
+            {user ? (
+              // profile.id is the real contractor UUID (the [id] param may be a
+              // slug), which is what requestProAction targets.
+              <RequestQuoteForm
+                contractorId={profile.id}
+                contractorName={profile.name}
+                categories={profile.categories}
+                action={requestProAction}
+              />
+            ) : (
+              <Link href={requestQuoteHref} className="btn-primary inline-flex">
+                Request a quote
+              </Link>
+            )}
           </div>
 
           {about && (
@@ -564,12 +632,12 @@ export default async function PublicProPage({
       </div>
 
       <p className="mt-6 text-center text-sm text-stone-500 dark:text-stone-400">
-        <a
+        <Link
           href="/pros"
           className="inline-flex items-center gap-1.5 hover:text-bark-700 hover:underline dark:hover:text-stone-300"
         >
           <Logo className="h-4 w-4" /> Powered by Hearth
-        </a>
+        </Link>
       </p>
     </main>
   );

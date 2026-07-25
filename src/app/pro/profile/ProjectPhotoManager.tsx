@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import InlineSpinner from "@/components/InlineSpinner";
 
 // Multi-photo uploader for a project album. Same client-upload machinery as
 // LogoUpload/PhotoUpload: files go straight to the PUBLIC `pro-logos` bucket
@@ -40,45 +41,52 @@ export default function ProjectPhotoManager({
     let failures = 0;
     let overflow = 0;
 
-    for (const [i, file] of files.entries()) {
-      if (i >= room) {
-        overflow++;
-        continue;
+    // finally guarantees busy resets even if an upload promise rejects
+    // (network blip, thrown error), so the input never stays disabled until a
+    // page reload.
+    try {
+      for (const [i, file] of files.entries()) {
+        if (i >= room) {
+          overflow++;
+          continue;
+        }
+        // Skip anything oversized or not an allowed raster image. SVG is rejected
+        // explicitly: this writes to the PUBLIC pro-logos bucket, where an SVG
+        // could carry script that runs on the storage origin.
+        if (file.size > MAX_BYTES || !["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+          failures++;
+          continue;
+        }
+        const rawExt = file.name.split(".").pop()?.toLowerCase() ?? "";
+        const ext = /^[a-z0-9]{1,5}$/.test(rawExt) ? rawExt : "jpg";
+        const id = crypto.randomUUID();
+        const path = `${contractorId}/projects/${id}.${ext}`;
+        const { error } = await supabase.storage
+          .from("pro-logos")
+          .upload(path, file, { upsert: false });
+        if (error) {
+          failures++;
+          continue;
+        }
+        const { data } = supabase.storage.from("pro-logos").getPublicUrl(path);
+        setPhotos((prev) => [...prev, { url: data.publicUrl, before: false }]);
       }
-      // Skip anything oversized or not an allowed raster image. SVG is rejected
-      // explicitly: this writes to the PUBLIC pro-logos bucket, where an SVG
-      // could carry script that runs on the storage origin.
-      if (file.size > MAX_BYTES || !["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
-        failures++;
-        continue;
-      }
-      const ext = file.name.split(".").pop() || "jpg";
-      const id = crypto.randomUUID();
-      const path = `${contractorId}/projects/${id}.${ext}`;
-      const { error } = await supabase.storage
-        .from("pro-logos")
-        .upload(path, file, { upsert: false });
-      if (error) {
-        failures++;
-        continue;
-      }
-      const { data } = supabase.storage.from("pro-logos").getPublicUrl(path);
-      setPhotos((prev) => [...prev, { url: data.publicUrl, before: false }]);
-    }
 
-    setBusy(false);
-    const problems: string[] = [];
-    if (failures) {
-      problems.push(
-        `${failures} photo${failures > 1 ? "s" : ""} couldn't upload (is the pro-logos bucket created?).`
-      );
+      const problems: string[] = [];
+      if (failures) {
+        problems.push(
+          `${failures} photo${failures > 1 ? "s" : ""} couldn't upload (is the pro-logos bucket created?).`
+        );
+      }
+      if (overflow) {
+        problems.push(`A project can have up to ${MAX_PHOTOS} photos.`);
+      }
+      setErr(problems.length ? problems.join(" ") : null);
+    } finally {
+      setBusy(false);
+      // Reset so picking the same file again still fires onChange.
+      input.value = "";
     }
-    if (overflow) {
-      problems.push(`A project can have up to ${MAX_PHOTOS} photos.`);
-    }
-    setErr(problems.length ? problems.join(" ") : null);
-    // Reset so picking the same file again still fires onChange.
-    input.value = "";
   }
 
   function toggleBefore(index: number) {
@@ -99,14 +107,19 @@ export default function ProjectPhotoManager({
         accept="image/*"
         multiple
         onChange={onPick}
-        disabled={photos.length >= MAX_PHOTOS}
+        disabled={busy || photos.length >= MAX_PHOTOS}
         className="block w-full text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-hearth-100 file:px-3 file:py-1.5 file:text-hearth-800 dark:text-stone-300"
       />
       <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
         Up to {MAX_PHOTOS} photos. Tag a photo &quot;Before&quot; to build a
         before/after story.
       </p>
-      {busy && <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">Uploading…</p>}
+      {busy && (
+        <p className="mt-1 flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
+          <InlineSpinner size={14} />
+          Uploading…
+        </p>
+      )}
       {err && <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">{err}</p>}
 
       {photos.length > 0 && (
@@ -124,7 +137,7 @@ export default function ProjectPhotoManager({
                   type="button"
                   onClick={() => remove(i)}
                   aria-label="Remove photo"
-                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-stone-200 bg-white text-xs text-stone-500 shadow-sm hover:text-stone-800 dark:border-white/10 dark:bg-stone-800 dark:text-stone-400 dark:hover:text-stone-100"
+                  className="absolute -right-1.5 -top-1.5 flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-xs text-stone-500 shadow-sm hover:text-stone-800 sm:h-5 sm:w-5 dark:border-white/10 dark:bg-stone-800 dark:text-stone-400 dark:hover:text-stone-100"
                 >
                   ×
                 </button>

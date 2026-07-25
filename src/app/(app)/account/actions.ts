@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as createJsClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { setFlash } from "@/lib/flash";
+import { friendlyAuthError } from "@/lib/friendlyAuthError";
 import { stripe } from "@/lib/stripe";
 import { eraseUserData, type EraseSummary } from "@/lib/privacy";
 import { isMissingSchemaError } from "@/lib/dbErrors";
@@ -85,7 +86,7 @@ export async function saveAccountAction(formData: FormData) {
     data: { full_name },
   });
   if (authError) {
-    setFlash(authError.message, "error");
+    setFlash("Couldn't save your name just now. Please try again.", "error");
     redirect("/account");
   }
 
@@ -118,7 +119,7 @@ export async function updateEmailAction(formData: FormData) {
 
   const { error } = await supabase.auth.updateUser({ email });
   if (error) {
-    setFlash(error.message, "error");
+    setFlash(friendlyAuthError(error), "error");
     redirect("/account/security");
   }
 
@@ -166,7 +167,7 @@ export async function updatePasswordAction(formData: FormData) {
 
   const { error } = await supabase.auth.updateUser({ password: next });
   if (error) {
-    setFlash(error.message, "error");
+    setFlash(friendlyAuthError(error), "error");
     redirect("/account/security");
   }
 
@@ -186,7 +187,10 @@ export async function signOutOthersAction() {
 
   const { error } = await supabase.auth.signOut({ scope: "others" });
   if (error) {
-    setFlash(error.message, "error");
+    setFlash(
+      "Couldn't sign out your other devices just now. Please try again.",
+      "error"
+    );
     redirect("/account/security");
   }
 
@@ -297,7 +301,10 @@ export async function deleteAccountAction(formData: FormData) {
 
   const { error } = await admin.auth.admin.deleteUser(user.id);
   if (error) {
-    setFlash(error.message, "error");
+    setFlash(
+      "Couldn't fully delete your account. Please try again, or contact support.",
+      "error"
+    );
     redirect("/account");
   }
 

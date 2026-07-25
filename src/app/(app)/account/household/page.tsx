@@ -129,7 +129,7 @@ export default async function HouseholdPage() {
             key={home.id}
             className="card p-6"
           >
-            <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">
+            <h2 className="break-words text-base font-semibold text-stone-900 dark:text-stone-100">
               {home.address_line1}
             </h2>
             <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
@@ -143,8 +143,8 @@ export default async function HouseholdPage() {
                     key={m.id}
                     className="flex items-center justify-between gap-3 py-2.5"
                   >
-                    <div>
-                      <p className="text-sm text-stone-900 dark:text-stone-100">{m.invited_email}</p>
+                    <div className="min-w-0">
+                      <p className="break-words text-sm text-stone-900 dark:text-stone-100">{m.invited_email}</p>
                       <p className="text-xs text-stone-500 dark:text-stone-400">Member</p>
                     </div>
                     <form action={removeMemberAction}>
@@ -163,8 +163,8 @@ export default async function HouseholdPage() {
                     key={m.id}
                     className="flex items-center justify-between gap-3 py-2.5"
                   >
-                    <div>
-                      <p className="text-sm text-stone-900 dark:text-stone-100">{m.invited_email}</p>
+                    <div className="min-w-0">
+                      <p className="break-words text-sm text-stone-900 dark:text-stone-100">{m.invited_email}</p>
                       <p className="text-xs text-stone-500 dark:text-stone-400">
                         Invited. Waiting for them to sign up or sign in with
                         this email.
@@ -226,8 +226,8 @@ export default async function HouseholdPage() {
             className="card p-6"
           >
             <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">
+              <div className="min-w-0">
+                <h2 className="break-words text-base font-semibold text-stone-900 dark:text-stone-100">
                   {home.address_line1}
                 </h2>
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">Shared with you.</p>

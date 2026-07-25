@@ -213,6 +213,7 @@ export async function POST() {
     "Under Questions to ask each agent, list practical coverage questions in plain sentences: replacement cost versus actual cash value, dwelling coverage limits, deductibles including wind or hail if relevant to the region, water backup, and available discounts for the updates listed. " +
     "Under What to compare beyond price, explain in a few sentences what matters besides the premium: matching coverage limits and deductibles across quotes, claim handling reputation, and exclusions. " +
     "Use only the facts provided. Never invent coverage details, claim history, quotes, discounts, or any other facts: where information is missing, use a clearly bracketed placeholder instead. " +
+    "Before finishing, re-read the packet and confirm every figure, date, and system detail in it exactly matches the facts you were given, replacing anything not provided with a bracketed placeholder rather than an invented value. " +
     "Never promise or predict savings, and never say the owner is overpaying: shopping around is worth checking, nothing more. " +
     "Do not give legal or financial advice, and do not recommend specific insurers. " +
     "Keep the whole packet under 450 words. " +

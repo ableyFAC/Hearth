@@ -32,6 +32,7 @@ import ChecklistProvider from "@/components/ChecklistProvider";
 import ReminderItem from "./ReminderItem";
 import WalkthroughNudge from "./WalkthroughNudge";
 import HomeAlerts from "@/components/HomeAlerts";
+import WeatherStrip from "@/components/WeatherStrip";
 import CategoryIcon from "@/components/CategoryIcon";
 import {
   Home,
@@ -482,6 +483,10 @@ export default async function HomePage({
 
   return (
     <div className="space-y-8">
+      {/* Current conditions for the home's city, one quiet row. Renders only
+          when the lookup succeeds; shares its fetch with HomeAlerts below. */}
+      <WeatherStrip propertyId={property.id} />
+
       {searchParams.welcome && (
         <>
           <Confetti />
@@ -530,7 +535,7 @@ export default async function HomePage({
 
       {/* Property header */}
       <section>
-        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
+        <h1 className="break-words text-2xl font-semibold text-stone-900 dark:text-stone-100">
           {property.address_line1}
           {property.city ? `, ${property.city}` : ""}
         </h1>
@@ -564,7 +569,7 @@ export default async function HomePage({
       </section>
 
       {/* Proactive weather + safety-recall alerts; self-hides when there's none */}
-      <HomeAlerts />
+      <HomeAlerts propertyId={property.id} />
 
       {/* Key stats, kept above the fold so the Health Score is the first
           thing the owner sees. */}

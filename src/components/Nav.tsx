@@ -22,7 +22,12 @@ export default function Nav({
 }) {
   const LINKS = [
     { href: "/dashboard", label: "Home", icon: "home" },
-    { href: "/issues", label: "Issues", icon: "issues" },
+    {
+      href: "/contractors/browse",
+      label: "Browse Pros",
+      shortLabel: "Pros",
+      icon: "pros",
+    },
     {
       href: "/contractors",
       label: "Post a Job",
@@ -103,6 +108,7 @@ export default function Nav({
             themeToggle
             links={[
               { href: "/account", label: "Edit profile" },
+              { href: "/issues", label: "Issues" },
               { href: "/account/household", label: "Household" },
               { href: "/account/notifications", label: "Notifications" },
               { href: "/account/privacy", label: "Your privacy rights" },

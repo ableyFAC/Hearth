@@ -3,7 +3,9 @@ import {
   hasPlus,
   getSubscription,
   getBillingOutlook,
+  getExtraHomeSlots,
 } from "@/lib/subscription";
+import { getProperties } from "@/lib/property";
 import {
   manageBillingAction,
   upgradeToYearlyAction,
@@ -13,6 +15,7 @@ import {
   resumeMembershipAction,
 } from "./actions";
 import PlanToggle from "./PlanToggle";
+import ExtraHomes from "./ExtraHomes";
 import PlusWelcome from "./PlusWelcome";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
 import SubmitButton from "@/components/SubmitButton";
@@ -88,8 +91,22 @@ export default async function PlusPage({
 
   if (plus) {
     // Pending billing changes (downgrade schedule, cancellation), read live
-    // from Stripe in one call.
-    const { scheduledDowngrade, cancelsAt } = await getBillingOutlook(sub);
+    // from Stripe in one call. Alongside it, the data the "More homes" add-on
+    // section needs: how many homes the member owns and how many extra slots
+    // they've already bought.
+    const [{ scheduledDowngrade, cancelsAt }, properties, extraSlots] =
+      await Promise.all([
+        getBillingOutlook(sub),
+        getProperties(),
+        getExtraHomeSlots(),
+      ]);
+    const homesUsed = properties.filter((p) => !p.isShared).length;
+    // The add-on bills on the same cadence as the base plan, so only a
+    // monthly/yearly member can buy it. A grandfathered weekly member must
+    // switch cadence first.
+    const isWeekly = sub?.plan === "weekly";
+    const addonInterval: "monthly" | "yearly" | null =
+      sub?.plan === "yearly" ? "yearly" : sub?.plan === "monthly" ? "monthly" : null;
     const renewsOn = sub?.current_period_end
       ? new Date(sub.current_period_end).toLocaleDateString()
       : "your renewal date";
@@ -145,27 +162,34 @@ export default async function PlusPage({
               <p className="text-xs font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
                 Change plan
               </p>
+              {isWeekly && (
+                <p className="rounded-lg border border-stone-200 bg-stone-50 p-3 text-left text-xs text-stone-600 dark:border-white/10 dark:bg-stone-900 dark:text-stone-300">
+                  Your weekly plan is a legacy plan we no longer offer. You keep
+                  it as long as you like, but you can switch to monthly or yearly
+                  anytime below. Extra homes are available on monthly and yearly.
+                </p>
+              )}
               {sub.plan !== "yearly" && (
                 <>
                   <form action={upgradeToYearlyAction}>
                     <ConfirmSubmit
                       label="Switch to yearly, $39.99/yr (save 33%)"
-                      note="You'll be charged today, with your unused monthly time credited toward it. Switch to yearly?"
+                      note="You'll be charged today, with your unused time credited toward it. Switch to yearly?"
                       yesLabel="Yes, switch to yearly"
                     />
                   </form>
                   <p className="text-xs text-stone-500 dark:text-stone-400">
-                    Starts today. Unused monthly time is credited toward the
-                    yearly charge.
+                    Starts today. Your unused time is credited toward the yearly
+                    charge.
                   </p>
                 </>
               )}
-              {sub.plan === "yearly" && !scheduledDowngrade && (
+              {(sub.plan === "yearly" || isWeekly) && !scheduledDowngrade && (
                 <>
                   <form action={downgradeToMonthlyAction}>
                     <ConfirmSubmit
                       label="Switch to monthly at renewal"
-                      note={`Nothing changes today. You keep yearly until ${renewsOn}, then it becomes $4.99/mo. Switch?`}
+                      note={`Nothing changes today. You keep what you have until ${renewsOn}, then it becomes $4.99/mo. Switch?`}
                       yesLabel="Yes, switch at renewal"
                     />
                   </form>
@@ -175,7 +199,7 @@ export default async function PlusPage({
                   </p>
                 </>
               )}
-              {sub.plan === "yearly" && scheduledDowngrade && (
+              {(sub.plan === "yearly" || isWeekly) && scheduledDowngrade && (
                 <>
                   <p className="text-sm text-stone-600 dark:text-stone-300">
                     Switching to monthly on{" "}
@@ -183,7 +207,7 @@ export default async function PlusPage({
                   </p>
                   <form action={keepYearlyAction}>
                     <SubmitButton className="btn-secondary" pendingLabel="Saving…">
-                      Keep yearly
+                      {isWeekly ? "Keep my current plan" : "Keep yearly"}
                     </SubmitButton>
                   </form>
                 </>
@@ -199,6 +223,16 @@ export default async function PlusPage({
             </div>
           )}
         </div>
+        {/* Pay-per-extra-home add-on, monthly/yearly members only. Weekly is
+            grandfathered and can't buy it - the legacy note in the Change plan
+            block above tells those members to switch cadence first. */}
+        {addonInterval && (
+          <ExtraHomes
+            interval={addonInterval}
+            currentSlots={extraSlots}
+            homesUsed={homesUsed}
+          />
+        )}
         <div className="card">
           <p className="mb-3 text-sm font-semibold text-stone-900 dark:text-stone-100">
             Everything you have
@@ -364,7 +398,7 @@ export default async function PlusPage({
         <p className="mt-2 text-sm font-medium text-bark-700 dark:text-stone-300">
           {trialEligible
             ? "Free for 3 days, then $4.99/mo or $39.99/yr. Cancel anytime."
-            : "$1.99/wk, $4.99/mo, or $39.99/yr. Cancel anytime."}
+            : "$4.99/mo or $39.99/yr. Cancel anytime."}
         </p>
         <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
           {COLD_START_FREE_POSTING

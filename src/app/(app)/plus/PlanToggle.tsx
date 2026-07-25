@@ -6,26 +6,18 @@ import AutoRenewalTerms from "@/components/AutoRenewalTerms";
 import SubmitButton from "@/components/SubmitButton";
 import { PLUS_PLAN } from "@/lib/constants";
 
-type Plan = "weekly" | "monthly" | "yearly";
+type Plan = "monthly" | "yearly";
 
-// Yearly reframed as a weekly and monthly cost, so the sticker price ($39.99)
-// doesn't have to do all the work on its own.
-const YEARLY_PER_WEEK = (PLUS_PLAN.yearly / 52).toFixed(2);
+// Yearly reframed as a monthly cost and its saving vs paying monthly, so the
+// sticker price ($39.99) doesn't have to do all the work on its own. Compared
+// against monthly x 12 ($59.88), never an invented list price.
 const YEARLY_PER_MONTH = (PLUS_PLAN.yearly / 12).toFixed(2);
-// The weekly plan reframed upward, so the cheapest-looking sticker ($1.99)
-// doesn't hide what a year of it actually costs.
-const WEEKLY_PER_YEAR = Math.round(PLUS_PLAN.weekly * 52);
+const YEARLY_SAVING = Math.round(PLUS_PLAN.monthly * 12 - PLUS_PLAN.yearly);
 
 const PLAN_COPY: Record<
   Plan,
   { label: string; price: string; unit: string; billed: string }
 > = {
-  weekly: {
-    label: "Weekly",
-    price: `$${PLUS_PLAN.weekly}`,
-    unit: "/week",
-    billed: "billed every week",
-  },
   monthly: {
     label: "Monthly",
     price: `$${PLUS_PLAN.monthly}`,
@@ -40,15 +32,14 @@ const PLAN_COPY: Record<
   },
 };
 
-// Three plan cards, replacing the old monthly/yearly toggle now that Plus
-// also has a weekly option. Yearly is picked by default since it's the plan
-// worth recommending; weekly is priced and selectable but kept visually
-// small, since it's the cheap-looking anchor next to the other two, not the
-// plan we're steering anyone toward.
+// Two plan cards: monthly and yearly. Weekly was retired as a new-checkout
+// option (existing weekly subscribers keep their plan), so it's no longer
+// offered here. Yearly is selected by default since it's the plan worth
+// recommending, and it carries the "about $3.33/mo, save vs monthly" framing.
 //
 // `trialEligible` mirrors the exact signal startPlusCheckoutAction uses to
-// grant the 3-day trial (no existing homeowner subscription row), and now
-// applies the same way to all three cadences.
+// grant the 3-day trial (no existing homeowner subscription row), and applies
+// the same way to both cadences.
 export default function PlanToggle({
   trialEligible = true,
 }: {
@@ -59,17 +50,16 @@ export default function PlanToggle({
 
   return (
     <div id="pricing" className="card-hero space-y-4 text-center">
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         {(Object.keys(PLAN_COPY) as Plan[]).map((key) => {
           const selected = plan === key;
-          const isWeekly = key === "weekly";
           return (
             <button
               key={key}
               type="button"
               onClick={() => setPlan(key)}
               aria-pressed={selected}
-              className={`relative rounded-xl border p-3 text-center transition-colors ${
+              className={`relative rounded-xl border p-4 text-center transition-colors ${
                 selected
                   ? "border-bark-600 bg-bark-50 dark:border-bark-600 dark:bg-bark-700/30"
                   : "border-stone-200 bg-white hover:border-stone-300 dark:border-white/10 dark:bg-stone-900 dark:hover:border-white/20"
@@ -80,22 +70,10 @@ export default function PlanToggle({
                   Best value
                 </span>
               )}
-              <span
-                className={`block font-medium ${
-                  isWeekly
-                    ? "text-xs text-stone-500 dark:text-stone-400"
-                    : "text-sm text-stone-700 dark:text-stone-300"
-                }`}
-              >
+              <span className="block text-sm font-medium text-stone-700 dark:text-stone-300">
                 {PLAN_COPY[key].label}
               </span>
-              <span
-                className={
-                  isWeekly
-                    ? "block text-base font-medium text-stone-500 dark:text-stone-400"
-                    : "block text-xl font-semibold text-stone-900 dark:text-stone-100"
-                }
-              >
+              <span className="block text-xl font-semibold text-stone-900 dark:text-stone-100">
                 {PLAN_COPY[key].price}
                 <span className="text-xs font-normal text-stone-500 dark:text-stone-400">
                   {PLAN_COPY[key].unit}
@@ -103,12 +81,7 @@ export default function PlanToggle({
               </span>
               {key === "yearly" && (
                 <span className="mt-0.5 block text-[11px] text-stone-500 dark:text-stone-400">
-                  about ${YEARLY_PER_WEEK}/week
-                </span>
-              )}
-              {isWeekly && (
-                <span className="mt-0.5 block text-[11px] text-stone-500 dark:text-stone-400">
-                  about ${WEEKLY_PER_YEAR}/year
+                  about ${YEARLY_PER_MONTH}/mo, save ${YEARLY_SAVING} a year
                 </span>
               )}
             </button>
@@ -130,12 +103,7 @@ export default function PlanToggle({
         </p>
         {plan === "yearly" && (
           <p className="text-xs text-stone-500 dark:text-stone-400">
-            about ${YEARLY_PER_WEEK}/week, or ${YEARLY_PER_MONTH}/month
-          </p>
-        )}
-        {plan === "weekly" && (
-          <p className="text-xs text-stone-500 dark:text-stone-400">
-            about ${WEEKLY_PER_YEAR}/year
+            about ${YEARLY_PER_MONTH}/month, save ${YEARLY_SAVING} vs monthly
           </p>
         )}
         <p className="text-xs text-stone-500 dark:text-stone-400">
@@ -147,9 +115,9 @@ export default function PlanToggle({
 
       {/* The recurring terms sit INSIDE the checkout form, immediately above
           the button that starts the charge, so the disclosure and the act of
-          consent are in visual proximity (see AutoRenewalTerms). Every plan
-          now carries the same 3-day trial, so introEligible mirrors
-          trialEligible directly instead of being plan-specific. */}
+          consent are in visual proximity (see AutoRenewalTerms). Both plans
+          carry the same 3-day trial, so introEligible mirrors trialEligible
+          directly instead of being plan-specific. */}
       <form action={startPlusCheckoutAction} className="space-y-3">
         <input type="hidden" name="plan" value={plan} />
         <AutoRenewalTerms plan={plan} introEligible={trialEligible} />

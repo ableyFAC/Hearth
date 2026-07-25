@@ -7,6 +7,8 @@ import {
   deleteReminderAction,
 } from "./actions";
 import { useChecklist } from "@/components/ChecklistProvider";
+import { useToast } from "@/components/ToastProvider";
+import InlineSpinner from "@/components/InlineSpinner";
 
 const MONTHS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -92,11 +94,8 @@ export default function ReminderItem({
   // True only right after the toggle turns a reminder on, so the check-pop
   // animation plays for that action and not for items already done on load.
   const [justCompleted, setJustCompleted] = useState(false);
-  // Server errors already surface as a toast (the actions call setFlash), but
-  // a truly unexpected failure (network drop, etc.) never reaches that code
-  // path, so this is a local fallback the row can show right where it happened.
-  const [actionError, setActionError] = useState<string | null>(null);
   const checklist = useChecklist();
+  const toast = useToast();
 
   useEffect(() => {
     checklist?.register(id, initialDone);
@@ -107,7 +106,6 @@ export default function ReminderItem({
 
   async function remove() {
     setBusy(true);
-    setActionError(null);
     // Optimistic: hide the row immediately, restore it if the delete fails.
     checklist?.unregister(id);
     setRemoved(true);
@@ -121,7 +119,10 @@ export default function ReminderItem({
     } catch {
       setRemoved(false);
       checklist?.register(id, done);
-      setActionError("Couldn't remove that reminder. Please try again.");
+      // Server errors already surface as a toast (the actions call setFlash);
+      // this fallback covers a truly unexpected failure (network drop, etc.)
+      // that never reaches that path.
+      toast.error("Couldn't remove that reminder. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -130,7 +131,6 @@ export default function ReminderItem({
   async function toggle() {
     const next = !done;
     setBusy(true);
-    setActionError(null);
     // Optimistic: flip the checkbox immediately, revert on failure. The
     // checklist report (which can trigger the once-per-session completion
     // celebration) waits for server confirmation, so a toggle that rolls
@@ -151,7 +151,8 @@ export default function ReminderItem({
     } catch {
       setDone(!next);
       setJustCompleted(false);
-      setActionError("Couldn't update that reminder. Please try again.");
+      // Fallback for an unexpected failure the server toast never sees.
+      toast.error("Couldn't update that reminder. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -208,17 +209,13 @@ export default function ReminderItem({
             type="button"
             onClick={remove}
             disabled={busy}
-            className="flex min-h-[44px] items-center px-1 text-xs text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
+            className="flex min-h-[44px] items-center gap-1.5 px-1 text-xs text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
           >
+            {busy && <InlineSpinner size={12} />}
             Delete
           </button>
         </div>
       </div>
-      {actionError && (
-        <p role="alert" className="px-2 pb-1 text-xs text-red-600 dark:text-red-400">
-          {actionError}
-        </p>
-      )}
     </li>
   );
 }

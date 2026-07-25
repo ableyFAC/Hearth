@@ -27,11 +27,52 @@ function periodEnd(subscription: any): string | null {
   return ts ? new Date(ts * 1000).toISOString() : null;
 }
 
-// Derive the stored plan ("monthly"/"yearly") from the price actually on the
-// subscription. It changes on an immediate upgrade and again when a scheduled
-// downgrade's monthly phase kicks in at period end.
+// The env-configured tiered volume Price ids for the extra-home add-on. An
+// add-on subscription item is identified by matching one of these price ids,
+// or - for the inline price_data fallback path that has no pre-created Price -
+// by the hearth_addon="home_slots" metadata setExtraHomesAction stamps on the
+// item.
+function homeSlotPriceIds(): string[] {
+  return [
+    process.env.STRIPE_PRICE_HOME_SLOT_MONTHLY,
+    process.env.STRIPE_PRICE_HOME_SLOT_YEARLY,
+  ].filter((id): id is string => Boolean(id));
+}
+
+// Whether a subscription item is the extra-home add-on rather than the base
+// Plus plan.
+function isHomeSlotItem(item: any): boolean {
+  if (!item) return false;
+  if (item.metadata?.hearth_addon === "home_slots") return true;
+  const priceId = item.price?.id;
+  return priceId ? homeSlotPriceIds().includes(priceId) : false;
+}
+
+// The BASE plan item on a subscription: the one that is NOT the extra-home
+// add-on. A subscription carries only the base item until a member buys extra
+// homes, when a second (add-on) item joins it. planFromItems must read the
+// base item's interval, never the add-on's, so a two-item subscription still
+// reports the plan the member actually bought.
+function baseItem(subscription: any): any {
+  const items = subscription?.items?.data ?? [];
+  return items.find((i: any) => !isHomeSlotItem(i)) ?? items[0] ?? null;
+}
+
+// Total paid extra-home slots on the subscription, read off the add-on item's
+// quantity. 0 when there is no add-on item.
+function extraHomeSlotsFromItems(subscription: any): number {
+  const items = subscription?.items?.data ?? [];
+  const addon = items.find((i: any) => isHomeSlotItem(i));
+  const qty = Number(addon?.quantity);
+  return Number.isFinite(qty) && qty > 0 ? qty : 0;
+}
+
+// Derive the stored plan ("monthly"/"yearly") from the price on the BASE
+// subscription item (never the extra-home add-on item). It changes on an
+// immediate upgrade and again when a scheduled downgrade's monthly phase kicks
+// in at period end.
 function planFromItems(subscription: any): string | null {
-  const interval = subscription?.items?.data?.[0]?.price?.recurring?.interval;
+  const interval = baseItem(subscription)?.price?.recurring?.interval;
   if (interval === "year") return "yearly";
   if (interval === "month") return "monthly";
   return null;
@@ -966,16 +1007,38 @@ export async function POST(req: NextRequest) {
         await releaseIntroReservationIfUnused(admin, existing.user_id);
       }
     }
-    await (admin as any)
+    // Paid extra-home slots are the source-of-truth here: derived from the
+    // add-on item's quantity, and forced to 0 on deletion/cancellation so the
+    // bought homes lapse with Plus (existing homes are never deleted; the cap
+    // only blocks NEW inserts). A pro-side subscription never carries a
+    // home-slot item, so this is 0 for pro rows and harmless to write.
+    const extraSlots =
+      event.type === "customer.subscription.deleted"
+        ? 0
+        : extraHomeSlotsFromItems(subscription);
+
+    const baseUpdate = {
+      status,
+      // Only overwrite the plan when the payload carries items we can read.
+      ...(plan ? { plan } : {}),
+      current_period_end: periodEnd(subscription),
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error: updateError } = await (admin as any)
       .from("subscriptions")
-      .update({
-        status,
-        // Only overwrite the plan when the payload carries items we can read.
-        ...(plan ? { plan } : {}),
-        current_period_end: periodEnd(subscription),
-        updated_at: new Date().toISOString(),
-      })
+      .update({ ...baseUpdate, extra_home_slots: extraSlots })
       .eq("stripe_subscription_id", subscription.id);
+    // Graceful degradation: if the live DB hasn't run migration 0108 yet, the
+    // extra_home_slots column doesn't exist. Retry without it so status/plan
+    // sync - the part that actually keeps a membership live - never breaks over
+    // the add-on column, same convention as upsertSubscriptionRow above.
+    if (updateError && isMissingSchemaError(updateError)) {
+      await (admin as any)
+        .from("subscriptions")
+        .update(baseUpdate)
+        .eq("stripe_subscription_id", subscription.id);
+    }
   }
 
   // Recurring Pro perk: every paid billing cycle grants bonus lead credit

@@ -1,5 +1,6 @@
 import { LegalContact } from "@/components/LegalContact";
 import type { Metadata } from "next";
+import Link from "next/link";
 
 // Public top-level page, same pattern as src/app/fountain-valley/page.tsx:
 // see src/lib/supabase/middleware.ts for the allowlist entry and
@@ -25,9 +26,9 @@ export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-2xl px-6 pb-16 pt-10">
       <p className="text-sm">
-        <a href="/" className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
+        <Link href="/" className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
           ← Hearth
-        </a>
+        </Link>
       </p>
 
       <h1 className="mt-4 text-2xl font-bold text-stone-900 sm:text-3xl dark:text-stone-100">
@@ -306,9 +307,9 @@ export default function PrivacyPage() {
             Hearth&apos;s choice. We plan to move to Google&apos;s paid tier,
             under which Google states it does not use your data this way.
             See{" "}
-            <a href="/ai-disclosure" className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href="/ai-disclosure" className="text-bark-700 hover:underline dark:text-stone-300">
               How Hearth Uses AI
-            </a>{" "}
+            </Link>{" "}
             for the fuller explanation.
           </p>
         </section>
@@ -512,9 +513,9 @@ export default function PrivacyPage() {
             deleting your account, and correcting your profile, live in your
             account settings once you&apos;re signed in, under Account &gt;
             Your privacy rights. See{" "}
-            <a href="/account/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href="/account/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
               Your privacy rights
-            </a>{" "}
+            </Link>{" "}
             for those controls, or reach us through{" "}
             <LegalContact />
             {" "}for anything they don&apos;t cover.

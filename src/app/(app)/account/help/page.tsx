@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getUserProfile } from "@/lib/user";
 import { getUser } from "@/lib/auth";
 import { FOUNDER } from "@/lib/constants";
@@ -70,12 +71,12 @@ export default async function HelpPage() {
               </summary>
               <p className="mt-2 text-sm text-stone-600 dark:text-stone-300">{f.a}</p>
               {f.href && (
-                <a
+                <Link
                   href={f.href}
                   className="mt-2 inline-block text-sm font-medium text-bark-700 hover:underline dark:text-stone-300"
                 >
                   {f.hrefLabel} →
-                </a>
+                </Link>
               )}
             </details>
           ))}

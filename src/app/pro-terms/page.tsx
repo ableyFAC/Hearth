@@ -1,5 +1,6 @@
 import { LegalContact } from "@/components/LegalContact";
 import type { Metadata } from "next";
+import Link from "next/link";
 
 // Public top-level page, same pattern as src/app/terms/page.tsx:
 // see src/lib/supabase/middleware.ts for the allowlist entry and
@@ -29,9 +30,9 @@ export default function ProTermsPage() {
   return (
     <main className="mx-auto max-w-2xl px-6 pb-16 pt-10">
       <p className="text-sm">
-        <a href="/" className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
+        <Link href="/" className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
           ← Hearth
-        </a>
+        </Link>
       </p>
 
       <h1 className="mt-4 text-2xl font-bold text-stone-900 sm:text-3xl dark:text-stone-100">
@@ -52,13 +53,13 @@ export default function ProTermsPage() {
             contractor, tradesperson, or company (&quot;pro&quot;) to receive
             leads, message homeowners, or get paid through Hearth for Pros.
             They supplement, and don&apos;t replace, the general{" "}
-            <a href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
               Terms of Service
-            </a>{" "}
+            </Link>{" "}
             and{" "}
-            <a href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
               Privacy Policy
-            </a>
+            </Link>
             , which still govern everything about your account that isn&apos;t
             specific to operating as a pro. If something here conflicts with
             the general Terms of Service on a pro-specific point, these terms
@@ -90,9 +91,9 @@ export default function ProTermsPage() {
             Where Hearth shows your license as verified, that means we checked
             the license number against the CSLB public registry at that point
             in time, as described in the general{" "}
-            <a href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
               Terms of Service
-            </a>
+            </Link>
             . It is a point-in-time public-records check, not an ongoing
             guarantee that your license or insurance stays valid, and it
             doesn&apos;t substitute for your own duty to keep both current.
@@ -229,15 +230,15 @@ export default function ProTermsPage() {
           </h2>
           <p className="mt-2 leading-relaxed">
             See the general{" "}
-            <a href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
               Terms of Service
-            </a>{" "}
+            </Link>{" "}
             for account-level terms (acceptable use, content, disputes and
             arbitration, and governing law) that apply to every Hearth user,
             including pros, and the{" "}
-            <a href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
               Privacy Policy
-            </a>{" "}
+            </Link>{" "}
             for what we collect and how it&apos;s used.
           </p>
         </section>

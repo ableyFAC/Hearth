@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import GuideCta from "@/components/GuideCta";
 
 // Public SEO guide. Cost range and "why" copy are pulled from the same
@@ -64,9 +65,9 @@ export default function HvacReplacementCostGuide() {
       />
 
       <p className="text-sm">
-        <a href="/guides" className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
+        <Link href="/guides" className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
           ← All guides
-        </a>
+        </Link>
       </p>
 
       <h1 className="mt-3 text-2xl font-bold text-stone-900 sm:text-3xl dark:text-stone-100">

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import InlineSpinner from "@/components/InlineSpinner";
 
 // A compact search box for the top nav. It routes to the /search page, which
 // matches the query against the homeowner's own home (systems, documents,
@@ -17,6 +18,7 @@ const EXAMPLES = [
 
 export default function GlobalSearch() {
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const [q, setQ] = useState("");
   const [focused, setFocused] = useState(false);
   // Plays the exit animation instead of an instant unmount: on the focused
@@ -40,7 +42,9 @@ export default function GlobalSearch() {
   function go(query: string) {
     const s = query.trim();
     setFocused(false);
-    if (s) router.push(`/search?q=${encodeURIComponent(s)}`);
+    // Wrap in a transition so the left icon can flip to a spinner the instant
+    // they submit, rather than the box sitting dead until the RSC payload lands.
+    if (s) startTransition(() => router.push(`/search?q=${encodeURIComponent(s)}`));
   }
 
   return (
@@ -63,19 +67,23 @@ export default function GlobalSearch() {
         role="search"
       >
         <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-500 dark:text-stone-400">
-          <svg
-            viewBox="0 0 24 24"
-            className="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <circle cx="11" cy="11" r="7" />
-            <path d="M21 21l-4.3-4.3" />
-          </svg>
+          {isPending ? (
+            <InlineSpinner size={16} />
+          ) : (
+            <svg
+              viewBox="0 0 24 24"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="M21 21l-4.3-4.3" />
+            </svg>
+          )}
         </span>
         <input
           type="search"

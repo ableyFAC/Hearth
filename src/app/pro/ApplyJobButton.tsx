@@ -1,8 +1,26 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
+import InlineSpinner from "@/components/InlineSpinner";
 import { applyToJobAction } from "./actions";
 import { GHOST_PROTECTION_DAYS } from "@/lib/constants";
+import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
+
+// Submit button for the "Confirm and pay" form below. Needs its own
+// component because useFormStatus only reports pending state inside a
+// descendant of the <form> it belongs to, not the component rendering the
+// form itself.
+function ConfirmPayButton({ fee }: { fee: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <button type="submit" disabled={pending} className="btn-primary flex-1 text-sm">
+      {pending && <InlineSpinner />}
+      Confirm and pay {fee}
+    </button>
+  );
+}
 
 // Quick-apply starter templates: plain string substitution, no AI and no cost.
 // They prefill the textarea so a pro can tap one, then personalize before
@@ -39,12 +57,18 @@ function quickApplyTemplates(category: string): { label: string; text: string }[
 export default function ApplyJobButton({
   leadId,
   fee,
+  feeCents,
   canAfford,
   category,
   billingHref = "/pro/billing",
 }: {
   leadId: string;
   fee: string;
+  // The displayed fee in cents, posted to the action so it can refuse to
+  // charge when the live price has climbed above what this card showed
+  // (e.g. the first big-ticket intro was consumed in another tab). Optional:
+  // without it the action simply skips that guard.
+  feeCents?: number;
   canAfford: boolean;
   // Job category label (already resolved via labelFor on the board), used to
   // personalize the quick-apply templates. Optional so nothing breaks if a
@@ -65,7 +89,7 @@ export default function ApplyJobButton({
   // auto-sends: this only touches the textarea's value). A hand-typed
   // message is never silently discarded: swapping between untouched
   // templates is free, but replacing custom text asks first.
-  function useTemplate(text: string) {
+  function applyTemplate(text: string) {
     const current = message.trim();
     const isTemplate = quickApplyTemplates(category || "this").some(
       (t) => t.text.trim() === current
@@ -92,7 +116,9 @@ export default function ApplyJobButton({
     setDrafting(true);
     setDraftError(null);
     try {
-      const resp = await fetch("/api/draft-apply", {
+      // Timeout-guarded: a hung drafting call must not strand the button in
+      // its busy state with no way to retry.
+      const resp = await fetchWithTimeout("/api/draft-apply", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ leadId }),
@@ -115,8 +141,12 @@ export default function ApplyJobButton({
           data?.error || "Couldn't draft a message. Try writing your own."
         );
       }
-    } catch {
-      setDraftError("Something went wrong. Please try again.");
+    } catch (e) {
+      setDraftError(
+        isTimeoutError(e)
+          ? "That took too long. Try again."
+          : "Something went wrong. Please try again."
+      );
     } finally {
       setDrafting(false);
     }
@@ -124,9 +154,9 @@ export default function ApplyJobButton({
 
   if (!canAfford) {
     return (
-      <a href={billingHref} className="btn-primary text-sm">
+      <Link href={billingHref} className="btn-primary text-sm">
         Add funds to apply ({fee})
-      </a>
+      </Link>
     );
   }
 
@@ -148,12 +178,15 @@ export default function ApplyJobButton({
       className="space-y-2 rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-white/10 dark:bg-stone-900"
     >
       <input type="hidden" name="id" value={leadId} />
+      {Number.isFinite(feeCents) && (
+        <input type="hidden" name="fee_cents" value={feeCents} />
+      )}
       <div className="flex flex-wrap gap-1.5">
         {quickApplyTemplates(category || "this").map((t) => (
           <button
             key={t.label}
             type="button"
-            onClick={() => useTemplate(t.text)}
+            onClick={() => applyTemplate(t.text)}
             className="chip border border-stone-200 bg-white text-stone-600 hover:border-hearth-300 hover:text-hearth-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-hearth-400 dark:hover:text-hearth-300"
           >
             {t.label}
@@ -179,8 +212,8 @@ export default function ApplyJobButton({
           {drafting ? "Drafting..." : "Draft it for me"}
         </button>
       </div>
-      {/* Matches the app's toast styling (see Toaster.tsx) so this reads as an
-          error, not a stray line of text. This form lives inside a client
+      {/* Matches the app's toast styling (see ToastProvider.tsx) so this reads
+          as an error, not a stray line of text. This form lives inside a client
           component that isn't rendered from a server action, so it can't use
           the flash-cookie toast; a styled inline card is the smallest honest
           stand-in. */}
@@ -203,10 +236,8 @@ export default function ApplyJobButton({
       <p className="text-xs text-stone-500 dark:text-stone-400">
         Applying charges the {fee} lead fee from your wallet. If the homeowner
         never responds and no one is picked, ghost protection returns it after{" "}
-        {GHOST_PROTECTION_DAYS} days. For licensed pros, the first-application
-        guarantee also applies. Not chosen on your first application? The fee
-        comes back as lead credit, spendable on any lead, and it expires after
-        60 days.
+        {GHOST_PROTECTION_DAYS} days. Not chosen? Your fee comes back as wallet
+        credit, good for 60 days.
       </p>
       <div className="flex gap-2">
         <button
@@ -216,9 +247,7 @@ export default function ApplyJobButton({
         >
           Cancel
         </button>
-        <button type="submit" className="btn-primary flex-1 text-sm">
-          Confirm and pay {fee}
-        </button>
+        <ConfirmPayButton fee={fee} />
       </div>
     </form>
   );

@@ -1,24 +1,16 @@
-// Skeleton for signed-in homeowner screens while server data loads. The app
-// shell's <main> already provides the max-w-5xl container, so this only
-// paints quiet placeholder cards.
+import { Skeleton, SkeletonCard } from "@/components/Skeleton";
+
+// Generic fallback for signed-in homeowner screens that don't ship their own
+// loading.tsx. The app shell's <main> already provides the max-w-5xl
+// container and padding, so this only paints a heading plus a couple of quiet
+// placeholder cards - deliberately page-agnostic, since it stands in for many
+// different routes rather than mirroring any single one.
 export default function Loading() {
   return (
-    <div className="animate-pulse space-y-4" aria-hidden="true">
-      {/* Page heading */}
-      <div className="h-7 w-56 rounded bg-stone-200 dark:bg-stone-700" />
-      <div className="card space-y-3">
-        <div className="h-5 w-1/3 rounded bg-stone-200 dark:bg-stone-700" />
-        <div className="h-4 w-2/3 rounded bg-stone-200 dark:bg-stone-700" />
-        <div className="h-4 w-1/2 rounded bg-stone-200 dark:bg-stone-700" />
-      </div>
-      <div className="card space-y-3">
-        <div className="h-5 w-1/4 rounded bg-stone-200 dark:bg-stone-700" />
-        <div className="h-4 w-3/4 rounded bg-stone-200 dark:bg-stone-700" />
-      </div>
-      <div className="card space-y-3">
-        <div className="h-5 w-1/3 rounded bg-stone-200 dark:bg-stone-700" />
-        <div className="h-4 w-1/2 rounded bg-stone-200 dark:bg-stone-700" />
-      </div>
+    <div className="space-y-6" aria-hidden="true">
+      <Skeleton className="h-7 w-56" />
+      <SkeletonCard lines={3} />
+      <SkeletonCard lines={2} />
     </div>
   );
 }

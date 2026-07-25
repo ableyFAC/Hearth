@@ -4,13 +4,16 @@ import { createClient } from "@/lib/supabase/server";
 import { getRole } from "@/lib/contractor";
 import {
   FOUNDER,
-  FOUNDER_CREDIT,
   LEAD_TIER_FEES,
+  MAJOR_INTRO_FEE,
   COLD_START_FREE_ALERTS,
 } from "@/lib/constants";
 import { AGING_LEAD_TIERS } from "@/lib/leadPricing";
+import Link from "next/link";
+import Image from "next/image";
 import Logo from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
+import ProDemoPlayer from "@/components/ProDemoPlayer";
 import {
   Tag,
   MousePointerClick,
@@ -48,7 +51,7 @@ const FIRST_APPLICATION_GUARANTEE =
   "Not chosen on your first application? The fee comes back as credit you can spend on any job within 60 days.";
 
 export const metadata: Metadata = {
-  title: "Hearth for Pros: local leads without the games",
+  title: "Hearth for Pros: real local leads, honest pricing",
   description:
     "Browse local jobs free and pay only when you apply, with the price on every card. No subscription required, no ghost leads, and free license-verified badges for California pros.",
 };
@@ -105,7 +108,7 @@ export default async function ProsLanding({
     {
       icon: <Hourglass className="h-5 w-5" />,
       title: "Older jobs get cheaper",
-      body: "Jobs that sit unclaimed are automatically marked down 15-30%, so patient pros get real deals.",
+      body: "Jobs that sit unclaimed are automatically marked down 15-30%, so pros willing to wait pay less.",
     },
     {
       icon: <Zap className="h-5 w-5" />,
@@ -117,7 +120,7 @@ export default async function ProsLanding({
         ? "Instant job alerts, free for now"
         : "Instant job alerts",
       body:
-        "The moment a job posts in your trades and area, it hits your email and your phone." +
+        "The moment a job posts in your trades and area, we send you an email and a phone alert right away." +
         (COLD_START_FREE_ALERTS
           ? " Free for every pro while Hearth is new. Later, a Pro membership perk."
           : " A Pro membership perk."),
@@ -147,50 +150,62 @@ export default async function ProsLanding({
       <div className="bg-bark-50 dark:bg-stone-900">
         <div className="mx-auto max-w-3xl px-6 pt-6">
           <header className="flex items-center justify-between">
-            <a
+            <Link
               href="/"
               className="inline-flex items-center gap-2 font-semibold text-stone-900 dark:text-stone-100"
             >
               <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> Hearth
-            </a>
+            </Link>
             {/* Theme switch + bordered cross-link, mirroring the landing
                 page's header exactly so the two doors read as one system. */}
             <div className="flex items-center gap-2">
               <ThemeToggle />
-              <a
+              <Link
                 href="/"
-                className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-300 dark:hover:border-bark-500 dark:hover:text-stone-300"
+                className="inline-flex min-h-11 items-center rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 sm:min-h-0 dark:border-white/10 dark:text-stone-300 dark:hover:border-bark-500 dark:hover:text-stone-300"
               >
                 For Homeowners
-              </a>
+              </Link>
             </div>
           </header>
 
           {/* Hero */}
           <div className="mt-14 flex flex-col items-center pb-4 text-center">
             <h1 className="max-w-2xl text-5xl font-semibold tracking-tight text-stone-900 sm:text-6xl dark:text-stone-100">
-              Leads without the games
+              Real local leads, honest pricing
             </h1>
             <p className="mt-5 max-w-xl text-lg text-stone-600 dark:text-stone-400">
-              Tired of lead sites that charge you for shared leads you never
-              asked for? On Hearth you see the price first, and you only pay
-              when you choose to apply.
+              Other sites charge you for leads you didn&apos;t ask for and that
+              other pros already have. On Hearth you see the price first and
+              only pay when you choose to apply.
             </p>
-            <a
+            <Link
               href={signupHref}
               className="btn-primary mt-8 px-6 py-3 text-base shadow-md"
             >
               Create your pro account
-            </a>
-            <a
+            </Link>
+            <Link
               href="/signin"
               className="mt-3 text-sm text-bark-700 hover:underline dark:text-stone-300"
             >
               Already have an account? Sign in
-            </a>
+            </Link>
+            <p className="mt-4 text-sm text-stone-500 dark:text-stone-400">
+              Serving Orange County, California
+            </p>
           </div>
         </div>
       </div>
+
+      {/* Pro-side click-to-play demo, the contractor sibling of the homeowner
+          hero video. Sits right after the warm band, mirroring how the
+          landing page mounts HeroDemoPlayer. */}
+      <section className="mx-auto mt-16 flex max-w-3xl flex-col items-center px-6 sm:mt-20">
+        <div className="w-full max-w-xl">
+          <ProDemoPlayer />
+        </div>
+      </section>
 
       <div className="mx-auto max-w-3xl px-6">
       {/* Ghost protection and the first-application guarantee get top
@@ -203,8 +218,8 @@ export default async function ProsLanding({
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-stone-600 dark:text-stone-400">
             If a homeowner doesn&apos;t respond within 7 days, your apply fee
-            comes back to your wallet automatically. No request form, no
-            support ticket, no arguing.
+            comes back to your wallet automatically. You don&apos;t have to fill
+            out a form, open a support ticket, or argue with anyone.
           </p>
         </section>
         <section className="rounded-2xl border border-bark-100 bg-bark-50 p-6 text-center shadow-sm dark:border-bark-700 dark:bg-bark-700/20">
@@ -217,18 +232,14 @@ export default async function ProsLanding({
         </section>
       </div>
 
-      {/* Who's behind this: founder identity is the trust signal a national
-          lead platform can never offer. Details are owner-fillable in
-          src/lib/constants.ts; until they're filled in, this stays honest and
-          generic instead of showing a placeholder name. */}
+      {/* Trust band: a real reachable team is the trust signal a national
+          lead platform can never offer. */}
       <section className="mt-6 rounded-2xl bg-stone-900 px-6 py-8 text-center dark:bg-stone-950 dark:border dark:border-white/10">
         <h2 className="text-xl font-semibold text-white">
-          Who&apos;s behind this
+          Real people, real answers
         </h2>
         <p className="mx-auto mt-2 max-w-md text-sm text-stone-300">
-          {FOUNDER_CREDIT
-            ? `Hearth is built by ${FOUNDER_CREDIT}. Real people, real answers: message us and we'll reply ourselves.`
-            : "Hearth is built by homeowners in Orange County. Real people, real answers."}
+          Message us and a real person on our team will answer.
         </p>
         {FOUNDER.name && FOUNDER.cellPhone && (
           <p className="mt-1 text-sm text-stone-300">
@@ -241,12 +252,12 @@ export default async function ProsLanding({
             fields, unlike the old mailto/tel here, so it's always shown - see
             src/app/contact/page.tsx. The cell-phone line above is still
             owner-fillable and still drops out entirely when blank. */}
-        <a
+        <Link
           href="/contact"
           className="mt-4 inline-block text-sm text-bark-500 hover:underline"
         >
           Questions? Contact us →
-        </a>
+        </Link>
       </section>
 
       {/* The promises */}
@@ -262,11 +273,25 @@ export default async function ProsLanding({
         ))}
       </section>
 
+      {/* Flat trade photo, same framed treatment as the landing page. The
+          handyman shot sits with the fee copy, where light work is the first
+          example named. Not priority - well below the fold. */}
+      <div className="mt-16 overflow-hidden rounded-xl border border-stone-200 dark:border-white/10">
+        <Image
+          src="/photos/handyman-cordless-drill.jpg"
+          alt="A handyman using a cordless drill"
+          width={1600}
+          height={1002}
+          sizes="(min-width: 768px) 48rem, 100vw"
+          className="h-auto w-full object-cover"
+        />
+      </div>
+
       {/* Pricing, in writing: the real per-category fees and the real aging
           markdown, both read straight from src/lib/constants.ts and
           src/lib/leadPricing.ts so this section can never drift from what
           checkout actually charges. */}
-      <section className="card mt-16 p-6 text-center">
+      <section className="card mt-6 p-6 text-center">
         <h2 className="text-xl font-semibold text-stone-900 dark:text-stone-100">
           The price, in writing
         </h2>
@@ -275,6 +300,10 @@ export default async function ProsLanding({
           ${LEAD_TIER_FEES.skilled} skilled trades (plumbing, electrical,
           HVAC). ${LEAD_TIER_FEES.major} big-ticket jobs (roofing,
           remodeling). The fee is printed on every job card before you pay.
+        </p>
+        <p className="mx-auto mt-2 max-w-md text-sm text-stone-600 dark:text-stone-400">
+          Your first big-ticket lead is ${MAJOR_INTRO_FEE}. Every big-ticket
+          lead after that is the normal ${LEAD_TIER_FEES.major}.
         </p>
         <p className="mx-auto mt-2 max-w-md text-sm text-stone-600 dark:text-stone-400">
           Jobs that sit unclaimed get cheaper: {agingCopy}.
@@ -350,15 +379,28 @@ export default async function ProsLanding({
           A Pro membership adds an AI back office on top: draft estimates,
           invoices, follow-up messages, review replies, and overdue-invoice
           reminders in seconds.{" "}
-          <a href="/pro/plus" className="text-bark-700 hover:underline dark:text-stone-300">
+          <Link href="/pro/plus" className="text-bark-700 hover:underline dark:text-stone-300">
             See what&apos;s included
-          </a>
+          </Link>
           .
         </p>
       </section>
 
+      {/* Flat trade photo break before the steps, mirroring how the landing
+          page pairs the roofer shot with its how-it-works block. */}
+      <div className="mt-16 overflow-hidden rounded-xl border border-stone-200 dark:border-white/10">
+        <Image
+          src="/photos/roofer-installing-shingles.jpg"
+          alt="A roofer installing asphalt shingles on a home"
+          width={1600}
+          height={1067}
+          sizes="(min-width: 768px) 48rem, 100vw"
+          className="h-auto w-full object-cover"
+        />
+      </div>
+
       {/* How it works */}
-      <section className="mt-16">
+      <section className="mt-12">
         <h2 className="text-center text-2xl font-semibold text-stone-900 dark:text-stone-100">
           How it works
         </h2>
@@ -384,9 +426,10 @@ export default async function ProsLanding({
             <li className="flex items-start gap-2">
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-700 dark:text-green-400" />
               <span>
-                Max 3 pros per job, so you never race a crowd. If the
-                homeowner picks another pro, that fee is spent, like any bid
-                you don&apos;t win.
+                Max 3 pros per job, so you're never competing against a crowd
+                of other pros. You never lose
+                money on a job you didn&apos;t get: if the homeowner picks
+                someone else, your fee comes back as credit, good for 60 days.
               </span>
             </li>
             <li className="flex items-start gap-2">
@@ -422,17 +465,17 @@ export default async function ProsLanding({
       </p>
 
       <footer className="mt-16 border-t border-stone-200 pt-6 text-center dark:border-white/10">
-        <a href="/" className="text-sm text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
+        <Link href="/" className="text-sm text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
           Looking after your own home instead? Hearth for Homeowners →
-        </a>
+        </Link>
         <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
-          <a href="/privacy" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
+          <Link href="/privacy" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
             Privacy
-          </a>{" "}
+          </Link>{" "}
           ·{" "}
-          <a href="/terms" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
+          <Link href="/terms" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
             Terms
-          </a>
+          </Link>
         </p>
       </footer>
       </div>

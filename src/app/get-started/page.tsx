@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getRole } from "@/lib/contractor";
+import Link from "next/link";
 import { safeNextPath } from "@/lib/safeNext";
 import { Home, Hammer } from "lucide-react";
 
@@ -54,7 +55,7 @@ export default async function GetStarted({
       </p>
 
       <div className="mt-10 grid w-full grid-cols-1 gap-4 sm:grid-cols-2">
-        <a
+        <Link
           href={`/homeowner-signup${nextQuery}`}
           className="flex flex-col items-center justify-center rounded-2xl border border-stone-200 bg-white px-6 py-12 shadow-sm transition hover:border-bark-500 hover:shadow-md dark:border-white/10 dark:bg-stone-800"
         >
@@ -65,9 +66,9 @@ export default async function GetStarted({
           <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
             Track your home and find a pro.
           </p>
-        </a>
+        </Link>
 
-        <a
+        <Link
           href={`/contractor-signup${nextQuery}`}
           className="flex flex-col items-center justify-center rounded-2xl border border-stone-200 bg-white px-6 py-12 shadow-sm transition hover:border-bark-500 hover:shadow-md dark:border-white/10 dark:bg-stone-800"
         >
@@ -78,21 +79,21 @@ export default async function GetStarted({
           <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
             Get matched with homeowner leads.
           </p>
-        </a>
+        </Link>
       </div>
 
       <p className="mt-8 text-sm text-stone-500 dark:text-stone-400">
         Already have an account?{" "}
-        <a
+        <Link
           href={`/signin${nextQuery}`}
           className="font-medium text-bark-700 hover:underline dark:text-stone-300"
         >
           Sign in
-        </a>
+        </Link>
       </p>
-      <a href="/" className="mt-3 text-sm text-stone-500 hover:underline dark:text-stone-400">
+      <Link href="/" className="mt-3 text-sm text-stone-500 hover:underline dark:text-stone-400">
         ← Back
-      </a>
+      </Link>
     </main>
   );
 }

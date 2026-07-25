@@ -87,6 +87,21 @@ export const COLD_START_FREE_POSTING = true;
 export const COLD_START_FREE_ALERTS = true;
 
 // =============================================================================
+// AI GLOBAL SPEND BREAKER: an owner-wide, all-users-combined daily ceiling on
+// the paid Gemini routes, enforced in src/lib/aiUsage.ts on top of the per-user
+// daily cap. This is NOT a per-user limit: it is one shared bucket across every
+// account, a runaway-cost circuit breaker so no volume of free signups can fan
+// the daily Gemini bill past a hard number. Set well ABOVE realistic total
+// daily usage (across every route and every user) so legitimate traffic never
+// trips it, but low enough that a cost-abuse spike hits a wall. If real usage
+// ever approaches this, raise it deliberately rather than letting it silently
+// throttle everyone. Counted once per request through the shared rate_limit_hit
+// RPC (migration 0068) under this fixed bucket, on an 86400s (daily) window.
+// =============================================================================
+export const AI_GLOBAL_DAILY_LIMIT = 5000;
+export const AI_GLOBAL_BUCKET = "ai-global-day";
+
+// =============================================================================
 // FOUNDER: owner-fillable identity for the /pros landing page's "Who's behind
 // this" section. Left blank on purpose: fill these in with real details, do
 // not invent a name, city, or phone number. When name is blank the page falls
@@ -114,17 +129,6 @@ export const FOUNDER = {
   // operational risk; move to a monitored business inbox before launch.
   email: "landenchu2000@gmail.com",
 };
-
-// Founder credit fragment for the landing pages, e.g. "Landen Chu and
-// William Tran, homeowners in Orange County". The homeowner noun pluralizes
-// to match how many names are filled in, and the whole string is empty when
-// both names are blank so each page can fall back to its honest generic line.
-const FOUNDER_NAMES = [FOUNDER.name, FOUNDER.coFounder].filter(Boolean);
-export const FOUNDER_CREDIT = FOUNDER_NAMES.length
-  ? `${FOUNDER_NAMES.join(" and ")}, ${
-      FOUNDER_NAMES.length > 1 ? "homeowners" : "a homeowner"
-    } in Orange County`
-  : "";
 
 export const SYSTEM_TYPES = [
   { value: "roof", label: "Roof", icon: CATEGORY_ICONS.roof },
@@ -351,8 +355,17 @@ export const BUDGET_RANGES = [
 //                handyman)
 //   Tier 2  $50  skilled trades + replacements (plumbing, electrical, HVAC,
 //                windows, garage door, pest & termite control)
-//   Tier 3  $90  big-ticket (roofing, structural, remodeling / general contracting)
-export const LEAD_TIER_FEES = { light: 25, skilled: 50, major: 90 } as const;
+//   Tier 3  $99  big-ticket (roofing, structural, remodeling / general contracting)
+export const LEAD_TIER_FEES = { light: 25, skilled: 50, major: 99 } as const;
+
+// First-timer intro price for the major tier: a pro's FIRST big-ticket lead
+// ever costs this, every major-tier lead after that costs the normal
+// LEAD_TIER_FEES.major. The authoritative check and charge live in the DB
+// (apply_to_lead / unlock_direct_request, migration 0113), which decides
+// "first" from the pro's own payment history under the wallet lock; this
+// constant only drives display copy and the board's price preview. Keep in
+// sync with major_lead_price_cents() in 0113 (4999 cents).
+export const MAJOR_INTRO_FEE = 49.99;
 
 export const LEAD_FEES: Record<string, number> = {
   // Tier 3 - major
@@ -379,6 +392,13 @@ export function leadFeeFor(category: string): number {
   return LEAD_FEES[category] ?? LEAD_FEES.other;
 }
 
+// Whether a category bills at the major (big-ticket) tier. Derived from
+// LEAD_FEES so it can never drift from the fee map; mirrored by the hardcoded
+// category list in migration 0113 (major_lead_price_cents).
+export function isMajorCategory(category: string): boolean {
+  return LEAD_FEES[category] === LEAD_TIER_FEES.major;
+}
+
 // Hearth Pro membership (contractor side) pricing, USD. This is the ONE place
 // the prices live: the /pro/plus page and checkout both read from here, so a
 // price change is a one-line edit. First-time monthly subscribers get an
@@ -403,6 +423,12 @@ export const PRO_PLAN = {
 // cadence, gets a 3-day free trial (a Stripe trial, so nothing is charged
 // until it ends); yearly is also discounted on top of that.
 export const PLUS_PLAN = {
+  // GRANDFATHERED ONLY, no longer sold. Weekly was retired as a new-checkout
+  // option (only monthly and yearly are sold now), but existing weekly
+  // subscribers keep their plan, so the price stays here: the auto-renewal
+  // disclosure in src/lib/billingTerms.ts and the renewal-reminder cron still
+  // need it to quote a legacy weekly row correctly. Nothing new-checkout reads
+  // it - startPlusCheckoutAction only offers monthly/yearly.
   weekly: 1.99,
   monthly: 4.99,
   // 33% off monthly x 12 ($59.88), about $3.33/mo. Always compare against
@@ -410,6 +436,51 @@ export const PLUS_PLAN = {
   yearly: 39.99,
   trialDays: 3,
 } as const;
+
+// Pay-per-extra-home add-on (Plus members only). The ONE place the add-on
+// pricing lives, so the /plus "More homes" UI, the setExtraHomesAction server
+// action's inline price_data fallback, and the recurring-total disclosure can
+// never quote a number the card isn't charged. Volume (tiered) pricing: the
+// discounted unit price applies to ALL purchased slots once the quantity
+// crosses a tier breakpoint (Stripe "volume" tiers, not "graduated"). Free
+// homeowners hitting the cap get the Plus upsell instead; Plus already
+// includes up to 5 homes, and these are extra homes on top of that.
+export const EXTRA_HOME = {
+  // Max extra homes a member can buy on top of the 5 Plus includes.
+  maxExtra: 20,
+  // Per-slot unit price by billing interval, in USD. Each entry is a volume
+  // tier: `upTo` is the highest quantity (inclusive) that pays this unit
+  // price; once quantity exceeds it, the next tier's unit price applies to
+  // EVERY slot. The last tier's `upTo` is null (no upper bound below maxExtra).
+  // Ordered ascending by breakpoint; keep in sync with the Stripe dashboard
+  // volume Price tiers (STRIPE_PRICE_HOME_SLOT_MONTHLY / _YEARLY).
+  monthly: [
+    { upTo: 2, unit: 1.99 },
+    { upTo: 4, unit: 1.49 },
+    { upTo: null as number | null, unit: 0.99 },
+  ],
+  yearly: [
+    { upTo: 2, unit: 14.99 },
+    { upTo: 4, unit: 11.99 },
+    { upTo: null as number | null, unit: 7.99 },
+  ],
+} as const;
+
+// The per-slot unit price for a given quantity and interval, applying the
+// volume discount to ALL slots (see EXTRA_HOME). Quantity 0 returns the
+// first-tier price (nothing is charged at 0 anyway). Single source of truth
+// for both the UI's shown price and the inline price_data fallback amount.
+export function extraHomeUnitPrice(
+  interval: "monthly" | "yearly",
+  quantity: number
+): number {
+  const tiers = EXTRA_HOME[interval];
+  for (const tier of tiers) {
+    if (tier.upTo === null || quantity <= tier.upTo) return tier.unit;
+  }
+  // Unreachable: the last tier's upTo is null. Fall back to the last unit.
+  return tiers[tiers.length - 1].unit;
+}
 
 // Extra percentage points a Pro member earns on top of the deposit-bonus tier
 // percentage, applied to every deposit. Display-side mirror of the
@@ -426,6 +497,14 @@ export const MAX_APPLICANTS_PER_JOB = 3;
 // auto-refunded after this many days. Display-only mirror of the cron window
 // in supabase/migrations/0028_ghost_protection.sql.
 export const GHOST_PROTECTION_DAYS = 7;
+
+// Default lifetime (days) of granted bonus credit. Display-only mirror of the
+// DEFAULT on wallet_config.bonus_expiry_days
+// (supabase/migrations/0010_wallet_v2.sql). Every grant path still reads the
+// live wallet_config value in SQL, so this only keeps default-case copy (e.g.
+// the credit-back notification) from quoting a number the config could have
+// been tuned away from; if that row is ever changed, update this too.
+export const BONUS_EXPIRY_DAYS = 60;
 
 // Maps a home system to the contractor category, so a "Find a pro" button on a
 // system jumps straight to the right trade.

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import InlineSpinner from "@/components/InlineSpinner";
 
 type Notification = {
   id: string;
@@ -41,6 +42,10 @@ export default function NotificationBell() {
   // a separate page (there isn't one yet, so this is the smaller change).
   const [limit, setLimit] = useState(20);
   const [hasMore, setHasMore] = useState(false);
+  // Pending flags for the panel's two async buttons, so each shows its own
+  // spinner instead of one shared flag covering both.
+  const [markingRead, setMarkingRead] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   // Plays the exit animation instead of an instant unmount: on the open ->
   // closed transition the panel stays mounted for one more tick with
   // fade-scale-out, then drops.
@@ -99,7 +104,12 @@ export default function NotificationBell() {
   async function showMore() {
     const next = limit + 30;
     setLimit(next);
-    await loadList(next);
+    setLoadingMore(true);
+    try {
+      await loadList(next);
+    } finally {
+      setLoadingMore(false);
+    }
   }
 
   // Clears every unread notification, not just the batch currently loaded
@@ -116,6 +126,7 @@ export default function NotificationBell() {
       cur.map((n) => (n.read_at ? n : { ...n, read_at: new Date().toISOString() }))
     );
     setUnread(0);
+    setMarkingRead(true);
     try {
       await supabase
         .from("notifications")
@@ -123,6 +134,8 @@ export default function NotificationBell() {
         .is("read_at", null);
     } catch {
       // Leave whatever was already shown; next poll will reconcile.
+    } finally {
+      setMarkingRead(false);
     }
   }
 
@@ -263,8 +276,10 @@ export default function NotificationBell() {
               <button
                 type="button"
                 onClick={markAllRead}
-                className="text-xs font-medium text-bark-700 hover:underline active:opacity-70 dark:text-stone-300"
+                disabled={markingRead}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-bark-700 hover:underline active:opacity-70 disabled:opacity-50 dark:text-stone-300"
               >
+                {markingRead && <InlineSpinner size={12} />}
                 Mark all read
               </button>
             )}
@@ -320,8 +335,10 @@ export default function NotificationBell() {
             <button
               type="button"
               onClick={showMore}
-              className="block w-full border-t border-stone-100 px-4 py-2 text-center text-xs font-medium text-bark-700 hover:bg-bark-50 hover:underline active:opacity-70 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-600"
+              disabled={loadingMore}
+              className="flex w-full items-center justify-center gap-1.5 border-t border-stone-100 px-4 py-2 text-center text-xs font-medium text-bark-700 hover:bg-bark-50 hover:underline active:opacity-70 disabled:opacity-50 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-600"
             >
+              {loadingMore && <InlineSpinner size={12} />}
               Show more
             </button>
           )}

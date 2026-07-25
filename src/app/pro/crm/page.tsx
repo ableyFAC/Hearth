@@ -191,9 +191,9 @@ export default async function ProCrmPage({
           Search
         </button>
         {q && (
-          <a href="/pro/crm" className="btn-secondary shrink-0">
+          <Link href="/pro/crm" className="btn-secondary shrink-0">
             Clear
-          </a>
+          </Link>
         )}
       </form>
 

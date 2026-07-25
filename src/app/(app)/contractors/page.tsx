@@ -21,7 +21,10 @@ import {
   chooseApplicantAction,
   rehireProAction,
   saveReviewAction,
+  cancelDirectRequestAction,
+  postDirectPubliclyAction,
 } from "./actions";
+import SubmitButton from "@/components/SubmitButton";
 import CategoryFilter from "./CategoryFilter";
 import LeadChat from "@/components/LeadChat";
 import PhoneInput from "@/components/PhoneInput";
@@ -56,6 +59,7 @@ export default async function ContractorsPage({
     posted?: string;
     desc?: string;
     timing?: string;
+    directsent?: string;
   };
 }) {
   const supabase = createClient();
@@ -88,8 +92,12 @@ export default async function ContractorsPage({
   // owner_closed_at (migration 0092) isn't in the generated types yet either,
   // so the client itself is cast to any for this call, same pattern as the
   // lead_applications reads below.
-  const LEADS_SELECT_WITH_CLOSE =
-    "id, category, issue_description, issue_id, contractor_id, status, timing, created_at, owner_closed_at, contractors(name, rating, review_count, service_area, license_number, contact_phone, contact_email)";
+  const LEADS_CONTRACTOR_JOIN =
+    "contractors(name, rating, review_count, service_area, license_number, contact_phone, contact_email)";
+  const LEADS_BASE = `id, category, issue_description, issue_id, contractor_id, status, timing, created_at, ${LEADS_CONTRACTOR_JOIN}`;
+  const LEADS_SELECT_WITH_CLOSE = `id, category, issue_description, issue_id, contractor_id, status, timing, created_at, owner_closed_at, ${LEADS_CONTRACTOR_JOIN}`;
+  // Direct-request columns (migration 0104) on top of owner_closed_at (0092).
+  const LEADS_SELECT_FULL = `id, category, issue_description, issue_id, contractor_id, status, timing, created_at, owner_closed_at, direct_to, direct_declined_at, ${LEADS_CONTRACTOR_JOIN}`;
 
   // These three queries only need property.id / user.id (both already in
   // hand) and are independent of each other, so they run as one parallel
@@ -119,28 +127,74 @@ export default async function ContractorsPage({
         .eq("id", user?.id ?? "")
         .maybeSingle(),
       (async () => {
-        let { data: leadsData, error: leadsError } = await (
-          supabase as any
-        )
+        // Cascade the select down as columns go missing, so this never shows
+        // an empty jobs list just because a migration hasn't reached this DB:
+        // full (0104 direct columns) -> owner_closed_at only (0092) -> base.
+        let { data: leadsData, error: leadsError } = await (supabase as any)
           .from("contractor_leads")
-          .select(LEADS_SELECT_WITH_CLOSE)
+          .select(LEADS_SELECT_FULL)
           .eq("property_id", property.id)
           .order("created_at", { ascending: false });
         if (leadsError && isMissingSchemaError(leadsError)) {
-          // Migration 0092 hasn't run against this database yet: retry
-          // without the new column instead of showing an empty jobs list.
-          ({ data: leadsData } = await (supabase as any)
+          // Migration 0104 hasn't run yet (no direct_to/direct_declined_at):
+          // retry with just owner_closed_at.
+          let close = await (supabase as any)
             .from("contractor_leads")
-            .select(
-              "id, category, issue_description, issue_id, contractor_id, status, timing, created_at, contractors(name, rating, review_count, service_area, license_number, contact_phone, contact_email)"
-            )
+            .select(LEADS_SELECT_WITH_CLOSE)
             .eq("property_id", property.id)
-            .order("created_at", { ascending: false }));
+            .order("created_at", { ascending: false });
+          if (close.error && isMissingSchemaError(close.error)) {
+            // Migration 0092 hasn't run either: fall back to the base columns.
+            close = await (supabase as any)
+              .from("contractor_leads")
+              .select(LEADS_BASE)
+              .eq("property_id", property.id)
+              .order("created_at", { ascending: false });
+          }
+          leadsData = close.data;
         }
         return leadsData;
       })(),
     ]);
   const leads = (leadsData ?? []) as any[];
+
+  // Direct requests (migration 0104) live in the same contractor_leads table.
+  // A PENDING one (aimed at a pro via direct_to, not yet unlocked so
+  // contractor_id is still null) belongs in its own card below, NOT the open
+  // "Your jobs" board. Once a pro pays to unlock it, contractor_id gets set and
+  // it flows into "Your jobs" as a normal assigned job with chat, so the only
+  // rows pulled out here are the still-pending ones. On a pre-0104 DB direct_to
+  // is undefined on every row, so nothing is pulled out and behavior is
+  // unchanged.
+  const directRequests = leads.filter((l) => l.direct_to && !l.contractor_id);
+  const jobLeads = leads.filter((l) => !(l.direct_to && !l.contractor_id));
+
+  // The target pro of a pending direct request isn't "related" to this
+  // homeowner yet (no assigned lead, no application), so the contractors RLS
+  // policy won't let the owner's client read their name. Fetch names via the
+  // admin client (already used on this page for reply speed), same as any
+  // other cross-homeowner read here.
+  const directProById = new Map<
+    string,
+    { name: string; slug: string | null }
+  >();
+  if (directRequests.length > 0) {
+    const directToIds = Array.from(
+      new Set(directRequests.map((l) => l.direct_to as string).filter(Boolean))
+    );
+    if (directToIds.length > 0) {
+      const { data: directPros } = await (createAdminClient() as any)
+        .from("contractors")
+        .select("id, name, slug")
+        .in("id", directToIds);
+      for (const c of (directPros ?? []) as {
+        id: string;
+        name: string;
+        slug: string | null;
+      }[])
+        directProById.set(c.id, { name: c.name, slug: c.slug ?? null });
+    }
+  }
 
   // My Pros: distinct pros the homeowner previously hired on this property
   // (accepted = active, closed = completed), most recent job first, so each
@@ -172,7 +226,9 @@ export default async function ContractorsPage({
 
   // Figure out which jobs are finished (chat-closed) and which already have a
   // review, so the row can show a "Leave a review" / "Edit review" button.
-  const leadIds = leads.map((l) => l.id);
+  // Scoped to the displayed jobs: pending direct requests carry no
+  // applications, reviews, or chat, so they never need these lookups.
+  const leadIds = jobLeads.map((l) => l.id);
   const reviewByLead = new Map<
     string,
     { rating: number; comment: string | null }
@@ -198,7 +254,7 @@ export default async function ContractorsPage({
       (supabase as any)
         .from("lead_applications")
         .select(
-          "id, lead_id, contractor_id, message, created_at, status, refunded_at, contractors(name, rating, review_count, service_area, license_number, license_verified_at)"
+          "id, lead_id, contractor_id, message, created_at, status, refunded_at, contractors(name, rating, review_count, service_area, license_number, license_verified_at, logo_url)"
         )
         .in("lead_id", leadIds)
         .order("created_at", { ascending: true }),
@@ -238,6 +294,43 @@ export default async function ContractorsPage({
           applicantContractorIds
         )
       : new Map<string, number | null>();
+
+  // One truncated review snippet per applicant card: the most recent review
+  // that actually has text. One batched read for every applying pro across the
+  // page instead of a contractor_reviews RPC call per applicant. Needs the
+  // admin client - reviews are written by other homeowners, so this owner's
+  // RLS-scoped client can't read them directly (the RPC is SECURITY DEFINER for
+  // exactly that reason). Ordered newest-first, so the first row with text per
+  // contractor is that pro's most recent written review; blanks are skipped so
+  // the snippet is never empty. Only applicants that have real reviews.
+  const reviewSnippetByContractor = new Map<string, string>();
+  const snippetContractorIds = Array.from(
+    new Set(
+      Array.from(appsByLead.values())
+        .flat()
+        .filter((a: any) => a.contractor_id && a.contractors?.review_count > 0)
+        .map((a: any) => a.contractor_id as string)
+    )
+  );
+  if (snippetContractorIds.length > 0) {
+    const { data: snippetRows } = await (createAdminClient() as any)
+      .from("reviews")
+      .select("contractor_id, comment, created_at")
+      .in("contractor_id", snippetContractorIds)
+      .order("created_at", { ascending: false });
+    for (const r of (snippetRows ?? []) as {
+      contractor_id: string;
+      comment: string | null;
+    }[]) {
+      // Rows arrive newest-first, so the first one carrying text wins and any
+      // later (older) rows for the same pro are ignored.
+      if (reviewSnippetByContractor.has(r.contractor_id)) continue;
+      const comment = (r.comment ?? "").trim();
+      if (comment.length > 0) {
+        reviewSnippetByContractor.set(r.contractor_id, comment);
+      }
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -449,13 +542,121 @@ export default async function ContractorsPage({
         </FadingBanner>
       )}
 
+      {searchParams.directsent && (
+        <FadingBanner
+          delay={2500}
+          fadeMs={4500}
+          className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200"
+        >
+          Request sent. Only this pro can see it. If they accept, they get your
+          contact and a chat opens. If they pass, you can post it to all local
+          pros from the card below.
+        </FadingBanner>
+      )}
+
+      {/* Pending direct requests (migration 0104): a request aimed at one
+          specific pro that they haven't accepted yet. Kept out of "Your jobs"
+          above until a pro unlocks it. */}
+      {directRequests.length > 0 && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+              Requests to specific pros
+            </h2>
+            <p className="text-sm text-stone-500 dark:text-stone-400">
+              Only the pro you asked can see these. If they pass, post the job
+              to all local pros instead.
+            </p>
+          </div>
+          <ul className="space-y-2">
+            {directRequests.map((l) => {
+              const pro = directProById.get(l.direct_to);
+              const proName = pro?.name ?? "This pro";
+              const declined = Boolean(l.direct_declined_at);
+              return (
+                <li key={l.id} className="card space-y-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-medium text-stone-900 dark:text-stone-100">
+                        <CategoryIcon
+                          list={JOB_CATEGORIES}
+                          value={l.category}
+                          className="mr-1 inline-block h-4 w-4 align-[-3px]"
+                        />
+                        {labelFor(JOB_CATEGORIES, l.category)}
+                        {" · "}
+                        {pro?.slug || l.direct_to ? (
+                          <Link
+                            href={`/p/${pro?.slug ?? l.direct_to}`}
+                            className="hover:underline"
+                          >
+                            {proName}
+                          </Link>
+                        ) : (
+                          proName
+                        )}
+                      </p>
+                      {l.issue_description && (
+                        <p className="mt-0.5 text-sm text-stone-500 dark:text-stone-400">
+                          {l.issue_description}
+                        </p>
+                      )}
+                      <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                        Sent {new Date(l.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ${
+                        declined
+                          ? "border-stone-300 bg-stone-100 text-stone-600 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300"
+                          : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                      }`}
+                    >
+                      {declined ? `${proName} passed` : `Waiting on ${proName}`}
+                    </span>
+                  </div>
+
+                  {declined && (
+                    <p className="rounded-lg border border-dashed border-stone-300 p-3 text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400">
+                      {proName} passed on this one. Post it to all local pros and
+                      matching pros can apply.
+                    </p>
+                  )}
+
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <form action={postDirectPubliclyAction}>
+                      <input type="hidden" name="lead_id" value={l.id} />
+                      <SubmitButton
+                        className="btn-primary text-sm"
+                        pendingLabel="Posting…"
+                      >
+                        Post publicly instead
+                      </SubmitButton>
+                    </form>
+                    <form action={cancelDirectRequestAction}>
+                      <input type="hidden" name="lead_id" value={l.id} />
+                      <SubmitButton
+                        className="btn-secondary text-sm"
+                        pendingLabel="Cancelling…"
+                      >
+                        Cancel
+                      </SubmitButton>
+                    </form>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
       {/* Renders nothing when there are no jobs yet; posting the first one
           is handled by the form above, not this section. */}
-      {leads && leads.length > 0 && (
+      {jobLeads.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Your jobs</h2>
           <ul className="space-y-3">
-            {leads.map((l) => {
+            {jobLeads.map((l) => {
               const apps = appsByLead.get(l.id) ?? [];
               const chosen = Boolean(l.contractor_id);
               // closeJobAction only counts and notifies LIVE applicants
@@ -514,7 +715,7 @@ export default async function ContractorsPage({
                             </span>
                           ) : null}
                         </p>
-                        <p className="text-stone-500 dark:text-stone-400">
+                        <p className="break-words text-stone-500 dark:text-stone-400">
                           {l.contractors?.contact_phone || ""}
                           {l.contractors?.contact_email
                             ? ` · ${l.contractors.contact_email}`
@@ -639,7 +840,22 @@ export default async function ContractorsPage({
                           className="rounded-lg border border-stone-200 p-3 dark:border-white/10"
                         >
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                            <div className="min-w-0">
+                            <div className="flex min-w-0 gap-3">
+                              {/* Small avatar: the pro's logo when they have
+                                  one, else a neutral initial chip. */}
+                              {a.contractors?.logo_url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={a.contractors.logo_url}
+                                  alt={`${a.contractors?.name ?? "Pro"} logo`}
+                                  className="h-9 w-9 shrink-0 rounded-lg bg-white object-cover ring-1 ring-stone-200 dark:ring-white/10"
+                                />
+                              ) : (
+                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-stone-50 text-sm font-semibold text-stone-500 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400">
+                                  {(a.contractors?.name ?? "P").slice(0, 1).toUpperCase()}
+                                </div>
+                              )}
+                              <div className="min-w-0">
                               <div className="flex items-center gap-2">
                                 {/* Name links to the pro's full public page
                                     (/p/<id>, new tab) so the owner can see
@@ -680,6 +896,15 @@ export default async function ContractorsPage({
                                   contractorId={a.contractor_id}
                                   count={a.contractors.review_count}
                                 />
+                              )}
+                              {/* One most-recent review snippet, one line, so
+                                  the card carries a real voice without opening
+                                  the full list. Only when the pro has reviews
+                                  with text (fetched server-side above). */}
+                              {reviewSnippetByContractor.get(a.contractor_id) && (
+                                <p className="truncate text-xs italic text-stone-500 dark:text-stone-400">
+                                  &ldquo;{reviewSnippetByContractor.get(a.contractor_id)}&rdquo;
+                                </p>
                               )}
                               {a.contractors?.service_area && (
                                 <p className="text-xs text-stone-500 dark:text-stone-400">
@@ -739,17 +964,28 @@ export default async function ContractorsPage({
                                     Reported by the business, not verified.
                                   </span>
                                 </p>
-                              ) : null}
+                              ) : (
+                                <p className="mt-1">
+                                  {/* Honest neutral empty state: nothing on
+                                      file and no CSLB match. Muted, not
+                                      alarming - states the fact, not a flag. */}
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-medium text-stone-500 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400">
+                                    No license listed
+                                  </span>
+                                </p>
+                              )}
                               {formatResponseTime(
                                 replyMinutesByContractor.get(a.contractor_id) ??
                                   null
                               ) && (
-                                <p className="text-xs font-medium text-green-700 dark:text-green-400">
-                                  {formatResponseTime(
-                                    replyMinutesByContractor.get(
-                                      a.contractor_id
-                                    ) ?? null
-                                  )}
+                                <p className="mt-1">
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200">
+                                    {formatResponseTime(
+                                      replyMinutesByContractor.get(
+                                        a.contractor_id
+                                      ) ?? null
+                                    )}
+                                  </span>
                                 </p>
                               )}
                               {a.message && (
@@ -757,6 +993,7 @@ export default async function ContractorsPage({
                                   {redactContact(a.message)}
                                 </p>
                               )}
+                              </div>
                             </div>
                             <form action={chooseApplicantAction}>
                               <input

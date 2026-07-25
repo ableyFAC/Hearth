@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/notify";
@@ -43,14 +44,22 @@ function isAuthorized(req: NextRequest): boolean {
   if (!expected) return false;
   // Vercel Cron automatically sends "Authorization: Bearer <CRON_SECRET>" when
   // the CRON_SECRET env var is set. Also accept an explicit x-cron-secret header
-  // or ?secret= for manual runs / other schedulers.
+  // for manual runs / other schedulers.
   const auth = req.headers.get("authorization");
   const bearer = auth?.startsWith("Bearer ") ? auth.slice(7) : null;
-  const provided =
-    bearer ??
-    req.headers.get("x-cron-secret") ??
-    req.nextUrl.searchParams.get("secret");
-  return provided === expected;
+  const provided = bearer ?? req.headers.get("x-cron-secret");
+  if (!provided) return false;
+  // Constant-time compare (mirrors src/lib/checkr.ts / the twilio inbound
+  // webhook): only call timingSafeEqual once both buffers are a confirmed
+  // equal length, since it throws on a length mismatch.
+  const providedBuf = Buffer.from(provided, "utf8");
+  const expectedBuf = Buffer.from(expected, "utf8");
+  if (providedBuf.length !== expectedBuf.length) return false;
+  try {
+    return timingSafeEqual(providedBuf, expectedBuf);
+  } catch {
+    return false;
+  }
 }
 
 function chunk<T>(items: T[], size: number): T[][] {

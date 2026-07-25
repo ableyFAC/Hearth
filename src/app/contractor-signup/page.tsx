@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import NoticeAtCollection from "@/components/NoticeAtCollection";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/safeNext";
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
+import { LEAD_TIER_FEES, MAJOR_INTRO_FEE } from "@/lib/constants";
 import { Eye, EyeOff } from "lucide-react";
 
 // Real per-user contractor sign-up. Creates a Supabase Auth account tagged with
@@ -47,10 +49,9 @@ export default function ContractorSignUpPage({
     : "";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  // Per-field show/hide toggles for the password and confirm inputs.
+  // Show/hide toggle for the single password field. The reveal makes a
+  // separate confirm-password field redundant, so there isn't one.
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   // Set when the account exists but email confirmation is still pending;
@@ -78,13 +79,6 @@ export default function ContractorSignUpPage({
     )}`;
   }
 
-  // Live inline mismatch signal: only once both fields have text and they
-  // differ, so a half-typed confirm field never flashes an error.
-  const passwordsMismatch =
-    password.length > 0 &&
-    confirmPassword.length > 0 &&
-    password !== confirmPassword;
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -92,11 +86,6 @@ export default function ContractorSignUpPage({
 
     if (password.length < 6) {
       setError("Password must be at least 6 characters.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError("Passwords don't match.");
       return;
     }
 
@@ -224,13 +213,13 @@ export default function ContractorSignUpPage({
 
           <p className="mt-6 border-t border-stone-100 pt-4 text-center text-xs text-stone-500 dark:border-white/10 dark:text-stone-400">
             Already confirmed, or used the wrong email?{" "}
-            <a href={`/signin${nextQuery}`} className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href={`/signin${nextQuery}`} className="text-bark-700 hover:underline dark:text-stone-300">
               Sign in
-            </a>{" "}
+            </Link>{" "}
             or{" "}
-            <a href="/reset-password" className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href="/reset-password" className="text-bark-700 hover:underline dark:text-stone-300">
               reset your password
-            </a>
+            </Link>
             .
           </p>
         </div>
@@ -246,8 +235,10 @@ export default function ContractorSignUpPage({
             Join Hearth for Pros
           </h1>
           <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-            Browse local jobs free. Pay only when you apply, $25-$90 by trade,
-            with the price on every job card.
+            Browse local jobs free. Pay only when you apply, $
+            {LEAD_TIER_FEES.light}-${LEAD_TIER_FEES.major} by trade, with the
+            price on every job card. Your first big-ticket lead is $
+            {MAJOR_INTRO_FEE}.
           </p>
         </div>
 
@@ -297,45 +288,6 @@ export default function ContractorSignUpPage({
               </button>
             </div>
           </div>
-          <div>
-            <label className="label" htmlFor="confirm_password">
-              Confirm password
-            </label>
-            <div className="relative">
-              <input
-                id="confirm_password"
-                className={`input pr-10 ${
-                  passwordsMismatch
-                    ? "border-red-400 focus:border-red-500 focus:ring-red-500 dark:border-red-500/60"
-                    : ""
-                }`}
-                type={showConfirm ? "text" : "password"}
-                autoComplete="new-password"
-                placeholder="Same password again"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                aria-invalid={passwordsMismatch}
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirm((s) => !s)}
-                aria-label={showConfirm ? "Hide password" : "Show password"}
-                className="focus-ring absolute inset-y-0 right-0 flex items-center px-3 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200"
-              >
-                {showConfirm ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-              </button>
-            </div>
-            {passwordsMismatch && (
-              <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                Doesn&apos;t match yet
-              </p>
-            )}
-          </div>
           {/* Unchecked-by-default, gated in onSubmit (Berman fix - a
               pre-ticked or merely-decorative agreement line doesn't bind).
               Also carries the 18+ age gate. Links to /pro-terms, not /terms:
@@ -350,13 +302,13 @@ export default function ContractorSignUpPage({
             />
             <span>
               I am at least 18 years old and I have read and agree to the{" "}
-              <a href="/pro-terms" className="text-bark-700 hover:underline dark:text-stone-300">
+              <Link href="/pro-terms" className="text-bark-700 hover:underline dark:text-stone-300">
                 Contractor Terms
-              </a>{" "}
+              </Link>{" "}
               and{" "}
-              <a href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
+              <Link href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
                 Privacy Policy
-              </a>
+              </Link>
               .
             </span>
           </label>
@@ -375,17 +327,19 @@ export default function ContractorSignUpPage({
           </div>
           <GoogleSignInButton next={googleNextPath} onError={setError} />
           {/* OAuth signups skip the checkbox above entirely, so the same
-              agreement needs to be restated here instead. Links to /pro-terms,
-              same as the checkbox (the B2B contractor terms). */}
+              agreement - including the 18+ age representation - needs to be
+              restated here instead. Links to /pro-terms, same as the checkbox
+              (the B2B contractor terms). */}
           <p className="text-center text-xs text-stone-500 dark:text-stone-400">
-            By continuing with Google you agree to the{" "}
-            <a href="/pro-terms" className="text-bark-700 hover:underline dark:text-stone-300">
+            By continuing with Google you confirm you are 18 or older and agree
+            to the{" "}
+            <Link href="/pro-terms" className="text-bark-700 hover:underline dark:text-stone-300">
               Contractor Terms
-            </a>{" "}
+            </Link>{" "}
             and{" "}
-            <a href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
               Privacy Policy
-            </a>
+            </Link>
             .
           </p>
           <button className="btn-primary w-full" disabled={busy}>
@@ -412,23 +366,23 @@ export default function ContractorSignUpPage({
 
         <div className="mt-6 border-t border-stone-100 pt-4 text-center dark:border-white/10">
           <p className="text-sm text-stone-500 dark:text-stone-400">Already have an account?</p>
-          <a
+          <Link
             href={`/signin${nextQuery}`}
             className="btn-secondary mt-2 inline-block w-full"
           >
             Sign in
-          </a>
+          </Link>
         </div>
       </div>
 
       <p className="mt-6 text-center text-xs text-stone-500 dark:text-stone-400">
         Want to track your own home instead?{" "}
-        <a
+        <Link
           href={`/homeowner-signup${nextQuery}`}
           className="text-bark-700 hover:underline dark:text-stone-300"
         >
           Sign up as a homeowner
-        </a>
+        </Link>
         .
       </p>
     </main>

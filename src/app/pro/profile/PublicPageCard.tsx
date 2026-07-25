@@ -2,16 +2,31 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Image as ImageIcon, PenLine, FileText, Contact, Star } from "lucide-react";
-import { savePublicPageAction } from "./actions";
+import { useFormStatus } from "react-dom";
+import { Image as ImageIcon, PenLine, Contact, Star } from "lucide-react";
+import InlineSpinner from "@/components/InlineSpinner";
+import { savePublicPageAction, saveLicenseInsuranceAction } from "./actions";
 import LogoUpload from "./LogoUpload";
 import QrCodeCard from "./QrCodeCard";
 import type { Contractor } from "@/lib/database.types";
 
-// "Your public page" manager. EVERY pro gets the shareable /p/<id> link; Pro
-// members additionally edit the page extras here: logo, about, and the
-// license/insurance vault that powers the "on file" badge. Membership never
-// changes the page's rating or reviews: those are the same for everyone.
+// Generic submit button. useFormStatus only reports pending state inside a
+// descendant of the <form> it belongs to, so each form renders its own.
+function SaveButton({ label }: { label: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <button type="submit" disabled={pending} className="btn-primary">
+      {pending && <InlineSpinner />}
+      {label}
+    </button>
+  );
+}
+
+// "Your public page" manager. EVERY pro gets the shareable /p/<id> link AND the
+// free license/insurance section that powers the "on file" trust badge (0109):
+// trust signals are never pay-to-play. Pro members additionally get cosmetics:
+// logo, about, and the share kit. Membership never changes the page's rating or
+// reviews: those are the same for everyone.
 export default function PublicPageCard({
   contractor,
   member,
@@ -92,6 +107,85 @@ export default function PublicPageCard({
           businessName={contractor.name}
         />
       </section>
+
+      {/* License and insurance: FREE for every pro (0109). These feed the
+          public "on file" trust badge, which is a safety fact, not a paid perk,
+          so this section is never membership-gated. The details themselves stay
+          private; the page only ever shows a badge. */}
+      <form action={saveLicenseInsuranceAction} className="card space-y-4">
+        <div>
+          <h2 className="font-semibold text-stone-900 dark:text-stone-100">
+            License and insurance
+          </h2>
+          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+            Add these so your public page can show a &quot;license and insurance
+            on file&quot; badge. Free for every pro. Kept private: the page shows
+            only the badge, worded as provided by you, not verified by Hearth.
+          </p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="label">License number</label>
+            {licenseLocked ? (
+              <>
+                <div className="input cursor-not-allowed select-none bg-stone-100 text-stone-500 dark:bg-stone-700 dark:text-stone-400">
+                  {contractor.license_number}
+                </div>
+                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                  Locked once set. Contact support to update it.
+                </p>
+              </>
+            ) : (
+              <input
+                name="license_number"
+                className="input"
+                placeholder="LIC-000000-XX"
+              />
+            )}
+          </div>
+          <div>
+            <label className="label">License state</label>
+            <input
+              name="license_state"
+              className="input uppercase"
+              maxLength={2}
+              defaultValue={extra.license_state ?? ""}
+              placeholder="CA"
+            />
+          </div>
+          <div>
+            <label className="label">Insurance carrier</label>
+            <input
+              name="insurance_carrier"
+              className="input"
+              maxLength={120}
+              defaultValue={extra.insurance_carrier ?? ""}
+              placeholder="e.g. State Farm"
+            />
+          </div>
+          <div>
+            <label className="label">Insurance expires</label>
+            <input
+              name="insurance_expires"
+              type="date"
+              className="input"
+              defaultValue={extra.insurance_expires ?? ""}
+            />
+          </div>
+        </div>
+
+        {hasVault && (
+          <p className="text-xs text-green-700 dark:text-green-400">
+            Your page shows the &quot;on file&quot; badge for what you&apos;ve
+            saved.
+          </p>
+        )}
+
+        <div className="flex justify-end border-t border-stone-100 pt-4 dark:border-white/10">
+          <SaveButton label="Save license and insurance" />
+        </div>
+      </form>
 
       {/* Share kit: member-only extras for spreading the page around. Free
           pros see these teased in the upsell card below, same as the other
@@ -175,9 +269,7 @@ export default function PublicPageCard({
               </span>
             </h2>
             <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-              Your logo and about section appear on your public page. Saving
-              license and insurance details adds an &quot;on file&quot; badge;
-              the details themselves stay private.
+              Your logo and about section appear on your public page.
             </p>
           </div>
 
@@ -201,78 +293,8 @@ export default function PublicPageCard({
             </p>
           </div>
 
-          <div className="border-t border-stone-100 pt-4 dark:border-white/10">
-            <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-              License &amp; insurance vault
-            </h3>
-            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-              Kept private. Your page only shows an &quot;on file&quot; badge,
-              worded as provided by you, not verified by Hearth.
-            </p>
-
-            <div className="mt-3 grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="label">License number</label>
-                {licenseLocked ? (
-                  <>
-                    <div className="input cursor-not-allowed select-none bg-stone-100 text-stone-500 dark:bg-stone-700 dark:text-stone-400">
-                      {contractor.license_number}
-                    </div>
-                    <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                      Locked once set. Contact support to update it.
-                    </p>
-                  </>
-                ) : (
-                  <input
-                    name="license_number"
-                    className="input"
-                    placeholder="LIC-000000-XX"
-                  />
-                )}
-              </div>
-              <div>
-                <label className="label">License state</label>
-                <input
-                  name="license_state"
-                  className="input uppercase"
-                  maxLength={2}
-                  defaultValue={extra.license_state ?? ""}
-                  placeholder="CA"
-                />
-              </div>
-              <div>
-                <label className="label">Insurance carrier</label>
-                <input
-                  name="insurance_carrier"
-                  className="input"
-                  maxLength={120}
-                  defaultValue={extra.insurance_carrier ?? ""}
-                  placeholder="e.g. State Farm"
-                />
-              </div>
-              <div>
-                <label className="label">Insurance expires</label>
-                <input
-                  name="insurance_expires"
-                  type="date"
-                  className="input"
-                  defaultValue={extra.insurance_expires ?? ""}
-                />
-              </div>
-            </div>
-
-            {hasVault && (
-              <p className="mt-3 text-xs text-green-700 dark:text-green-400">
-                Your page shows the &quot;on file&quot; badge for what
-                you&apos;ve saved.
-              </p>
-            )}
-          </div>
-
           <div className="flex justify-end border-t border-stone-100 pt-4 dark:border-white/10">
-            <button type="submit" className="btn-primary">
-              Save Page Extras
-            </button>
+            <SaveButton label="Save page extras" />
           </div>
         </form>
       ) : (
@@ -281,7 +303,8 @@ export default function PublicPageCard({
             Make it yours with Hearth Pro
           </h2>
           <p className="text-sm text-stone-500 dark:text-stone-400">
-            Your basic page is live for every pro. Members can dress it up:
+            Your basic page is live for every pro, license and insurance badge
+            included. Members can dress it up:
           </p>
           <ul className="space-y-1.5 text-sm text-stone-600 dark:text-stone-300">
             <li className="flex items-start gap-2">
@@ -291,13 +314,6 @@ export default function PublicPageCard({
             <li className="flex items-start gap-2">
               <PenLine className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>An about section in your own words</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <FileText className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-              <span>
-                A &quot;license and insurance on file&quot; badge once you save
-                those details in a private vault
-              </span>
             </li>
             <li className="flex items-start gap-2">
               <Contact className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { ActionResult } from "@/lib/actionResult";
 import { getMyInviteCodeAction } from "./inviteActions";
+import InlineSpinner from "@/components/InlineSpinner";
 
 // "Leave a review" / "Edit review" button shown on a closed job's row. Opens a
 // star + comment form that submits through the saveReviewAction server action
@@ -65,6 +66,8 @@ export default function ReviewButton({
   const [inviteShareState, setInviteShareState] = useState<
     "idle" | "copied" | "show-link"
   >("idle");
+  const [sharePending, setSharePending] = useState(false);
+  const [inviteSharePending, setInviteSharePending] = useState(false);
 
   // Lazily pull the homeowner's own invite code the moment the panel is armed,
   // so the link is ready synchronously when they tap Share (some browsers void
@@ -94,57 +97,67 @@ export default function ReviewButton({
 
   async function handleInviteShare() {
     if (!inviteCode) return;
-    const url = inviteUrl();
-    const shareData = {
-      title: "Hearth",
-      text: "I've been using Hearth to keep on top of my house. Thought you might find it handy for yours:",
-      url,
-    };
-    if (typeof navigator !== "undefined" && navigator.share) {
-      try {
-        await navigator.share(shareData);
-        return;
-      } catch (err) {
-        // The user closing the share sheet is a decision, not a failure.
-        if (err instanceof Error && err.name === "AbortError") return;
-        // A real failure falls through to copying the link.
-      }
-    }
+    setInviteSharePending(true);
     try {
-      await navigator.clipboard.writeText(url);
-      setInviteShareState("copied");
-      setTimeout(() => setInviteShareState("idle"), 2000);
-    } catch {
-      setInviteShareState("show-link");
+      const url = inviteUrl();
+      const shareData = {
+        title: "Hearth",
+        text: "I've been using Hearth to keep on top of my house. Thought you might find it handy for yours:",
+        url,
+      };
+      if (typeof navigator !== "undefined" && navigator.share) {
+        try {
+          await navigator.share(shareData);
+          return;
+        } catch (err) {
+          // The user closing the share sheet is a decision, not a failure.
+          if (err instanceof Error && err.name === "AbortError") return;
+          // A real failure falls through to copying the link.
+        }
+      }
+      try {
+        await navigator.clipboard.writeText(url);
+        setInviteShareState("copied");
+        setTimeout(() => setInviteShareState("idle"), 2000);
+      } catch {
+        setInviteShareState("show-link");
+      }
+    } finally {
+      setInviteSharePending(false);
     }
   }
 
   async function handleShare() {
-    const url = `${window.location.origin}${proProfilePath}`;
-    const shareData = {
-      title: `${contractorName} on Hearth`,
-      text: `${contractorName} did great work. Here's their Hearth page:`,
-      url,
-    };
-    if (typeof navigator !== "undefined" && navigator.share) {
-      try {
-        await navigator.share(shareData);
-        return;
-      } catch (err) {
-        // The user closing the share sheet is a decision, not a failure:
-        // do not copy the link behind their back.
-        if (err instanceof Error && err.name === "AbortError") return;
-        // A real failure falls through to copying the link.
-      }
-    }
+    setSharePending(true);
     try {
-      await navigator.clipboard.writeText(url);
-      setShareState("copied");
-      setTimeout(() => setShareState("idle"), 2000);
-    } catch {
-      // Clipboard unavailable too (permissions, insecure origin): show the
-      // link as selectable text so there is always SOME way to grab it.
-      setShareState("show-link");
+      const url = `${window.location.origin}${proProfilePath}`;
+      const shareData = {
+        title: `${contractorName} on Hearth`,
+        text: `${contractorName} did great work. Here's their Hearth page:`,
+        url,
+      };
+      if (typeof navigator !== "undefined" && navigator.share) {
+        try {
+          await navigator.share(shareData);
+          return;
+        } catch (err) {
+          // The user closing the share sheet is a decision, not a failure:
+          // do not copy the link behind their back.
+          if (err instanceof Error && err.name === "AbortError") return;
+          // A real failure falls through to copying the link.
+        }
+      }
+      try {
+        await navigator.clipboard.writeText(url);
+        setShareState("copied");
+        setTimeout(() => setShareState("idle"), 2000);
+      } catch {
+        // Clipboard unavailable too (permissions, insecure origin): show the
+        // link as selectable text so there is always SOME way to grab it.
+        setShareState("show-link");
+      }
+    } finally {
+      setSharePending(false);
     }
   }
 
@@ -263,8 +276,10 @@ export default function ReviewButton({
             <button
               type="button"
               onClick={handleShare}
-              className="btn-primary text-sm"
+              disabled={sharePending}
+              className="btn-primary text-sm inline-flex items-center justify-center gap-1.5"
             >
+              {sharePending && <InlineSpinner />}
               {shareState === "copied" ? "Link copied" : "Share"}
             </button>
             <button
@@ -295,8 +310,10 @@ export default function ReviewButton({
             <button
               type="button"
               onClick={handleInviteShare}
-              className="btn-primary text-sm"
+              disabled={inviteSharePending}
+              className="btn-primary text-sm inline-flex items-center justify-center gap-1.5"
             >
+              {inviteSharePending && <InlineSpinner />}
               {inviteShareState === "copied" ? "Link copied" : "Share invite"}
             </button>
             <button

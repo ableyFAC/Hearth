@@ -9,6 +9,11 @@ import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
 import { FilePreviewThumb } from "@/components/FilePreview";
 import Lightbox from "@/components/Lightbox";
 import AiNotice from "@/components/AiNotice";
+import ProgressBar, { useStagedProgress } from "@/components/ProgressBar";
+
+// What /api/extract-document does while the owner waits: read the file, then
+// pull the facts (brand, model, dates) off it into the editable form.
+const READ_STAGES = ["Reading the document", "Pulling out the details"];
 
 const DOC_TYPES = [
   { value: "warranty", label: "Warranty" },
@@ -66,6 +71,8 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
   // in-flight extraction fetch and hands the picker back to the owner.
   const [reading, setReading] = useState<AbortController | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  // Progress bar for the "Reading the document" extraction step.
+  const progress = useStagedProgress(READ_STAGES, 12000);
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const input = e.target;
@@ -118,6 +125,7 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
     setNote({ text: "Reading the document…", tone: "working" });
     setFields(null);
     setFile(picked);
+    progress.start();
     // Local preview only, no storage object: a blob URL renders directly, no
     // signing needed, and it never touches the (private) home-photos bucket.
     // Kept in a local too (not just state) so the timeout path below revokes
@@ -160,6 +168,7 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
       extracted = null;
     }
     setReading(null);
+    progress.finish();
 
     if (timedOut) {
       setPhase("idle");
@@ -198,7 +207,10 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
       setNote({ text: "Uploading…", tone: "working" });
       // Only now, on the owner's actual say-so, does the file land in
       // storage: the property-scoped path lets RLS gate it.
-      const ext = file.name.split(".").pop() || "jpg";
+      // Sanitize the derived extension to a safe charset so no ".." or path
+      // fragment from a crafted filename can enter the storage key.
+      const rawExt = file.name.split(".").pop()?.toLowerCase() ?? "";
+      const ext = /^[a-z0-9]{1,5}$/.test(rawExt) ? rawExt : "jpg";
       const path = `${propertyId}/docs/${crypto.randomUUID()}.${ext}`;
       const { error: upErr } = await supabase.storage
         .from("home-photos")
@@ -250,6 +262,7 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
   function cancelReading() {
     reading?.abort();
     setReading(null);
+    progress.reset();
     if (preview) URL.revokeObjectURL(preview);
     setPhase("idle");
     setFile(null);
@@ -311,6 +324,16 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
         </p>
       )}
 
+      {phase === "working" && (
+        <ProgressBar
+          className="mt-2"
+          value={progress.value}
+          stages={READ_STAGES}
+          stageIndex={progress.stageIndex}
+          ariaLabel="Reading your document"
+        />
+      )}
+
       {phase === "review" && fields && (
         <form action={save} className="mt-3 space-y-3">
           {/* Sits above the editable fields, same placement as the equivalent
@@ -355,7 +378,7 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="label">Type</label>
               <select
@@ -387,7 +410,7 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="label">Brand</label>
               <input
@@ -408,7 +431,7 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="label">Install / purchase year</label>
               <input

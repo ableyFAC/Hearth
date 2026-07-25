@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { safeNextPath } from "@/lib/safeNext";
@@ -89,18 +90,18 @@ export default async function JoinHouseholdPage({
             honest "ask for a fresh code" state below instead of a false
             success - that's fine and expected.
           */}
-          <a
+          <Link
             href={`/homeowner-signup${nextQuery}`}
             className="btn-primary mt-6 block w-full"
           >
             Create your account
-          </a>
-          <a
+          </Link>
+          <Link
             href={`/signin${nextQuery}`}
             className="btn-secondary mt-3 block w-full"
           >
             Already have an account? Sign in
-          </a>
+          </Link>
         </div>
       </main>
     );
@@ -128,9 +129,9 @@ export default async function JoinHouseholdPage({
         <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
           You're in. You now share this home.
         </p>
-        <a href="/dashboard" className="btn-primary mt-6 block w-full">
+        <Link href="/dashboard" className="btn-primary mt-6 block w-full">
           Go to your home
-        </a>
+        </Link>
       </div>
     </main>
   );

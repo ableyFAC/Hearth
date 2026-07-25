@@ -62,6 +62,52 @@ export default function LeadsRealtime({
       console.warn("LeadsRealtime: realtime subscription failed, falling back to polling");
     }
 
+    // Pending DIRECT requests (contractor_leads rows with contractor_id null,
+    // aimed at this pro) are invisible to them under RLS, so their
+    // contractor_leads INSERT never reaches this client. But each direct
+    // request also writes a public.notifications row for the target pro, and
+    // that row IS RLS-visible to its owner, so we subscribe to the pro's own
+    // notification inserts to catch them. A short debounce collapses a burst of
+    // notifications (a request can fan out more than one) into a single
+    // refresh. Needs the signed-in user's id, which is async, so this channel
+    // is wired up after getUser() resolves and tracked for cleanup separately.
+    let notifChannel: ReturnType<typeof supabase.channel> | null = null;
+    let notifTimer: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
+    const debouncedRefresh = () => {
+      if (notifTimer) clearTimeout(notifTimer);
+      notifTimer = setTimeout(refresh, 500);
+    };
+    supabase.auth
+      .getUser()
+      .then(({ data: { user } }) => {
+        if (cancelled || !user) return;
+        try {
+          const topic =
+            `leads-notif-${user.id}-` + Math.random().toString(36).slice(2);
+          notifChannel = supabase
+            .channel(topic)
+            .on(
+              "postgres_changes",
+              {
+                event: "INSERT",
+                schema: "public",
+                table: "notifications",
+                filter: `user_id=eq.${user.id}`,
+              },
+              debouncedRefresh
+            )
+            .subscribe();
+        } catch {
+          // Same best-effort posture as the leads channel: the poll/focus
+          // paths still surface a new direct request on their own.
+          console.warn("LeadsRealtime: notifications subscription failed, falling back to polling");
+        }
+      })
+      .catch(() => {
+        // getUser can reject (e.g. offline); the poll/focus fallback covers it.
+      });
+
     const onFocus = () => refresh();
     window.addEventListener("focus", onFocus);
     const poll = setInterval(() => {
@@ -69,6 +115,15 @@ export default function LeadsRealtime({
     }, 20000);
 
     return () => {
+      cancelled = true;
+      if (notifTimer) clearTimeout(notifTimer);
+      if (notifChannel) {
+        try {
+          supabase.removeChannel(notifChannel);
+        } catch {
+          // Best-effort cleanup, same as the leads channel below.
+        }
+      }
       if (channel) {
         try {
           supabase.removeChannel(channel);

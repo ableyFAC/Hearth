@@ -1,9 +1,13 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getRole } from "@/lib/contractor";
-import { FOUNDER, FOUNDER_CREDIT } from "@/lib/constants";
+import { FOUNDER, SERVICE_CATEGORIES } from "@/lib/constants";
+import Link from "next/link";
+import Image from "next/image";
 import Logo from "@/components/Logo";
+import CategoryIcon from "@/components/CategoryIcon";
 import HeroDemoPlayer from "@/components/HeroDemoPlayer";
+import HeroPhotoCycler from "@/components/HeroPhotoCycler";
 import ThemeToggle from "@/components/ThemeToggle";
 import { TrendingUp, Bell, MessageSquare, Wrench } from "lucide-react";
 
@@ -39,7 +43,7 @@ export default async function Home({
     {
       icon: Bell,
       title: "Know before it breaks",
-      body: "Alerts for storms, product recalls, and big things getting old, like your water heater. All tailored to your actual home.",
+      body: "Hearth watches for storms, recalls, and aging systems like your water heater or furnace, then sends the alert. You never have to check.",
     },
     {
       icon: MessageSquare,
@@ -49,7 +53,7 @@ export default async function Home({
     {
       icon: Wrench,
       title: "The right pro, fast",
-      body: "Reach a local pro the moment something breaks, with your home's details ready to send.",
+      body: "Post the job once and Hearth fills in your home's details for you, so local pros can quote it fast.",
     },
   ];
 
@@ -73,12 +77,12 @@ export default async function Home({
           don&apos;t sell your personal data, and we don&apos;t let ad
           companies track what you do here. When you post a job, a pro sees only
           what&apos;s needed to quote it. The full details are in the{" "}
-          <a
+          <Link
             href="/privacy"
             className="text-bark-700 hover:underline dark:text-stone-300"
           >
             privacy policy
-          </a>
+          </Link>
           .
         </>
       ),
@@ -88,8 +92,28 @@ export default async function Home({
       a: "Local pros who set up their own Hearth profiles. When a pro has a California license number on file, we check it with the state's contractor license board (the CSLB) and show the result on their profile. You can see exactly what's been verified.",
     },
     {
+      q: "Where is Hearth available?",
+      a: "We're starting in Orange County, California, with local pros there. If you're outside Orange County, Hearth isn't ready for your home yet, but we're working on it.",
+    },
+    {
       q: "What does Plus cost?",
-      a: "Hearth itself stays free for your first home. Hearth Plus is optional: new subscribers get a free 3-day trial, then it's $1.99/wk, $4.99/mo, or $39.99/yr (about $3.33/mo), whichever you pick. Cancel anytime.",
+      a: "Hearth itself stays free for your first home. Hearth Plus is optional: new subscribers get a free 3-day trial, then it's $4.99/mo or $39.99/yr (about $3.33/mo), whichever you pick. After the free trial we charge your card automatically unless you cancel, and you can cancel anytime.",
+      node: (
+        <>
+          Hearth itself stays free for your first home. Hearth Plus is
+          optional: new subscribers get a free 3-day trial, then it&apos;s
+          $4.99/mo or $39.99/yr (about $3.33/mo), whichever you pick. After the
+          free trial we charge your card automatically unless you cancel, and
+          you can cancel anytime.{" "}
+          <Link
+            href="/pricing"
+            className="text-bark-700 hover:underline dark:text-stone-300"
+          >
+            See what Plus costs
+          </Link>
+          .
+        </>
+      ),
     },
     {
       q: "Where does my home's info come from?",
@@ -97,7 +121,7 @@ export default async function Home({
     },
     {
       q: "What happens if I cancel or delete my account?",
-      a: "Canceling Hearth Plus just stops the subscription: you keep your account and home data, and lose the Plus tools. Deleting your account is separate and permanent: it removes your data from Hearth. One honest caveat: if you already shared details with a pro through a job or message, they may keep their own copy in their own business records.",
+      a: "Canceling Hearth Plus just stops the subscription: you keep your account and home data, and lose the Plus tools. Deleting your account is separate and permanent: it removes your data from Hearth. One thing to know: if you already shared details with a pro through a job or message, they may keep their own copy in their own business records.",
     },
   ];
 
@@ -119,7 +143,90 @@ export default async function Home({
     },
     {
       n: "3",
-      text: "Hearth tells you what needs attention and what fixing it should cost.",
+      text: "Once you've added a few details, Hearth works out what needs attention and what it should cost, automatically.",
+    },
+  ];
+
+  // Service-scent chips: the jobs people most often come here for. `value` is
+  // the JOB_CATEGORIES key; each chip drops into homeowner signup with the
+  // category riding along in ?next= so /contractors (which reads ?category=)
+  // lands on a pre-filled post-a-job form. `label` is the friendlier public
+  // wording (e.g. "Roofing" for the "roof" category).
+  const SERVICE_SCENT = [
+    { value: "plumbing", label: "Plumbing" },
+    { value: "electrical", label: "Electrical" },
+    { value: "hvac", label: "HVAC" },
+    { value: "roof", label: "Roofing" },
+    { value: "painting", label: "Painting" },
+    { value: "landscaping", label: "Landscaping" },
+    { value: "handyman", label: "Handyman" },
+    { value: "remodeling", label: "Remodeling" },
+  ];
+
+  // Trust strip: three signals that are already true today, no invented
+  // numbers. Reuses the same green "all clear" pill as the hero reassurance
+  // row (.chip-ok tone).
+  const TRUST_SIGNALS = [
+    "State contractor license (CSLB) checks",
+    "County-records ownership match (we confirm the poster owns the home)",
+    "Your contact info stays private",
+  ];
+
+  // Hero photo set for the crossfading cycler: the warm home leads (it paints
+  // first, server-visible), then a run of licensed trade photos, closing on a
+  // second warm home. Each alt names the trade or scene shown.
+  const HERO_PHOTOS = [
+    {
+      src: "/photos/craftsman-home-dusk.jpg",
+      alt: "A warm craftsman home with glowing windows at dusk",
+    },
+    {
+      src: "/photos/roofer-installing-shingles.jpg",
+      alt: "A roofer installing asphalt shingles on a home",
+    },
+    {
+      src: "/photos/plumber-pipe-fittings.jpg",
+      alt: "A plumber's hands tightening pipe fittings",
+    },
+    {
+      src: "/photos/electrician-switchboard.jpg",
+      alt: "An electrician working on a breaker panel",
+    },
+    {
+      src: "/photos/painter-undercoating-wall.jpg",
+      alt: "A painter prepping and undercoating a bright wall",
+    },
+    {
+      src: "/photos/hvac-technician-gauges.jpg",
+      alt: "An HVAC technician holding refrigerant manifold gauges",
+    },
+    {
+      src: "/photos/landscaper-mowing-lawn.jpg",
+      alt: "A landscaper mowing a green lawn at golden hour",
+    },
+    {
+      src: "/photos/handyman-cordless-drill.jpg",
+      alt: "A handyman drilling into a wood board with a cordless drill",
+    },
+    {
+      src: "/photos/flooring-installation-planks.jpg",
+      alt: "A flooring installer fitting hardwood planks together",
+    },
+    {
+      src: "/photos/tiling-backsplash.jpg",
+      alt: "A tiler setting mosaic tile onto a kitchen backsplash",
+    },
+    {
+      src: "/photos/concrete-finishing-float.jpg",
+      alt: "A worker finishing a fresh concrete slab with a float",
+    },
+    {
+      src: "/photos/window-installation-drill.jpg",
+      alt: "A window installer driving a screw into a window frame",
+    },
+    {
+      src: "/photos/suburban-home-sunset.jpg",
+      alt: "A suburban home at dusk with warm glowing windows",
     },
   ];
 
@@ -129,7 +236,7 @@ export default async function Home({
           flat fill, hearth-50 in light and stone-900 in dark (matching the
           body), no gradient. */}
       <div className="bg-bark-50 dark:bg-stone-900">
-        <div className="mx-auto max-w-3xl px-6 pt-6">
+        <div className="mx-auto max-w-5xl px-6 pt-6">
           {/* Slim header: wordmark left, theme switch + quiet pro door right */}
           <header className="flex items-center justify-between">
             <span className="inline-flex items-center gap-2 font-semibold text-stone-900 dark:text-stone-100">
@@ -137,65 +244,88 @@ export default async function Home({
             </span>
             <div className="flex items-center gap-2">
               <ThemeToggle />
-              <a
+              <Link
+                href="/emergency-help"
+                className="hidden px-2 py-1.5 text-sm font-medium text-stone-600 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-200 sm:inline"
+              >
+                Emergency help
+              </Link>
+              <Link
                 href="/pros"
                 className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-300 dark:hover:border-bark-500 dark:hover:text-stone-300"
               >
                 Hearth for Pros
-              </a>
+              </Link>
             </div>
           </header>
 
-          {/* Hero */}
-          <div className="mt-14 flex flex-col items-center text-center sm:mt-20">
-            <h1 className="max-w-2xl text-4xl font-semibold tracking-tight text-stone-900 dark:text-stone-100 sm:text-6xl sm:tracking-[-0.03em] [text-wrap:balance]">
-              Know what your home needs before it costs you
-            </h1>
-            <p className="mt-5 max-w-xl text-lg leading-relaxed text-stone-600 dark:text-stone-400">
-              Hearth watches over your house, tells you what needs attention,
-              and finds a local pro when something breaks.
-            </p>
-            {/* Straight to homeowner signup: this page is homeowner-targeted
-                and pros have two dedicated doors (header link + pro band), so
-                the "Who are you?" fork on /get-started only cost a click. */}
-            <a
-              href="/homeowner-signup"
-              className="btn-primary mt-8 px-6 py-3 text-base shadow-lift"
-            >
-              Get started free
-            </a>
-            {/* Reassurance as pills, not fine print: these facts (fast, free,
-                no strings) are what get someone to actually click, so they get
-                the same visual weight as a real UI element, not a footnote.
-                Green is the success tone everywhere else in the app (.chip-ok),
-                so it reads as "all clear" here too. This exact trio is the
-                founder's pick. */}
-            <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-              {["About 30 seconds", "No card needed", "Cancel anytime"].map((label) => (
-                <span
-                  key={label}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-3.5 py-1.5 text-sm font-semibold text-green-700 dark:border-green-500/30 dark:bg-green-500/15 dark:text-green-300"
-                >
-                  <svg
-                    viewBox="0 0 20 20"
-                    className="h-4 w-4"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
+          {/* Hero: split layout. Copy and CTA on the left, a flat photo of a
+              warm home on the right. Below lg it collapses to one column and
+              the photo stacks under the copy, so mobile keeps the old
+              centered read. */}
+          <div className="mt-14 grid items-center gap-10 sm:mt-20 lg:grid-cols-2 lg:gap-12">
+            <div className="flex flex-col items-center text-center lg:items-start lg:text-left">
+              <h1 className="max-w-2xl text-4xl font-semibold tracking-tight text-stone-900 dark:text-stone-100 sm:text-6xl sm:tracking-[-0.03em] [text-wrap:balance]">
+                Know what your home needs before it costs you
+              </h1>
+              <p className="mt-5 max-w-xl text-lg leading-relaxed text-stone-600 dark:text-stone-400">
+                Hearth checks on your home for you and warns you before things
+                break. When you need a pro, post the job once and the quotes
+                come to you.
+              </p>
+              {/* Straight to homeowner signup: this page is homeowner-targeted
+                  and pros have two dedicated doors (header link + pro band), so
+                  the "Who are you?" fork on /get-started only cost a click. */}
+              <Link
+                href="/homeowner-signup"
+                className="btn-primary mt-8 px-6 py-3 text-base shadow-lift"
+              >
+                Get started free
+              </Link>
+              {/* Reassurance as pills, not fine print: these facts (fast, free,
+                  no strings) are what get someone to actually click, so they get
+                  the same visual weight as a real UI element, not a footnote.
+                  Green is the success tone everywhere else in the app (.chip-ok),
+                  so it reads as "all clear" here too. This exact trio is the
+                  founder's pick. */}
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-2 lg:justify-start">
+                {["About 30 seconds", "No card needed", "Cancel anytime"].map((label) => (
+                  <span
+                    key={label}
+                    className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-4 py-1.5 text-sm font-semibold text-green-700 sm:min-h-0 sm:px-3.5 dark:border-green-500/30 dark:bg-green-500/15 dark:text-green-300"
                   >
-                    <path d="m4 10.5 4 4 8-9" />
-                  </svg>
-                  {label}
-                </span>
-              ))}
+                    <svg
+                      viewBox="0 0 20 20"
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="m4 10.5 4 4 8-9" />
+                    </svg>
+                    {label}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-4 text-sm text-stone-500 dark:text-stone-400">
+                Serving Orange County, California
+              </p>
+              <div className="mt-4 flex justify-center text-sm lg:justify-start">
+                <Link href="/signin" className="text-bark-700 hover:underline dark:text-stone-300">
+                  Already have an account? Sign in
+                </Link>
+              </div>
             </div>
-            <div className="mt-4 flex justify-center text-sm">
-              <a href="/signin" className="text-bark-700 hover:underline dark:text-stone-300">
-                Already have an account? Sign in
-              </a>
+            {/* Flat hero photo: no gradient, no glass, no text-over-image
+                scrim - just a licensed photo in a rounded frame. The cycler's
+                aspect-[3/2] box reserves the space so it never shifts layout,
+                and the first frame loads with priority since it's above the
+                fold. */}
+            <div className="overflow-hidden rounded-xl border border-stone-200 dark:border-white/10">
+              <HeroPhotoCycler photos={HERO_PHOTOS} />
             </div>
           </div>
 
@@ -211,21 +341,99 @@ export default async function Home({
       </div>
 
       <div className="mx-auto max-w-3xl px-6">
-        {/* How it works */}
-      <section className="mt-16 sm:mt-24">
-        <h2 className="text-center text-2xl font-semibold text-stone-900 dark:text-stone-100 [text-wrap:balance]">
-          How it works
+        {/* Service scent: the common jobs, as flat clickable chips. Each drops
+            into homeowner signup with the category preset in ?next= so the
+            post-a-job form on /contractors lands pre-filled (it reads
+            ?category=). Chips reuse the header link's neutral outline shape,
+            rounded full; icons inherit currentColor via CategoryIcon. */}
+      <section className="mt-12 sm:mt-16">
+        <h2 className="text-center text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+          Find a pro for
         </h2>
-        <ol className="mx-auto mt-6 max-w-md space-y-4">
-          {STEPS.map((s) => (
-            <li key={s.n} className="flex items-start gap-3">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-bark-600 text-sm font-semibold text-white">
-                {s.n}
-              </span>
-              <p className="pt-0.5 text-stone-600 dark:text-stone-400">{s.text}</p>
+        <ul className="mx-auto mt-4 flex max-w-2xl flex-wrap justify-center gap-2">
+          {SERVICE_SCENT.map((s) => (
+            <li key={s.value}>
+              <Link
+                href={`/homeowner-signup?next=${encodeURIComponent(
+                  `/contractors?category=${s.value}`
+                )}`}
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-stone-300 bg-white px-4 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 sm:min-h-0 sm:px-3.5 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-500 dark:hover:text-stone-100"
+              >
+                <CategoryIcon
+                  list={SERVICE_CATEGORIES}
+                  value={s.value}
+                  className="h-4 w-4"
+                />
+                {s.label}
+              </Link>
             </li>
           ))}
-        </ol>
+        </ul>
+      </section>
+
+        {/* Trust strip: three already-true signals in the green "all clear"
+            pill, the same tone as the hero reassurance row. No invented
+            numbers - only what Hearth actually does today. */}
+      <section className="mt-8">
+        <h2 className="text-center text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+          What we check
+        </h2>
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+          {TRUST_SIGNALS.map((label) => (
+            <span
+              key={label}
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-4 py-1.5 text-sm font-semibold text-green-700 sm:min-h-0 sm:px-3.5 dark:border-green-500/30 dark:bg-green-500/15 dark:text-green-300"
+            >
+              <svg
+                viewBox="0 0 20 20"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m4 10.5 4 4 8-9" />
+              </svg>
+              {label}
+            </span>
+          ))}
+        </div>
+      </section>
+
+        {/* How it works: steps on the left, a flat photo of real work on the
+            right. Collapses to one column below lg (steps, then photo). */}
+      <section className="mt-16 sm:mt-24">
+        <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-12">
+          <div>
+            <h2 className="text-center text-2xl font-semibold text-stone-900 dark:text-stone-100 [text-wrap:balance] lg:text-left">
+              How it works
+            </h2>
+            <ol className="mx-auto mt-6 max-w-md space-y-4 lg:mx-0">
+              {STEPS.map((s) => (
+                <li key={s.n} className="flex items-start gap-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-bark-600 text-sm font-semibold text-white">
+                    {s.n}
+                  </span>
+                  <p className="pt-0.5 text-stone-600 dark:text-stone-400">{s.text}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
+          {/* Flat trade photo, same framed treatment as the hero. Not
+              priority - it sits below the fold. */}
+          <div className="overflow-hidden rounded-xl border border-stone-200 dark:border-white/10">
+            <Image
+              src="/photos/roofer-installing-shingles.jpg"
+              alt="A roofer installing asphalt shingles on a home"
+              width={1600}
+              height={1067}
+              sizes="(min-width: 1024px) 22rem, 100vw"
+              className="h-auto w-full object-cover"
+            />
+          </div>
+        </div>
       </section>
 
       {/* Value */}
@@ -246,36 +454,31 @@ export default async function Home({
         </div>
       </section>
 
-      {/* Trust: who's behind this. Founder identity over corporate polish,
-          same as the /pros version; details are owner-fillable in
-          src/lib/constants.ts and the copy falls back to an honest generic
-          line when they're blank. */}
+      {/* Trust band, same as the /pros version. */}
       <section className="mt-16 rounded-2xl bg-stone-900 px-6 py-8 dark:bg-stone-950 text-center sm:mt-24">
         <h2 className="text-2xl font-semibold text-white [text-wrap:balance]">
-          {FOUNDER_CREDIT
-            ? `Built by ${FOUNDER_CREDIT}`
-            : "Built by homeowners in Orange County"}
+          Real people, real answers
         </h2>
         <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-stone-300">
-          Real people, real answers: message us and we&apos;ll reply ourselves.
-          Pros see only what you choose to share.
+          Message us and a real person on our team will answer. Pros see only
+          what you choose to share.
         </p>
         <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-stone-300">
           Hearth started close to home, in Orange County, with local pages
           for{" "}
-          <a
+          <Link
             href="/fountain-valley"
             className="text-bark-500 hover:underline"
           >
             Fountain Valley
-          </a>{" "}
+          </Link>{" "}
           and{" "}
-          <a
+          <Link
             href="/huntington-beach"
             className="text-bark-500 hover:underline"
           >
             Huntington Beach
-          </a>{" "}
+          </Link>{" "}
           homeowners.
         </p>
         {/* Contact form works with no session and no owner-fillable fields,
@@ -283,12 +486,12 @@ export default async function Home({
             src/app/contact/page.tsx and the note in LegalContact.tsx for why
             this changed. The cell-phone line is still owner-fillable and
             still drops out entirely when blank. */}
-        <a
+        <Link
           href="/contact"
           className="mt-4 inline-block text-sm text-bark-500 hover:underline"
         >
           Questions? Contact us →
-        </a>
+        </Link>
         {FOUNDER.cellPhone && (
           <a
             href={`tel:${FOUNDER.cellPhone.replace(/[^\d+]/g, "")}`}
@@ -329,12 +532,12 @@ export default async function Home({
         <h2 className="mx-auto max-w-xl text-2xl font-semibold text-stone-900 dark:text-stone-100 [text-wrap:balance]">
           Know what your home needs before it costs you
         </h2>
-        <a
+        <Link
           href="/homeowner-signup"
           className="btn-primary mt-6 inline-block px-6 py-3 text-base shadow-lift"
         >
           Get started free
-        </a>
+        </Link>
         <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
           Free for your first home. About 30 seconds to sign up. No card
           needed.
@@ -345,20 +548,26 @@ export default async function Home({
           link. Outline button on purpose: the filled primary on this page is
           reserved for the homeowner CTAs. */}
       <section className="mt-16 rounded-2xl bg-stone-900 px-6 py-8 dark:bg-stone-950 text-center sm:mt-24">
-        <h3 className="text-xl font-semibold text-white">
-          You fix homes? Get the leads without the games.
+        {/* stone-400 in BOTH modes: this band's fill is always dark (stone-900
+            / stone-950), so the light-mode stone-500 the other eyebrows use
+            would sit too dark against it. */}
+        <h2 className="text-center text-sm font-semibold uppercase tracking-wide text-stone-400">
+          For contractors
+        </h2>
+        <h3 className="mt-2 text-xl font-semibold text-white">
+          Fix homes for a living? Real local leads, honest pricing.
         </h3>
         <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-stone-300">
           The fee is on every job before you pay, and if the homeowner never
           responds, it comes back automatically. No subscription. You pay
           only when you apply.
         </p>
-        <a
+        <Link
           href="/pros"
           className="mt-5 inline-block rounded-lg border border-stone-500 px-6 py-2.5 font-medium text-white hover:border-white hover:bg-white/10"
         >
           Explore Hearth for Pros
-        </a>
+        </Link>
       </section>
 
         <footer className="mt-16 border-t border-stone-200 pt-8 sm:mt-24 dark:border-white/10">
@@ -369,33 +578,33 @@ export default async function Home({
               </p>
               <ul className="mt-2 space-y-1.5 text-sm text-stone-600 dark:text-stone-400">
                 <li>
-                  <a href="/guides" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
+                  <Link href="/guides" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
                     All guides
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a
+                  <Link
                     href="/guides/water-heater-replacement-cost"
                     className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
                   >
                     Water heater replacement cost
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a
+                  <Link
                     href="/guides/hvac-replacement-cost"
                     className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
                   >
                     HVAC replacement cost
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a
+                  <Link
                     href="/guides/socal-home-maintenance-calendar"
                     className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
                   >
                     SoCal maintenance calendar
-                  </a>
+                  </Link>
                 </li>
               </ul>
             </div>
@@ -405,20 +614,20 @@ export default async function Home({
               </p>
               <ul className="mt-2 space-y-1.5 text-sm text-stone-600 dark:text-stone-400">
                 <li>
-                  <a
+                  <Link
                     href="/fountain-valley"
                     className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
                   >
                     Fountain Valley
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a
+                  <Link
                     href="/huntington-beach"
                     className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
                   >
                     Huntington Beach
-                  </a>
+                  </Link>
                 </li>
               </ul>
             </div>
@@ -428,14 +637,24 @@ export default async function Home({
               </p>
               <ul className="mt-2 space-y-1.5 text-sm text-stone-600 dark:text-stone-400">
                 <li>
-                  <a href="/pros" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
-                    For Pros
-                  </a>
+                  <Link href="/pricing" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
+                    Pricing
+                  </Link>
                 </li>
                 <li>
-                  <a href="/signin" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
+                  <Link href="/emergency-help" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
+                    Emergency help
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/pros" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
+                    For Pros
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/signin" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
                     Sign in
-                  </a>
+                  </Link>
                 </li>
               </ul>
             </div>
@@ -445,19 +664,19 @@ export default async function Home({
               </p>
               <ul className="mt-2 space-y-1.5 text-sm text-stone-600 dark:text-stone-400">
                 <li>
-                  <a href="/privacy" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
+                  <Link href="/privacy" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
                     Privacy
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="/terms" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
+                  <Link href="/terms" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
                     Terms
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="/ai-disclosure" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
+                  <Link href="/ai-disclosure" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
                     How we use AI
-                  </a>
+                  </Link>
                 </li>
                 {/* Was a mailto: to FOUNDER.email; a raw address in a
                     site-wide footer is exactly the kind of thing spam
@@ -465,12 +684,12 @@ export default async function Home({
                     conditional, since the contact form needs no owner-fillable
                     field to work. */}
                 <li>
-                  <a
+                  <Link
                     href="/contact"
                     className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
                   >
                     Contact us
-                  </a>
+                  </Link>
                 </li>
               </ul>
             </div>

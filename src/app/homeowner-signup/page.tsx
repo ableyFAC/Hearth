@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import NoticeAtCollection from "@/components/NoticeAtCollection";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/safeNext";
+import { friendlyAuthError } from "@/lib/friendlyAuthError";
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
 import { track } from "@/lib/analytics";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
@@ -51,13 +53,11 @@ export default function HomeownerSignUpPage({
   const onboardingQuery = onboardingParams.toString()
     ? `?${onboardingParams.toString()}`
     : "";
-  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  // Per-field show/hide toggles for the password and confirm inputs.
+  // Show/hide toggle for the single password field. The reveal makes a
+  // separate confirm-password field redundant, so there isn't one.
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   // Set when the account exists but email confirmation is still pending;
@@ -87,13 +87,6 @@ export default function HomeownerSignUpPage({
     )}`;
   }
 
-  // Live inline mismatch signal: only once both fields have text and they
-  // differ, so a half-typed confirm field never flashes an error.
-  const passwordsMismatch =
-    password.length > 0 &&
-    confirmPassword.length > 0 &&
-    password !== confirmPassword;
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -101,11 +94,6 @@ export default function HomeownerSignUpPage({
 
     if (password.length < 6) {
       setError("Password must be at least 6 characters.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError("Passwords don't match.");
       return;
     }
 
@@ -122,18 +110,17 @@ export default function HomeownerSignUpPage({
       email: email.trim(),
       password,
       options: {
-        data: { role: "homeowner", full_name: fullName.trim() },
+        // Name is no longer collected here - it's asked for in onboarding,
+        // where it's actually used for the county ownership-of-record match
+        // (see src/app/onboarding). Only the role is stamped at creation.
+        data: { role: "homeowner" },
         emailRedirectTo: confirmRedirectUrl(),
       },
     });
 
     if (error) {
       setBusy(false);
-      setError(
-        /registered|exists/i.test(error.message)
-          ? "An account with this email already exists. Try signing in instead."
-          : error.message
-      );
+      setError(friendlyAuthError(error));
       return;
     }
 
@@ -181,7 +168,7 @@ export default function HomeownerSignUpPage({
 
     setBusy(false);
     if (error) {
-      setError(error.message);
+      setError(friendlyAuthError(error));
       return;
     }
     setNotice("Confirmation email resent. Give it a minute or two.");
@@ -235,13 +222,13 @@ export default function HomeownerSignUpPage({
 
           <p className="mt-6 border-t border-stone-100 pt-4 text-center text-xs text-stone-500 dark:border-white/10 dark:text-stone-400">
             Already confirmed, or used the wrong email?{" "}
-            <a href={`/signin${nextQuery}`} className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href={`/signin${nextQuery}`} className="text-bark-700 hover:underline dark:text-stone-300">
               Sign in
-            </a>{" "}
+            </Link>{" "}
             or{" "}
-            <a href="/reset-password" className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href="/reset-password" className="text-bark-700 hover:underline dark:text-stone-300">
               reset your password
-            </a>
+            </Link>
             .
           </p>
         </div>
@@ -263,22 +250,6 @@ export default function HomeownerSignUpPage({
 
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
-            <label className="label" htmlFor="full_name">
-              Full name
-            </label>
-            <input
-              id="full_name"
-              className="input"
-              type="text"
-              autoComplete="name"
-              placeholder="e.g. Alex Rivera"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              autoFocus
-              required
-            />
-          </div>
-          <div>
             <label className="label" htmlFor="email">
               Email
             </label>
@@ -290,6 +261,7 @@ export default function HomeownerSignUpPage({
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              autoFocus
               required
             />
           </div>
@@ -322,45 +294,6 @@ export default function HomeownerSignUpPage({
               </button>
             </div>
           </div>
-          <div>
-            <label className="label" htmlFor="confirm_password">
-              Confirm password
-            </label>
-            <div className="relative">
-              <input
-                id="confirm_password"
-                className={`input pr-10 ${
-                  passwordsMismatch
-                    ? "border-red-400 focus:border-red-500 focus:ring-red-500 dark:border-red-500/60"
-                    : ""
-                }`}
-                type={showConfirm ? "text" : "password"}
-                autoComplete="new-password"
-                placeholder="Same password again"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                aria-invalid={passwordsMismatch}
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirm((s) => !s)}
-                aria-label={showConfirm ? "Hide password" : "Show password"}
-                className="focus-ring absolute inset-y-0 right-0 flex items-center px-3 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200"
-              >
-                {showConfirm ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-              </button>
-            </div>
-            {passwordsMismatch && (
-              <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                Doesn&apos;t match yet
-              </p>
-            )}
-          </div>
           {/* Unchecked-by-default, gated in onSubmit (Berman fix - a
               pre-ticked or merely-decorative agreement line doesn't bind).
               Also carries the 18+ age gate. */}
@@ -374,13 +307,13 @@ export default function HomeownerSignUpPage({
             />
             <span>
               I am at least 18 years old and I have read and agree to the{" "}
-              <a href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
+              <Link href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
                 Terms
-              </a>{" "}
+              </Link>{" "}
               and{" "}
-              <a href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
+              <Link href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
                 Privacy Policy
-              </a>
+              </Link>
               .
             </span>
           </label>
@@ -388,7 +321,7 @@ export default function HomeownerSignUpPage({
               above, shown at the point of collection directly under the
               Privacy Policy link. Collapsed by default so it stays tidy. */}
           <NoticeAtCollection
-            collects="Your name, email address, and password."
+            collects="Your email address and password."
             purpose="create and secure your account, sign you in, and contact you about your home."
             sensitive="Your password is sensitive information. It's stored only as a scrambled hash that we can't reverse, and it's used for nothing but signing you in."
           />
@@ -399,16 +332,18 @@ export default function HomeownerSignUpPage({
           </div>
           <GoogleSignInButton next={googleNextPath} onError={setError} />
           {/* OAuth signups skip the checkbox above entirely, so the same
-              agreement needs to be restated here instead. */}
+              agreement - including the 18+ age representation - needs to be
+              restated here instead. */}
           <p className="text-center text-xs text-stone-500 dark:text-stone-400">
-            By continuing with Google you agree to the{" "}
-            <a href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
+            By continuing with Google you confirm you are 18 or older and agree
+            to the{" "}
+            <Link href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
               Terms
-            </a>{" "}
+            </Link>{" "}
             and{" "}
-            <a href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
               Privacy Policy
-            </a>
+            </Link>
             .
           </p>
           <button className="btn-primary w-full" disabled={busy}>
@@ -435,23 +370,23 @@ export default function HomeownerSignUpPage({
 
         <div className="mt-6 border-t border-stone-100 pt-4 text-center dark:border-white/10">
           <p className="text-sm text-stone-500 dark:text-stone-400">Already have an account?</p>
-          <a
+          <Link
             href={`/signin${nextQuery}`}
             className="btn-secondary mt-2 inline-block w-full"
           >
             Sign in
-          </a>
+          </Link>
         </div>
       </div>
 
       <p className="mt-6 text-center text-xs text-stone-500 dark:text-stone-400">
         Are you a contractor?{" "}
-        <a
+        <Link
           href={`/contractor-signup${nextQuery}`}
           className="text-bark-700 hover:underline dark:text-stone-300"
         >
           Sign up for Hearth for Pros
-        </a>
+        </Link>
         .
       </p>
     </main>

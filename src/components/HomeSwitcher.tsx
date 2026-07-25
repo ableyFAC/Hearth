@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { setActiveHomeAction } from "@/lib/homeActions";
 import RemoveHomeButton from "@/components/RemoveHomeButton";
@@ -98,12 +99,12 @@ export default function HomeSwitcher({
             </div>
           ))}
 
-          <a
+          <Link
             href="/onboarding"
             className="mt-1 block rounded-md px-2 py-1.5 text-sm font-medium text-bark-700 hover:bg-bark-50 dark:text-stone-300 dark:hover:bg-stone-600"
           >
             + Add a home
-          </a>
+          </Link>
           {homes.length >= 1 && (
             <p className="px-2 pb-1 text-xs text-stone-500 dark:text-stone-400">
               Free includes 1 home. Hearth Plus unlocks up to 5.

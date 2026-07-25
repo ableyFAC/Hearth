@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import InlineSpinner from "@/components/InlineSpinner";
 
 // Uploads a single logo image to the PUBLIC `pro-logos` bucket under
 // <contractorId>/ and renders a hidden input (name="logo_url") so the parent
@@ -50,23 +51,30 @@ export default function LogoUpload({
       return;
     }
 
-    const ext = file.name.split(".").pop() || "png";
+    const rawExt = file.name.split(".").pop()?.toLowerCase() ?? "";
+    const ext = /^[a-z0-9]{1,5}$/.test(rawExt) ? rawExt : "png";
     const id = crypto.randomUUID();
     const path = `${contractorId}/${id}.${ext}`;
-    const { error } = await supabase.storage
-      .from("pro-logos")
-      .upload(path, file, { upsert: false });
-    if (error) {
-      setErr(
-        "The logo couldn't upload (is the pro-logos bucket created?). You can still save the rest."
-      );
-    } else {
-      const { data } = supabase.storage.from("pro-logos").getPublicUrl(path);
-      setUrl(data.publicUrl);
+    // finally guarantees busy resets even if the upload promise rejects
+    // (network blip, thrown error), so the input never stays disabled until a
+    // page reload.
+    try {
+      const { error } = await supabase.storage
+        .from("pro-logos")
+        .upload(path, file, { upsert: false });
+      if (error) {
+        setErr(
+          "The logo couldn't upload (is the pro-logos bucket created?). You can still save the rest."
+        );
+      } else {
+        const { data } = supabase.storage.from("pro-logos").getPublicUrl(path);
+        setUrl(data.publicUrl);
+      }
+    } finally {
+      setBusy(false);
+      // Reset so picking the same file again still fires onChange.
+      input.value = "";
     }
-    setBusy(false);
-    // Reset so picking the same file again still fires onChange.
-    input.value = "";
   }
 
   return (
@@ -99,10 +107,16 @@ export default function LogoUpload({
           type="file"
           accept="image/png,image/jpeg,image/webp"
           onChange={onPick}
+          disabled={busy}
           className="block w-full text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-hearth-100 file:px-3 file:py-1.5 file:text-hearth-800 dark:text-stone-300 dark:file:bg-hearth-900/40 dark:file:text-hearth-200"
         />
       </div>
-      {busy && <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">Uploading…</p>}
+      {busy && (
+        <p className="mt-1 flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
+          <InlineSpinner size={14} />
+          Uploading…
+        </p>
+      )}
       {err && <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">{err}</p>}
       {url && <input type="hidden" name="logo_url" value={url} />}
     </div>

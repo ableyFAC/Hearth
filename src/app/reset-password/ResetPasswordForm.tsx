@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { friendlyAuthError } from "@/lib/friendlyAuthError";
 
 // Password reset, styled to match src/app/signin/page.tsx.
 //
@@ -39,7 +41,7 @@ export default function ResetPasswordForm({
 
     setBusy(false);
     if (error) {
-      setError(error.message);
+      setError(friendlyAuthError(error));
       return;
     }
     setNotice(
@@ -65,7 +67,7 @@ export default function ResetPasswordForm({
       setError(
         /session/i.test(error.message)
           ? "Your reset link may have expired. Request a new one below."
-          : error.message
+          : friendlyAuthError(error)
       );
       return;
     }
@@ -111,12 +113,12 @@ export default function ResetPasswordForm({
             </button>
             <p className="text-center text-xs text-stone-500 dark:text-stone-400">
               Link expired?{" "}
-              <a
+              <Link
                 href="/reset-password"
                 className="text-bark-700 hover:underline dark:text-stone-300"
               >
                 Request a new one
-              </a>
+              </Link>
               .
             </p>
           </form>
@@ -163,9 +165,9 @@ export default function ResetPasswordForm({
 
         <div className="mt-6 border-t border-stone-100 pt-4 text-center dark:border-white/10">
           <p className="text-sm text-stone-500 dark:text-stone-400">Remembered it after all?</p>
-          <a href="/signin" className="btn-secondary mt-2 inline-block w-full">
+          <Link href="/signin" className="btn-secondary mt-2 inline-block w-full">
             Back to sign in
-          </a>
+          </Link>
         </div>
       </div>
     </main>

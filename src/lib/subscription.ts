@@ -96,8 +96,10 @@ export const getBillingOutlook = cache(
 
       let scheduledDowngrade: { switchesAt: Date } | null = null;
       const schedule = stripeSub.schedule;
+      // A pending switch-to-monthly schedule can exist on a yearly row or on a
+      // grandfathered weekly one (both use downgradeToMonthlyAction).
       if (
-        sub.plan === "yearly" &&
+        (sub.plan === "yearly" || sub.plan === "weekly") &&
         schedule &&
         typeof schedule !== "string" &&
         schedule.phases.length >= 2
@@ -138,6 +140,22 @@ export async function hasPlus(): Promise<boolean> {
   const sub = await getSubscription();
   if (!sub) return false;
   return isLive(sub);
+}
+
+// Paid extra-home slots on the current user's homeowner Plus subscription.
+// Extra homes are a Plus-only add-on (see setExtraHomesAction): the Stripe
+// webhook writes extra_home_slots off the add-on subscription item's quantity,
+// and sets it to 0 when Plus is canceled. Counted only when the homeowner row
+// is LIVE (same active/trialing + period check hasPlus uses), so a lapsed row
+// with a stale value never grants extra capacity - slots lapse with Plus. The
+// column isn't in database.types.ts yet, so it's read cast-through-any, the
+// same convention the other not-yet-typed columns use. Returns 0 when there is
+// no live Plus row.
+export async function getExtraHomeSlots(): Promise<number> {
+  const sub = await getSubscription();
+  if (!sub || !isLive(sub)) return 0;
+  const slots = Number((sub as any).extra_home_slots) || 0;
+  return slots > 0 ? slots : 0;
 }
 
 // Whether the current user has an active Hearth Pro membership (contractor

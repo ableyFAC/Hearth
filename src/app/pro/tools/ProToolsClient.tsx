@@ -12,6 +12,7 @@ import {
 import { JOB_CATEGORIES, labelFor } from "@/lib/constants";
 import type { ProPastJob } from "@/lib/database.types";
 import AiNotice from "@/components/AiNotice";
+import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
 import {
   deletePastJobAction,
   recordToolEditAction,
@@ -173,7 +174,9 @@ export default function ProToolsClient({
 
     try {
       const b64 = await toBase64(file);
-      const resp = await fetch("/api/pro-past-jobs", {
+      // Timeout-guarded: a hung extract call must not strand the picker in
+      // its busy state with no way to retry.
+      const resp = await fetchWithTimeout("/api/pro-past-jobs", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ image: b64, mime: file.type || "image/jpeg" }),
@@ -200,8 +203,12 @@ export default function ProToolsClient({
           "Couldn't read that document. Try a clearer photo, a PDF, or a different file."
         );
       }
-    } catch {
-      setPjError("Something went wrong. Please try again.");
+    } catch (e) {
+      setPjError(
+        isTimeoutError(e)
+          ? "That took too long. Try again."
+          : "Something went wrong. Please try again."
+      );
     } finally {
       setPjBusy(false);
     }
@@ -302,7 +309,9 @@ export default function ProToolsClient({
     setDrafts((d) => ({ ...d, [tool]: null }));
 
     try {
-      const resp = await fetch("/api/pro-tools", {
+      // Timeout-guarded: a hung drafting call must not strand the tool in
+      // its loading state with no way to retry.
+      const resp = await fetchWithTimeout("/api/pro-tools", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
@@ -328,8 +337,12 @@ export default function ProToolsClient({
       } else {
         setError(data?.error || "Couldn't write that draft. Please try again.");
       }
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (e) {
+      setError(
+        isTimeoutError(e)
+          ? "That took too long. Try again."
+          : "Something went wrong. Please try again."
+      );
     } finally {
       setLoading(false);
     }

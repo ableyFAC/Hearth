@@ -13,7 +13,13 @@ marketplaces so Hearth undercuts them, with no annual fee.
 |------|-----|--------|
 | 1 - light / low-ticket | **$25** | cleaning, landscaping, painting, other/handyman |
 | 2 - skilled / replacement | **$50** | plumbing, electrical, HVAC, windows |
-| 3 - big-ticket | **$90** | roofing, structural, remodeling / general contracting |
+| 3 - big-ticket | **$99** | roofing, structural, remodeling / general contracting |
+
+Intro price (decided 2026-07-12): a pro's FIRST big-ticket lead ever costs
+**$49.99**; every big-ticket lead after that costs the normal $99. Charged in
+the DB (migration `0113_major_intro_price.sql`, `major_lead_price_cents`),
+derived from the pro's own payment history, no new column. A refund does not
+restore intro eligibility.
 
 Market context (2025-26): Angi/HomeAdvisor charge roughly $15-85+ per lead PLUS
 a ~$300/yr fee, roofing/HVAC/remodel at the top ($80-200 for roofing). Thumbtack

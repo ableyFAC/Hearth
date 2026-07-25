@@ -1,7 +1,22 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
+import InlineSpinner from "@/components/InlineSpinner";
 import { depositAction } from "./actions";
+
+// Needs its own component because useFormStatus only reports pending state
+// inside a descendant of the <form> it belongs to, not the component
+// rendering the form itself.
+function DepositButton({ disabled, num }: { disabled: boolean; num: number }) {
+  const { pending } = useFormStatus();
+  return (
+    <button className="btn-primary" disabled={disabled || pending}>
+      {pending && <InlineSpinner />}
+      Deposit ${num || 0}
+    </button>
+  );
+}
 
 type Tier = { min_cents: number; max_cents: number | null; bonus_pct: number };
 
@@ -150,9 +165,7 @@ export default function DepositForm({
         I understand and agree.
       </label>
 
-      <button className="btn-primary" disabled={!agreed || num < 5}>
-        Deposit ${num || 0}
-      </button>
+      <DepositButton disabled={!agreed || num < 5} num={num} />
     </form>
   );
 }

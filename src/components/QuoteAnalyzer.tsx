@@ -5,7 +5,17 @@ import Link from "next/link";
 import { ReceiptText } from "lucide-react";
 import { JOB_CATEGORIES } from "@/lib/constants";
 import AiNotice from "@/components/AiNotice";
+import ProgressBar, { useStagedProgress } from "@/components/ProgressBar";
 import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
+
+// The honest steps the two-stage analyze pipeline actually runs through:
+// transcribe the quote, check its numbers against typical local costs, then
+// write the plain-language breakdown and negotiation script.
+const ANALYZE_STAGES = [
+  "Reading your quote",
+  "Comparing against local pricing",
+  "Writing the breakdown",
+];
 
 type Verdict = "fair" | "high" | "low" | "unclear";
 type Severity = "red_flag" | "ask" | "ok";
@@ -133,6 +143,9 @@ export default function QuoteAnalyzer({
   const [copied, setCopied] = useState(false);
   const [copyFallback, setCopyFallback] = useState(false);
   const negotiationRef = useRef<HTMLParagraphElement>(null);
+  // Drives the progress bar shown while analyze() is in flight. The pipeline is
+  // a couple of sequential Gemini calls, so budget ~22s for the label pacing.
+  const progress = useStagedProgress(ANALYZE_STAGES, 22000);
 
   // Restore state: whether the initial "load the latest saved analysis" fetch
   // is still in flight, the "when did we analyze this" / "what was it called"
@@ -181,7 +194,11 @@ export default function QuoteAnalyzer({
     // all, the POST response below already delivers the result directly.
     pollRef.current = setInterval(async () => {
       try {
-        const resp = await fetch("/api/analyze-quote");
+        // The 15s timeout is longer than the 5s tick, so up to 3 of these
+        // GETs can be in flight at once when the server is slow. That's
+        // fine: it's an idempotent status read, and the timeout still
+        // bounds how many can pile up.
+        const resp = await fetchWithTimeout("/api/analyze-quote", {}, 15_000);
         const data = await resp.json().catch(() => ({}));
         applyLatest(data?.latest ?? null);
       } catch {
@@ -194,7 +211,9 @@ export default function QuoteAnalyzer({
     let cancelled = false;
     (async () => {
       try {
-        const resp = await fetch("/api/analyze-quote");
+        // Short timeout: if this restore check hangs, `restoring` would stay
+        // true forever and the upload form would never appear.
+        const resp = await fetchWithTimeout("/api/analyze-quote", {}, 15_000);
         const data = await resp.json().catch(() => ({}));
         if (!cancelled) applyLatest(data?.latest ?? null);
       } catch {
@@ -321,6 +340,7 @@ export default function QuoteAnalyzer({
     setCopyFallback(false);
     setCopied(false);
     clearEdits();
+    progress.start();
 
     try {
       // Longer than the single-call default: the route now runs a grounded
@@ -373,6 +393,7 @@ export default function QuoteAnalyzer({
           : "Something went wrong. Please try again."
       );
     } finally {
+      progress.finish();
       setLoading(false);
     }
   }
@@ -595,9 +616,17 @@ export default function QuoteAnalyzer({
           {loading ? "Reading the quote…" : "Analyze this quote"}
         </button>
         {loading && (
-          <p className="text-center text-xs text-stone-500 dark:text-stone-400">
-            You can leave this page. We&apos;ll notify you when it&apos;s ready.
-          </p>
+          <>
+            <ProgressBar
+              value={progress.value}
+              stages={ANALYZE_STAGES}
+              stageIndex={progress.stageIndex}
+              ariaLabel="Analyzing your quote"
+            />
+            <p className="text-center text-xs text-stone-500 dark:text-stone-400">
+              You can leave this page. We&apos;ll notify you when it&apos;s ready.
+            </p>
+          </>
         )}
       </div>
 

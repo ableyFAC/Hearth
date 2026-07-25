@@ -9,6 +9,8 @@ import {
   BUDGET_RANGES,
   MAX_APPLICANTS_PER_JOB,
   COLD_START_FREE_ALERTS,
+  MAJOR_INTRO_FEE,
+  isMajorCategory,
 } from "@/lib/constants";
 import CategoryIcon from "@/components/CategoryIcon";
 import { Check } from "lucide-react";
@@ -17,6 +19,7 @@ import OpenChatButton from "@/components/OpenChatButton";
 import ChatDrawer from "@/components/ChatDrawer";
 import LeadsRealtime from "./LeadsRealtime";
 import ApplyJobButton from "./ApplyJobButton";
+import DirectRequestActions from "./DirectRequestActions";
 import JobStatusSelect from "./JobStatusSelect";
 import JobPhotoStrip from "./JobPhotoStrip";
 import SetupChecklist, { type SetupItem } from "@/components/pro/SetupChecklist";
@@ -101,21 +104,47 @@ export default async function ProDashboard({
 
   // Open jobs to apply to (safe fields only, category-matched, not yet applied),
   // the pro's own applications, and the jobs they were chosen for (full detail).
-  const [{ data: openJobs }, { data: myApps }, { data: assignedData }] =
-    await Promise.all([
-      (supabase as any).rpc("open_jobs_for_me"),
-      (supabase as any).rpc("my_applications"),
-      supabase
-        .from("contractor_leads")
-        .select(
-          "id, issue_id, status, category, issue_severity, issue_description, homeowner_name, homeowner_email, homeowner_phone, property_address, created_at"
-        )
-        .eq("contractor_id", contractor.id)
-        .order("created_at", { ascending: false }),
-    ]);
+  const [
+    { data: openJobs },
+    { data: myApps },
+    { data: assignedData },
+    { data: directData },
+  ] = await Promise.all([
+    (supabase as any).rpc("open_jobs_for_me"),
+    (supabase as any).rpc("my_applications"),
+    supabase
+      .from("contractor_leads")
+      .select(
+        "id, issue_id, status, category, issue_severity, issue_description, homeowner_name, homeowner_email, homeowner_phone, property_address, created_at"
+      )
+      .eq("contractor_id", contractor.id)
+      .order("created_at", { ascending: false }),
+    // Direct requests a homeowner aimed at this pro (0104). Masked, contact-free
+    // fields plus the live-priced fee; the ONLY read path to a pending request.
+    (supabase as any).rpc("my_direct_requests"),
+  ]);
 
   let open = (openJobs ?? []) as any[];
   const apps = (myApps ?? []) as any[];
+  const directRequests = (directData ?? []) as any[];
+
+  // Has this pro ever PAID for a big-ticket (major-tier) lead? Their first
+  // one ever costs MAJOR_INTRO_FEE; every one after costs the normal tier
+  // price. Mirrors the DB's check in migration 0113: any application row
+  // with a non-zero fee on a major-category lead, refunded or not (a refund
+  // pays the money back, it doesn't restore the intro). my_applications
+  // already returns fee_cents + category for every application, including
+  // paid direct-request unlocks, so this costs no extra query. Display-only:
+  // the DB re-derives this under the wallet lock at charge time.
+  const hasPaidMajor = apps.some(
+    (a) => Number(a.fee_cents ?? 0) > 0 && isMajorCategory(a.category)
+  );
+  // The intro only undercuts the shown fee when it is actually lower (the DB
+  // charges least(aged fee, intro), so an aging markdown below $49.99 wins).
+  const introFeeFor = (category: string, normalFee: number) =>
+    !hasPaidMajor && isMajorCategory(category) && MAJOR_INTRO_FEE < normalFee
+      ? MAJOR_INTRO_FEE
+      : null;
 
   // Advisory signal only (see migration 0092's RESIDUAL note): apply_to_lead
   // has no awareness of owner_closed_at, so open_jobs_for_me - a DB function,
@@ -395,6 +424,139 @@ export default async function ProDashboard({
         </Link>
       </section>
 
+      {/* ---- Asked for you: a homeowner reached out to this pro directly ----
+          Sits above the open board because it is exclusive: only this pro can
+          see or unlock it. Card anatomy mirrors an open-job card (same classes,
+          same photo preview), minus the applicant count and aging deal - a
+          direct request has no competition and no markdown. */}
+      {directRequests.length > 0 && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-xl font-semibold text-stone-900 dark:text-stone-100">
+              Asked for you{" "}
+              <span className="text-stone-500 dark:text-stone-400">
+                ({directRequests.length})
+              </span>
+            </h2>
+            <p className="text-sm text-stone-500 dark:text-stone-400">
+              A homeowner reached out to you directly. Unlock to accept, see their
+              contact, and open the chat. Only you can see these.
+            </p>
+          </div>
+          <ul className="space-y-3">
+            {directRequests.map((d) => {
+              const normalFee = Number(d.fee_cents ?? 0) / 100;
+              const introFee = introFeeFor(d.category, normalFee);
+              const fee = introFee ?? normalFee;
+              const feeStr = money(fee);
+              const chips = qualityChips(d);
+              const budgetLabel =
+                d.budget_range && d.budget_range !== "not-sure"
+                  ? labelFor(BUDGET_RANGES, d.budget_range)
+                  : null;
+              return (
+                <li key={d.id} className="card space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
+                      <span className="icon-chip">
+                        <CategoryIcon list={JOB_CATEGORIES} value={d.category} />
+                      </span>{" "}
+                      {labelFor(JOB_CATEGORIES, d.category)}
+                      {d.city ? (
+                        <span className="font-normal text-stone-500 dark:text-stone-400">
+                          in {d.city}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="chip border border-hearth-200 bg-hearth-50 text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
+                      Direct request
+                    </span>
+                    {d.issue_severity && (
+                      <span
+                        className={`chip border ${SEVERITY_STYLE[d.issue_severity] ?? ""}`}
+                      >
+                        {d.issue_severity}
+                      </span>
+                    )}
+                    <span className="ml-auto flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-300">
+                      {introFee !== null && (
+                        <span className="chip border border-hearth-200 bg-hearth-50 font-semibold text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
+                          First big-ticket lead
+                        </span>
+                      )}
+                      <span className="[font-variant-numeric:tabular-nums]">
+                        Unlock fee{" "}
+                        {introFee !== null && (
+                          <span className="text-stone-500 line-through dark:text-stone-400">
+                            {money(normalFee)}
+                          </span>
+                        )}{" "}
+                        {feeStr}
+                      </span>
+                    </span>
+                  </div>
+
+                  {d.issue_description ? (
+                    <p className="text-sm text-stone-600 dark:text-stone-400">
+                      {d.issue_description}
+                    </p>
+                  ) : (
+                    <p className="text-sm italic text-stone-500 dark:text-stone-400">
+                      No details provided yet
+                    </p>
+                  )}
+                  {Array.isArray(d.photo_urls) && d.photo_urls.length > 0 && (
+                    <JobPhotoStrip leadId={d.id} urls={d.photo_urls} />
+                  )}
+                  {(chips.length > 0 || budgetLabel) && (
+                    <div className="flex flex-wrap gap-1">
+                      {budgetLabel && (
+                        <span className="chip bg-stone-100 text-stone-600 dark:bg-stone-700 dark:text-stone-400">
+                          Budget: {budgetLabel}
+                        </span>
+                      )}
+                      {chips.map((c) => (
+                        <span
+                          key={c}
+                          className="chip bg-stone-100 text-stone-600 dark:bg-stone-700 dark:text-stone-400"
+                        >
+                          {c}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {(postedAgo(d.created_at) || d.timing) && (
+                    <div className="flex flex-wrap gap-4 text-xs text-stone-500 dark:text-stone-400">
+                      {postedAgo(d.created_at) && (
+                        <span className="text-xs text-stone-500 dark:text-stone-400">
+                          {postedAgo(d.created_at)}
+                        </span>
+                      )}
+                      {d.timing && (
+                        <span>Timing: {labelFor(TIMING_OPTIONS, d.timing)}</span>
+                      )}
+                    </div>
+                  )}
+
+                  <DirectRequestActions
+                    leadId={d.id}
+                    fee={feeStr}
+                    feeCents={Math.round(fee * 100)}
+                    canAfford={balance >= fee}
+                    billingHref={`/pro/billing?need=${Math.max(
+                      0,
+                      fee - balance
+                    ).toFixed(2)}&category=${encodeURIComponent(
+                      d.category ?? ""
+                    )}`}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
       {/* ---- Open jobs: posted by homeowners, pay the fee to apply ---- */}
       <section id="open-jobs" className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-2">
@@ -413,7 +575,7 @@ export default async function ProDashboard({
                 <Link
                   key={o.value}
                   href={o.value === "new" ? "/pro" : `/pro?sort=${o.value}`}
-                  className={`rounded-full border px-3 py-1.5 text-xs ${
+                  className={`inline-flex min-h-11 items-center rounded-full border px-3 py-1.5 text-xs sm:inline-block sm:min-h-0 ${
                     sort === o.value
                       ? "border-hearth-300 bg-hearth-50 font-medium text-hearth-700 dark:border-hearth-500/40 dark:bg-hearth-500/15 dark:text-hearth-300"
                       : "border-stone-200 text-stone-500 hover:border-stone-300 dark:border-white/10 dark:text-stone-400 dark:hover:border-stone-600"
@@ -502,12 +664,18 @@ export default async function ProDashboard({
         ) : (
           <ul className="space-y-3">
             {open.map((j) => {
-              const { fee, off } = agingLeadFee(
+              const aged = agingLeadFee(
                 Number(j.payout_amount ?? 0),
                 j.created_at
               );
+              const off = aged.off;
+              // First big-ticket lead: the intro price replaces the normal
+              // (possibly aging-discounted) fee when it's lower, matching
+              // what apply_to_lead will actually charge (migration 0113).
+              const introFee = introFeeFor(j.category, aged.fee);
+              const fee = introFee ?? aged.fee;
               const feeStr = money(fee);
-              const baseStr = money(j.payout_amount);
+              const baseStr = money(introFee !== null ? aged.fee : j.payout_amount);
               const spots = Number(j.application_count ?? 0);
               const full = spots >= MAX_APPLICANTS_PER_JOB;
               const conflict = relationshipConflicts.get(j.id);
@@ -550,14 +718,19 @@ export default async function ProDashboard({
                       </span>
                     )}
                     <span className="ml-auto flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-300">
-                      {off > 0 && (
+                      {introFee !== null && (
+                        <span className="chip border border-hearth-200 bg-hearth-50 font-semibold text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
+                          First big-ticket lead
+                        </span>
+                      )}
+                      {off > 0 && introFee === null && (
                         <span className="chip border border-amber-200 bg-amber-100 font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
                           {off}% off, aging deal
                         </span>
                       )}
                       <span className="[font-variant-numeric:tabular-nums]">
                         Apply fee{" "}
-                        {off > 0 && (
+                        {(off > 0 || introFee !== null) && (
                           <span className="text-stone-500 line-through dark:text-stone-400">
                             {baseStr}
                           </span>
@@ -647,6 +820,7 @@ export default async function ProDashboard({
                     <ApplyJobButton
                       leadId={j.id}
                       fee={feeStr}
+                      feeCents={Math.round(fee * 100)}
                       category={labelFor(JOB_CATEGORIES, j.category)}
                       canAfford={balance >= fee}
                       billingHref={`/pro/billing?need=${Math.max(
@@ -819,7 +993,7 @@ function AssignedJobCard({
           <span className="text-stone-500 dark:text-stone-400">Address:</span>{" "}
           {l.property_address || "-"}
         </p>
-        <p>
+        <p className="break-words">
           <span className="text-stone-500 dark:text-stone-400">Contact:</span>{" "}
           {l.homeowner_email || "-"}
           {l.homeowner_phone ? ` · ${l.homeowner_phone}` : ""}

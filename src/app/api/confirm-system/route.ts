@@ -94,6 +94,7 @@ export async function POST(req: NextRequest) {
   const sysLabel = labelFor(SYSTEM_TYPES, system.system_type) || "home system";
   const instruction =
     `You are reading the data plate / model-and-serial label on a homeowner's ${sysLabel}. ` +
+    "First, judge whether you can actually read the label. If the photo is too blurry, dark, cropped, glare covered, or low resolution to read, or it is clearly not a data plate or model-and-serial label (for example a selfie or an unrelated photo), do not guess: leave every field empty. If only part of the label is legible, read the fields you can and leave the rest empty rather than guessing at them. " +
     "Extract ONLY what is actually printed on the label - never guess or invent a value. Leave a field empty if it isn't shown. " +
     "Read brand and model exactly as printed. " +
     "For serial, read the serial number exactly as printed. " +
@@ -111,6 +112,9 @@ export async function POST(req: NextRequest) {
       },
     ],
     generationConfig: {
+      // Deterministic extraction: reading a data plate is not a creative task,
+      // so keep the model from embellishing what it sees.
+      temperature: 0,
       maxOutputTokens: 300,
       responseMimeType: "application/json",
       responseSchema: RESPONSE_SCHEMA,
@@ -146,7 +150,20 @@ export async function POST(req: NextRequest) {
       } catch {
         continue; // malformed - try the next model
       }
-      return NextResponse.json({ suggestion: normalize(parsed) });
+      const suggestion = normalize(parsed);
+      // Nothing legible came off the label (unreadable photo or wrong subject):
+      // surface it as a read failure so the owner gets the "couldn't read it,
+      // fill in what you can" note instead of an empty form that looks like a
+      // successful read. A partial read (any field present) still goes through.
+      if (
+        !suggestion.brand &&
+        !suggestion.model &&
+        !suggestion.serial &&
+        suggestion.install_year == null
+      ) {
+        return NextResponse.json({ suggestion: null, reason: "unreadable" });
+      }
+      return NextResponse.json({ suggestion });
     } catch {
       // network error - try the next model
     }
@@ -165,9 +182,12 @@ function normalize(raw: any) {
     const s = typeof v === "string" ? v.trim() : "";
     return s.length ? s : null;
   };
+  // A system can't have been installed in the future, so bound the upper end
+  // at this year (a +1 of slack), not a far-off 2100.
+  const maxYear = new Date().getFullYear() + 1;
   const yearNum = Number(raw?.install_year);
   const install_year =
-    Number.isInteger(yearNum) && yearNum >= 1900 && yearNum <= 2100
+    Number.isInteger(yearNum) && yearNum >= 1900 && yearNum <= maxYear
       ? yearNum
       : null;
 

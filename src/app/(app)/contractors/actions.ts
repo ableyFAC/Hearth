@@ -14,6 +14,7 @@ import {
   ISSUE_CATEGORIES,
   BUDGET_RANGES,
   COLD_START_FREE_POSTING,
+  BONUS_EXPIRY_DAYS,
 } from "@/lib/constants";
 import { setFlash } from "@/lib/flash";
 import { hasPlus } from "@/lib/subscription";
@@ -54,6 +55,14 @@ async function trackServerEvent(
       e instanceof Error ? e.message : e
     );
   }
+}
+
+// Apply fee formatted for a notification body: whole-dollar fees ($25/$50/$99)
+// read as "$50", an aging-discounted fee ($42.50) keeps its cents. cents comes
+// off lead_applications.fee_cents.
+function formatFeeCents(cents: number): string {
+  const dollars = (Number.isFinite(cents) ? cents : 0) / 100;
+  return Number.isInteger(dollars) ? `$${dollars}` : `$${dollars.toFixed(2)}`;
 }
 
 // Photo URLs come from our own upload component (PhotoUpload), so anything
@@ -549,7 +558,7 @@ export async function updateJobAction(
     .eq("id", leadId)
     .maybeSingle();
   if (!lead) {
-    return err("Something went wrong. Please try again.");
+    return err("Couldn't find that job. Please refresh and try again.");
   }
 
   // Once a pro has paid the (non-refundable) apply fee, the job they paid for
@@ -587,7 +596,7 @@ export async function updateJobAction(
       homeowner_phone: homeownerPhone,
     })
     .eq("id", leadId);
-  if (error) return err("Something went wrong. Please try again.");
+  if (error) return err("Couldn't save those changes just now. Please try again.");
 
   // The flash cookie survives revalidatePath, so this still shows even
   // though EditJobForm closes the panel itself on ok() rather than reloading.
@@ -627,7 +636,7 @@ export async function closeJobAction(formData: FormData) {
     .eq("id", leadId)
     .maybeSingle();
   if (!lead) {
-    setFlash("Something went wrong. Please try again.", "error");
+    setFlash("Couldn't find that job. Please refresh and try again.", "error");
     revalidatePath("/contractors");
     return;
   }
@@ -673,7 +682,7 @@ export async function closeJobAction(formData: FormData) {
       return;
     }
     if (error) {
-      setFlash("Something went wrong. Please try again.", "error");
+      setFlash("Couldn't close that job just now. Please try again.", "error");
       revalidatePath("/contractors");
       return;
     }
@@ -756,7 +765,7 @@ export async function closeJobAction(formData: FormData) {
     .from("contractor_leads")
     .delete()
     .eq("id", leadId);
-  if (error) setFlash("Something went wrong. Please try again.", "error");
+  if (error) setFlash("Couldn't close that job just now. Please try again.", "error");
   else setFlash(reason ? `Job closed: ${reason}.` : "Job closed.", "info");
   revalidatePath("/contractors");
   revalidatePath("/dashboard");
@@ -770,10 +779,48 @@ export async function chooseApplicantAction(formData: FormData) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  // Capture the applicants who are about to be credited BEFORE the pick runs:
+  // choose_applicant() flips the losers to 'declined' and stamps their
+  // refunded_at, so this same "live, never-refunded, non-zero fee" filter run
+  // afterward would come back empty. Read here mirrors the DB's credit-back
+  // eligibility exactly (status 'applied', refunded_at null, fee > 0, and not
+  // the chosen application), so we notify precisely the pros who got credit and
+  // never the chosen pro. Best-effort: a read hiccup just means no notice, it
+  // never blocks the pick. RLS scopes this to a lead the caller owns.
+  let credited: { contractor_id: string; fee_cents: number }[] = [];
+  try {
+    const { data: chosenApp } = await supabase
+      .from("lead_applications")
+      .select("lead_id")
+      .eq("id", applicationId)
+      .maybeSingle();
+    if (chosenApp?.lead_id) {
+      const { data: apps } = await supabase
+        .from("lead_applications")
+        .select("contractor_id, fee_cents")
+        .eq("lead_id", chosenApp.lead_id)
+        .eq("status", "applied")
+        .is("refunded_at", null)
+        .neq("id", applicationId);
+      credited = (apps ?? [])
+        .filter(
+          (a: { contractor_id: string | null; fee_cents: number | null }) =>
+            Boolean(a.contractor_id) && (a.fee_cents ?? 0) > 0
+        )
+        .map((a: { contractor_id: string; fee_cents: number }) => ({
+          contractor_id: a.contractor_id,
+          fee_cents: a.fee_cents,
+        }));
+    }
+  } catch {
+    // The pick still runs; the credit-back notice is best-effort only.
+  }
+
   const { error } = await supabase.rpc("choose_applicant", {
     p_application: applicationId,
   });
-  if (error) setFlash("Something went wrong. Please try again.", "error");
+  if (error) setFlash("Couldn't select that pro just now. Please try again.", "error");
   else {
     setFlash(
       "Pro selected. They now have your contact and can message you.",
@@ -783,6 +830,68 @@ export async function chooseApplicantAction(formData: FormData) {
     // successful pick. The category isn't already in scope here (would need
     // an extra application -> lead join just for this), so no props.
     await trackServerEvent(user?.id ?? null, "choose_applicant");
+
+    // Tell every non-chosen applicant their fee came back as wallet credit
+    // (the DB already granted it inside choose_applicant). Same
+    // contractor -> user -> contact resolution and sendNotification path as
+    // closeJobAction, so the email/SMS channels fire once configured, gated by
+    // the recipient's own consent inside sendNotification. Best-effort: a
+    // notification hiccup must never undo a pick that already committed.
+    if (credited.length) {
+      try {
+        const admin = createAdminClient();
+        const contractorIds = Array.from(
+          new Set(credited.map((c) => c.contractor_id))
+        );
+        const { data: contractors } = await admin
+          .from("contractors")
+          .select("id, user_id")
+          .in("id", contractorIds);
+        // contractor_id -> user_id, for the ones with a real user to notify.
+        const userByContractor = new Map<string, string>(
+          (contractors ?? [])
+            .filter((c): c is { id: string; user_id: string } =>
+              Boolean(c.user_id)
+            )
+            .map((c) => [c.id, c.user_id])
+        );
+        const userIds = Array.from(new Set(userByContractor.values()));
+        const { data: users } = userIds.length
+          ? await admin
+              .from("users")
+              .select("id, email, phone, sms_consent")
+              .in("id", userIds)
+          : {
+              data: [] as {
+                id: string;
+                email: string | null;
+                phone: string | null;
+                sms_consent: boolean | null;
+              }[],
+            };
+        const userById = new Map((users ?? []).map((u) => [u.id, u]));
+        await Promise.all(
+          credited.map((c) => {
+            const userId = userByContractor.get(c.contractor_id);
+            if (!userId) return Promise.resolve(false);
+            const contact = userById.get(userId);
+            const feeLabel = formatFeeCents(c.fee_cents);
+            return sendNotification(admin, {
+              userId,
+              kind: "apply_credit_back",
+              title: "Your fee came back as credit",
+              body: `The homeowner went with another pro this time. Your ${feeLabel} apply fee is back in your wallet as credit, good for ${BONUS_EXPIRY_DAYS} days.`,
+              url: "/pro",
+              email: contact?.email ?? null,
+              phone: contact?.phone ?? null,
+              smsConsent: contact?.sms_consent === true,
+            });
+          })
+        );
+      } catch {
+        // Notifications are a nice-to-have here, not part of the pick.
+      }
+    }
   }
   revalidatePath("/contractors");
 }
@@ -838,7 +947,7 @@ export async function saveReviewAction(
   if (error) {
     revalidatePath("/contractors");
     revalidatePath("/chats");
-    return err(error.message);
+    return err("Couldn't post your review just now. Please try again.");
   }
 
   // Tell the pro a review came in. Best-effort: a notification hiccup should
@@ -905,6 +1014,368 @@ export async function saveReviewAction(
   return ok();
 }
 
+// Homeowner asks ONE specific pro for a quote (Direct Requests, migration
+// 0104). Modeled on rehireProAction, but instead of an already-assigned free
+// repeat lead this creates a PENDING request: the pro is stored in direct_to,
+// contractor_id stays NULL (so no other pro can see it and no contact/chat
+// opens), and the pro pays the normal per-category lead fee to unlock = accept
+// it. Nothing fans out to the general board: only the target pro is notified.
+//
+// Submitted programmatically from the /p/<id> request form (like
+// HireAgainButton), so it returns ActionResult on every failure - the modal
+// stays open with the typed description intact and the error shown inline. On
+// success it redirects to /contractors, where the pending request is now
+// visible, with a success banner.
+export async function requestProAction(
+  formData: FormData
+): Promise<ActionResult> {
+  const property = await getActiveProperty();
+  if (!property) throw new Error("No active property");
+  const supabase = createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/signin");
+
+  const contractorId = String(formData.get("contractor_id") || "");
+  const category = String(formData.get("category") || "");
+  const timing = (formData.get("timing") as string) || null;
+  const description = ((formData.get("description") as string) || "").trim();
+
+  if (!contractorId) {
+    return err("Couldn't send your request just now. Please try again.");
+  }
+  // Only a real category may set the payout tier: a forged value would fall
+  // back to the cheapest "other" fee in leadFeeFor. Mirrors updateJobAction.
+  if (!JOB_CATEGORIES.some((c) => c.value === category)) {
+    return err("Please pick a valid job category.");
+  }
+  // Same 20-character floor as every other lead path: the pro needs real text
+  // to decide whether to pay to unlock.
+  if (description.length < 20) {
+    return err(
+      "Please describe the job in at least 20 characters so the pro knows what you need."
+    );
+  }
+
+  // Abuse gate: a direct request notifies one specific pro, and cancel +
+  // re-request (cancelDirectRequestAction deletes the pending row, freeing the
+  // per-pro uniqueness guard below) could otherwise be looped to bomb that one
+  // pro with notifications. Cap the number of direct requests one homeowner can
+  // fire per hour. Same fixed-window limiter (migration 0068) and same
+  // fail-open-on-DB-hiccup posture as postJobAction: only an explicit
+  // `allowed === false` blocks.
+  const rlAdmin = createAdminClient();
+  const { data: allowedRequest } = await rlAdmin.rpc("rate_limit_hit", {
+    p_bucket: `direct-request:${user.id}`,
+    p_limit: 10,
+    p_window_seconds: 3600,
+  });
+  if (allowedRequest === false) {
+    return err(
+      "You're sending requests too quickly, please wait a bit before requesting another pro."
+    );
+  }
+
+  // The target pro must exist, be claimed (a real user to notify and charge),
+  // and serve this category (null/empty categories means "takes anything",
+  // matching how open_jobs_for_me treats them).
+  const { data: pro } = await supabase
+    .from("contractors")
+    .select("id, user_id, name, categories, serves_orange_county")
+    .eq("id", contractorId)
+    .maybeSingle();
+  if (!pro || !pro.user_id) {
+    return err("That pro isn't available for direct requests right now.");
+  }
+  // Same launch-market gate as browse_pros and apply_to_lead: /p/<id> is a
+  // public shareable link, so a request could otherwise target a pro who
+  // never confirmed they serve Orange County.
+  if (!pro.serves_orange_county) {
+    return err("That pro isn't taking Hearth jobs in your area yet.");
+  }
+  const serves =
+    !pro.categories ||
+    pro.categories.length === 0 ||
+    pro.categories.includes(category);
+  if (!serves) {
+    return err(
+      `${pro.name ?? "This pro"} doesn't list that service. Pick one they offer, or post the job to all local pros instead.`
+    );
+  }
+
+  // One pending direct request per (property, pro) at a time. A pending row is
+  // one still aimed at this pro (direct_to set), not yet unlocked
+  // (contractor_id null), still open (status 'new'), and not declined.
+  const { data: existing } = await (supabase as any)
+    .from("contractor_leads")
+    .select("id")
+    .eq("property_id", property.id)
+    .eq("direct_to", contractorId)
+    .is("contractor_id", null)
+    .eq("status", "new")
+    .is("direct_declined_at", null)
+    .limit(1)
+    .maybeSingle();
+  if (existing) {
+    return err(
+      `You already have a pending request with ${pro.name ?? "this pro"}. Give them a little time to respond.`
+    );
+  }
+
+  const address = [property.address_line1, property.city, property.state]
+    .filter(Boolean)
+    .join(", ");
+
+  // Contact snapshot, same columns postJobAction / rehire_pro freeze onto the
+  // lead: pros read only contractor_leads, never the homeowner's account.
+  const { data: profile } = await supabase
+    .from("users")
+    .select("full_name, email, phone")
+    .eq("id", user.id)
+    .maybeSingle();
+  const homeownerName = profile?.full_name || null;
+  const homeownerEmail = profile?.email || user.email || null;
+  const homeownerPhone = profile?.phone || null;
+
+  // Scrub contact info out of the description before it's stored, exactly like
+  // postJobAction: the pro pays to unlock, and a "call me at ..." in the free
+  // text would let them take the job off-platform before paying.
+  const leadRow = {
+    property_id: property.id,
+    direct_to: contractorId,
+    contractor_id: null, // pending: the pro pays to unlock = accept
+    category,
+    status: "new",
+    paid: false,
+    payout_amount: leadFeeFor(category),
+    homeowner_name: homeownerName,
+    homeowner_email: homeownerEmail,
+    homeowner_phone: homeownerPhone,
+    property_address: address,
+    issue_description: redactContact(description),
+    timing,
+  };
+
+  const { error } = await (supabase as any)
+    .from("contractor_leads")
+    .insert(leadRow)
+    .select("id")
+    .single();
+  if (error) {
+    // Migration 0104 may not have run against this database yet (direct_to is
+    // an unknown column): degrade to a soft message instead of crashing.
+    if (isMissingSchemaError(error)) {
+      return err(
+        "Direct requests aren't available yet. Please check back soon."
+      );
+    }
+    // The partial unique index caught a racing double-submit: same message
+    // the pre-insert check gives, not a scary generic error.
+    if ((error as { code?: string }).code === "23505") {
+      return err(
+        `You already have a pending request with ${pro.name ?? "this pro"}. Give them a little time to respond.`
+      );
+    }
+    return err("Couldn't send your request just now. Please try again.");
+  }
+
+  // Notify only the target pro. No alertProsForNewLead fan-out: a direct
+  // request belongs to this one pro alone. Best-effort, like every other
+  // notification path: a hiccup here must not undo a request that saved.
+  try {
+    const admin = createAdminClient();
+    const categoryLabel = labelFor(JOB_CATEGORIES, category);
+    const { data: contact } = await admin
+      .from("users")
+      .select("email, phone, sms_consent")
+      .eq("id", pro.user_id)
+      .maybeSingle();
+    await sendNotification(admin, {
+      userId: pro.user_id,
+      kind: "direct_request",
+      title: "A homeowner asked for you",
+      body: `A homeowner wants a quote for ${categoryLabel} work and asked for you specifically. Open your jobs to see it.`,
+      url: "/pro",
+      email: contact?.email ?? null,
+      phone: contact?.phone ?? null,
+      smsConsent: contact?.sms_consent === true,
+    });
+  } catch {
+    // Notifications are a nice-to-have here, not part of the request flow.
+  }
+
+  await trackServerEvent(user.id, "direct_request", { category });
+
+  revalidatePath("/contractors");
+  redirect("/contractors?directsent=1");
+}
+
+// Homeowner cancels a PENDING direct request. Nothing has been paid (the pro
+// only pays on unlock, and a pending request is by definition not unlocked:
+// contractor_id null, no lead_applications row), so there is no fee to preserve
+// and nothing for ghost protection to look at. That makes a plain delete the
+// clean choice here, unlike closeJobAction's owner_closed_at marker (which only
+// exists to keep a PAID open job's refund path intact). RLS scopes the delete
+// to a lead on a property the caller owns; the direct_to / contractor_id guards
+// stop this from touching a normal open job or an already-unlocked one.
+export async function cancelDirectRequestAction(formData: FormData) {
+  const supabase = createClient() as any;
+  const leadId = String(formData.get("lead_id") || "");
+
+  const { data: lead } = await supabase
+    .from("contractor_leads")
+    .select("id, direct_to, contractor_id")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (!lead || !lead.direct_to || lead.contractor_id) {
+    // Not a pending direct request (or already unlocked): nothing to cancel
+    // here. Guard against a forged/replayed submit.
+    setFlash("Couldn't cancel that request just now. Please try again.", "error");
+    revalidatePath("/contractors");
+    return;
+  }
+
+  const { error } = await supabase
+    .from("contractor_leads")
+    .delete()
+    .eq("id", leadId)
+    .is("contractor_id", null);
+  if (error) setFlash("Couldn't cancel that request just now. Please try again.", "error");
+  else setFlash("Request cancelled.", "info");
+  revalidatePath("/contractors");
+}
+
+// Homeowner converts a direct request into a normal open job ("Post publicly
+// instead"): clears direct_to so the lead becomes a plain open posting every
+// matching pro can apply to, then runs the SAME fan-out postJobAction does
+// (alertProsForNewLead + the batched new_lead notifications insert). Used both
+// when the target pro passed (declined) and when the homeowner simply changes
+// their mind while still waiting.
+export async function postDirectPubliclyAction(formData: FormData) {
+  const property = await getActiveProperty();
+  if (!property) throw new Error("No active property");
+  const supabase = createClient() as any;
+  const leadId = String(formData.get("lead_id") || "");
+
+  // RLS scopes this read to a lead the caller owns. It must still be a pending
+  // direct request (aimed at a pro, not yet unlocked) to convert.
+  const { data: lead } = await supabase
+    .from("contractor_leads")
+    .select("id, property_id, category, timing, issue_description, direct_to, contractor_id")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (
+    !lead ||
+    !lead.direct_to ||
+    lead.contractor_id ||
+    lead.property_id !== property.id
+  ) {
+    setFlash("Couldn't post that job just now. Please try again.", "error");
+    revalidatePath("/contractors");
+    return;
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/signin");
+
+  // Abuse gate: converting a direct request to a public job runs the SAME
+  // alertProsForNewLead + batched new_lead fan-out as postJobAction (up to ~250
+  // pro notification writes, and real SMS/email once those providers flip on),
+  // so it gets the SAME two limiters, sharing postJobAction's 'post'/'post-day'
+  // buckets so this path can't be looped to sidestep the posting cap. Same
+  // fixed-window limiter (migration 0068), same fail-open-on-DB-hiccup behavior:
+  // only an explicit `allowed === false` blocks.
+  const admin = createAdminClient();
+  const { data: allowed } = await admin.rpc("rate_limit_hit", {
+    p_bucket: `post:${user.id}`,
+    p_limit: 8,
+    p_window_seconds: 3600,
+  });
+  if (allowed === false) {
+    setFlash("You're posting jobs too quickly, please wait a bit.", "error");
+    redirect("/contractors");
+  }
+  const { data: allowedDay } = await admin.rpc("rate_limit_hit", {
+    p_bucket: `post-day:${user.id}`,
+    p_limit: 20,
+    p_window_seconds: 86400,
+  });
+  if (allowedDay === false) {
+    setFlash(
+      "You've reached today's posting limit. Please try again tomorrow.",
+      "error"
+    );
+    redirect("/contractors");
+  }
+
+  // Clear the target and the decline stamp so the lead is a plain open job.
+  const { data: updated, error } = await supabase
+    .from("contractor_leads")
+    .update({ direct_to: null, direct_declined_at: null })
+    .eq("id", leadId)
+    .is("contractor_id", null)
+    .not("direct_to", "is", null)
+    .select("id")
+    .maybeSingle();
+  if (error || !updated) {
+    setFlash("Couldn't post that job just now. Please try again.", "error");
+    revalidatePath("/contractors");
+    return;
+  }
+
+  const category = lead.category as string;
+  const timing = (lead.timing as string) ?? null;
+  const issueDescription = (lead.issue_description as string) ?? null;
+
+  // Same instant-alert fan-out as postJobAction. externalChannels gated on
+  // this property's ownership status, mirroring postJobAction's final gate:
+  // in-app rows always go out, email/SMS only for a verified poster.
+  const alertedPros = await alertProsForNewLead({
+    category,
+    timing,
+    issue_description: issueDescription,
+    property_state: property.state ?? null,
+    externalChannels: property.ownership_status === "verified",
+  });
+
+  // Nudge matching pros a fresh job is open, skipping anyone already alerted
+  // above so nobody is pinged twice. Best-effort, same as postJobAction.
+  try {
+    // Reuses the admin client created for the rate-limit gates above.
+    const { data: matches } = await admin
+      .from("contractors")
+      .select("user_id")
+      .not("user_id", "is", null)
+      .contains("categories", [category])
+      .limit(50);
+    const categoryLabel = labelFor(JOB_CATEGORIES, category);
+    const rows = (matches ?? []).flatMap((match: { user_id: string | null }) => {
+      if (!match.user_id || alertedPros.has(match.user_id)) return [];
+      return [
+        {
+          user_id: match.user_id,
+          kind: "new_lead",
+          title: `New ${categoryLabel} job posted nearby`,
+          body: "A homeowner just posted a job. Apply before other pros do.",
+          url: "/pro",
+        },
+      ];
+    });
+    if (rows.length) {
+      await admin.from("notifications").insert(rows);
+    }
+  } catch {
+    // Notifications are a nice-to-have here, not part of the conversion.
+  }
+
+  setFlash("Posted to all local pros. Matching pros can now apply.", "success");
+  revalidatePath("/contractors");
+}
+
 // Homeowner re-hires a pro they've already worked with (My Pros). The repeat
 // lead is free for the pro: rehire_pro() inserts it already assigned, with no
 // apply fee and no wallet charge, so nobody pays to work together again.
@@ -938,7 +1409,7 @@ export async function rehireProAction(
   const description = ((formData.get("description") as string) || "").trim();
 
   if (!contractorId || !category) {
-    return err("Something went wrong. Please try again.");
+    return err("Couldn't send that request just now. Please try again.");
   }
 
   // Mirror postJobAction: the pro needs a real description to go on, even on a
@@ -967,7 +1438,7 @@ export async function rehireProAction(
     return err(
       missingFn
         ? "Hiring a pro again isn't available yet. Please check back soon."
-        : "Something went wrong. Please try again."
+        : "Couldn't send that request just now. Please try again."
     );
   }
 

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getRole } from "@/lib/contractor";
@@ -91,17 +92,17 @@ export default async function WelcomeRolePage({
             "By continuing you agree to the ..." phrasing on the signup pages. */}
         <p className="mt-6 border-t border-stone-100 pt-4 text-center text-xs text-stone-500 dark:border-white/10 dark:text-stone-400">
           By choosing homeowner you agree to the{" "}
-          <a href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
+          <Link href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
             Terms
-          </a>
+          </Link>
           ; by choosing contractor you agree to the{" "}
-          <a href="/pro-terms" className="text-bark-700 hover:underline dark:text-stone-300">
+          <Link href="/pro-terms" className="text-bark-700 hover:underline dark:text-stone-300">
             Contractor Terms
-          </a>
+          </Link>
           . Either way you agree to the{" "}
-          <a href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
+          <Link href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
             Privacy Policy
-          </a>
+          </Link>
           .
         </p>
       </div>

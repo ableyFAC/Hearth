@@ -1,5 +1,19 @@
 import type { Metadata } from "next";
-import { Droplet, Thermometer, Wrench, CalendarDays, ClipboardList } from "lucide-react";
+import Link from "next/link";
+import {
+  Droplet,
+  Thermometer,
+  Wrench,
+  CalendarDays,
+  ClipboardList,
+  ScanSearch,
+  Home,
+  Zap,
+  ChefHat,
+  Bath,
+  Building2,
+  ShieldCheck,
+} from "lucide-react";
 
 // Index for the public guide pages. Kept as a plain list: this section is
 // meant to stay small and good rather than grow into thin programmatic pages.
@@ -17,6 +31,41 @@ const GUIDES = [
     title: "HVAC replacement cost",
     blurb:
       "Typical national price range for a new heating and cooling system, and how to tell if yours can be repaired instead.",
+  },
+  {
+    href: "/guides/roof-replacement-cost",
+    icon: Home,
+    title: "Roof replacement cost",
+    blurb:
+      "The typical national range plus realistic Orange County numbers for shingle and tile, when a repair beats a replacement, and permits.",
+  },
+  {
+    href: "/guides/electrical-panel-upgrade-cost",
+    icon: Zap,
+    title: "Electrical panel upgrade cost",
+    blurb:
+      "The typical range, when an upgrade is actually needed, 100 vs 200 amp, and why permits and a licensed electrician matter.",
+  },
+  {
+    href: "/guides/kitchen-remodel-cost",
+    icon: ChefHat,
+    title: "Kitchen remodel cost",
+    blurb:
+      "What a kitchen remodel runs in Orange County by tier, cost per square foot, what drives the price, and how to save.",
+  },
+  {
+    href: "/guides/bathroom-remodel-cost",
+    icon: Bath,
+    title: "Bathroom remodel cost",
+    blurb:
+      "Typical Orange County bathroom remodel ranges by tier, cost per square foot, what affects the price, and where to save.",
+  },
+  {
+    href: "/guides/adu-cost",
+    icon: Building2,
+    title: "ADU cost",
+    blurb:
+      "What an ADU costs in Orange County by type, garage conversion vs attached vs detached, California ADU rules, and how to save.",
   },
   {
     href: "/guides/slab-leak-signs",
@@ -38,6 +87,13 @@ const GUIDES = [
     title: "Is my contractor's quote fair?",
     blurb:
       "How to read a quote line by line, red flags to watch for, and what a fair bidding process looks like.",
+  },
+  {
+    href: "/guides/contractor-deposit-rules-california",
+    icon: ShieldCheck,
+    title: "How much can a contractor ask for up front?",
+    blurb:
+      "California's deposit cap, the written-contract rule, when a license is required, and the red flags that mean you should slow down.",
   },
   {
     href: "/guides/socal-home-maintenance-calendar",
@@ -69,7 +125,7 @@ export default function GuidesIndex() {
       <ul className="mt-8 space-y-4">
         {GUIDES.map((g) => (
           <li key={g.href}>
-            <a
+            <Link
               href={g.href}
               className="card block transition hover:border-bark-500 hover:shadow-md"
             >
@@ -82,10 +138,35 @@ export default function GuidesIndex() {
                   <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">{g.blurb}</p>
                 </div>
               </div>
-            </a>
+            </Link>
           </li>
         ))}
       </ul>
+
+      <h2 className="mt-10 text-lg font-bold text-stone-900 dark:text-stone-100">
+        Have a quote in hand?
+      </h2>
+      <div className="mt-4">
+        <Link
+          href="/homeowner-signup?next=/quote-check"
+          className="card block transition hover:border-bark-500 hover:shadow-md"
+        >
+          <div className="flex items-start gap-3">
+            <span className="icon-chip" aria-hidden>
+              <ScanSearch className="h-5 w-5" />
+            </span>
+            <div>
+              <h3 className="font-semibold text-stone-900 dark:text-stone-100">
+                Quote analyzer
+              </h3>
+              <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
+                Paste a contractor&apos;s quote and see if the price is fair.
+                Your first check is free.
+              </p>
+            </div>
+          </div>
+        </Link>
+      </div>
     </main>
   );
 }
