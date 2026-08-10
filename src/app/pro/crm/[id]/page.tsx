@@ -248,7 +248,7 @@ export default async function ClientDetailPage({
           Danger zone
         </h2>
         <p className="text-sm text-stone-500 dark:text-stone-400">
-          Removing a client also removes its notes. This can't be undone.
+          Removing a client also removes its notes. This can&apos;t be undone.
         </p>
         <form action={deleteClientAction}>
           <input type="hidden" name="id" value={client.id} />

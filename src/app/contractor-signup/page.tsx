@@ -177,7 +177,7 @@ export default function ContractorSignUpPage({
             <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
               We sent a confirmation link to{" "}
               <span className="break-all font-medium text-stone-700 dark:text-stone-300">{pendingEmail}</span>
-              . Click it and you'll land right in company setup.
+              . Click it and you&apos;ll land right in company setup.
             </p>
           </div>
 

@@ -77,7 +77,7 @@ export default async function JoinHouseholdPage({
           <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
             Someone shared a QR code inviting you to share day to day access
             to their home. Sign in or create a free account to continue -
-            you'll land right back here afterward.
+            you&apos;ll land right back here afterward.
           </p>
 
           {/*
@@ -124,10 +124,10 @@ export default async function JoinHouseholdPage({
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
       <div className="card text-center">
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
-          You're in
+          You&apos;re in
         </h1>
         <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
-          You're in. You now share this home.
+          You&apos;re in. You now share this home.
         </p>
         <Link href="/dashboard" className="btn-primary mt-6 block w-full">
           Go to your home
@@ -154,7 +154,7 @@ function InvalidState({ reason }: { reason?: string | null }) {
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
       <div className="card text-center">
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
-          This code isn't working
+          This code isn&apos;t working
         </h1>
         <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">{subtext}</p>
         <p className="mt-4 text-sm text-stone-500 dark:text-stone-400">

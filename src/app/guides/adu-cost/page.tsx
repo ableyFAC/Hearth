@@ -154,7 +154,7 @@ export default function AduCostGuide() {
           <p className="mt-2 leading-relaxed">
             The main variables are how much plumbing and electrical the garage
             needs, whether the slab and roof are sound, and how far the
-            existing utilities reach. A garage close to the main home's water,
+            existing utilities reach. A garage close to the main home&apos;s water,
             sewer, and panel converts more cheaply than one that needs long
             new utility runs.
           </p>
@@ -258,7 +258,7 @@ export default function AduCostGuide() {
             </li>
             <li>
               <strong>Stay near existing utilities.</strong> Building close to
-              the main home's water, sewer, and panel shortens costly utility
+              the main home&apos;s water, sewer, and panel shortens costly utility
               runs.
             </li>
             <li>

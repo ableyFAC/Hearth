@@ -754,7 +754,7 @@ export default function QuoteAnalyzer({
           <div>
             {result.missing.length > 0 && (
               <>
-                <h2 className="mb-2 text-sm font-medium text-stone-900 dark:text-stone-100">What's missing</h2>
+                <h2 className="mb-2 text-sm font-medium text-stone-900 dark:text-stone-100">What&apos;s missing</h2>
                 {result.missing.some((_, i) => !coveredMissing.has(i)) ? (
                   <ul className="space-y-1.5">
                     {result.missing.map((item, i) =>

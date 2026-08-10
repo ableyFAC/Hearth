@@ -103,6 +103,25 @@ npm run typecheck  # optional: verify types
 npm run db:types   # supabase gen types typescript --local > src/lib/database.types.ts
 ```
 
+## Known local limitation (Windows)
+
+`npm run build` fails during static prerender of `/opengraph-image` on
+Windows, with `TypeError: Invalid URL` thrown from
+`node_modules/next/dist/compiled/@vercel/og/index.node.js`. That bundled file
+calls `fileURLToPath(join(import.meta.url, ...))` to locate its default font
+at ES module load time, and Node's `path.join` on Windows mangles a
+`file://` URL into an invalid path. This runs before any application code,
+so it can't be worked around from our side (see the writeup in
+`src/lib/ogFont.ts`, which already routes around the same bug for `npm run
+dev` by loading the font ourselves). Vercel builds on Linux, where the
+bundled path logic is correct, so production OG images are unaffected.
+
+To confirm a change hasn't introduced a new problem, run `npm run build` and
+check that it compiles, typechecks, and reaches `Generating static pages
+(113/113)` with the only reported export error being `/opengraph-image`.
+Every other route, including the dynamic `/p/[id]/opengraph-image`, is
+unaffected.
+
 ## Data → revenue, honestly
 
 - **Condition signal**: `home_systems` + `issues` (the ~80% of the value).

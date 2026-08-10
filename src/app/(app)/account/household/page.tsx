@@ -81,9 +81,9 @@ export default async function HouseholdPage() {
         <p className="text-sm text-stone-600 dark:text-stone-300">
           A household member can see and manage the day to day of a shared
           home: systems, maintenance tasks, issues, photos, documents, job
-          posts, and contractor messages. A member cannot edit the home's
+          posts, and contractor messages. A member cannot edit the home&apos;s
           details, remove the home, or invite anyone else. Hearth Plus is a
-          personal subscription, so a member does not inherit the owner's
+          personal subscription, so a member does not inherit the owner&apos;s
           Plus.
         </p>
       </div>

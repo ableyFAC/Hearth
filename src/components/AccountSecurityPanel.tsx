@@ -187,7 +187,7 @@ export default function AccountSecurityPanel({
               Sign out of other devices
             </p>
             <p className="mt-0.5 text-sm text-stone-500 dark:text-stone-400">
-              Left yourself signed in somewhere, or see activity you don't
+              Left yourself signed in somewhere, or see activity you don&apos;t
               recognize? This ends every session except this one.
             </p>
           </div>

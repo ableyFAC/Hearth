@@ -85,8 +85,8 @@ export default function SlabLeakSignsGuide() {
           </h2>
           <p className="mt-2 leading-relaxed">
             A slab leak is a leak in a water line running underneath your
-            home's concrete foundation. Because the pipe is hidden, the signs
-            tend to show up somewhere else first: a spot on the floor that's
+            home&apos;s concrete foundation. Because the pipe is hidden, the signs
+            tend to show up somewhere else first: a spot on the floor that&apos;s
             noticeably warm (usually a hot water line), a water bill that
             climbs without a clear explanation, or the sound of running water
             when every faucet, toilet, and appliance in the house is off. As
@@ -105,11 +105,11 @@ export default function SlabLeakSignsGuide() {
             the 1960s and 1970s, when it was standard practice to run copper
             water supply lines directly through the concrete slab rather than
             through walls or an attic. Copper pipe from that era is now well
-            past a typical plumbing system's working life, and decades of
+            past a typical plumbing system&apos;s working life, and decades of
             direct contact with concrete and soil, along with the normal
             expansion and contraction of the pipe, make corrosion and
             pinhole leaks more likely than in homes with more accessible
-            plumbing. It's a pattern of the era and construction method, not
+            plumbing. It&apos;s a pattern of the era and construction method, not
             a reflection of how well any individual home has been cared for.
           </p>
           <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
@@ -136,24 +136,24 @@ export default function SlabLeakSignsGuide() {
             <strong>reroute</strong> (capping the damaged line and running a
             new one through the attic or walls instead of back through the
             slab), or a full <strong>repipe</strong> (replacing all of the
-            home's supply lines at once, typically through the attic, which
+            home&apos;s supply lines at once, typically through the attic, which
             is often considered once a home has had more than one slab leak).
-            Which one makes sense depends on the pipe's condition elsewhere
+            Which one makes sense depends on the pipe&apos;s condition elsewhere
             in the home, not just the single leak that got noticed.
           </p>
         </section>
 
         <section>
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-            When it's an emergency
+            When it&apos;s an emergency
           </h2>
           <p className="mt-2 leading-relaxed">
             Active water pooling, water coming up through the flooring, or a
-            leak you can't stop by closing the main shutoff valve are all
+            leak you can&apos;t stop by closing the main shutoff valve are all
             reasons to call a plumber right away. A slow leak, where the only
             signs are a warm spot and a rising water bill, is still worth
             addressing promptly, since it can undermine flooring and drive up
-            water costs over time, but it usually doesn't need a same-hour
+            water costs over time, but it usually doesn&apos;t need a same-hour
             emergency response the way active flooding does.
           </p>
         </section>

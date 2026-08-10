@@ -84,10 +84,26 @@ function emailFooter(unsubscribeUrl: string): string {
   ].join("\n");
 }
 
+// Fires once per process: warns that emails will only reach the account
+// owner until RESEND_FROM is set to a verified-domain sender, instead of the
+// Resend sandbox default below. A module-level flag, not a per-call check,
+// so a hot path doesn't re-log this on every notification.
+let warnedSandboxFrom = false;
+
 // Email via the Resend REST API. Plain fetch, no SDK, so there is no new
 // dependency to install. Dormant until RESEND_API_KEY is set.
 async function sendEmail(input: NotificationInput): Promise<void> {
   if (!process.env.RESEND_API_KEY || !input.email) return;
+
+  if (!process.env.RESEND_FROM && !warnedSandboxFrom) {
+    warnedSandboxFrom = true;
+    console.warn(
+      "sendEmail: RESEND_FROM is not set, falling back to the Resend sandbox " +
+        "sender (onboarding@resend.dev), which only delivers to the account " +
+        "owner. Set RESEND_FROM to a verified-domain sender to reach real " +
+        "recipients."
+    );
+  }
 
   // Honor the CAN-SPAM opt-out centrally. Unlike sms_consent (which the caller
   // passes, so a forgotten field fails safe to no-send), the email opt-out is
@@ -116,19 +132,31 @@ async function sendEmail(input: NotificationInput): Promise<void> {
     const bodyText = input.body
       ? `${input.title}\n\n${input.body}`
       : input.title;
-    await fetch("https://api.resend.com/emails", {
+    const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: process.env.RESEND_FROM ?? "Hearth <onboarding@resend.dev>",
+        from: process.env.RESEND_FROM || "Hearth <onboarding@resend.dev>",
         to: input.email,
         subject: input.title,
         text: `${bodyText}\n${emailFooter(unsubscribeUrl)}`,
       }),
     });
+    if (!response.ok) {
+      let responseBody = "";
+      try {
+        responseBody = await response.text();
+      } catch {
+        // Body unreadable; log what we have.
+      }
+      console.error(
+        `sendEmail: Resend API rejected the request (status ${response.status}):`,
+        responseBody
+      );
+    }
   } catch {
     // A provider hiccup must never break the caller - the in-app
     // notification is the source of truth.
@@ -168,7 +196,7 @@ async function sendSms(input: NotificationInput): Promise<void> {
 
   try {
     const body = input.body ? `${input.title} ${input.body}` : input.title;
-    await fetch(
+    const response = await fetch(
       `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
       {
         method: "POST",
@@ -188,6 +216,18 @@ async function sendSms(input: NotificationInput): Promise<void> {
         }),
       }
     );
+    if (!response.ok) {
+      let responseBody = "";
+      try {
+        responseBody = await response.text();
+      } catch {
+        // Body unreadable; log what we have.
+      }
+      console.error(
+        `sendSms: Twilio API rejected the request (status ${response.status}):`,
+        responseBody
+      );
+    }
   } catch {
     // Same as email: never let a provider error break the caller.
   }

@@ -67,7 +67,7 @@ export default function InviteNeighbor({ code }: { code: string }) {
         Invite a neighbor
       </h2>
       <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-        Hearth grows street by street. If it's been useful, pass it along.
+        Hearth grows street by street. If it&apos;s been useful, pass it along.
       </p>
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">

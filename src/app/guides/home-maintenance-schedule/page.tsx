@@ -136,7 +136,7 @@ export default function HomeMaintenanceScheduleGuide() {
       <div className="mt-8 space-y-6 text-stone-700 dark:text-stone-300">
         <section>
           <p className="leading-relaxed">
-            Most home maintenance isn't complicated, it's just easy to lose
+            Most home maintenance isn&apos;t complicated, it&apos;s just easy to lose
             track of. Below is a plain schedule covering the tasks that come
             up on nearly every home, in roughly the order they tend to matter.
           </p>
@@ -187,11 +187,11 @@ export default function HomeMaintenanceScheduleGuide() {
             sooner.{" "}
             <strong>AC service</strong>, once a year and ideally before the
             season you need it most, catches small problems, like a low
-            refrigerant charge or a failing capacitor, while they're still
+            refrigerant charge or a failing capacitor, while they&apos;re still
             cheap to fix.{" "}
             <strong>Gutter cleaning</strong>, twice a year, keeps water moving
             away from the roofline and foundation instead of backing up and
-            causing damage somewhere it's expensive to fix.
+            causing damage somewhere it&apos;s expensive to fix.
           </p>
         </section>
 

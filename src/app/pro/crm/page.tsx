@@ -154,7 +154,7 @@ export default async function ProCrmPage({
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Clients</h1>
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           Your pipeline: a stage, an estimated value, contact info, and a
-          notes timeline for everyone you're doing business with.
+          notes timeline for everyone you&apos;re doing business with.
         </p>
       </div>
 

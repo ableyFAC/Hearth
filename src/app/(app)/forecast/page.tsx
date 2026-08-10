@@ -139,7 +139,7 @@ export default async function ForecastPage() {
       </header>
       <p className="mb-5 text-sm text-stone-500 dark:text-stone-400">
         Most homeowners get surprised by a big repair sooner or later, and a
-        five-figure one hurts. Here is what your home's systems are likely to
+        five-figure one hurts. Here is what your home&apos;s systems are likely to
         need over the next {forecast?.horizonYears ?? 10} years, and how much
         to set aside so it never catches you off guard.
       </p>
@@ -147,7 +147,7 @@ export default async function ForecastPage() {
       {!forecast && (
         <div className="card space-y-3 text-center">
           <p className="text-sm text-stone-600 dark:text-stone-300">
-            Add your home's systems to see a cost forecast and a recommended
+            Add your home&apos;s systems to see a cost forecast and a recommended
             monthly set-aside amount.
           </p>
           <Link href="/profile" className="btn-primary inline-block">

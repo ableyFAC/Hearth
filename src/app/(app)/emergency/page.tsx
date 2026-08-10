@@ -31,7 +31,7 @@ export default async function EmergencyPage() {
       <div>
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Emergency</h1>
         <p className="mt-1 text-stone-500 dark:text-stone-400">
-          Something wrong right now? Pick what's happening below. The steps are
+          Something wrong right now? Pick what&apos;s happening below. The steps are
           short, do them in order.
         </p>
       </div>
@@ -51,8 +51,8 @@ export default async function EmergencyPage() {
         <div>
           <h2 className="flex items-center font-semibold text-stone-900 dark:text-stone-100">Be ready before it happens</h2>
           <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-            Take a photo of each shutoff now, on a calm day. Next time there's an
-            emergency, we'll show it to you right where you need it.
+            Take a photo of each shutoff now, on a calm day. Next time there&apos;s an
+            emergency, we&apos;ll show it to you right where you need it.
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">

@@ -70,7 +70,7 @@ export default function IsMyContractorQuoteFairGuide() {
       </p>
 
       <h1 className="mt-3 text-2xl font-bold text-stone-900 sm:text-3xl dark:text-stone-100">
-        Is my contractor's quote fair? How to read it before you sign
+        Is my contractor&apos;s quote fair? How to read it before you sign
       </h1>
       <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
         General guidance for reading any home repair or improvement quote.
@@ -82,13 +82,13 @@ export default function IsMyContractorQuoteFairGuide() {
             How to read a quote
           </h2>
           <p className="mt-2 leading-relaxed">
-            Start with whether it's itemized. A fair quote breaks out
+            Start with whether it&apos;s itemized. A fair quote breaks out
             materials from labor rather than handing you a single total, so
-            you can see what you're actually paying for each. It should say
+            you can see what you&apos;re actually paying for each. It should say
             plainly whether permits are included in the price or billed
             separately, and if the job requires one, whether the contractor
             is pulling it. Look for a specific description of the work, not a
-            generic line like "repair as needed," along with a realistic
+            generic line like &quot;repair as needed,&quot; along with a realistic
             start date and estimated completion window, and a payment
             schedule that ties payments to stages of completed work instead
             of asking for everything upfront.
@@ -100,12 +100,12 @@ export default function IsMyContractorQuoteFairGuide() {
           <p className="mt-2 leading-relaxed">
             Be cautious of pressure to sign the same day the quote is given,
             or a demand for full payment before any work begins. A
-            contractor who can't or won't give you a license number, business
+            contractor who can&apos;t or won&apos;t give you a license number, business
             address, or proof of insurance is a red flag on its own. So are
             vague line items that lump everything into one number, and a
             price that comes in far below every other bid with no clear
             reason, since it often means something gets cut later, whether
-            that's materials, permits, or the scope itself.
+            that&apos;s materials, permits, or the scope itself.
           </p>
         </section>
 
@@ -114,14 +114,14 @@ export default function IsMyContractorQuoteFairGuide() {
             What a fair process looks like
           </h2>
           <p className="mt-2 leading-relaxed">
-            For anything beyond a small repair, it's worth getting more than
+            For anything beyond a small repair, it&apos;s worth getting more than
             one quote so you have something to compare against. Look at the
             itemized breakdown, not just the bottom line, confirm the
             license and insurance independently rather than taking the
-            contractor's word for it, and get everything in writing,
+            contractor&apos;s word for it, and get everything in writing,
             including a payment schedule tied to milestones rather than a
             single deposit. None of this guarantees a low price, but it
-            gives you a much clearer picture of what you're actually paying
+            gives you a much clearer picture of what you&apos;re actually paying
             for.
           </p>
         </section>
@@ -131,7 +131,7 @@ export default function IsMyContractorQuoteFairGuide() {
             Already have a quote in hand?
           </h2>
           <p className="mt-2 leading-relaxed">
-            Hearth's{" "}
+            Hearth&apos;s{" "}
             <Link
               href="/quote-check"
               className="text-bark-700 hover:underline dark:text-stone-300"

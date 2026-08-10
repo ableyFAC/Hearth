@@ -117,7 +117,7 @@ export default async function DocumentsPage() {
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Documents</h1>
       </header>
       <p className="mb-5 text-sm text-stone-500 dark:text-stone-400">
-        Your home's paperwork in one place. Warranties, manuals, receipts, and
+        Your home&apos;s paperwork in one place. Warranties, manuals, receipts, and
         model labels all live here. Hearth reads each one and can drop the
         details straight into your home profile, so you never dig for a manual
         or a warranty date again.

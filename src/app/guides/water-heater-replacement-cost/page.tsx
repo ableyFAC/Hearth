@@ -127,7 +127,7 @@ export default function WaterHeaterReplacementCostGuide() {
           <p className="mt-2 leading-relaxed">
             A standard tank water heater keeps a set volume of hot water ready
             to go, costs less to buy and install, and is the simplest to
-            service, but it takes up a closet's worth of space and can run out
+            service, but it takes up a closet&apos;s worth of space and can run out
             of hot water during heavy use. A tankless unit heats water only as
             you use it, takes up far less room, and typically lasts longer,
             but it costs more upfront, sometimes needs bigger gas or
@@ -147,7 +147,7 @@ export default function WaterHeaterReplacementCostGuide() {
             repair is usually the cheaper and faster fix. Replacement tends to
             make more sense once the tank itself is leaking (tanks don&apos;t
             get patched), the unit is at or past its typical lifespan, or
-            you're facing a second repair on the same unit within a short
+            you&apos;re facing a second repair on the same unit within a short
             span.
           </p>
         </section>
@@ -169,7 +169,7 @@ export default function WaterHeaterReplacementCostGuide() {
             >
               home maintenance schedule guide
             </Link>
-            ) helps slow that buildup, though it doesn't undo it entirely.
+            ) helps slow that buildup, though it doesn&apos;t undo it entirely.
           </p>
         </section>
 

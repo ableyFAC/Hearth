@@ -321,7 +321,7 @@ export default function InspectionUpload() {
     return (
       <div className="space-y-3">
         <p className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200">
-          Added to your home. Check your systems and issues to see what's new.
+          Added to your home. Check your systems and issues to see what&apos;s new.
         </p>
         <button type="button" className="btn-secondary" onClick={startOver}>
           Add another report
@@ -457,7 +457,7 @@ export default function InspectionUpload() {
 
         {result.systems.length === 0 && result.issues.length === 0 && (
           <p className="text-sm text-stone-500 dark:text-stone-400">
-            Hearth couldn't find any specific systems or issues in that
+            Hearth couldn&apos;t find any specific systems or issues in that
             report.
           </p>
         )}

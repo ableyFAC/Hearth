@@ -164,7 +164,7 @@ export default function HvacReplacementCostGuide() {
             inland Southern California, with less extreme heat, so an AC
             system there often runs fewer hours in a typical year than the
             same system further inland. Less run time is generally easier on
-            equipment, though a system's age, install quality, and
+            equipment, though a system&apos;s age, install quality, and
             maintenance history still matter more than location on their
             own.
           </p>

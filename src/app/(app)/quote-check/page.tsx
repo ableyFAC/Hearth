@@ -43,11 +43,11 @@ export default async function QuoteCheckPage() {
           Quote analyzer
         </h1>
         <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
-          Upload a photo of a contractor's quote, or paste the text, and
+          Upload a photo of a contractor&apos;s quote, or paste the text, and
           Hearth will read every line item, compare the total to typical
           costs, flag anything that looks padded, vague, or duplicated, and
           draft a short message you can send back to negotiate. It only takes
-          a minute, and you'll know where you stand before you sign anything.
+          a minute, and you&apos;ll know where you stand before you sign anything.
         </p>
       </header>
 

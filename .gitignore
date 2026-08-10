@@ -54,3 +54,8 @@ yarn-error.log*
 
 # spent one-time SQL apply bundles (canonical migrations live in supabase/migrations/)
 /supabase/applied-bundles/
+
+# dated session notes and reports (handoff.md is the tracked, current one)
+/handoff-*.md
+/MORNING-REPORT-*.md
+/MORNING-REPORT-*.pdf

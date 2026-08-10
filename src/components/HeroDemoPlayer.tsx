@@ -2337,7 +2337,7 @@ export default function HeroDemoPlayer() {
       aria-describedby="hero-demo-desc"
     >
       <p id="hero-demo-desc" className="sr-only">
-        A fast animated walkthrough of Hearth. A homeowner types their address, sees their home's
+        A fast animated walkthrough of Hearth. A homeowner types their address, sees their home&apos;s
         health score and an alert the app caught, checks off a maintenance reminder, and posts a
         plumbing job with the price shown up front. Then a local pro browses open jobs, applies,
         and wins the job through an in-app chat thread. On-screen captions describe each step.

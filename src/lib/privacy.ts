@@ -161,9 +161,7 @@ async function rows(
 // escape hatch the rest of the codebase already uses for these (see
 // src/lib/aiUsage.ts), named so it's obvious this is a types gap and not a
 // place where type safety was thrown away casually.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function untyped(admin: ReturnType<typeof createAdminClient>): any {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return admin as any;
 }
 

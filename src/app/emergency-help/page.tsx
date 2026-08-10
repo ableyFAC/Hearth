@@ -45,7 +45,7 @@ export default function EmergencyHelpPage() {
         Emergency help
       </h1>
       <p className="mt-2 leading-relaxed text-stone-600 dark:text-stone-400">
-        Something wrong right now? Pick what's happening below. The steps are
+        Something wrong right now? Pick what&apos;s happening below. The steps are
         short, do them in order. No account needed.
       </p>
 
@@ -60,8 +60,8 @@ export default function EmergencyHelpPage() {
           <div className="text-sm leading-relaxed text-red-900 dark:text-red-200">
             <p className="font-semibold">If someone is hurt, trapped, or in danger, call 911 now.</p>
             <ul className="mt-2 list-disc space-y-1 pl-5">
-              <li>If you smell gas, leave the house first and call from outside. Don't flip switches or use your phone indoors.</li>
-              <li>Never step into standing water to reach a breaker panel or an outlet. If you'd have to stand in water, leave it for an electrician.</li>
+              <li>If you smell gas, leave the house first and call from outside. Don&apos;t flip switches or use your phone indoors.</li>
+              <li>Never step into standing water to reach a breaker panel or an outlet. If you&apos;d have to stand in water, leave it for an electrician.</li>
               <li>Stay far away from any downed power line and call 911.</li>
             </ul>
           </div>
@@ -81,7 +81,7 @@ export default function EmergencyHelpPage() {
         </h2>
         <p className="text-sm leading-relaxed text-stone-600 dark:text-stone-400">
           Create a free account and Hearth will help you post the job and get a
-          local pro on it, usually same day for an emergency. It's the fastest
+          local pro on it, usually same day for an emergency. It&apos;s the fastest
           way to get someone out to your house.
         </p>
         <Link href="/homeowner-signup" className="btn-primary block w-full text-center">

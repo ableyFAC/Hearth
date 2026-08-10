@@ -426,7 +426,7 @@ export default async function ProsLanding({
             <li className="flex items-start gap-2">
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-700 dark:text-green-400" />
               <span>
-                Max 3 pros per job, so you're never competing against a crowd
+                Max 3 pros per job, so you&apos;re never competing against a crowd
                 of other pros. You never lose
                 money on a job you didn&apos;t get: if the homeowner picks
                 someone else, your fee comes back as credit, good for 60 days.

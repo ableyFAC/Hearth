@@ -353,7 +353,7 @@ export default async function ProDashboard({
       {lowBalance && (
         <div className="card flex flex-wrap items-center justify-between gap-3 border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/15">
           <p className="text-sm text-amber-800 dark:text-amber-300">
-            You're low on funds. Add funds to keep applying, and deposits of
+            You&apos;re low on funds. Add funds to keep applying, and deposits of
             $200+ earn bonus credit.
           </p>
           <Link href="/pro/billing" className="btn-primary shrink-0">
@@ -371,7 +371,7 @@ export default async function ProDashboard({
         {appliedCount === 0 ? (
           <>
             <p className="text-sm text-stone-600 dark:text-stone-400">
-              You haven't applied to a job yet. Apply to an open job below to
+              You haven&apos;t applied to a job yet. Apply to an open job below to
               start winning work.
             </p>
             {apps.length === 0 && (
@@ -387,7 +387,7 @@ export default async function ProDashboard({
         ) : (
           <>
             <p className="text-xl font-semibold text-stone-900 dark:text-stone-100">
-              You've won {wonCount} job{wonCount === 1 ? "" : "s"} from{" "}
+              You&apos;ve won {wonCount} job{wonCount === 1 ? "" : "s"} from{" "}
               {appliedCount} application{appliedCount === 1 ? "" : "s"}.
             </p>
             <p className="text-sm text-stone-500 dark:text-stone-400">
