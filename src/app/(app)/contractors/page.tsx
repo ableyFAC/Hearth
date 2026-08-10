@@ -10,7 +10,6 @@ import {
 import {
   JOB_CATEGORIES,
   TIMING_OPTIONS,
-  BUDGET_RANGES,
   labelFor,
   COLD_START_FREE_POSTING,
 } from "@/lib/constants";
@@ -35,6 +34,8 @@ import PostJobButton from "./PostJobButton";
 import StrongPostMeter from "./StrongPostMeter";
 import DraftablePhotoUpload from "./DraftablePhotoUpload";
 import DescriptionField from "./DescriptionField";
+import BudgetField from "./BudgetField";
+import ProjectScopeFields from "./ProjectScopeFields";
 import { DraftJobProvider } from "./DraftJobContext";
 import { budgetBracketForCategory } from "@/lib/health";
 import PhotoTips from "@/components/PhotoTips";
@@ -430,28 +431,10 @@ export default async function ContractorsPage({
             </p>
             <PhotoTips />
           </div>
-          <div>
-            <label className="label" htmlFor="job-budget">
-              Rough budget (optional)
-            </label>
-            <select
-              name="budget_range"
-              id="job-budget"
-              className="select"
-              defaultValue={budgetDefault}
-            >
-              <option value="">Prefer not to say</option>
-              {BUDGET_RANGES.map((b) => (
-                <option key={b.value} value={b.value}>
-                  {b.label}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-              Helps pros give realistic quotes. Not a commitment.
-            </p>
-          </div>
+          <BudgetField category={category} defaultValue={budgetDefault} />
         </div>
+
+        <ProjectScopeFields category={category} />
 
         <StrongPostMeter />
 
@@ -606,11 +589,7 @@ export default async function ContractorsPage({
                       </p>
                     </div>
                     <span
-                      className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ${
-                        declined
-                          ? "border-stone-300 bg-stone-100 text-stone-600 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300"
-                          : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
-                      }`}
+                      className={`shrink-0 ${declined ? "chip-muted" : "chip-warn"}`}
                     >
                       {declined ? `${proName} passed` : `Waiting on ${proName}`}
                     </span>
@@ -687,7 +666,7 @@ export default async function ContractorsPage({
                         </p>
                       )}
                     </div>
-                    <span className="shrink-0 rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-medium text-stone-500 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300">
+                    <span className="chip-muted shrink-0">
                       {chosen
                         ? "Pro selected"
                         : closedByOwner

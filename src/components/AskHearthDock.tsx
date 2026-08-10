@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Maximize2, X } from "lucide-react";
 
 // The AskHearth chat body (Markdown renderer, voice input, full conversation
 // logic) is heavy and was previously bundled into every page via this dock.
@@ -108,25 +108,19 @@ export default function AskHearthDock({
               href="/chats?lead=ask-hearth"
               onClick={close}
               title="Open full screen in Messages"
-              className="leading-none hover:text-bark-700 dark:hover:text-stone-300"
+              className="focus-ring leading-none hover:text-bark-700 dark:hover:text-stone-300"
             >
-              ⤢
+              <Maximize2 className="h-4 w-4" aria-hidden="true" />
             </Link>
+            {/* Single control: the dock stays docked by design, so minimizing
+                and closing are the same action (back to the FAB). */}
             <button
               type="button"
               onClick={close}
               title="Minimize"
-              className="text-lg leading-none hover:text-stone-700 dark:hover:text-stone-200"
+              className="focus-ring -m-2 p-2 leading-none hover:text-stone-700 dark:hover:text-stone-200"
             >
-              −
-            </button>
-            <button
-              type="button"
-              onClick={close}
-              title="Close"
-              className="-m-2 p-2 leading-none hover:text-red-600 dark:hover:text-red-400"
-            >
-              ✕
+              <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
           <div className="min-h-0 flex-1">

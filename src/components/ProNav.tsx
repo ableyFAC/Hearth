@@ -48,7 +48,7 @@ export default function ProNav({ company }: { company: string | null }) {
               top strip, unchanged. Below sm it is hidden and the same links
               render as the fixed bottom tab bar further down. */}
           <nav className="-mx-1 hidden items-center gap-1 overflow-x-auto px-1 sm:flex">
-            <NavLinks links={LINKS} />
+            <NavLinks links={LINKS} accent="hearth" />
           </nav>
           <NotificationBell />
           <ProfileMenu
@@ -59,7 +59,7 @@ export default function ProNav({ company }: { company: string | null }) {
               // business" says what you DO here.
               { href: "/pro/profile", label: "Edit business profile" },
               { href: "/pro/playbook", label: "Playbook" },
-              { href: "/pro/tools", label: "AI back office" },
+              { href: "/pro/tools", label: "Back office" },
               { href: "/pro/plus", label: "Membership" },
               { href: "/pro/billing", label: "Billing" },
               { href: "/pro/privacy", label: "Your privacy rights" },
@@ -79,7 +79,7 @@ export default function ProNav({ company }: { company: string | null }) {
       aria-label="Primary"
       className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-stone-200 bg-hearth-50 pb-[env(safe-area-inset-bottom)] sm:hidden dark:border-white/10 dark:bg-stone-900"
     >
-      <NavLinks links={LINKS} variant="bottom" />
+      <NavLinks links={LINKS} variant="bottom" accent="hearth" />
     </nav>
     </>
   );

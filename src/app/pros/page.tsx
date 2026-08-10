@@ -273,47 +273,18 @@ export default async function ProsLanding({
         ))}
       </section>
 
-      {/* Flat trade photo, same framed treatment as the landing page. The
-          handyman shot sits with the fee copy, where light work is the first
-          example named. Not priority - well below the fold. */}
+      {/* Flat trade photo, same framed treatment as the landing page.
+          Not priority - well below the fold. */}
       <div className="mt-16 overflow-hidden rounded-xl border border-stone-200 dark:border-white/10">
         <Image
-          src="/photos/handyman-cordless-drill.jpg"
-          alt="A handyman using a cordless drill"
+          src="/photos/painter-undercoating-wall.jpg"
+          alt="A painter prepping and undercoating a bright wall"
           width={1600}
-          height={1002}
+          height={1068}
           sizes="(min-width: 768px) 48rem, 100vw"
           className="h-auto w-full object-cover"
         />
       </div>
-
-      {/* Pricing, in writing: the real per-category fees and the real aging
-          markdown, both read straight from src/lib/constants.ts and
-          src/lib/leadPricing.ts so this section can never drift from what
-          checkout actually charges. */}
-      <section className="card mt-6 p-6 text-center">
-        <h2 className="text-xl font-semibold text-stone-900 dark:text-stone-100">
-          The price, in writing
-        </h2>
-        <p className="mx-auto mt-2 max-w-md text-sm text-stone-600 dark:text-stone-400">
-          ${LEAD_TIER_FEES.light} light work (handyman, cleaning, painting).
-          ${LEAD_TIER_FEES.skilled} skilled trades (plumbing, electrical,
-          HVAC). ${LEAD_TIER_FEES.major} big-ticket jobs (roofing,
-          remodeling). The fee is printed on every job card before you pay.
-        </p>
-        <p className="mx-auto mt-2 max-w-md text-sm text-stone-600 dark:text-stone-400">
-          Your first big-ticket lead is ${MAJOR_INTRO_FEE}. Every big-ticket
-          lead after that is the normal ${LEAD_TIER_FEES.major}.
-        </p>
-        <p className="mx-auto mt-2 max-w-md text-sm text-stone-600 dark:text-stone-400">
-          Jobs that sit unclaimed get cheaper: {agingCopy}.
-        </p>
-        <p className="mx-auto mt-2 max-w-md text-sm text-stone-600 dark:text-stone-400">
-          Wallet deposits can&apos;t be cashed back out: they can only be
-          spent on applications, and they never expire. Refunds from ghost
-          protection go back into that same wallet.
-        </p>
-      </section>
 
       {/* Single-player value: worth having even before the first job comes
           in. Every item here is verified against the shipped feature, and

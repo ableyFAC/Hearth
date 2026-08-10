@@ -48,7 +48,7 @@ export default function RemoveHomeButton({
           onClick={() => setOpen(false)}
         >
           <div
-            className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl dark:border dark:border-white/10 dark:bg-stone-700"
+            className="w-full max-w-sm rounded-xl bg-white p-5 shadow-pop dark:border dark:border-white/10 dark:bg-stone-700"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold text-stone-900 dark:text-stone-100">

@@ -9,7 +9,7 @@ import { ACTIVE_HOME_COOKIE, getProperties } from "@/lib/property";
 import { lookupParcel, type ParcelFacts } from "@/lib/parcel";
 import { deriveOwnershipStatus } from "@/lib/ownershipMatch";
 import { DEFAULT_LIFESPANS } from "@/lib/health";
-import { hasPlus, getExtraHomeSlots } from "@/lib/subscription";
+import { ownsPlus, getExtraHomeSlots } from "@/lib/subscription";
 import { setFlash } from "@/lib/flash";
 import { safeNextPath } from "@/lib/safeNext";
 import { isMissingSchemaError } from "@/lib/dbErrors";
@@ -158,10 +158,12 @@ export async function claimPropertyAction(formData: FormData) {
   // Homes merely shared with the user as a household member do not count
   // against their own limit, so only owned homes are tallied here. This mirrors
   // the DB backstop in supabase/migrations/0108_extra_home_slots.sql, which
-  // must agree on the same formula.
+  // must agree on the same formula. ownsPlus, not hasPlus: the cap is on homes
+  // the claimer OWNS, and the 0108 trigger checks the claimer's own row, so
+  // household Plus (a shared home's owner has Plus) must not raise it.
   const [existingHomes, plus, extraSlots] = await Promise.all([
     getProperties(),
-    hasPlus(),
+    ownsPlus(),
     getExtraHomeSlots(),
   ]);
   const ownedHomes = existingHomes.filter((h) => !h.isShared);

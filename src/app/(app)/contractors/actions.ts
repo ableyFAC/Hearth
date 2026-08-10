@@ -15,6 +15,7 @@ import {
   BUDGET_RANGES,
   COLD_START_FREE_POSTING,
   BONUS_EXPIRY_DAYS,
+  isMajorCategory,
 } from "@/lib/constants";
 import { setFlash } from "@/lib/flash";
 import { hasPlus } from "@/lib/subscription";
@@ -203,6 +204,41 @@ export async function postJobAction(formData: FormData) {
     ? budgetRaw
     : null;
 
+  // Major-tier project scope (0114): square footage, material notes, and a
+  // plans/permits flag. Read and validated regardless of category, but only
+  // ever attached to the lead when the category is actually major-tier
+  // (roof/structural/remodeling) - a non-major post ignores these fields
+  // entirely, so its behavior is byte-for-byte what it was before 0114.
+  const isMajor = isMajorCategory(category);
+
+  // Square footage: clamped to a sane range rather than rejected outright -
+  // it's a pro-facing signal, not a fact worth failing the whole post over.
+  const SQUARE_FOOTAGE_MIN = 1;
+  const SQUARE_FOOTAGE_MAX = 20000;
+  const sqFtRaw = (formData.get("square_footage") as string) || "";
+  const sqFtParsed = sqFtRaw.trim() ? Number(sqFtRaw) : NaN;
+  const squareFootage =
+    isMajor && Number.isFinite(sqFtParsed)
+      ? Math.round(
+          Math.min(SQUARE_FOOTAGE_MAX, Math.max(SQUARE_FOOTAGE_MIN, sqFtParsed))
+        )
+      : null;
+
+  // Material notes: short free text, capped well under the DB's own CHECK
+  // (300 chars, migration 0114) so a truncated-but-valid value always reaches
+  // the insert rather than tripping the constraint.
+  const MATERIAL_NOTES_MAX_LEN = 300;
+  const materialNotesRaw = ((formData.get("material_notes") as string) || "").trim();
+  const materialNotes =
+    isMajor && materialNotesRaw
+      ? materialNotesRaw.slice(0, MATERIAL_NOTES_MAX_LEN)
+      : null;
+
+  // Checkbox: absent from formData entirely when unchecked, so its presence
+  // IS the true/false answer. Null (not false) for a non-major post, since
+  // the question was never asked there.
+  const hasPlansPermits = isMajor ? formData.has("has_plans_permits") : null;
+
   const photoUrls = validPhotoUrls(formData);
 
   // Contact details are captured on the form and snapshotted onto the job,
@@ -228,39 +264,59 @@ export async function postJobAction(formData: FormData) {
     issueSeverity = issue?.severity ?? null;
   }
 
+  // The redirect on either validation gate below carries what the owner typed
+  // back as query params (the page already prefills category/timing/desc/
+  // issue from searchParams), so a rejected post keeps the text fields.
+  // Contact fields re-prefill from the saved profile as usual.
+  const keepParamsQuery = () => {
+    const keep = new URLSearchParams();
+    if (category) keep.set("category", category);
+    if (timing) keep.set("timing", timing);
+    if (message) keep.set("desc", message);
+    if (issueId) keep.set("issue", issueId);
+    return keep.toString();
+  };
+  // Photos are the one thing the round-trip can't keep: they live in
+  // PhotoUpload's client state, which the redirect remounts empty. So the
+  // already-uploaded objects are removed from storage (they'd be unreachable
+  // orphans otherwise). Best-effort, same pattern as saveDocumentAction: a
+  // storage hiccup here should never block the validation redirect.
+  const cleanupOrphanPhotos = async () => {
+    if (!photoUrls.length) return;
+    const paths = photoUrls
+      .map((u) => u.split("/home-photos/")[1])
+      .filter((p): p is string => Boolean(p));
+    if (paths.length) {
+      await supabase.storage.from("home-photos").remove(paths);
+    }
+  };
+
   // Pros pay to apply, so a posting has to give them something to go on:
   // require a real description (at least 20 characters) before it goes live.
-  // The redirect carries what they typed back as query params (the page
-  // already prefills category/timing/desc/issue from searchParams), so a
-  // rejected post keeps the text fields. Contact fields re-prefill from the
-  // saved profile as usual. Photos are the one thing the round-trip can't
-  // keep: they live in PhotoUpload's client state, which the redirect
-  // remounts empty. So the already-uploaded objects are removed from storage
-  // (they'd be unreachable orphans otherwise) and the flash says plainly that
-  // photos need re-attaching.
   if ((issueDescription ?? "").trim().length < 20) {
-    if (photoUrls.length) {
-      // Best-effort cleanup, same pattern as saveDocumentAction: a storage
-      // hiccup here should never block the validation redirect.
-      const paths = photoUrls
-        .map((u) => u.split("/home-photos/")[1])
-        .filter((p): p is string => Boolean(p));
-      if (paths.length) {
-        await supabase.storage.from("home-photos").remove(paths);
-      }
-    }
+    await cleanupOrphanPhotos();
     setFlash(
       photoUrls.length
         ? "Please describe the job in at least 20 characters so pros know what they're applying to. Your photos weren't kept, so please re-attach them."
         : "Please describe the job in at least 20 characters so pros know what they're applying to.",
       "error"
     );
-    const keep = new URLSearchParams();
-    if (category) keep.set("category", category);
-    if (timing) keep.set("timing", timing);
-    if (message) keep.set("desc", message);
-    if (issueId) keep.set("issue", issueId);
-    const query = keep.toString();
+    const query = keepParamsQuery();
+    redirect(query ? `/contractors?${query}` : "/contractors");
+  }
+
+  // Major-tier jobs (0114) need a real budget so pros can bid seriously - no
+  // more silent "Prefer not to say". BudgetField makes the select `required`
+  // client-side for these categories; this is the authoritative server-side
+  // enforcement (a client hitting the action directly, or an older cached
+  // page, can't bypass it).
+  if (isMajor && !budgetRange) {
+    await cleanupOrphanPhotos();
+    setFlash(
+      "Pros need a budget range to bid seriously on projects this size. Please pick one and post again.",
+      "error"
+    );
+    const query = keepParamsQuery();
     redirect(query ? `/contractors?${query}` : "/contractors");
   }
 
@@ -357,18 +413,42 @@ export async function postJobAction(formData: FormData) {
     timing,
   };
 
-  // budget_range isn't in the generated types (and migration 0047 may not have
-  // run against this database yet): write it via `as any`, and on the
-  // missing-column fingerprint specifically, retry without it so posting never
-  // breaks. Same pattern as the contractors insert in pro/actions.
+  // budget_range (0047) and square_footage/material_notes/has_plans_permits
+  // (0114) may not have reached this database yet: write them via `as any`,
+  // cascading down to fewer columns on the missing-column fingerprint
+  // specifically, so posting never breaks on a DB mid-migration. Same pattern
+  // as the contractors insert in pro/actions, extended to two optional
+  // layers instead of one: the 0114 scope fields are stripped first (the
+  // newer of the two migrations, so the more likely one to be missing), then
+  // budget_range, before falling back to the bare row.
+  const scopeExtras: Record<string, unknown> = {};
+  if (squareFootage !== null) scopeExtras.square_footage = squareFootage;
+  if (materialNotes !== null) scopeExtras.material_notes = materialNotes;
+  if (hasPlansPermits !== null) scopeExtras.has_plans_permits = hasPlansPermits;
+  const budgetExtras: Record<string, unknown> = {};
+  if (budgetRange) budgetExtras.budget_range = budgetRange;
+
   let { data: inserted, error } = await supabase
     .from("contractor_leads")
-    .insert(
-      (budgetRange ? { ...leadRow, budget_range: budgetRange } : leadRow) as any
-    )
+    .insert({ ...leadRow, ...budgetExtras, ...scopeExtras } as any)
     .select("id, created_at")
     .single();
-  if (error && budgetRange && isMissingSchemaError(error)) {
+  if (
+    error &&
+    Object.keys(scopeExtras).length > 0 &&
+    isMissingSchemaError(error)
+  ) {
+    ({ data: inserted, error } = await supabase
+      .from("contractor_leads")
+      .insert({ ...leadRow, ...budgetExtras } as any)
+      .select("id, created_at")
+      .single());
+  }
+  if (
+    error &&
+    Object.keys(budgetExtras).length > 0 &&
+    isMissingSchemaError(error)
+  ) {
     ({ data: inserted, error } = await supabase
       .from("contractor_leads")
       .insert(leadRow as any)

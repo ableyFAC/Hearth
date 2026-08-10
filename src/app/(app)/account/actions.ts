@@ -141,8 +141,8 @@ export async function updatePasswordAction(formData: FormData) {
   const next = (formData.get("new_password") as string) || "";
   const confirm = (formData.get("confirm_password") as string) || "";
 
-  if (next.length < 6) {
-    setFlash("New password must be at least 6 characters.", "error");
+  if (next.length < 8) {
+    setFlash("New password must be at least 8 characters.", "error");
     redirect("/account/security");
   }
   if (next !== confirm) {

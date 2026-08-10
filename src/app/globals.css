@@ -138,7 +138,7 @@ body {
            dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300;
   }
   .chip-danger {
-    @apply chip border border-red-100 bg-red-50 text-red-700
+    @apply chip border border-red-200 bg-red-50 text-red-700
            dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-300;
   }
   .chip-muted {

@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useRef,
-  useState,
-} from "react";
-import Confetti from "@/components/Confetti";
+import { createContext, useCallback, useContext } from "react";
 
 type ChecklistApi = {
   register: (id: string, done: boolean) => void;
@@ -18,31 +11,20 @@ type ChecklistApi = {
 const Ctx = createContext<ChecklistApi | null>(null);
 export const useChecklist = () => useContext(Ctx);
 
-// Wraps the "This month" list. The first time the user crosses an item off this
-// visit, we fire a single confetti burst (not again, and never on un-checking or
-// on load).
+// Wraps the "This month" list. register/unregister/report are no-ops now
+// (kept so items don't need to change); this used to fire a confetti burst
+// on the first item checked off, which has been removed.
 export default function ChecklistProvider({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const celebrated = useRef(false);
-  const [burst, setBurst] = useState(0);
-
-  // register/unregister are no-ops now (kept so items don't need to change).
   const register = useCallback(() => {}, []);
   const unregister = useCallback(() => {}, []);
-
-  const report = useCallback((_id: string, done: boolean) => {
-    if (done && !celebrated.current) {
-      celebrated.current = true;
-      setBurst((b) => b + 1);
-    }
-  }, []);
+  const report = useCallback(() => {}, []);
 
   return (
     <Ctx.Provider value={{ register, unregister, report }}>
-      {burst > 0 && <Confetti key={burst} />}
       {children}
     </Ctx.Provider>
   );

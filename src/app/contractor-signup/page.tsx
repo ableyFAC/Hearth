@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/safeNext";
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
+import PasswordStrengthMeter from "@/components/PasswordStrengthMeter";
 import { LEAD_TIER_FEES, MAJOR_INTRO_FEE } from "@/lib/constants";
 import { Eye, EyeOff } from "lucide-react";
 
@@ -84,8 +85,8 @@ export default function ContractorSignUpPage({
     setError(null);
     setNotice(null);
 
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
       return;
     }
 
@@ -269,7 +270,8 @@ export default function ContractorSignUpPage({
                 className="input pr-10"
                 type={showPassword ? "text" : "password"}
                 autoComplete="new-password"
-                placeholder="At least 6 characters"
+                placeholder="At least 8 characters"
+                minLength={8}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -287,6 +289,7 @@ export default function ContractorSignUpPage({
                 )}
               </button>
             </div>
+            <PasswordStrengthMeter password={password} />
           </div>
           {/* Unchecked-by-default, gated in onSubmit (Berman fix - a
               pre-ticked or merely-decorative agreement line doesn't bind).

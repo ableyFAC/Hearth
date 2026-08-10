@@ -26,17 +26,19 @@ import SetupChecklist, { type SetupItem } from "@/components/pro/SetupChecklist"
 import { agingLeadFee } from "@/lib/leadPricing";
 import { hasProPlan } from "@/lib/subscription";
 import { findActiveJobConflicts } from "@/lib/activeJobConflicts";
+import { isMissingSchemaError } from "@/lib/dbErrors";
 
 const SEVERITY_STYLE: Record<string, string> = {
   low: "border-stone-200 bg-stone-50 text-stone-600 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300",
   medium: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300",
-  urgent: "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200",
+  urgent: "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-300",
 };
 
 const STATUS_STYLE: Record<string, string> = {
   new: "border-hearth-200 bg-hearth-50 text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300",
   accepted: "border-green-200 bg-green-50 text-green-700 dark:border-green-500/30 dark:bg-green-500/15 dark:text-green-300",
-  closed: "border-green-600 bg-green-600 text-white",
+  // Done-and-dusted reads muted so it can't be confused with the active green.
+  closed: "border-stone-200 bg-stone-100 text-stone-600 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300",
   lost: "border-stone-200 bg-stone-100 text-stone-500 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400",
 };
 
@@ -69,12 +71,34 @@ function postedAgo(createdAt: string | null | undefined): string | null {
 // shows via the posted-ago line, so it isn't repeated here.
 function qualityChips(j: any): string[] {
   const chips: string[] = [];
-  if ((j.issue_description ?? "").trim().length >= 80)
+  // Major-tier jobs (roof/structural/remodeling) need real detail to bid
+  // seriously - 80 characters of filler doesn't cut it at that price point,
+  // so the floor doubles for those categories only (0114). Every other
+  // category keeps the original 80.
+  const detailFloor = isMajorCategory(j.category) ? 160 : 80;
+  if ((j.issue_description ?? "").trim().length >= detailFloor)
     chips.push("Detailed description");
   // Photos are now shown as a thumbnail strip on the card, so no redundant
   // "Photos attached" chip; a job with photos but no rendered urls (rare) still
   // gets no chip - the strip is the signal now.
   if (j.timing) chips.push("Timing set");
+  return chips;
+}
+
+// Major-tier project scope (0114): square footage and material notes, shown
+// as the same muted chip tokens as budget/quality above. Only meaningful for
+// roof/structural/remodeling jobs, and only when the homeowner actually filled
+// them in - undefined until migration 0114 reaches the DB, which reads the
+// same as "not provided" here.
+function scopeChips(j: any): string[] {
+  const chips: string[] = [];
+  if (!isMajorCategory(j.category)) return chips;
+  const sqFt = Number(j.square_footage);
+  if (Number.isFinite(sqFt) && sqFt > 0) {
+    chips.push(`${sqFt.toLocaleString()} sq ft`);
+  }
+  const materials = typeof j.material_notes === "string" ? j.material_notes.trim() : "";
+  if (materials) chips.push(materials);
   return chips;
 }
 
@@ -102,6 +126,13 @@ export default async function ProDashboard({
 
   const supabase = createClient();
 
+  const ASSIGNED_BASE_COLUMNS =
+    "id, issue_id, status, category, issue_severity, issue_description, homeowner_name, homeowner_email, homeowner_phone, property_address, created_at";
+  // 0114: square_footage/material_notes/has_plans_permits may not have
+  // reached this DB yet - same isMissingSchemaError cascade quote-check uses
+  // for a column that might predate the current migration.
+  const ASSIGNED_COLUMNS_WITH_SCOPE = `${ASSIGNED_BASE_COLUMNS}, square_footage, material_notes, has_plans_permits`;
+
   // Open jobs to apply to (safe fields only, category-matched, not yet applied),
   // the pro's own applications, and the jobs they were chosen for (full detail).
   const [
@@ -112,13 +143,25 @@ export default async function ProDashboard({
   ] = await Promise.all([
     (supabase as any).rpc("open_jobs_for_me"),
     (supabase as any).rpc("my_applications"),
-    supabase
-      .from("contractor_leads")
-      .select(
-        "id, issue_id, status, category, issue_severity, issue_description, homeowner_name, homeowner_email, homeowner_phone, property_address, created_at"
-      )
-      .eq("contractor_id", contractor.id)
-      .order("created_at", { ascending: false }),
+    (async () => {
+      // Cast to any: the two branches select different column sets, and the
+      // generated types don't narrow cleanly across a cascading reassignment
+      // like this - same reasoning as the contractor_leads cascade on the
+      // homeowner side (src/app/(app)/contractors/page.tsx).
+      let res = await (supabase as any)
+        .from("contractor_leads")
+        .select(ASSIGNED_COLUMNS_WITH_SCOPE)
+        .eq("contractor_id", contractor.id)
+        .order("created_at", { ascending: false });
+      if (res.error && isMissingSchemaError(res.error)) {
+        res = await (supabase as any)
+          .from("contractor_leads")
+          .select(ASSIGNED_BASE_COLUMNS)
+          .eq("contractor_id", contractor.id)
+          .order("created_at", { ascending: false });
+      }
+      return res;
+    })(),
     // Direct requests a homeowner aimed at this pro (0104). Masked, contact-free
     // fields plus the live-priced fee; the ONLY read path to a pending request.
     (supabase as any).rpc("my_direct_requests"),
@@ -414,7 +457,7 @@ export default async function ProDashboard({
         </div>
         <Link
           href="/pro/billing"
-          className="card transition hover:border-hearth-400 hover:shadow-md"
+          className="card-link hover:border-hearth-400 dark:hover:border-hearth-400"
         >
           <p className="stat-label">Wallet balance</p>
           <p className="stat-number mt-1 text-4xl text-stone-900 dark:text-stone-100">
@@ -450,6 +493,7 @@ export default async function ProDashboard({
               const fee = introFee ?? normalFee;
               const feeStr = money(fee);
               const chips = qualityChips(d);
+              const scope = scopeChips(d);
               const budgetLabel =
                 d.budget_range && d.budget_range !== "not-sure"
                   ? labelFor(BUDGET_RANGES, d.budget_range)
@@ -525,6 +569,23 @@ export default async function ProDashboard({
                       ))}
                     </div>
                   )}
+                  {/* Major-tier project scope (0114): sq ft / materials as the
+                      same muted chip, plans/permits as a positive chip-ok. */}
+                  {(scope.length > 0 || d.has_plans_permits === true) && (
+                    <div className="flex flex-wrap gap-1">
+                      {scope.map((c) => (
+                        <span
+                          key={c}
+                          className="chip bg-stone-100 text-stone-600 dark:bg-stone-700 dark:text-stone-400"
+                        >
+                          {c}
+                        </span>
+                      ))}
+                      {d.has_plans_permits === true && (
+                        <span className="chip-ok">Plans/permits in hand</span>
+                      )}
+                    </div>
+                  )}
                   {(postedAgo(d.created_at) || d.timing) && (
                     <div className="flex flex-wrap gap-4 text-xs text-stone-500 dark:text-stone-400">
                       {postedAgo(d.created_at) && (
@@ -575,7 +636,7 @@ export default async function ProDashboard({
                 <Link
                   key={o.value}
                   href={o.value === "new" ? "/pro" : `/pro?sort=${o.value}`}
-                  className={`inline-flex min-h-11 items-center rounded-full border px-3 py-1.5 text-xs sm:inline-block sm:min-h-0 ${
+                  className={`inline-flex min-h-[44px] items-center rounded-full border px-3 py-1.5 text-xs sm:inline-block sm:min-h-0 ${
                     sort === o.value
                       ? "border-hearth-300 bg-hearth-50 font-medium text-hearth-700 dark:border-hearth-500/40 dark:bg-hearth-500/15 dark:text-hearth-300"
                       : "border-stone-200 text-stone-500 hover:border-stone-300 dark:border-white/10 dark:text-stone-400 dark:hover:border-stone-600"
@@ -680,6 +741,7 @@ export default async function ProDashboard({
               const full = spots >= MAX_APPLICANTS_PER_JOB;
               const conflict = relationshipConflicts.get(j.id);
               const chips = qualityChips(j);
+              const scope = scopeChips(j);
               // Homeowner's rough budget band (0047): a pricing signal, not a
               // quote. "not-sure" carries no signal, so no chip for it.
               const budgetLabel =
@@ -767,6 +829,23 @@ export default async function ProDashboard({
                           {c}
                         </span>
                       ))}
+                    </div>
+                  )}
+                  {/* Major-tier project scope (0114): sq ft / materials as the
+                      same muted chip, plans/permits as a positive chip-ok. */}
+                  {(scope.length > 0 || j.has_plans_permits === true) && (
+                    <div className="flex flex-wrap gap-1">
+                      {scope.map((c) => (
+                        <span
+                          key={c}
+                          className="chip bg-stone-100 text-stone-600 dark:bg-stone-700 dark:text-stone-400"
+                        >
+                          {c}
+                        </span>
+                      ))}
+                      {j.has_plans_permits === true && (
+                        <span className="chip-ok">Plans/permits in hand</span>
+                      )}
                     </div>
                   )}
                   {(postedAgo(j.created_at) || j.timing) && (
@@ -953,6 +1032,7 @@ function AssignedJobCard({
   l: any;
   photoUrls: string[];
 }) {
+  const scope = scopeChips(l);
   return (
     <li className="card space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -978,6 +1058,25 @@ function AssignedJobCard({
         <p className="text-sm text-stone-600 dark:text-stone-400">{l.issue_description}</p>
       ) : (
         <p className="text-sm italic text-stone-500 dark:text-stone-400">No details provided yet</p>
+      )}
+
+      {/* Major-tier project scope (0114): sq ft / materials as the same muted
+          chip, plans/permits as a positive chip-ok. Still worth showing once
+          a job is won, not just while bidding on it. */}
+      {(scope.length > 0 || l.has_plans_permits === true) && (
+        <div className="flex flex-wrap gap-1">
+          {scope.map((c) => (
+            <span
+              key={c}
+              className="chip bg-stone-100 text-stone-600 dark:bg-stone-700 dark:text-stone-400"
+            >
+              {c}
+            </span>
+          ))}
+          {l.has_plans_permits === true && (
+            <span className="chip-ok">Plans/permits in hand</span>
+          )}
+        </div>
       )}
 
       {photoUrls.length > 0 && (

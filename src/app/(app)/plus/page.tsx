@@ -1,6 +1,6 @@
 import Link from "next/link";
 import {
-  hasPlus,
+  ownsPlus,
   getSubscription,
   getBillingOutlook,
   getExtraHomeSlots,
@@ -64,7 +64,10 @@ export default async function PlusPage({
 }: {
   searchParams: { reason?: string; welcome?: string };
 }) {
-  const [plus, sub] = await Promise.all([hasPlus(), getSubscription()]);
+  // ownsPlus, not hasPlus: this page manages the viewer's OWN billing. A
+  // household member covered by the owner's Plus must still see the buy flow
+  // here (their benefits come from the owner's plan, not a row of their own).
+  const [plus, sub] = await Promise.all([ownsPlus(), getSubscription()]);
 
   // One-time celebration right after checkout. Shown off the ?welcome=1 flag so
   // it appears even if the Stripe webhook hasn't synced the subscription yet.
@@ -253,7 +256,7 @@ export default async function PlusPage({
     );
   }
 
-  // A subscription that Stripe still considers live but that hasPlus() reads
+  // A subscription that Stripe still considers live but that ownsPlus() reads
   // as not-entitled (past_due, unpaid, incomplete: the card failed and Stripe
   // is retrying) used to fall straight through to the marketing pitch below,
   // leaving someone whose card is ACTIVELY being retried with no way to stop
@@ -406,6 +409,10 @@ export default async function PlusPage({
               // pitch leans on the perks that stay exclusive.
               "Line up local pros, on your terms. Get matched first and keep every proactive alert working for you."
             : "Line up local pros, on your terms. Post more jobs at once, get matched first, and keep every proactive alert working for you."}
+        </p>
+        <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
+          Plus covers everyone in your household on that home, at no extra
+          cost.
         </p>
         <div className="mt-5">
           {/* Label mirrors the pricing card's button exactly, so the promise

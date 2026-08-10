@@ -526,6 +526,12 @@ export interface Database {
           direct_to: string | null;
           direct_declined_at: string | null;
           direct_unlocked_at: string | null;
+          // 0114: major-tier project scope, nullable - only ever set for a
+          // major-tier category (roof/structural/remodeling); null on every
+          // other job and on every row from before this migration.
+          square_footage: number | null;
+          material_notes: string | null;
+          has_plans_permits: boolean | null;
           created_at: string;
         };
         Insert: {
@@ -548,6 +554,9 @@ export interface Database {
           direct_to?: string | null;
           direct_declined_at?: string | null;
           direct_unlocked_at?: string | null;
+          square_footage?: number | null;
+          material_notes?: string | null;
+          has_plans_permits?: boolean | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["contractor_leads"]["Insert"]>;

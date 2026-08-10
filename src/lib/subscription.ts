@@ -1,6 +1,8 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getUser } from "@/lib/auth";
+import { getActiveProperty } from "@/lib/property";
 import { stripe } from "@/lib/stripe";
 import type { Subscription } from "@/lib/database.types";
 
@@ -124,29 +126,69 @@ export const getBillingOutlook = cache(
 
 // Shared billing-status check: active or trialing, and not past a known
 // period end.
-function isLive(sub: Subscription): boolean {
+function isLive(
+  sub: Pick<Subscription, "status" | "current_period_end">
+): boolean {
   if (sub.status !== "active" && sub.status !== "trialing") return false;
   if (sub.current_period_end && new Date(sub.current_period_end) <= new Date())
     return false;
   return true;
 }
 
-// Whether the current user has an active Hearth Plus subscription. Gates
-// "finding a pro" (posting a job / contacting pros) - the rest of the app
-// (home tracking, AI chat, document vault, alerts) stays free. Homeowner
-// plans only: getSubscription never returns the Pro-side row, so a
-// contractor's pro_ plan never counts as Plus.
-export async function hasPlus(): Promise<boolean> {
+// Whether the current user PERSONALLY holds a live Hearth Plus subscription.
+// This is the billing truth: the /plus manage-billing UI and the owned-home
+// cap (claimPropertyAction, mirrored by the 0108 DB trigger, which checks the
+// inserting user's own row) key off it. A household member of a Plus home
+// does NOT count here - for feature gating use hasPlus() below.
+export async function ownsPlus(): Promise<boolean> {
   const sub = await getSubscription();
   if (!sub) return false;
   return isLive(sub);
+}
+
+// Household Plus half of hasPlus(): whether the ACTIVE property is someone
+// else's home whose owner holds a live Plus row. getActiveProperty
+// re-validates ownership/membership through RLS on every read, so
+// property.user_id is trusted. The owner's subscriptions row is NOT readable
+// through the member's session ("subscriptions owner read" is self-only), so
+// the lookup uses the service-role client with that RLS-validated owner id,
+// the same trusted-server pattern the household join flow uses. Cached per
+// request like the other getters.
+const activeHomeOwnerHasPlus = cache(async (): Promise<boolean> => {
+  const user = await getUser();
+  if (!user) return false;
+
+  const property = await getActiveProperty();
+  if (!property || property.user_id === user.id) return false;
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("subscriptions")
+    .select("plan,status,current_period_end")
+    .eq("user_id", property.user_id);
+
+  // Homeowner side only: a pro_ plan never counts as Plus.
+  return (data ?? []).some((row) => !isProPlanName(row.plan) && isLive(row));
+});
+
+// Whether the current user has Plus BENEFITS on the active property. True
+// when they hold a live Plus subscription themselves, or when the active
+// home's owner does: Plus carries with the home, so household members of a
+// Plus home get Plus features there at no extra cost. Gates the paid tools
+// (posting/contacting pros, forecast, quote check, home report, AI limits).
+// Billing UI and the owned-home cap must use ownsPlus() instead. Homeowner
+// plans only: getSubscription never returns the Pro-side row, so a
+// contractor's pro_ plan never counts as Plus.
+export async function hasPlus(): Promise<boolean> {
+  if (await ownsPlus()) return true;
+  return activeHomeOwnerHasPlus();
 }
 
 // Paid extra-home slots on the current user's homeowner Plus subscription.
 // Extra homes are a Plus-only add-on (see setExtraHomesAction): the Stripe
 // webhook writes extra_home_slots off the add-on subscription item's quantity,
 // and sets it to 0 when Plus is canceled. Counted only when the homeowner row
-// is LIVE (same active/trialing + period check hasPlus uses), so a lapsed row
+// is LIVE (same active/trialing + period check ownsPlus uses), so a lapsed row
 // with a stale value never grants extra capacity - slots lapse with Plus. The
 // column isn't in database.types.ts yet, so it's read cast-through-any, the
 // same convention the other not-yet-typed columns use. Returns 0 when there is

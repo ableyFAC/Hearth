@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import SubmitButton from "@/components/SubmitButton";
+import PasswordStrengthMeter from "@/components/PasswordStrengthMeter";
 
 // The one account-security surface, shared by the homeowner page
 // (/account/security) and the pro profile's Account Security tab so the two
@@ -69,6 +70,11 @@ export default function AccountSecurityPanel({
   privacyHref: string;
 }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // Local mirror of the new-password field, only so the strength meter below
+  // it has something to read. The input stays a normal uncontrolled form
+  // field for the server action (name="new_password" still submits via
+  // FormData) - value/onChange here don't change that.
+  const [newPassword, setNewPassword] = useState("");
 
   return (
     <div className="space-y-6">
@@ -147,10 +153,14 @@ export default function AccountSecurityPanel({
                 type="password"
                 autoComplete="new-password"
                 className="input pl-9"
-                placeholder="Create new password"
+                placeholder="At least 8 characters"
+                minLength={8}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
                 required
               />
             </div>
+            <PasswordStrengthMeter password={newPassword} />
           </div>
 
           <div>
@@ -163,6 +173,7 @@ export default function AccountSecurityPanel({
                 autoComplete="new-password"
                 className="input pl-9"
                 placeholder="Confirm new password"
+                minLength={8}
                 required
               />
             </div>

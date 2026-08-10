@@ -538,37 +538,6 @@
 }
 .photoLockBadge svg { width: 8px; height: 8px; }
 
-/* Intro card: centered logo + wordmark that fades in over the loading
-   site and fades away to reveal the dashboard. Replaces the old corner
-   zoom-out, which read as jarring. */
-.introCard {
-  position: absolute;
-  inset: 0;
-  z-index: 6;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  background: var(--dev-bg);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 650ms ease;
-}
-.introCard.show { opacity: 1; }
-.introWord {
-  font-family: var(--sans);
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: #292524;
-}
-.introTag {
-  font-family: var(--sans);
-  font-size: 12px;
-  color: #78716c;
-}
-
 /* Notification card: slides in like a real in-app notification. */
 .notif {
   opacity: 0;
@@ -744,14 +713,11 @@
   animation-play-state: paused !important;
 }
 
-.fx { position: absolute; inset: 0; pointer-events: none; z-index: 8; }
-
-/* ---------- Caption layer ----------
-   The big kinetic captions were retired once the real pro voiceover shipped
-   (the spoken VO carries the narration now), so setCaption is a no-op and this
-   layer stays empty. The empty container is kept because the caption state
-   machine still targets it as a display sink; the per-word styles that used to
-   pop each chunk in are gone with the visuals they drove. */
+/* ---------- Captions (outside the camera; standard bottom subtitles) ----------
+   Small subtitle chunks that mirror the narration line by line, advanced off
+   the live VO position in cursorLoop so they can never drift from the voice.
+   The old full-screen kinetic captions and hero words are gone per the
+   founder's direction; this is the quiet, video-player kind. */
 .captionLayer {
   position: absolute;
   left: 0;
@@ -764,40 +730,34 @@
   flex-wrap: wrap;
   padding: 0 14px;
   pointer-events: none;
-}
-
-/* Dead-center hero word (JOB WON etc). */
-.heroWord {
-  position: absolute;
-  inset: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-  font-weight: 700;
-  text-transform: uppercase;
-  font-size: clamp(20px, 5vw, 32px);
-  letter-spacing: 0.04em;
-  color: #fff;
+  /* Subtitles for the narration: the site's own typeface, sentence case,
+     quiet enough that eyes stay on the cursor. */
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: clamp(11px, 2.2vw, 15px);
+  letter-spacing: 0.01em;
+  color: rgb(255 255 255 / 0.95);
   text-shadow:
-    -1px -1px 0 #0f0b08, 1px -1px 0 #0f0b08, -1px 1px 0 #0f0b08, 1px 1px 0 #0f0b08,
-    0 4px 14px rgb(0 0 0 / 0.4);
+    -1px -1px 0 #0f0b08, 1px -1px 0 #0f0b08, -1px 1px 0 #0f0b08, 1px 1px 0 #0f0b08;
+}
+.capWord {
+  display: inline-block;
   opacity: 0;
+  transform: scale(0.8);
 }
-.heroWord.pop { animation: heroPop 640ms cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-@keyframes heroPop {
-  0% { opacity: 0; transform: scale(1.6); }
-  18% { opacity: 1; transform: scale(1); }
-  80% { opacity: 1; transform: scale(1.02); }
-  100% { opacity: 0; transform: scale(1.04); }
+.capWord.pop {
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 130ms cubic-bezier(0.175, 0.885, 0.32, 1.275), transform 130ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
-.box.reduced .heroWord.pop { animation: heroPopReduced 640ms linear; }
-@keyframes heroPopReduced {
-  0% { opacity: 0; }
-  18% { opacity: 1; }
-  80% { opacity: 1; }
-  100% { opacity: 0; }
+/* Highlight keyword: the site's light brand brown (hearth-400) so it stays
+   legible on the dark room while matching the website's palette. */
+.capHi { color: #c08f60; }
+/* OS reduced motion: the words still appear (they are the muted viewer's
+   narration), just as a plain fade with no scale pop. */
+@media (prefers-reduced-motion: reduce) {
+  .capWord { transform: none; }
+  .capWord.pop { transition: opacity 120ms linear; transform: none; }
 }
 
 /* ---------- Bottom control bar ---------- */

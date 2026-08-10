@@ -206,9 +206,9 @@ export default function HeroDemoPlayer() {
     // of `root` directly.
     const boxEl: HTMLDivElement = root;
 
-    // OS reduced-motion tones down the big camera zooms, shake, flash, and
-    // confetti (the vestibular triggers) but NEVER removes the cursor,
-    // typing, or click sounds: those are the demo's content, and hiding them
+    // OS reduced-motion tones down the big camera zooms, shake, and flash
+    // (the vestibular triggers) but NEVER removes the cursor, typing, or
+    // click sounds: those are the demo's content, and hiding them
     // (as an earlier version did) made the video look broken on machines
     // with Windows "Animation effects" turned off.
     const fxReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -1150,8 +1150,8 @@ export default function HeroDemoPlayer() {
     // NOTE: the camera deliberately does NOT respect the OS reduced-motion
     // flag. It gated all zooms off for anyone with Windows "Animation
     // effects" disabled (including the founder), making the demo look
-    // zoomless. The zooms ARE the video; only shake/flash/confetti stay
-    // behind fxReduced.
+    // zoomless. The zooms ARE the video; only shake/flash stay behind
+    // fxReduced.
     const cam = { s: 1, sT: 1, cx: 240, cy: 130, px: 240, py: 130, follow: "wide" as "cursor" | "point" | "wide" };
 
     function focusOn(sel: string, scale = 1.7, _ms = 520) {
@@ -1580,59 +1580,6 @@ export default function HeroDemoPlayer() {
       }
     }
 
-    function burstConfetti() {
-      if (fxReduced || seeking) return;
-      const fx = q<HTMLCanvasElement>("[data-x='fx']");
-      const screenEl = q("[data-x='screen']");
-      if (!fx || !screenEl) return;
-      const rect = screenEl.getBoundingClientRect();
-      fx.width = rect.width;
-      fx.height = rect.height;
-      const g = fx.getContext("2d");
-      if (!g) return;
-      const colors = ["#c08f60", "#915d32", "#e6d1ba", "#22c55e", "#ffffff"];
-      const particles = Array.from({ length: 40 }, () => ({
-        x: rect.width / 2 + (Math.random() - 0.5) * 50,
-        y: rect.height / 2,
-        vx: (Math.random() - 0.5) * 4,
-        vy: -Math.random() * 4 - 1.5,
-        size: 2.5 + Math.random() * 3,
-        color: colors[(Math.random() * colors.length) | 0],
-        life: 1,
-      }));
-      // Elapsed is accumulated from frame-to-frame deltas (not ts - start)
-      // so a pause freezes the burst mid-flight instead of the paused gap
-      // silently counting against its 1s budget.
-      let elapsed = 0;
-      let lastTs: number | null = null;
-      function frame(ts: number) {
-        if (paused) {
-          // Frozen: drop the reference frame so the gap doesn't get
-          // counted as elapsed time once resumed, and keep polling.
-          lastTs = null;
-          requestAnimationFrame(frame);
-          return;
-        }
-        if (lastTs === null) lastTs = ts;
-        elapsed += ts - lastTs;
-        lastTs = ts;
-        g!.clearRect(0, 0, fx!.width, fx!.height);
-        particles.forEach((p) => {
-          p.vy += 0.1;
-          p.x += p.vx;
-          p.y += p.vy;
-          p.life -= 0.017;
-          g!.globalAlpha = Math.max(p.life, 0);
-          g!.fillStyle = p.color;
-          g!.fillRect(p.x, p.y, p.size, p.size);
-        });
-        g!.globalAlpha = 1;
-        if (elapsed < 1000) requestAnimationFrame(frame);
-        else g!.clearRect(0, 0, fx!.width, fx!.height);
-      }
-      requestAnimationFrame(frame);
-    }
-
     // ======================= SCENE CHOREOGRAPHY =======================
     // Each enter function receives 0ms = its scene start. Captions are
     // driven by the narration lines (playVo), so what you read matches what
@@ -1799,7 +1746,6 @@ export default function HeroDemoPlayer() {
         booked?.classList.add(styles.show);
         focusOn("[data-x='booked']", 1.3);
         impactVisual();
-        burstConfetti();
         setCaption([]);
       });
       atBeat(14.4, () => playVo("booked"));
@@ -2586,7 +2532,6 @@ export default function HeroDemoPlayer() {
               <span className={styles.introTag}>Your home, looked after.</span>
             </div>
             <span className={styles.flash} data-x="flash" aria-hidden="true"></span>
-            <canvas className={styles.fx} data-x="fx" aria-hidden="true"></canvas>
           </div>
         </div>
       </div>

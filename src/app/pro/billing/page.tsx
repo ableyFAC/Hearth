@@ -135,8 +135,8 @@ export default async function ProBillingPage({
         </div>
       )}
 
-      {/* A calm confirmation only: confetti is saved for winning a job, not
-          for spending money. */}
+      {/* A calm confirmation only: no celebration effect here, this is just
+          spending money. */}
       {searchParams.paid && (
         <FadingBanner className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 dark:border-green-500/30 dark:bg-green-500/15 dark:text-green-300">
           Payment received. Your wallet has been credited.

@@ -205,6 +205,12 @@ export default async function DocumentsPage() {
                     {facts.join(" · ")}
                   </p>
                 )}
+                {!d.warranty_expires && (
+                  <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                    Covered by a warranty? Add its expiration date and it will
+                    show up on your dashboard&apos;s warranty countdown.
+                  </p>
+                )}
 
                 <div className="mt-2 flex items-center gap-3">
                   {canApply && (

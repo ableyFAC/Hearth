@@ -48,7 +48,7 @@ export function friendlyAuthError(error: AuthErrorLike): string {
   // Weak / too-short password coming back from the server (the 6-char client
   // check was bypassed, or the project requires more).
   if (/password/.test(m) && /(6|short|weak|length|at least|characters)/.test(m)) {
-    return "Password needs at least 6 characters.";
+    return "Password needs at least 8 characters.";
   }
 
   // Signing up with an email that already has an account.

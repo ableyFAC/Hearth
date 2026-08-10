@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProperties } from "@/lib/property";
 import { isContractor } from "@/lib/contractor";
-import { hasPlus } from "@/lib/subscription";
+import { ownsPlus } from "@/lib/subscription";
 import { safeNextPath } from "@/lib/safeNext";
 import OnboardingForm from "./OnboardingForm";
 
@@ -53,11 +53,12 @@ export default async function OnboardingPage({
   const isFirst = homes.length === 0;
 
   // Free plan covers 1 owned home (shared homes don't count - same tally as
-  // claimPropertyAction in ./actions.ts). Surface the cap HERE, before the
-  // form, instead of letting someone fill it all in only to be bounced to
-  // /plus at the very end.
+  // claimPropertyAction in ./actions.ts, incl. ownsPlus over hasPlus: the cap
+  // is on homes you own, so household Plus doesn't raise it). Surface the cap
+  // HERE, before the form, instead of letting someone fill it all in only to
+  // be bounced to /plus at the very end.
   if (!isFirst) {
-    const plus = await hasPlus();
+    const plus = await ownsPlus();
     const ownedHomes = homes.filter((h) => !h.isShared);
     if (!plus && ownedHomes.length >= 1) {
       return (

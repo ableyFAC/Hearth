@@ -450,6 +450,9 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
                 defaultValue={val(fields.warranty_expires)}
                 className="input"
               />
+              <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                This date is what makes it show up on your dashboard&apos;s warranty countdown.
+              </p>
             </div>
           </div>
 

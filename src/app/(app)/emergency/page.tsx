@@ -49,7 +49,7 @@ export default async function EmergencyPage() {
 
       <section className="card space-y-4">
         <div>
-          <h2 className="flex items-center font-semibold text-stone-900 dark:text-stone-100">Be ready before it happens</h2>
+          <h2 className="font-semibold text-stone-900 dark:text-stone-100">Be ready before it happens</h2>
           <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
             Take a photo of each shutoff now, on a calm day. Next time there&apos;s an
             emergency, we&apos;ll show it to you right where you need it.

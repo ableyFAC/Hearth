@@ -36,7 +36,7 @@ const FREE_FEATURES = [
   "Track your first home: systems, ages, documents, and reminders",
   "Your first maintenance plan, built from your home's systems",
   "Your 10-year cost forecast total and the monthly amount to set aside",
-  "A free quote check to see whether a quote is fair",
+  "A one-time free quote check to see whether a quote is fair",
   COLD_START_FREE_POSTING
     ? "Post jobs and get quotes from local pros, unlimited while Hearth is new"
     : "Post up to 3 jobs at a time and get quotes from local pros",
@@ -66,7 +66,7 @@ export default function PricingPage() {
         </Link>
       </p>
 
-      <h1 className="mt-4 text-3xl font-bold text-stone-900 sm:text-4xl dark:text-stone-100">
+      <h1 className="mt-4 text-3xl font-semibold text-stone-900 sm:text-4xl dark:text-stone-100">
         Simple pricing. Most of Hearth is free.
       </h1>
       <p className="mt-3 text-base leading-relaxed text-stone-600 dark:text-stone-300">
@@ -152,6 +152,15 @@ export default function PricingPage() {
           </ul>
         </div>
       </div>
+
+      {/* Plain disclosure of Ask Hearth's daily cap, so the AI features above
+          never read as unlimited. Numbers match DAILY_LIMIT_FREE /
+          DAILY_LIMIT_PLUS in src/lib/aiUsage.ts, the source of truth the
+          route actually enforces; keep this in sync if those change. */}
+      <p className="mt-4 text-sm text-stone-500 dark:text-stone-400">
+        Ask Hearth, the AI assistant, is capped at 25 questions a day on Free
+        and 250 a day on Plus, so it stays fast and available for everyone.
+      </p>
 
       {/* The honest auto-renew disclosure, stated plainly. Same facts the
           checkout disclosure carries (src/components/AutoRenewalTerms.tsx),

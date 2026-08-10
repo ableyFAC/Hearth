@@ -26,7 +26,6 @@ import { planTitles } from "@/lib/maintenancePlan";
 import SystemForm from "../profile/SystemForm";
 import SystemRow from "../profile/SystemRow";
 import { addSystemFormAction } from "../profile/actions";
-import Confetti from "@/components/Confetti";
 import SeasonalChecklist from "@/components/SeasonalChecklist";
 import ChecklistProvider from "@/components/ChecklistProvider";
 import ReminderItem from "./ReminderItem";
@@ -49,6 +48,18 @@ import {
 } from "@/lib/energy";
 import type { Issue } from "@/lib/database.types";
 
+// Shared "Plus" badge chip, used on every paywalled CTA/card on this page.
+// className lets each call site set its own margin, everything else fixed.
+function PlusChip({ className = "" }: { className?: string }) {
+  return (
+    <span
+      className={`chip bg-bark-100 text-bark-700 dark:bg-bark-700 dark:text-stone-300 ${className}`}
+    >
+      Plus
+    </span>
+  );
+}
+
 export default async function HomePage({
   searchParams,
 }: {
@@ -57,6 +68,12 @@ export default async function HomePage({
   // "View my plan" lands here with ?plan=open so the collapsed task groups
   // start expanded, making the click visibly do something.
   const planOpen = searchParams.plan === "open";
+  // First visit after claiming a home (?welcome=1): the banner below already
+  // walks through the started systems, so the below-the-fold detail sections
+  // default collapsed instead of dumping everything open at once. Health
+  // Score and "This month" stay expanded either way. Normal visits are
+  // untouched.
+  const isFirstVisit = !!searchParams.welcome;
   // getActiveProperty and hasPlus don't depend on each other - run them
   // together instead of stacking two round trips before the redirect check.
   const [property, plus] = await Promise.all([getActiveProperty(), hasPlus()]);
@@ -385,8 +402,10 @@ export default async function HomePage({
   const seasonLabel = season.charAt(0).toUpperCase() + season.slice(1);
 
   // Upcoming warranties from the documents vault, soonest first, so the owner
-  // hears about coverage before it lapses.
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // hears about coverage before it lapses. Local date, not toISOString's UTC
+  // one - in US evenings UTC has already rolled to tomorrow, which would drop
+  // a warranty expiring today before local midnight actually arrives.
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const warranties = (docs ?? [])
     .filter((d) => d.warranty_expires && d.warranty_expires >= todayStr)
     .map((d) => {
@@ -481,6 +500,35 @@ export default async function HomePage({
         })
       : null;
 
+  // Shared body of the "Thinking about a project?" block - identical whether
+  // it's rendered as a plain section (normal visits) or inside a collapsed
+  // <details> (first visit), so the two render paths below can't drift.
+  const projectChips = (
+    <>
+      <p className="text-sm text-stone-500 dark:text-stone-400">
+        Popular upgrades. Tap one to get matched with a local pro.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {REMODEL_PROJECTS.map((p) => (
+          <Link
+            key={p.label}
+            href={`/contractors?category=${p.category}`}
+            className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-600 dark:hover:text-stone-300"
+          >
+            <p.icon className="mr-1 inline-block h-3.5 w-3.5 align-[-2px]" aria-hidden="true" />
+            {p.label}
+          </Link>
+        ))}
+        <Link
+          href="/contractors?category=other"
+          className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-600 dark:hover:text-stone-300"
+        >
+          Other
+        </Link>
+      </div>
+    </>
+  );
+
   return (
     <div className="space-y-8">
       {/* Current conditions for the home's city, one quiet row. Renders only
@@ -488,49 +536,46 @@ export default async function HomePage({
       <WeatherStrip propertyId={property.id} />
 
       {searchParams.welcome && (
-        <>
-          <Confetti />
-          <div className="rounded-xl border border-bark-100 bg-bark-50 p-4 dark:border-bark-700/40 dark:bg-bark-700/30">
-            {sys.length > 0 ? (
-              <>
-                <p className="font-medium text-stone-900 dark:text-stone-100">
-                  Your home is claimed.
-                </p>
-                <p className="mt-1 text-sm text-bark-700 dark:text-stone-300">
-                  We started {sys.length} system
-                  {sys.length === 1 ? "" : "s"} with estimated details based on
-                  your home&apos;s age:
-                </p>
-                <ul className="mt-2 flex flex-wrap gap-1.5">
-                  {sys.map((s) => (
-                    <li
-                      key={s.id}
-                      className="chip border border-bark-100 bg-white text-stone-700 dark:border-bark-700 dark:bg-stone-800 dark:text-stone-300"
-                    >
-                      <CategoryIcon
-                        list={SYSTEM_TYPES}
-                        value={s.system_type}
-                        className="mr-1 inline-block h-3.5 w-3.5 align-[-2px]"
-                      />
-                      {labelFor(SYSTEM_TYPES, s.system_type)}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  href="/walkthrough"
-                  className="btn-primary mt-3 inline-block"
-                >
-                  Walk your home to confirm them
-                </Link>
-              </>
-            ) : (
-              <p className="text-sm text-bark-700 dark:text-stone-300">
-                Your home is claimed. Add your systems below. It&apos;s what
-                powers your maintenance reminders and your Home Health Score.
+        <div className="rounded-xl border border-bark-100 bg-bark-50 p-4 dark:border-bark-700/40 dark:bg-bark-700/30">
+          {sys.length > 0 ? (
+            <>
+              <p className="font-medium text-stone-900 dark:text-stone-100">
+                Your home is claimed.
               </p>
-            )}
-          </div>
-        </>
+              <p className="mt-1 text-sm text-bark-700 dark:text-stone-300">
+                We started {sys.length} system
+                {sys.length === 1 ? "" : "s"} with estimated details based on
+                your home&apos;s age:
+              </p>
+              <ul className="mt-2 flex flex-wrap gap-1.5">
+                {sys.map((s) => (
+                  <li
+                    key={s.id}
+                    className="chip border border-bark-100 bg-white text-stone-700 dark:border-bark-700 dark:bg-stone-800 dark:text-stone-300"
+                  >
+                    <CategoryIcon
+                      list={SYSTEM_TYPES}
+                      value={s.system_type}
+                      className="mr-1 inline-block h-3.5 w-3.5 align-[-2px]"
+                    />
+                    {labelFor(SYSTEM_TYPES, s.system_type)}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/walkthrough"
+                className="btn-primary mt-3 inline-block"
+              >
+                Walk your home to confirm them
+              </Link>
+            </>
+          ) : (
+            <p className="text-sm text-bark-700 dark:text-stone-300">
+              Your home is claimed. Add your systems below. It&apos;s what
+              powers your maintenance reminders and your Home Health Score.
+            </p>
+          )}
+        </div>
       )}
 
       {/* Property header */}
@@ -545,14 +590,16 @@ export default async function HomePage({
             same on both ends. No chip at all when unverified - nothing to nag
             about, since a mismatch is expected and harmless. */}
         {property.ownership_status === "verified" && (
-          <p className="mt-2">
-            <span
-              className="chip-ok"
-              title="The name on your account matches the county assessor's public owner-of-record for this address. It's a soft trust signal we show pros, not proof of ownership."
-            >
+          <details className="mt-2 inline-block">
+            <summary className="chip-ok focus-ring w-fit cursor-pointer list-none [&::-webkit-details-marker]:hidden">
               Matches county records
-            </span>
-          </p>
+            </summary>
+            <p className="mt-1.5 max-w-sm text-xs text-stone-500 dark:text-stone-400">
+              The name on your account matches the county assessor&apos;s
+              public owner-of-record for this address. It&apos;s a soft trust
+              signal we show pros, not proof of ownership.
+            </p>
+          </details>
         )}
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           Built {property.year_built ?? "-"} · {property.sqft ?? "-"} sqft ·{" "}
@@ -575,7 +622,7 @@ export default async function HomePage({
           thing the owner sees. */}
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className={`card-hero border ${band.tone}`}>
-          <p className="stat-label">Home Health Score</p>
+          <p className="stat-label text-sm">Home Health Score</p>
           {mostlyEstimated && (
             <p className="mt-1 text-xs font-medium uppercase tracking-wide opacity-80">
               Estimated score
@@ -587,7 +634,7 @@ export default async function HomePage({
               ? "Based on your home's age. Confirm your systems to sharpen it."
               : band.label}
           </p>
-          <details className="mt-2 text-xs">
+          <details className="mt-2 text-sm">
             <summary className="cursor-pointer opacity-80 hover:opacity-100">
               Why this score?
             </summary>
@@ -627,7 +674,7 @@ export default async function HomePage({
           )}
         </div>
         <div className="card">
-          <p className="stat-label">Open jobs</p>
+          <p className="stat-label text-sm">Open jobs</p>
           {openJobsCount > 0 ? (
             <>
               <p className="stat-number mt-1 text-2xl">
@@ -661,7 +708,7 @@ export default async function HomePage({
           href="/value"
           className="card-link"
         >
-          <p className="stat-label">Home value</p>
+          <p className="stat-label text-sm">Home value</p>
           {hasHomeValueData && homeEstimatedValue != null ? (
             <>
               <p className="stat-number mt-1 text-2xl">
@@ -697,7 +744,7 @@ export default async function HomePage({
           )}
         </Link>
         <div className="card">
-          <p className="stat-label">
+          <p className="stat-label text-sm">
             Energy this season
           </p>
           {energyEstimate ? (
@@ -727,9 +774,7 @@ export default async function HomePage({
                     className="mt-1 block text-xs text-bark-700 hover:underline dark:text-stone-300"
                   >
                     See what a new unit would save
-                    <span className="chip mx-1.5 bg-bark-100 text-bark-700 dark:bg-bark-700 dark:text-stone-300">
-                      Plus
-                    </span>
+                    <PlusChip className="mx-1.5" />
                     →
                   </Link>
                 ))}
@@ -756,7 +801,7 @@ export default async function HomePage({
 
       {/* This month: focus + one merged checklist (reminders + seasonal) */}
       <section id="this-month" className="scroll-mt-20 space-y-3">
-        <h2 className="flex items-center text-lg font-semibold text-stone-900 dark:text-stone-100">This month</h2>
+        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">This month</h2>
         <WalkthroughNudge count={unconfirmedCount} />
         <div className="card space-y-3">
           <div className="rounded-lg bg-bark-50 p-3 dark:bg-bark-700/30">
@@ -830,9 +875,7 @@ export default async function HomePage({
                     className="text-sm font-medium hover:underline"
                   >
                     Plan my next round
-                    <span className="chip mx-1.5 bg-bark-100 text-bark-700 dark:bg-bark-700 dark:text-stone-300">
-                      Plus
-                    </span>
+                    <PlusChip className="mx-1.5" />
                     →
                   </Link>
                 )}
@@ -937,7 +980,7 @@ export default async function HomePage({
                         <span className="truncate">{w.title ?? "Home document"}</span>
                       </span>
                       <span
-                        className={`chip shrink-0 ${
+                        className={`chip shrink-0 text-sm ${
                           w.days <= 60 ? "chip-warn" : "chip-muted"
                         }`}
                       >
@@ -961,7 +1004,7 @@ export default async function HomePage({
 
       {/* Hearth Plus: one cohesive "plan ahead" block (plan + premium tools) */}
       <section className="space-y-3">
-        <h2 className="flex items-center text-lg font-semibold text-stone-900 dark:text-stone-100">
+        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
           {plus ? "Your Hearth Plus tools" : "Plan ahead with Hearth Plus"}
         </h2>
         <div className="card flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1024,9 +1067,7 @@ export default async function HomePage({
               className="btn-secondary whitespace-nowrap text-center"
             >
               Get my maintenance plan
-              <span className="chip ml-1.5 bg-bark-100 text-bark-700 dark:bg-bark-700 dark:text-stone-300">
-                Plus
-              </span>
+              <PlusChip className="ml-1.5" />
             </Link>
           )}
         </div>
@@ -1062,11 +1103,7 @@ export default async function HomePage({
               </p>
               <p className="mt-1 font-medium text-stone-900 dark:text-stone-100">
                 {t.title}
-                {!plus && (
-                  <span className="chip ml-1.5 bg-bark-100 text-bark-700 dark:bg-bark-700 dark:text-stone-300">
-                    Plus
-                  </span>
-                )}
+                {!plus && <PlusChip className="ml-1.5" />}
                 {!plus && t.title === "Quote analyzer" && (
                   <span className="chip ml-1.5 bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300">
                     1 free
@@ -1080,7 +1117,7 @@ export default async function HomePage({
       </section>
 
       {/* Systems inventory (the old Home Profile) */}
-      <details id="systems" open className="group space-y-4">
+      <details id="systems" open={!isFirstVisit} className="group space-y-4">
         <summary className="focus-ring w-fit cursor-pointer list-none [&::-webkit-details-marker]:hidden text-lg font-semibold text-stone-900 dark:text-stone-100">
           <span className="mr-1 inline-block transition-transform group-open:rotate-90">
             ▸
@@ -1141,33 +1178,28 @@ export default async function HomePage({
         <SystemForm propertyId={property.id} />
       </details>
 
-      {/* Project ideas - always open, not collapsible. */}
-      <section className="space-y-3">
-        <h2 className="flex items-center text-lg font-semibold text-stone-900 dark:text-stone-100">
-          Thinking about a project?
-        </h2>
-        <p className="text-sm text-stone-500 dark:text-stone-400">
-          Popular upgrades. Tap one to get matched with a local pro.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {REMODEL_PROJECTS.map((p) => (
-            <Link
-              key={p.label}
-              href={`/contractors?category=${p.category}`}
-              className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-600 dark:hover:text-stone-300"
-            >
-              <p.icon className="mr-1 inline-block h-3.5 w-3.5 align-[-2px]" aria-hidden="true" />
-              {p.label}
-            </Link>
-          ))}
-          <Link
-            href="/contractors?category=other"
-            className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-600 dark:hover:text-stone-300"
-          >
-            Other
-          </Link>
-        </div>
-      </section>
+      {/* Project ideas. Always-open plain section on normal visits (not
+          collapsible - unchanged from before); collapsed by default right
+          after claiming a home so first-visit declutter doesn't dump this
+          below Systems too. */}
+      {isFirstVisit ? (
+        <details className="group space-y-3">
+          <summary className="focus-ring w-fit cursor-pointer list-none [&::-webkit-details-marker]:hidden text-lg font-semibold text-stone-900 dark:text-stone-100">
+            <span className="mr-1 inline-block transition-transform group-open:rotate-90">
+              ▸
+            </span>
+            Thinking about a project?
+          </summary>
+          {projectChips}
+        </details>
+      ) : (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+            Thinking about a project?
+          </h2>
+          {projectChips}
+        </section>
+      )}
 
     </div>
   );

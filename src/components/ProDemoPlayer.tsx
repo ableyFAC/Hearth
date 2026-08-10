@@ -23,14 +23,21 @@ import { track } from "@/lib/analytics";
 // - FULL pro app pages (Hearth for Pros nav and all) inside a browser device,
 //   with a virtual camera that punches into click targets so a normal-sized
 //   cursor still owns the frame.
-// - One continuous session: a "you got the job" flash-forward, then leads
-//   board -> apply and pay the lead fee (wallet ticks down, shown honestly)
-//   -> chat with the homeowner -> "You got the job" (the drop, at ~81% of
-//   runtime, on the same beat grid as the homeowner win) -> end card with the
-//   pro value prop and the fee-credit guarantee.
-// - The voiceover carries the story now; the big kinetic captions were retired
-//   (setCaption is a no-op). A mid-video CTA chip appears at the ~20s
-//   engagement peak; a step chip signals progress.
+// - One continuous session: cold open on the live leads board (no title
+//   card), then browse -> apply and pay the lead fee (wallet ticks down,
+//   shown honestly) -> chat with the homeowner -> "You got the job" (the
+//   drop, at ~81% of runtime, on the same beat grid as the homeowner win)
+//   -> end card with the pro value prop and the fee-credit guarantee.
+// - Tutorial-style motion, per the founder's direction: the cursor visibly
+//   travels to and clicks the real controls (the apply flow, the Messages
+//   tab in the nav) and every zoom is anchored to either the click target
+//   (followCursorZoom travels with the hand) or the element that just
+//   changed (popZoom/focusOn). No free-floating zooms, no full-screen
+//   overlay text cards.
+// - The voiceover carries the story; plain bottom subtitles mirror each
+//   spoken line in small chunks, driven off the live audio position in
+//   cursorLoop so they can never drift from the voice. A mid-video CTA chip
+//   appears at the ~20s engagement peak; a step chip signals progress.
 // - Audio is fully synthesized: sidechain-pumped music bus through soft
 //   saturation, a glue compressor and a limiter stand-in; thocky keyboard,
 //   soft apple-style clicks, whooshes, a 3-layer riser that hard-cuts to
@@ -38,8 +45,8 @@ import { track } from "@/lib/analytics";
 // - VOICEOVER: this cut ships with real pro narration (VO_ENABLED = true). The
 //   /public/demo-vo/pro mp3s were generated with the SAME msedge-tts neural
 //   voice as the homeowner cut (en-US-AvaNeural, rate -8%), one clip per scene
-//   keyed to VO_TEXT. The synth track sits under it; captionVo/capState still
-//   run to sync the voice through seeks, but no longer paint any on-screen text.
+//   keyed to VO_TEXT. The synth track sits under it; captionVo/capState both
+//   paint the bottom subtitles and keep the voice in sync through seeks.
 
 const BEAT_MS = 375; // 160 BPM
 const BEAT_S = BEAT_MS / 1000;
@@ -52,15 +59,18 @@ const TOTAL_MS = TOTAL_BEATS * BEAT_MS;
 // homeowner, gets chosen, and lands on the value-prop end card.
 // 80 beats = 30 seconds; the "You got the job" payoff lands on beat 65 (~81%),
 // the SAME beat as the homeowner win, so the copied arrangement (WIN=65) hits
-// the drop exactly under the badge.
+// the drop exactly under the badge (won starts at 62, badge on scene beat 3).
+// The end scene carries the extra beats the old cut gave to won: its VO clip
+// is the longest (5.42s), and the subtitles must track it to the last word
+// before the replay overlay arrives, so the closer needs the runway.
 type SceneDef = { id: string; beats: number; step: string | null };
 const SCENES: SceneDef[] = [
   { id: "hook", beats: 13, step: null },
   { id: "leads", beats: 16, step: "1/4" },
   { id: "apply", beats: 15, step: "2/4" },
   { id: "chat", beats: 18, step: "3/4" },
-  { id: "won", beats: 12, step: "4/4" },
-  { id: "end", beats: 6, step: null },
+  { id: "won", beats: 8, step: "4/4" },
+  { id: "end", beats: 10, step: null },
 ];
 
 // Which page each scene shows (scenes can share a page for continuity). The
@@ -136,7 +146,19 @@ function LockMark() {
 // shell's warm hearth-50 fill, not the homeowner's white. Rendered at natural
 // size, then the page scales to fit the device, so every pixel matches the
 // production stylesheet.
-function ProAppNav({ active = 0 }: { active?: number }) {
+function ProAppNav({
+  active = 0,
+  msgTabX = false,
+  msgBadge = false,
+}: {
+  active?: number;
+  // Marks THIS nav's Messages tab as the cursor's click target (only one
+  // page's nav may carry it, since anchors are queried document-wide).
+  msgTabX?: boolean;
+  // Renders a hidden unread badge on Messages; the choreography reveals it
+  // when the homeowner's reply lands, which is what motivates the tab click.
+  msgBadge?: boolean;
+}) {
   const tabs = ["Leads", "Messages", "Clients", "My Business"];
   return (
     // Tight spacing so the whole strip, company name included, always fits the
@@ -150,11 +172,23 @@ function ProAppNav({ active = 0 }: { active?: number }) {
         {tabs.map((t, i) => (
           <span
             key={t}
+            {...(msgTabX && t === "Messages" ? { "data-x": "msgTab" } : {})}
             className={`flex items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm font-medium ${
               i === active ? "bg-hearth-100 text-hearth-800" : "text-stone-600"
             }`}
           >
             {t}
+            {t === "Messages" && msgBadge && (
+              <span
+                className={cx(
+                  "inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1.5 text-xs font-semibold text-white",
+                  styles.applied
+                )}
+                data-x="msgBadge"
+              >
+                1
+              </span>
+            )}
           </span>
         ))}
       </span>
@@ -219,9 +253,9 @@ export default function ProDemoPlayer() {
     // of `root` directly.
     const boxEl: HTMLDivElement = root;
 
-    // OS reduced-motion tones down the big camera zooms, shake, flash, and
-    // confetti (the vestibular triggers) but NEVER removes the cursor,
-    // typing, or click sounds: those are the demo's content, and hiding them
+    // OS reduced-motion tones down the big camera zooms, shake, and flash
+    // (the vestibular triggers) but NEVER removes the cursor, typing, or
+    // click sounds: those are the demo's content, and hiding them
     // (as an earlier version did) made the video look broken on machines
     // with Windows "Animation effects" turned off.
     const fxReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -952,14 +986,15 @@ export default function ProDemoPlayer() {
     // Narration text, one line per scene. Real pro VO now ships: the mp3s in
     // /public/demo-vo/pro were generated from these exact strings with the same
     // msedge-tts neural voice as the homeowner cut (en-US-AvaNeural, rate -8%),
-    // so VO_ENABLED is on and playVo streams them; captionVo/capState still sync
-    // the voice through mid-line seeks and pause/resume. These strings and the
-    // generator's LINES table must stay character-for-character identical, or the
-    // audio drifts from the copy.
+    // so VO_ENABLED is on and playVo streams them; captionVo/capState paint the
+    // bottom subtitles from these strings and keep the voice in sync through
+    // mid-line seeks and pause/resume. These strings and the generator's LINES
+    // table must stay character-for-character identical, or the audio (and the
+    // subtitles) drift from the copy.
     const VO_ENABLED = true;
     const VO_DIR = "/demo-vo/pro";
     const VO_TEXT = {
-      // hook: the flash-forward tease, then the promise.
+      // hook: cold open over the live board, the promise up front.
       hook: "This is Hearth. Real jobs, from homeowners near you.",
       // leads: the board, with the honest up-front fee.
       leads: "New jobs post here, with the lead fee shown up front.",
@@ -998,10 +1033,8 @@ export default function ProDemoPlayer() {
       lastVoKey = key;
       lastVoStartV = vnow;
       if (seeking) return;
-      // captionVo no longer paints text (the pro VO carries the narration now),
-      // but we still call it: it keeps capState/timing in sync so a mid-line
-      // seek resumes the voice at the right spot. Mute suppresses the spoken
-      // track; there is no on-screen caption fallback anymore.
+      // Mute suppresses AUDIO only: the captions are the muted viewer's
+      // narration, so they always render (every test viewer flagged this).
       captionVo(key);
       if (isMuted || !VO_ENABLED) return;
       if (currentVo) {
@@ -1180,8 +1213,8 @@ export default function ProDemoPlayer() {
     // NOTE: the camera deliberately does NOT respect the OS reduced-motion
     // flag. It gated all zooms off for anyone with Windows "Animation
     // effects" disabled (including the founder), making the demo look
-    // zoomless. The zooms ARE the video; only shake/flash/confetti stay
-    // behind fxReduced.
+    // zoomless. The zooms ARE the video; only shake/flash stay behind
+    // fxReduced.
     const cam = { s: 1, sT: 1, cx: 240, cy: 130, px: 240, py: 130, follow: "wide" as "cursor" | "point" | "wide" };
 
     function focusOn(sel: string, scale = 1.7, _ms = 520) {
@@ -1415,6 +1448,13 @@ export default function ProDemoPlayer() {
       });
     }
 
+    // Cursor glide with no click: the tutorial "look here" move. Same spring
+    // travel as clickOn, minus the ripple and press, so the hand can lead
+    // the camera to whatever the narration is talking about.
+    function glideTo(sel: string, delayMs: number) {
+      after(delayMs, () => cursorTo(sel));
+    }
+
     function typeInto(sel: string, text: string, startDelay: number, onDone?: () => void, prefix = "") {
       after(startDelay, () => {
         const el = q(sel);
@@ -1437,31 +1477,41 @@ export default function ProDemoPlayer() {
     }
 
     // ======================= CAPTIONS =======================
-    // The big kinetic captions were removed once the real pro voiceover shipped:
-    // the spoken VO now carries the narration, so nothing is painted on screen.
-    // This is intentionally a no-op DISPLAY sink, NOT a removal of the caption
-    // state machine: captionVo still chunks each line and cursorLoop still
-    // advances capState off the live audio position, which is what keeps the
-    // seek/resume VO sync (lastVoKey/lastVoStartV) honest. We simply keep the
-    // caption layer empty. Params are kept for call-site compatibility.
-    function setCaption(_words: string[], _hiIndex = -1, _stepMs = 120) {
+    // Standard bottom subtitles (the founder cut the old full-screen text
+    // cards): each narration chunk renders as small popping words above the
+    // control bar, same renderer as the homeowner cut.
+    function setCaption(words: string[], hiIndex = -1, stepMs = 120) {
       const layer = q("[data-x='captions']");
-      if (layer && layer.innerHTML !== "") layer.innerHTML = "";
+      if (!layer) return;
+      layer.innerHTML = "";
+      words.forEach((w, i) => {
+        const span = document.createElement("span");
+        span.className = cx(styles.capWord, i === hiIndex && styles.capHi);
+        span.textContent = w;
+        layer.appendChild(span);
+        // During playback the pops ride the virtual clock (pause/rate
+        // aware); in the finishTour end window that clock is stopped while
+        // the closer VO's tail still drives new chunks (see finishTour), so
+        // those fall back to wall-clock timeouts. timers are cleared by any
+        // replay/seek, same as the overlay timer.
+        if (playing) after(i * stepMs, () => span.classList.add(styles.pop));
+        else timers.push(setTimeout(() => span.classList.add(styles.pop), i * stepMs));
+      });
     }
 
-    // Caption pacing per line. With no VO audio, these ARE the caption
-    // schedule (captionVo divides the line into 2-word chunks across this
-    // duration); roughly word-count times ~380ms plus a little lead. If real
-    // pro-*.mp3 clips are added later, captionVo prefers each clip's true
-    // duration and these become the pre-load fallback, exactly as on the
-    // homeowner cut.
+    // Rough per-line durations for caption pacing before the audio's real
+    // duration is known.
+    // Frame-counted from the actual pro Ava MP3s (CBR 96kbps, so this equals
+    // bytes / 12000 = sec, same convention as the homeowner cut). captionVo
+    // prefers each clip's true duration once loaded; these cover the muted
+    // fallback schedule and pre-load seeks.
     const VO_EST_MS: Record<VoKey, number> = {
-      hook: 3600,
-      leads: 4200,
-      apply: 3800,
-      chat: 3200,
-      won: 1600,
-      end: 5000,
+      hook: 4540,
+      leads: 3700,
+      apply: 3910,
+      chat: 3260,
+      won: 1780,
+      end: 5420,
     };
 
     // Captions ARE the narration: the spoken line renders in short chunks
@@ -1611,59 +1661,6 @@ export default function ProDemoPlayer() {
       }
     }
 
-    function burstConfetti() {
-      if (fxReduced || seeking) return;
-      const fx = q<HTMLCanvasElement>("[data-x='fx']");
-      const screenEl = q("[data-x='screen']");
-      if (!fx || !screenEl) return;
-      const rect = screenEl.getBoundingClientRect();
-      fx.width = rect.width;
-      fx.height = rect.height;
-      const g = fx.getContext("2d");
-      if (!g) return;
-      const colors = ["#c08f60", "#915d32", "#e6d1ba", "#22c55e", "#ffffff"];
-      const particles = Array.from({ length: 40 }, () => ({
-        x: rect.width / 2 + (Math.random() - 0.5) * 50,
-        y: rect.height / 2,
-        vx: (Math.random() - 0.5) * 4,
-        vy: -Math.random() * 4 - 1.5,
-        size: 2.5 + Math.random() * 3,
-        color: colors[(Math.random() * colors.length) | 0],
-        life: 1,
-      }));
-      // Elapsed is accumulated from frame-to-frame deltas (not ts - start)
-      // so a pause freezes the burst mid-flight instead of the paused gap
-      // silently counting against its 1s budget.
-      let elapsed = 0;
-      let lastTs: number | null = null;
-      function frame(ts: number) {
-        if (paused) {
-          // Frozen: drop the reference frame so the gap doesn't get
-          // counted as elapsed time once resumed, and keep polling.
-          lastTs = null;
-          requestAnimationFrame(frame);
-          return;
-        }
-        if (lastTs === null) lastTs = ts;
-        elapsed += ts - lastTs;
-        lastTs = ts;
-        g!.clearRect(0, 0, fx!.width, fx!.height);
-        particles.forEach((p) => {
-          p.vy += 0.1;
-          p.x += p.vx;
-          p.y += p.vy;
-          p.life -= 0.017;
-          g!.globalAlpha = Math.max(p.life, 0);
-          g!.fillStyle = p.color;
-          g!.fillRect(p.x, p.y, p.size, p.size);
-        });
-        g!.globalAlpha = 1;
-        if (elapsed < 1000) requestAnimationFrame(frame);
-        else g!.clearRect(0, 0, fx!.width, fx!.height);
-      }
-      requestAnimationFrame(frame);
-    }
-
     // ======================= SCENE CHOREOGRAPHY =======================
     // Each enter function receives 0ms = its scene start. Captions are
     // driven by the narration lines (playVo), so what you read matches what
@@ -1675,65 +1672,53 @@ export default function ProDemoPlayer() {
       cam.s = Math.max(cam.s, scale + 0.16);
     }
 
-    // Dead-center hero word: the flash-forward tease in the hook and the win
-    // title in the payoff. Same pop-and-fade as the homeowner cut; the
-    // stylesheet swaps to a plain opacity fade under reduced motion.
-    function popHero(text: string) {
-      const el = q("[data-x='hero']");
-      if (!el) return;
-      el.textContent = text;
-      el.classList.remove(styles.pop);
-      void el.offsetWidth;
-      el.classList.add(styles.pop);
-    }
-
     function enterHook() {
-      // Cold open on the leads board behind a centered "Hearth for Pros" card.
-      // A quick flash-forward hero word teases the payoff ("You got the job"),
-      // then the card fades to reveal the board underneath.
+      // Cold open straight onto the live leads board: no title card, no
+      // flash-forward (the founder cut the full-screen overlay text). The
+      // narration starts over the real product and the hand drifts to the
+      // one open job, with the camera easing in behind it, so the first
+      // seconds already read as someone showing you around.
       // VO: "This is Hearth. Real jobs, from homeowners near you."
       showPage("leadsPage");
       cameraSnapWide();
       const w = q("[data-x='wallet']");
       if (w) w.textContent = "80";
-      const intro = q("[data-x='intro']");
-      if (intro) {
-        // Visible instantly: suppress the fade-in for frame zero.
-        intro.style.transition = "none";
-        intro.classList.add(styles.show);
-        void intro.offsetWidth;
-        intro.style.transition = "";
-      }
-      // The ending, shown first: the flash-forward tease over the intro card.
-      after(300, () => popHero("You got the job"));
-      after(1100, () => playVo("hook"));
-      after(2400, () => intro?.classList.remove(styles.show));
-      after(3100, () => focusOn("[data-x='jobCard']", 1.1));
+      after(250, () => playVo("hook"));
+      // "...near you": cursor to the job card first, then the camera follows
+      // onto the same spot, so the zoom is anchored where the hand rests.
+      glideTo("[data-x='jobCard']", 2400);
+      after(2900, () => focusOn("[data-x='jobCard']", 1.12));
     }
 
     function enterLeads() {
-      // One still shot framed on the board: the wallet balance counts up and
-      // the camera settles on the single open-job card so its masked details
-      // and up-front fee read clearly.
+      // Same page, no cut: the board is already on screen, so the shot eases
+      // wide off the hook's job-card push and the cursor walks the viewer to
+      // the fee line. The one zoom in this scene pops onto the fee chip the
+      // hand is resting on; nothing free-floating.
       // VO: "New jobs post here, with the lead fee shown up front."
-      showPage("leadsPage", { whoosh: true });
-      cameraSnapWide();
       playVo("leads");
-      const w = q("[data-x='wallet']");
-      if (w) w.textContent = "0";
-      countUp("[data-x='wallet']", 80, 800);
-      atBeat(6, () => focusOn("[data-x='jobCard']", 1.12));
+      cameraWide(400);
+      // "...with the lead fee shown up front": hand to the fee chip first,
+      // then the pop lands on it as the words do.
+      glideTo("[data-x='fee']", 2.5 * BEAT_MS);
+      atBeat(5, () => popZoom("[data-x='fee']", 1.3));
+      atBeat(12, () => cameraWide(400));
     }
 
     function enterApply() {
-      // Continuity: stay on the leads board. The cursor opens the apply
-      // confirm on the job card, taps "Draft it for me" (the real
-      // ApplyJobButton AI drafter composes the note to the homeowner), then
-      // pays. The camera pulls wide for the charge so the wallet balance is in
-      // frame when it ticks down by exactly the fee: the honest fee moment.
+      // Continuity: stay on the leads board. Every camera move in this scene
+      // is cursor-led: the click zooms travel WITH the hand (followCursorZoom
+      // via clickOn's zoom option) and anchor on the control they land on, so
+      // the frame always explains itself. The cursor opens the apply confirm
+      // on the job card, taps "Draft it for me" (the real ApplyJobButton AI
+      // drafter composes the note to the homeowner), then pays. The camera
+      // pulls wide for the charge so the wallet balance is in frame when it
+      // ticks down by exactly the fee, then pops onto the wallet itself: the
+      // honest fee moment. Finally the unread badge lights the Messages tab
+      // and the cursor clicks it, which is what carries us into the chat.
       // VO: "Apply in one tap. The fee comes from your wallet."
-      showPage("leadsPage");
-      cameraSnapTo("[data-x='applyArea']", 1.12);
+      // No showPage: the board is already the active page (same shot since
+      // the hook), and re-showing it would fire an unanchored punch zoom.
       playVo("apply");
       const note = q("[data-x='applyNote']");
       if (note) note.textContent = "";
@@ -1741,8 +1726,10 @@ export default function ProDemoPlayer() {
       q("[data-x='applyNoteWrap']")?.classList.remove(styles.show);
       q("[data-x='applyBtn']")?.classList.remove(styles.hidden);
       q("[data-x='applied']")?.classList.remove(styles.show);
-      // Open the confirm form in place of the apply button.
-      clickOn("[data-x='applyBtn']", 300, {
+      // "Apply in one tap": the hand travels to the button and the zoom rides
+      // along, then the confirm form opens in place of the button.
+      clickOn("[data-x='applyBtn']", 150, {
+        zoom: 1.25,
         onHit: () => {
           q("[data-x='applyBtn']")?.classList.add(styles.hidden);
           q("[data-x='applyForm']")?.classList.add(styles.show);
@@ -1751,6 +1738,7 @@ export default function ProDemoPlayer() {
       // "Draft it for me": a brief drafting state, then the AI note arrives
       // composed (revealed, not typed char by char, like the real drafter).
       clickOn("[data-x='draftBtn']", 3 * BEAT_MS, {
+        zoom: 1.25,
         onHit: () => {
           const btn = q("[data-x='draftBtn']");
           if (btn) btn.textContent = "Drafting...";
@@ -1765,10 +1753,11 @@ export default function ProDemoPlayer() {
         },
       });
       // Pull wide so the wallet card is in frame for the charge.
-      atBeat(8.5, () => cameraWide(400));
+      atBeat(7.5, () => cameraWide(400));
       // Confirm and pay: the fee leaves the wallet (80 -> 30), a toast
-      // confirms, and the card flips to its applied state.
-      clickOn("[data-x='confirmBtn']", 10 * BEAT_MS, {
+      // confirms, and the card flips to its applied state. The click lands
+      // right as the VO says "wallet".
+      clickOn("[data-x='confirmBtn']", 8.2 * BEAT_MS, {
         onHit: () => {
           q("[data-x='applyForm']")?.classList.remove(styles.show);
           q("[data-x='applied']")?.classList.add(styles.show);
@@ -1777,7 +1766,16 @@ export default function ProDemoPlayer() {
           coin();
         },
       });
+      // Pop onto the wallet while the balance is still ticking down: the
+      // zoom is anchored on the thing that is changing, nothing else.
+      atBeat(11, () => popZoom("[data-x='walletCard']", 1.18));
       atBeat(13.4, () => q("[data-x='toast']")?.classList.remove(styles.show));
+      // The homeowner replies: the unread badge lights the Messages tab, the
+      // camera goes wide so the nav is in frame, and the cursor visibly
+      // clicks the tab. The chat scene's page cut lands as the caused result.
+      atBeat(12.2, () => q("[data-x='msgBadge']")?.classList.add(styles.show));
+      atBeat(12.6, () => cameraWide(400));
+      clickOn("[data-x='msgTab']", 12.6 * BEAT_MS);
     }
 
     function enterChat() {
@@ -1835,28 +1833,32 @@ export default function ProDemoPlayer() {
     function enterWon() {
       // Same thread, no page cut: the "You got the job" badge drops on scene
       // beat 3 = global beat 65, exactly under the copied WIN arrangement
-      // (impact + coin arp). Hero word, screen shake, and confetti land with it.
+      // (impact + coin arp). The camera dives onto the badge itself, so the
+      // payoff zoom is anchored on the change; the old full-screen hero word
+      // is gone with the rest of the overlay text cards.
       // VO: "You got the job."
       const won = q("[data-x='won']");
       won?.classList.remove(styles.show);
       cameraSnapTo("[data-x='thread']", 1.12);
       atBeat(3, () => {
         won?.classList.add(styles.show);
-        popHero("You got the job");
         focusOn("[data-x='won']", 1.3);
         impactVisual();
-        burstConfetti();
         setCaption([]);
       });
-      atBeat(4.4, () => playVo("won"));
-      atBeat(9, () => cameraWide(600));
+      atBeat(3.4, () => playVo("won"));
+      atBeat(7, () => cameraWide(600));
     }
 
     function enterEnd() {
       // Value-prop end card: the pro promise plus the fee-credit guarantee.
+      // The closer is the longest clip (5.42s), which is why this scene owns
+      // 10 beats and starts the line almost immediately: the last words (and
+      // their subtitles) finish inside the end-card breathing room that
+      // finishTour leaves before the replay overlay.
       // VO: "Win work in your trade. Not chosen? Your fee comes back as credit."
       showPage("endPage", { whoosh: true });
-      atBeat(2.2, () => playVo("end"));
+      atBeat(0.6, () => playVo("end"));
       const es = q("[data-x='endStat']");
       if (es) es.textContent = "0";
       // A small win-tally count-up gives the card a beat of motion.
@@ -1923,20 +1925,31 @@ export default function ProDemoPlayer() {
     function finishTour() {
       playing = false;
       stopMusic();
-      if (cursorRaf) cancelAnimationFrame(cursorRaf);
-      cursorRaf = null;
       if (fillEl) fillEl.style.width = "100%";
       if (counterEl) counterEl.textContent = `${fmt(TOTAL_MS)} / ${fmt(TOTAL_MS)}`;
       // Let the end card (real CTA link, final score) breathe before the
       // replay overlay covers it: the last 2 seconds sell the signup.
-      timers.push(setTimeout(() => setFinished(true), 2600));
+      // cursorLoop stays alive through that window (unlike the homeowner
+      // cut): the closer VO's tail outlives the 30s timeline by design, and
+      // the loop is what advances the subtitle chunks off the live audio
+      // position, so the words track the voice to the last syllable and
+      // clear when the clip ends. The rAF dies with the same timeout that
+      // shows the overlay; a replay or seek before then clears this timer
+      // and reuses the still-running loop.
+      timers.push(
+        setTimeout(() => {
+          if (cursorRaf) cancelAnimationFrame(cursorRaf);
+          cursorRaf = null;
+          setFinished(true);
+        }, 2600)
+      );
     }
 
     function resetState() {
       q("[data-x='toast']")?.classList.remove(styles.show);
       q("[data-x='won']")?.classList.remove(styles.show);
       q("[data-x='midCta']")?.classList.remove(styles.show);
-      q("[data-x='intro']")?.classList.remove(styles.show);
+      q("[data-x='msgBadge']")?.classList.remove(styles.show);
       // Apply-flow controls back to their starting state.
       q("[data-x='applyBtn']")?.classList.remove(styles.hidden);
       q("[data-x='applyForm']")?.classList.remove(styles.show);
@@ -2427,7 +2440,7 @@ export default function ProDemoPlayer() {
               {/* ---------- Leads board (real pro app classes, see
                    src/app/pro/page.tsx) ---------- */}
               <div className={styles.page} data-page="leadsPage">
-                <ProAppNav active={0} />
+                <ProAppNav active={0} msgTabX msgBadge />
                 <div className="relative mx-auto max-w-5xl px-6 py-5">
                   <h1 className="text-xl font-semibold text-stone-900">Your leads</h1>
                   {/* Two live stat cards, mirroring /pro: active jobs and the
@@ -2437,7 +2450,7 @@ export default function ProDemoPlayer() {
                       <p className="stat-label">Active jobs</p>
                       <p className="stat-number mt-1 text-4xl text-stone-900">0</p>
                     </div>
-                    <div className="card">
+                    <div className="card" data-x="walletCard">
                       <p className="stat-label">Wallet balance</p>
                       <p className="stat-number mt-1 text-4xl text-stone-900">
                         $<span data-x="wallet">80</span>
@@ -2599,19 +2612,7 @@ export default function ProDemoPlayer() {
               <span className={styles.ripple} data-x="ripple" aria-hidden="true"></span>
             </div>
 
-            {/* Centered brand card: on screen from frame zero, fades out to
-                reveal the leads board once the flash-forward has teased. */}
-            <div className={styles.introCard} data-x="intro" aria-hidden="true">
-              <Logo className="h-12 w-12 text-hearth-700" />
-              <span className={styles.introWord}>Hearth for Pros</span>
-              <span className={styles.introTag}>Win work in your trade.</span>
-            </div>
             <span className={styles.flash} data-x="flash" aria-hidden="true"></span>
-            <canvas className={styles.fx} data-x="fx" aria-hidden="true"></canvas>
-            {/* Dead-center hero word: the "You got the job" flash-forward in
-                the hook and the win title at the payoff. Outside the camera so
-                it never scales with the zoom. */}
-            <span className={styles.heroWord} data-x="hero" aria-hidden="true"></span>
           </div>
         </div>
       </div>

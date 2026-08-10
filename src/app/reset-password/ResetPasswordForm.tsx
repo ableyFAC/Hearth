@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { friendlyAuthError } from "@/lib/friendlyAuthError";
+import PasswordStrengthMeter from "@/components/PasswordStrengthMeter";
 
 // Password reset, styled to match src/app/signin/page.tsx.
 //
@@ -54,8 +55,8 @@ export default function ResetPasswordForm({
     setError(null);
     setNotice(null);
 
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
       return;
     }
 
@@ -101,12 +102,14 @@ export default function ResetPasswordForm({
                 className="input"
                 type="password"
                 autoComplete="new-password"
-                placeholder="At least 6 characters"
+                placeholder="At least 8 characters"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoFocus
                 required
+                minLength={8}
               />
+              <PasswordStrengthMeter password={password} />
             </div>
             <button className="btn-primary w-full" disabled={busy}>
               {busy ? "Updating…" : "Update password"}

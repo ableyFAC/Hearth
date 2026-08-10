@@ -50,9 +50,16 @@ type NavLink = {
 export default function NavLinks({
   links,
   variant = "top",
+  accent = "bark",
 }: {
   links: NavLink[];
   variant?: "top" | "bottom";
+  // Which brand accent marks the active/hover link: bark for the homeowner
+  // shell (Nav), hearth for the pro shell (ProNav). Kept as a prop instead of
+  // reading the route so this component stays a plain rendering of whatever
+  // it's handed. Full class strings are spelled out per accent below (not
+  // interpolated) so Tailwind's compiler can see them.
+  accent?: "bark" | "hearth";
 }) {
   const pathname = usePathname();
 
@@ -77,7 +84,9 @@ export default function NavLinks({
               aria-current={active ? "page" : undefined}
               className={`flex min-h-[48px] flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1 text-[11px] ${
                 active
-                  ? "font-semibold text-bark-700 dark:text-stone-300"
+                  ? accent === "hearth"
+                    ? "font-semibold text-hearth-700 dark:text-stone-300"
+                    : "font-semibold text-bark-700 dark:text-stone-300"
                   : "font-medium text-stone-500 dark:text-stone-400"
               }`}
             >
@@ -107,10 +116,14 @@ export default function NavLinks({
             key={l.href}
             href={l.href}
             aria-current={active ? "page" : undefined}
-            className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ${
+            className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ${
               active
-                ? "bg-bark-100 text-bark-700 dark:bg-bark-700 dark:text-stone-300"
-                : "text-stone-600 hover:bg-bark-50 hover:text-bark-700 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+                ? accent === "hearth"
+                  ? "bg-hearth-100 text-hearth-700 dark:bg-hearth-700 dark:text-stone-300"
+                  : "bg-bark-100 text-bark-700 dark:bg-bark-700 dark:text-stone-300"
+                : accent === "hearth"
+                  ? "text-stone-600 hover:bg-hearth-50 hover:text-hearth-700 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+                  : "text-stone-600 hover:bg-bark-50 hover:text-bark-700 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300"
             }`}
           >
             {l.label}

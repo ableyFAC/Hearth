@@ -701,8 +701,6 @@
   animation-play-state: paused !important;
 }
 
-.fx { position: absolute; inset: 0; pointer-events: none; z-index: 8; }
-
 /* ---------- Kinetic captions (outside the camera; carry the message for
    the 70-85% watching muted) ---------- */
 .captionLayer {

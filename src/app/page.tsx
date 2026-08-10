@@ -11,6 +11,29 @@ import HeroPhotoCycler from "@/components/HeroPhotoCycler";
 import ThemeToggle from "@/components/ThemeToggle";
 import { TrendingUp, Bell, MessageSquare, Wrench } from "lucide-react";
 
+// Shared "all clear" pill: same green tone (.chip-ok) used by both the hero
+// reassurance row and the trust strip below, so the two lists render off one
+// component instead of two copies of the same markup drifting apart.
+function CheckPill({ label }: { label: string }) {
+  return (
+    <span className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-4 py-1.5 text-sm font-semibold text-green-700 sm:min-h-0 sm:px-3.5 dark:border-green-500/30 dark:bg-green-500/15 dark:text-green-300">
+      <svg
+        viewBox="0 0 20 20"
+        className="h-4 w-4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="m4 10.5 4 4 8-9" />
+      </svg>
+      {label}
+    </span>
+  );
+}
+
 // Root: route signed-in users into the app, everyone else to the marketing-lite
 // landing. Kept server-side so there's no flash of the wrong screen.
 export default async function Home({
@@ -65,7 +88,7 @@ export default async function Home({
   const FAQ_ITEMS: { q: string; a: string; node?: React.ReactNode }[] = [
     {
       q: "Is it really free?",
-      a: "Yes. Your first home is free, no card needed. Hearth makes money two ways: an optional Plus plan, and a fee pros pay when they apply to a job. We never sell your data.",
+      a: "Yes. Your first home is free, no card needed. Hearth makes money two ways: an optional Plus plan, and a fee pros pay when they apply to a job.",
     },
     {
       q: "What do you do with my data?",
@@ -89,11 +112,15 @@ export default async function Home({
     },
     {
       q: "Who are the pros?",
-      a: "Local pros who set up their own Hearth profiles. When a pro has a California license number on file, we check it with the state's contractor license board (the CSLB) and show the result on their profile. You can see exactly what's been verified.",
+      a: "Local pros who set up their own Hearth profiles. If a pro has a California license number, we check it live with the state's contractor license board (the CSLB) and show the result. Some trades, like handyman work or cleaning, don't require a license, so not every pro will have that badge. Pros can also complete an optional background check, which shows on their profile if they do. You always see exactly what's been verified and what hasn't.",
+    },
+    {
+      q: "Will I get flooded with calls once I post a job?",
+      a: "No. Your contact info stays private until you pick a pro yourself, and at most three pros can apply to any job. Until you choose someone, the conversation happens inside Hearth, not on your phone.",
     },
     {
       q: "Where is Hearth available?",
-      a: "We're starting in Orange County, California, with local pros there. If you're outside Orange County, Hearth isn't ready for your home yet, but we're working on it.",
+      a: "We're starting in Orange County, California, with local pros there. If you're outside Orange County you can still sign up and join the waitlist, which is how we decide where Hearth goes next.",
     },
     {
       q: "What does Plus cost?",
@@ -174,15 +201,13 @@ export default async function Home({
 
   // Hero photo set for the crossfading cycler: the warm home leads (it paints
   // first, server-visible), then a run of licensed trade photos, closing on a
-  // second warm home. Each alt names the trade or scene shown.
+  // second warm home. Each alt names the trade or scene shown. The roofer
+  // photo is deliberately absent: it already anchors the "How it works"
+  // section below, and repeating it in the cycler read as a mistake.
   const HERO_PHOTOS = [
     {
       src: "/photos/craftsman-home-dusk.jpg",
       alt: "A warm craftsman home with glowing windows at dusk",
-    },
-    {
-      src: "/photos/roofer-installing-shingles.jpg",
-      alt: "A roofer installing asphalt shingles on a home",
     },
     {
       src: "/photos/plumber-pipe-fittings.jpg",
@@ -235,7 +260,7 @@ export default async function Home({
       {/* Warm band wraps header, hero, and the product preview: a single
           flat fill, hearth-50 in light and stone-900 in dark (matching the
           body), no gradient. */}
-      <div className="bg-bark-50 dark:bg-stone-900">
+      <div className="bg-hearth-50 dark:bg-stone-900">
         <div className="mx-auto max-w-5xl px-6 pt-6">
           {/* Slim header: wordmark left, theme switch + quiet pro door right */}
           <header className="flex items-center justify-between">
@@ -246,9 +271,12 @@ export default async function Home({
               <ThemeToggle />
               <Link
                 href="/emergency-help"
-                className="hidden px-2 py-1.5 text-sm font-medium text-stone-600 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-200 sm:inline"
+                className="px-2 py-1.5 text-sm font-medium text-stone-600 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-200"
               >
-                Emergency help
+                {/* Compact label on mobile (header space is tight), full
+                    wording from sm up - desktop text/appearance unchanged. */}
+                <span className="sm:hidden">Emergency</span>
+                <span className="hidden sm:inline">Emergency help</span>
               </Link>
               <Link
                 href="/pros"
@@ -290,24 +318,7 @@ export default async function Home({
                   founder's pick. */}
               <div className="mt-5 flex flex-wrap items-center justify-center gap-2 lg:justify-start">
                 {["About 30 seconds", "No card needed", "Cancel anytime"].map((label) => (
-                  <span
-                    key={label}
-                    className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-4 py-1.5 text-sm font-semibold text-green-700 sm:min-h-0 sm:px-3.5 dark:border-green-500/30 dark:bg-green-500/15 dark:text-green-300"
-                  >
-                    <svg
-                      viewBox="0 0 20 20"
-                      className="h-4 w-4"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="m4 10.5 4 4 8-9" />
-                    </svg>
-                    {label}
-                  </span>
+                  <CheckPill key={label} label={label} />
                 ))}
               </div>
               <p className="mt-4 text-sm text-stone-500 dark:text-stone-400">
@@ -341,11 +352,11 @@ export default async function Home({
       </div>
 
       <div className="mx-auto max-w-3xl px-6">
-        {/* Service scent: the common jobs, as flat clickable chips. Each drops
-            into homeowner signup with the category preset in ?next= so the
-            post-a-job form on /contractors lands pre-filled (it reads
-            ?category=). Chips reuse the header link's neutral outline shape,
-            rounded full; icons inherit currentColor via CategoryIcon. */}
+      {/* Service scent: the common jobs, as flat clickable chips. Each drops
+          into homeowner signup with the category preset in ?next= so the
+          post-a-job form on /contractors lands pre-filled (it reads
+          ?category=). Chips reuse the header link's neutral outline shape,
+          rounded full; icons inherit currentColor via CategoryIcon. */}
       <section className="mt-12 sm:mt-16">
         <h2 className="text-center text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
           Find a pro for
@@ -371,39 +382,22 @@ export default async function Home({
         </ul>
       </section>
 
-        {/* Trust strip: three already-true signals in the green "all clear"
-            pill, the same tone as the hero reassurance row. No invented
-            numbers - only what Hearth actually does today. */}
+      {/* Trust strip: three already-true signals in the green "all clear"
+          pill, the same tone as the hero reassurance row. No invented
+          numbers - only what Hearth actually does today. */}
       <section className="mt-8">
         <h2 className="text-center text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
           What we check
         </h2>
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
           {TRUST_SIGNALS.map((label) => (
-            <span
-              key={label}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-4 py-1.5 text-sm font-semibold text-green-700 sm:min-h-0 sm:px-3.5 dark:border-green-500/30 dark:bg-green-500/15 dark:text-green-300"
-            >
-              <svg
-                viewBox="0 0 20 20"
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="m4 10.5 4 4 8-9" />
-              </svg>
-              {label}
-            </span>
+            <CheckPill key={label} label={label} />
           ))}
         </div>
       </section>
 
-        {/* How it works: steps on the left, a flat photo of real work on the
-            right. Collapses to one column below lg (steps, then photo). */}
+      {/* How it works: steps on the left, a flat photo of real work on the
+          right. Collapses to one column below lg (steps, then photo). */}
       <section className="mt-16 sm:mt-24">
         <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-12">
           <div>
@@ -570,135 +564,135 @@ export default async function Home({
         </Link>
       </section>
 
-        <footer className="mt-16 border-t border-stone-200 pt-8 sm:mt-24 dark:border-white/10">
-          <div className="grid gap-8 text-left sm:grid-cols-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                Guides
-              </p>
-              <ul className="mt-2 space-y-1.5 text-sm text-stone-600 dark:text-stone-400">
-                <li>
-                  <Link href="/guides" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
-                    All guides
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href="/guides/water-heater-replacement-cost"
-                    className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
-                  >
-                    Water heater replacement cost
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href="/guides/hvac-replacement-cost"
-                    className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
-                  >
-                    HVAC replacement cost
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href="/guides/socal-home-maintenance-calendar"
-                    className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
-                  >
-                    SoCal maintenance calendar
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                Cities
-              </p>
-              <ul className="mt-2 space-y-1.5 text-sm text-stone-600 dark:text-stone-400">
-                <li>
-                  <Link
-                    href="/fountain-valley"
-                    className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
-                  >
-                    Fountain Valley
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href="/huntington-beach"
-                    className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
-                  >
-                    Huntington Beach
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                Hearth
-              </p>
-              <ul className="mt-2 space-y-1.5 text-sm text-stone-600 dark:text-stone-400">
-                <li>
-                  <Link href="/pricing" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
-                    Pricing
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/emergency-help" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
-                    Emergency help
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/pros" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
-                    For Pros
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/signin" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
-                    Sign in
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                Fine print
-              </p>
-              <ul className="mt-2 space-y-1.5 text-sm text-stone-600 dark:text-stone-400">
-                <li>
-                  <Link href="/privacy" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
-                    Privacy
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/terms" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
-                    Terms
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/ai-disclosure" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
-                    How we use AI
-                  </Link>
-                </li>
-                {/* Was a mailto: to FOUNDER.email; a raw address in a
-                    site-wide footer is exactly the kind of thing spam
-                    scrapers find first. Always rendered now, unlike the old
-                    conditional, since the contact form needs no owner-fillable
-                    field to work. */}
-                <li>
-                  <Link
-                    href="/contact"
-                    className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
-                  >
-                    Contact us
-                  </Link>
-                </li>
-              </ul>
-            </div>
+      <footer className="mt-16 border-t border-stone-200 pt-8 sm:mt-24 dark:border-white/10">
+        <div className="grid gap-8 text-left sm:grid-cols-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+              Guides
+            </p>
+            <ul className="mt-2 space-y-1.5 text-sm text-stone-600 dark:text-stone-400">
+              <li>
+                <Link href="/guides" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
+                  All guides
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/guides/water-heater-replacement-cost"
+                  className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
+                >
+                  Water heater replacement cost
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/guides/hvac-replacement-cost"
+                  className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
+                >
+                  HVAC replacement cost
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/guides/socal-home-maintenance-calendar"
+                  className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
+                >
+                  SoCal maintenance calendar
+                </Link>
+              </li>
+            </ul>
           </div>
-          <p className="mt-8 inline-flex w-full items-center justify-center gap-2 pb-2 text-xs text-stone-500 dark:text-stone-400">
-            <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> Hearth · Your home,
-            looked after
-          </p>
-        </footer>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+              Cities
+            </p>
+            <ul className="mt-2 space-y-1.5 text-sm text-stone-600 dark:text-stone-400">
+              <li>
+                <Link
+                  href="/fountain-valley"
+                  className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
+                >
+                  Fountain Valley
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/huntington-beach"
+                  className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
+                >
+                  Huntington Beach
+                </Link>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+              Hearth
+            </p>
+            <ul className="mt-2 space-y-1.5 text-sm text-stone-600 dark:text-stone-400">
+              <li>
+                <Link href="/pricing" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
+                  Pricing
+                </Link>
+              </li>
+              <li>
+                <Link href="/emergency-help" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
+                  Emergency help
+                </Link>
+              </li>
+              <li>
+                <Link href="/pros" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
+                  For Pros
+                </Link>
+              </li>
+              <li>
+                <Link href="/signin" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
+                  Sign in
+                </Link>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+              Fine print
+            </p>
+            <ul className="mt-2 space-y-1.5 text-sm text-stone-600 dark:text-stone-400">
+              <li>
+                <Link href="/privacy" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
+                  Privacy
+                </Link>
+              </li>
+              <li>
+                <Link href="/terms" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
+                  Terms
+                </Link>
+              </li>
+              <li>
+                <Link href="/ai-disclosure" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
+                  How we use AI
+                </Link>
+              </li>
+              {/* Was a mailto: to FOUNDER.email; a raw address in a
+                  site-wide footer is exactly the kind of thing spam
+                  scrapers find first. Always rendered now, unlike the old
+                  conditional, since the contact form needs no owner-fillable
+                  field to work. */}
+              <li>
+                <Link
+                  href="/contact"
+                  className="hover:text-bark-700 hover:underline dark:hover:text-stone-300"
+                >
+                  Contact us
+                </Link>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <p className="mt-8 inline-flex w-full items-center justify-center gap-2 pb-2 text-xs text-stone-500 dark:text-stone-400">
+          <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> Hearth · Your home,
+          looked after
+        </p>
+      </footer>
       </div>
     </main>
   );

@@ -1034,10 +1034,31 @@ export async function POST(req: NextRequest) {
     // sync - the part that actually keeps a membership live - never breaks over
     // the add-on column, same convention as upsertSubscriptionRow above.
     if (updateError && isMissingSchemaError(updateError)) {
-      await (admin as any)
+      const { error: fallbackError } = await (admin as any)
         .from("subscriptions")
         .update(baseUpdate)
         .eq("stripe_subscription_id", subscription.id);
+      if (fallbackError) {
+        // Same reasoning as the checkout upsert branches above: without this
+        // write the row drifts from Stripe and nothing else heals it until
+        // the next subscription event. 500 so Stripe redelivers.
+        console.error(
+          "subscriptions update (fallback) failed for",
+          subscription.id,
+          fallbackError.message ?? fallbackError
+        );
+        return NextResponse.json({ error: "subscription update failed" }, { status: 500 });
+      }
+    } else if (updateError) {
+      // Non-schema failure (transient network, RLS, bad payload): the DB can
+      // drift from Stripe until the next subscription event. 500 so Stripe
+      // redelivers instead of the write being silently lost.
+      console.error(
+        "subscriptions update failed for",
+        subscription.id,
+        updateError.message ?? updateError
+      );
+      return NextResponse.json({ error: "subscription update failed" }, { status: 500 });
     }
   }
 

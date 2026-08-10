@@ -9,25 +9,33 @@ import type { HomeSystem, Issue, Property } from "@/lib/database.types";
 
 export const runtime = "nodejs";
 
-// Monthly job (Vercel Cron, see vercel.json) that sends every homeowner one
-// short factual check-in composed entirely from data they already entered:
-// the estimated home value (if they set a purchase price and year), the home
-// health score and its band (if they have systems on file), how many open
-// maintenance tasks come due in the next month, and up to two systems whose
-// age says they are due for attention. Only sections with data appear, and an
-// owner with nothing at all gets nothing at all: no filler, no urgency.
+// Monthly job (Vercel Cron, see vercel.json) that sends every homeowner ONE
+// email covering ALL of their properties: a short factual check-in per home,
+// composed entirely from data they already entered: the estimated home value
+// (if they set a purchase price and year), the home health score and its
+// band (if they have systems on file), how many open maintenance tasks come
+// due in the next month, and up to two systems whose age says they are due
+// for attention. Only sections with data appear, a property with nothing to
+// say gets no section, and an owner whose properties all have nothing to say
+// gets no digest at all: no filler, no urgency. An owner with several
+// properties gets one email with one short block per property, not one email
+// per property, so digest volume never multiplies with portfolio size.
 //
 // Noise control: at most one digest per owner per run, and a dup guard (same
 // kind written in the last 25 days) makes an accidental second run a no-op
 // while never suppressing next month's legitimate digest.
 
-const MAX_OWNERS = 2000; // cap the work a single run does
+const MAX_PROPERTY_ROWS = 2000; // cap the work a single run does
 
 // PostgREST caps every response at its max-rows setting (1000 in
 // supabase/config.toml), silently, regardless of a larger .limit(). The
 // property scan therefore pages with .range() in cap-sized steps up to
-// MAX_OWNERS instead of asking for MAX_OWNERS rows in one call, which would
-// return the same oldest 1000 forever and permanently skip everyone after.
+// MAX_PROPERTY_ROWS instead of asking for MAX_PROPERTY_ROWS rows in one
+// call, which would return the same oldest 1000 forever and permanently skip
+// everyone after. This bounds property ROWS scanned per run, not owners: a
+// portfolio of several properties spends several rows of this budget, so the
+// number of distinct owners covered in one run is at most MAX_PROPERTY_ROWS,
+// usually fewer.
 const PROPERTY_PAGE = 1000;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -134,8 +142,8 @@ async function runCron(req: NextRequest) {
   // below (same pattern as the /value page) rather than widening the
   // generated types by hand.
   const rawProperties: Property[] = [];
-  for (let start = 0; start < MAX_OWNERS; start += PROPERTY_PAGE) {
-    const end = Math.min(start + PROPERTY_PAGE, MAX_OWNERS) - 1;
+  for (let start = 0; start < MAX_PROPERTY_ROWS; start += PROPERTY_PAGE) {
+    const end = Math.min(start + PROPERTY_PAGE, MAX_PROPERTY_ROWS) - 1;
     const { data: propertyPage, error: propertiesError } = await supabase
       .from("properties")
       .select("*")
@@ -153,16 +161,19 @@ async function runCron(req: NextRequest) {
     if (!propertyPage || propertyPage.length < end - start + 1) break;
   }
 
-  // Simplification: an owner with several properties gets a digest for their
-  // FIRST property only (oldest by created_at). One warm monthly note beats
-  // a stack of near-identical ones; multi-property digests can come later.
+  // Group every property under its owner (a multi-property owner gets all of
+  // them, not just the oldest) so the digest built below can cover the whole
+  // portfolio in one email. rawProperties is already ordered oldest-first,
+  // so each owner's list stays in that order too.
   type PropertyRow = Property;
-  const propertyByOwner = new Map<string, PropertyRow>();
+  const propertiesByOwner = new Map<string, PropertyRow[]>();
   for (const p of rawProperties ?? []) {
-    if (!p.user_id || propertyByOwner.has(p.user_id)) continue;
-    propertyByOwner.set(p.user_id, p);
+    if (!p.user_id) continue;
+    const list = propertiesByOwner.get(p.user_id) ?? [];
+    list.push(p);
+    propertiesByOwner.set(p.user_id, list);
   }
-  const owners = Array.from(propertyByOwner.keys());
+  const owners = Array.from(propertiesByOwner.keys());
   if (owners.length === 0) {
     return NextResponse.json({ checked: 0, notified: 0 });
   }
@@ -182,11 +193,11 @@ async function runCron(req: NextRequest) {
     for (const r of recent ?? []) alreadyNotified.add(r.user_id);
   }
 
-  // Pull systems, open issues, and soon-due open tasks for the properties
-  // that can still receive a digest, grouped by property.
+  // Pull systems, open issues, and soon-due open tasks for every property of
+  // every owner that can still receive a digest, grouped by property.
   const activePropertyIds = owners
     .filter((o) => !alreadyNotified.has(o))
-    .map((o) => propertyByOwner.get(o)!.id);
+    .flatMap((o) => propertiesByOwner.get(o)!.map((p) => p.id));
 
   const systemsByProperty = new Map<string, HomeSystem[]>();
   const issuesByProperty = new Map<string, Issue[]>();
@@ -243,88 +254,117 @@ async function runCron(req: NextRequest) {
     }
   }
 
-  // Build each owner's digest: 2-4 short factual sentences, only the
-  // sections they actually have data for.
+  // Build each owner's digest: 2-4 short factual sentences per property,
+  // only the sections a property actually has data for. checked counts
+  // owners (one row per Map entry below), matching MAX_PROPERTY_ROWS /
+  // QUERY_CHUNK / SEND_CHUNK, which all bound work per owner or per property
+  // row, never per digest.
   let checked = 0;
   const digests: { userId: string; body: string }[] = [];
 
-  for (const [userId, property] of propertyByOwner) {
+  for (const [userId, properties] of propertiesByOwner) {
     try {
       checked += 1;
       if (alreadyNotified.has(userId)) continue;
 
-      const raw = property as any;
-      const purchasePrice: number | null =
-        typeof raw.purchase_price === "number" ? raw.purchase_price : null;
-      const mortgageBalance: number | null =
-        typeof raw.mortgage_balance === "number" ? raw.mortgage_balance : null;
-      const purchaseYear: number | null = property.purchase_date
-        ? Number(property.purchase_date.slice(0, 4)) || null
-        : null;
+      // parts per property, skipping any property with nothing to say.
+      const propertyParts: { property: PropertyRow; parts: string[] }[] = [];
 
-      const systems = systemsByProperty.get(property.id) ?? [];
-      const openIssues = issuesByProperty.get(property.id) ?? [];
-      const dueTasks = dueTasksByProperty.get(property.id) ?? 0;
+      for (const property of properties) {
+        const raw = property as any;
+        const purchasePrice: number | null =
+          typeof raw.purchase_price === "number" ? raw.purchase_price : null;
+        const mortgageBalance: number | null =
+          typeof raw.mortgage_balance === "number"
+            ? raw.mortgage_balance
+            : null;
+        const purchaseYear: number | null = property.purchase_date
+          ? Number(property.purchase_date.slice(0, 4)) || null
+          : null;
 
-      const parts: string[] = [];
+        const systems = systemsByProperty.get(property.id) ?? [];
+        const openIssues = issuesByProperty.get(property.id) ?? [];
+        const dueTasks = dueTasksByProperty.get(property.id) ?? 0;
 
-      // Estimated value (and equity when a balance is on file). A negative
-      // equity number is real but a one-line digest is the wrong place to
-      // break it, so the equity clause only appears when it is positive.
-      if (purchasePrice && purchaseYear) {
-        const value = estimateHomeValue(
-          purchasePrice,
-          purchaseYear,
-          property.state,
-          currentYear
-        );
-        const equity = calculateEquity(value, mortgageBalance);
-        parts.push(
-          mortgageBalance !== null && equity > 0
-            ? `Your home's estimated value is ${usd(value)}, about ${usd(
-                equity
-              )} of it equity.`
-            : `Your home's estimated value is ${usd(value)}.`
-        );
+        const parts: string[] = [];
+
+        // Estimated value (and equity when a balance is on file). A negative
+        // equity number is real but a one-line digest is the wrong place to
+        // break it, so the equity clause only appears when it is positive.
+        if (purchasePrice && purchaseYear) {
+          const value = estimateHomeValue(
+            purchasePrice,
+            purchaseYear,
+            property.state,
+            currentYear
+          );
+          const equity = calculateEquity(value, mortgageBalance);
+          parts.push(
+            mortgageBalance !== null && equity > 0
+              ? `Your home's estimated value is ${usd(value)}, about ${usd(
+                  equity
+                )} of it equity.`
+              : `Your home's estimated value is ${usd(value)}.`
+          );
+        }
+
+        // Health score, only meaningful once they have systems on file.
+        if (systems.length > 0) {
+          const { score } = scoreBreakdown(systems, openIssues);
+          parts.push(
+            `Your home health score is ${score} (${scoreBand(
+              score
+            ).label.toLowerCase()}).`
+          );
+        }
+
+        if (dueTasks > 0) {
+          parts.push(
+            `You have ${plural(
+              dueTasks,
+              "maintenance task"
+            )} coming due in the next month.`
+          );
+        }
+
+        // Up to two systems whose age says they are due for attention.
+        const dueSystems = systems
+          .filter((s) => assessSystem(s).stage === "due")
+          .slice(0, 2)
+          .map((s) => labelFor(SYSTEM_TYPES, s.system_type).toLowerCase());
+        if (dueSystems.length === 1) {
+          parts.push(`Your ${dueSystems[0]} is due for attention.`);
+        } else if (dueSystems.length === 2) {
+          parts.push(
+            `Your ${dueSystems[0]} and ${dueSystems[1]} are due for attention.`
+          );
+        }
+
+        if (parts.length > 0) propertyParts.push({ property, parts });
       }
 
-      // Health score, only meaningful once they have systems on file.
-      if (systems.length > 0) {
-        const { score } = scoreBreakdown(systems, openIssues);
-        parts.push(
-          `Your home health score is ${score} (${scoreBand(
-            score
-          ).label.toLowerCase()}).`
+      // Nothing to say for any property, nothing sent.
+      if (propertyParts.length === 0) continue;
+
+      let body: string;
+      if (properties.length === 1) {
+        // Single-home owner: identical shape to before multi-property
+        // support existed, one space-joined paragraph.
+        const parts = propertyParts[0].parts;
+        if (NEIGHBOR_LINE) parts.push(NEIGHBOR_LINE);
+        body = parts.join(" ");
+      } else {
+        // Multi-property owner: one email, one short section per property
+        // (address as the header) so it reads as a portfolio check-in
+        // instead of a wall of undifferentiated sentences.
+        const sections = propertyParts.map(
+          ({ property, parts }) => `${property.address_line1}: ${parts.join(" ")}`
         );
+        if (NEIGHBOR_LINE) sections.push(NEIGHBOR_LINE);
+        body = sections.join("\n\n");
       }
 
-      if (dueTasks > 0) {
-        parts.push(
-          `You have ${plural(
-            dueTasks,
-            "maintenance task"
-          )} coming due in the next month.`
-        );
-      }
-
-      // Up to two systems whose age says they are due for attention.
-      const dueSystems = systems
-        .filter((s) => assessSystem(s).stage === "due")
-        .slice(0, 2)
-        .map((s) => labelFor(SYSTEM_TYPES, s.system_type).toLowerCase());
-      if (dueSystems.length === 1) {
-        parts.push(`Your ${dueSystems[0]} is due for attention.`);
-      } else if (dueSystems.length === 2) {
-        parts.push(
-          `Your ${dueSystems[0]} and ${dueSystems[1]} are due for attention.`
-        );
-      }
-
-      // Nothing to say, nothing sent.
-      if (parts.length === 0) continue;
-
-      if (NEIGHBOR_LINE) parts.push(NEIGHBOR_LINE);
-      digests.push({ userId, body: parts.join(" ") });
+      digests.push({ userId, body });
     } catch {
       // One bad property shouldn't stop the rest of the run.
       continue;
