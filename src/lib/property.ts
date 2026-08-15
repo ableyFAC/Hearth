@@ -57,6 +57,6 @@ export async function getActiveProperty(): Promise<Property | null> {
   const props = await getProperties();
   if (props.length === 0) return null;
 
-  const activeId = cookies().get(ACTIVE_HOME_COOKIE)?.value;
+  const activeId = (await cookies()).get(ACTIVE_HOME_COOKIE)?.value;
   return props.find((p) => p.id === activeId) ?? props[0];
 }

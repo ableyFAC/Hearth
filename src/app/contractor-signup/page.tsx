@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import NoticeAtCollection from "@/components/NoticeAtCollection";
-import { useState } from "react";
+import { useState, use } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/safeNext";
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
@@ -23,11 +23,12 @@ import { Eye, EyeOff } from "lucide-react";
 // posts to saveCompanyAction (src/app/pro/actions.ts, owned by another fix),
 // which redirects on its own, so a contractor's original destination isn't
 // honored past this point. Left alone rather than reaching into that file.
-export default function ContractorSignUpPage({
-  searchParams,
-}: {
-  searchParams?: { next?: string; ref?: string };
-}) {
+export default function ContractorSignUpPage(
+  props: {
+    searchParams?: Promise<{ next?: string; ref?: string }>;
+  }
+) {
+  const searchParams = use(props.searchParams);
   const supabase = createClient();
   const next = safeNextPath(
     typeof searchParams?.next === "string" ? searchParams.next : null

@@ -119,11 +119,12 @@ const SORT_OPTIONS = [
   { value: "deal", label: "Biggest deal" },
 ] as const;
 
-export default async function ProDashboard({
-  searchParams,
-}: {
-  searchParams?: { sort?: string };
-}) {
+export default async function ProDashboard(
+  props: {
+    searchParams?: Promise<{ sort?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const contractor = await getCurrentContractor();
   if (!contractor) {
     // No company yet: a user who chose the contractor role finishes company

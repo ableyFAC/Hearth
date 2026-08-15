@@ -71,11 +71,12 @@ function dollarsFromCents(cents: number): string {
 // never stores or joins to a homeowner's own email or phone: contact fields
 // and notes are typed in by the pro, and lead_id only links back to a job or
 // chat the pro can already open.
-export default async function ProCrmPage({
-  searchParams,
-}: {
-  searchParams: { q?: string };
-}) {
+export default async function ProCrmPage(
+  props: {
+    searchParams: Promise<{ q?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const contractor = await getCurrentContractor();
   if (!contractor) {
     if ((await getRole()) === null) redirect("/get-started");

@@ -36,11 +36,12 @@ function CheckPill({ label }: { label: string }) {
 
 // Root: route signed-in users into the app, everyone else to the marketing-lite
 // landing. Kept server-side so there's no flash of the wrong screen.
-export default async function Home({
-  searchParams,
-}: {
-  searchParams: { code?: string };
-}) {
+export default async function Home(
+  props: {
+    searchParams: Promise<{ code?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // Safety net: if a magic link lands here (e.g. Supabase fell back to the Site
   // URL instead of /auth/callback), forward the code to the handler that
   // exchanges it for a session.

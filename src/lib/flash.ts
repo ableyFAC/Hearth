@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, type UnsafeUnwrappedCookies } from "next/headers";
 
 // Lightweight "flash" toast that survives a server action + revalidate/redirect.
 // setFlash() drops a short-lived, non-httpOnly cookie (so the client FlashBridge
@@ -15,7 +15,7 @@ export interface Flash {
 // Call from inside a Server Action, before redirect()/revalidatePath().
 export function setFlash(message: string, type: FlashType = "success") {
   const id = `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
-  cookies().set(FLASH_COOKIE, JSON.stringify({ message, type, id }), {
+  (cookies() as unknown as UnsafeUnwrappedCookies).set(FLASH_COOKIE, JSON.stringify({ message, type, id }), {
     httpOnly: false,
     sameSite: "lax",
     path: "/",
@@ -24,7 +24,7 @@ export function setFlash(message: string, type: FlashType = "success") {
 }
 
 export function readFlash(): Flash | null {
-  const raw = cookies().get(FLASH_COOKIE)?.value;
+  const raw = (cookies() as unknown as UnsafeUnwrappedCookies).get(FLASH_COOKIE)?.value;
   if (!raw) return null;
   try {
     return JSON.parse(raw) as Flash;

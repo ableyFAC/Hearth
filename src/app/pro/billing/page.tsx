@@ -51,16 +51,17 @@ function txLabel(type: string | null | undefined): string {
   return TX_LABEL[type] ?? type.replace(/_/g, " ");
 }
 
-export default async function ProBillingPage({
-  searchParams,
-}: {
-  searchParams: {
-    paid?: string;
-    canceled?: string;
-    need?: string;
-    category?: string;
-  };
-}) {
+export default async function ProBillingPage(
+  props: {
+    searchParams: Promise<{
+      paid?: string;
+      canceled?: string;
+      need?: string;
+      category?: string;
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");
 

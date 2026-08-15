@@ -51,18 +51,19 @@ import { isMissingSchemaError } from "@/lib/dbErrors";
 const isCloseMarker = (b: string) =>
   b.startsWith("Conversation closed") || b === "Chat closed by the contractor.";
 
-export default async function ContractorsPage({
-  searchParams,
-}: {
-  searchParams: {
-    issue?: string;
-    category?: string;
-    posted?: string;
-    desc?: string;
-    timing?: string;
-    directsent?: string;
-  };
-}) {
+export default async function ContractorsPage(
+  props: {
+    searchParams: Promise<{
+      issue?: string;
+      category?: string;
+      posted?: string;
+      desc?: string;
+      timing?: string;
+      directsent?: string;
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const supabase = createClient();
 
   // Nothing here depends on anything else on the page (property/plus/auth

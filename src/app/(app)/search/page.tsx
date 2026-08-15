@@ -32,11 +32,12 @@ type Result = {
   icon?: LucideIcon | null;
 };
 
-export default async function SearchPage({
-  searchParams,
-}: {
-  searchParams: { q?: string };
-}) {
+export default async function SearchPage(
+  props: {
+    searchParams: Promise<{ q?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const q = (searchParams.q ?? "").trim();
   const ql = q.toLowerCase();
 

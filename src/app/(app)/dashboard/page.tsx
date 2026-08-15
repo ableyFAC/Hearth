@@ -61,11 +61,12 @@ function PlusChip({ className = "" }: { className?: string }) {
   );
 }
 
-export default async function HomePage({
-  searchParams,
-}: {
-  searchParams: { welcome?: string; plan?: string };
-}) {
+export default async function HomePage(
+  props: {
+    searchParams: Promise<{ welcome?: string; plan?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // "View my plan" lands here with ?plan=open so the collapsed task groups
   // start expanded, making the click visibly do something.
   const planOpen = searchParams.plan === "open";

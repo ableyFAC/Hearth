@@ -60,11 +60,12 @@ export const metadata: Metadata = {
 // Marketing front door for contractors. Every claim here is a real product
 // behavior (lead fee shown up front, aging markdowns, pay-per-apply wallet),
 // so keep copy in sync with /pro and leadPricing.ts if those change.
-export default async function ProsLanding({
-  searchParams,
-}: {
-  searchParams?: { ref?: string };
-}) {
+export default async function ProsLanding(
+  props: {
+    searchParams?: Promise<{ ref?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const supabase = createClient();
   const {
     data: { user },

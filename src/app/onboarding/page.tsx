@@ -13,11 +13,12 @@ import OnboardingForm from "./OnboardingForm";
 // the claimed-home gate in (app)/layout.tsx sends every new homeowner through
 // here regardless of ?next=, which is expected; this just keeps their
 // original destination alive across that detour instead of dropping it.
-export default async function OnboardingPage({
-  searchParams,
-}: {
-  searchParams?: { next?: string; ref?: string };
-}) {
+export default async function OnboardingPage(
+  props: {
+    searchParams?: Promise<{ next?: string; ref?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // Contractors belong in /pro - don't let them create a homeowner property.
   if (await isContractor()) redirect("/pro");
 

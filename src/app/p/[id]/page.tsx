@@ -130,11 +130,12 @@ function canonicalPath(profile: PublicProfile): string {
   return `/p/${profile.slug ?? profile.id}`;
 }
 
-export async function generateMetadata({
-  params,
-}: {
-  params: { id: string };
-}): Promise<Metadata> {
+export async function generateMetadata(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+): Promise<Metadata> {
+  const params = await props.params;
   const { id } = await resolveContractorId(params.id);
   if (!id) return { title: "Hearth" };
   const { profile } = await loadProfile(id);
@@ -231,11 +232,12 @@ function NotReadyCard() {
   );
 }
 
-export default async function PublicProPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function PublicProPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   const { id, unavailable: slugUnavailable } = await resolveContractorId(
     params.id
   );

@@ -149,10 +149,8 @@ async function logoDataUri(value: string | null): Promise<string | null> {
   }
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { leadId: string } }
-) {
+export async function GET(req: NextRequest, props: { params: Promise<{ leadId: string }> }) {
+  const params = await props.params;
   const supabase = createClient();
   const {
     data: { user },

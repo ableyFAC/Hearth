@@ -74,7 +74,7 @@ export async function sendContactMessageAction(formData: FormData) {
   // visitor can never exhaust their contact-form budget, or vice versa. Fails
   // open on an RPC hiccup: only an explicit `allowed === false` blocks the
   // message, so an outage never silently eats a real visitor's message.
-  const h = headers();
+  const h = await headers();
   const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
   const admin = createAdminClient();
   const { data: allowed } = await admin.rpc("rate_limit_hit", {

@@ -28,11 +28,12 @@ type RedeemRow = {
 // caller's own session. Every open of this page also stamps the one-time
 // scan-grace extension (migration 0097) before any of that, signed in or
 // not.
-export default async function JoinHouseholdPage({
-  params,
-}: {
-  params: { token: string };
-}) {
+export default async function JoinHouseholdPage(
+  props: {
+    params: Promise<{ token: string }>;
+  }
+) {
+  const params = await props.params;
   const token = params.token;
   const nextPath = safeNextPath(`/join/household/${token}`);
   const nextQuery = nextPath ? `?next=${encodeURIComponent(nextPath)}` : "";

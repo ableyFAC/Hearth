@@ -20,7 +20,7 @@ export async function setActiveHomeAction(formData: FormData) {
   const props = await getProperties();
   const home = props.find((p) => p.id === id);
   if (home) {
-    cookies().set(ACTIVE_HOME_COOKIE, id, COOKIE_OPTS);
+    (await cookies()).set(ACTIVE_HOME_COOKIE, id, COOKIE_OPTS);
     setFlash(`Switched to ${home.address_line1}`, "info");
   }
   revalidatePath("/", "layout");
@@ -38,15 +38,15 @@ export async function removeHomeAction(formData: FormData) {
 
   const remaining = await getProperties();
   if (remaining.length === 0) {
-    cookies().delete(ACTIVE_HOME_COOKIE);
+    (await cookies()).delete(ACTIVE_HOME_COOKIE);
     revalidatePath("/", "layout");
     redirect("/onboarding");
   }
 
   // Keep the current active home unless it was the one just removed.
-  const current = cookies().get(ACTIVE_HOME_COOKIE)?.value;
+  const current = (await cookies()).get(ACTIVE_HOME_COOKIE)?.value;
   if (!current || !remaining.some((p) => p.id === current)) {
-    cookies().set(ACTIVE_HOME_COOKIE, remaining[0].id, COOKIE_OPTS);
+    (await cookies()).set(ACTIVE_HOME_COOKIE, remaining[0].id, COOKIE_OPTS);
   }
   revalidatePath("/", "layout");
   redirect("/dashboard");

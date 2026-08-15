@@ -85,7 +85,7 @@ export async function joinMarketWaitlistAction(
   // src/app/contact/actions.ts and /api/track: only an explicit
   // `allowed === false` blocks, so a limiter outage never costs a real
   // out-of-area homeowner their place on the list.
-  const ip = headers().get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
   const { data: allowed } = await admin.rpc("rate_limit_hit", {
     p_bucket: `waitlist:${ip ?? "unknown"}`,
     p_limit: 5,
@@ -446,7 +446,7 @@ export async function claimPropertyAction(formData: FormData) {
   }
 
   // Make the new home the active one.
-  cookies().set(ACTIVE_HOME_COOKIE, created.id, {
+  (await cookies()).set(ACTIVE_HOME_COOKIE, created.id, {
     httpOnly: true,
     sameSite: "lax",
     path: "/",

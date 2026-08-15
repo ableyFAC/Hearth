@@ -455,7 +455,7 @@ export async function saveCompanyAction(formData: FormData) {
         // out-of-area pro their place on the list. The reject below still
         // goes through either way.
         const ip =
-          headers().get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+          (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
         const { data: allowed } = await createAdminClient().rpc(
           "rate_limit_hit",
           {

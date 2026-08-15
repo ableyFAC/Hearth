@@ -21,11 +21,12 @@ export const metadata: Metadata = {
 // ?next=: the destination they were originally headed for, threaded through to
 // the action so it survives the "who are you?" fork. Validated with the same
 // open-redirect guard used everywhere else the param is read.
-export default async function WelcomeRolePage({
-  searchParams,
-}: {
-  searchParams?: { next?: string };
-}) {
+export default async function WelcomeRolePage(
+  props: {
+    searchParams?: Promise<{ next?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const next = safeNextPath(
     typeof searchParams?.next === "string" ? searchParams.next : null
   );

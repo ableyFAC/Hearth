@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { headers } from "next/headers";
+import { headers, type UnsafeUnwrappedHeaders } from "next/headers";
 
 // The origin the BROWSER is actually on, for building same-site redirects.
 //
@@ -43,7 +43,7 @@ export function requestOrigin(request: NextRequest): string {
 // camera, so it has no "current window" to fall back on the way a redirect
 // would - the Host header is the only signal available.
 export function requestOriginFromHeaders(): string {
-  const h = headers();
+  const h = (headers() as unknown as UnsafeUnwrappedHeaders);
   const host = (h.get("x-forwarded-host") ?? h.get("host") ?? "")
     .split(",")[0]
     .trim();

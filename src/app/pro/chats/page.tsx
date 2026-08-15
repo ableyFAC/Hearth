@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
+import { cookies, type UnsafeUnwrappedCookies } from "next/headers";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
@@ -20,7 +20,7 @@ const SEEN_COOKIE = "hearth_chat_seen"; // { [leadId]: ISO timestamp last viewed
 
 function readSeenMap(): Record<string, string> {
   try {
-    return JSON.parse(cookies().get(SEEN_COOKIE)?.value || "{}");
+    return JSON.parse((cookies() as unknown as UnsafeUnwrappedCookies).get(SEEN_COOKIE)?.value || "{}");
   } catch {
     return {};
   }
@@ -29,7 +29,7 @@ function readSeenMap(): Record<string, string> {
 // Mark a conversation as read (called from the open thread).
 async function markChatSeenAction(leadId: string) {
   "use server";
-  const jar = cookies();
+  const jar = await cookies();
   let map: Record<string, string> = {};
   try {
     map = JSON.parse(jar.get(SEEN_COOKIE)?.value || "{}");
@@ -41,11 +41,12 @@ async function markChatSeenAction(leadId: string) {
   revalidatePath("/pro/chats");
 }
 
-export default async function ProChatsPage({
-  searchParams,
-}: {
-  searchParams: { lead?: string };
-}) {
+export default async function ProChatsPage(
+  props: {
+    searchParams: Promise<{ lead?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");
 
