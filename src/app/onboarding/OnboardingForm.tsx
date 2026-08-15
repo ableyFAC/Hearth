@@ -3,7 +3,7 @@
 import NoticeAtCollection from "@/components/NoticeAtCollection";
 import { useState } from "react";
 import { lookupParcelAction, claimPropertyAction, joinMarketWaitlistAction } from "./actions";
-import type { ParcelFacts } from "@/lib/parcel";
+import type { PublicParcelFacts } from "@/lib/parcel";
 import { PROPERTY_TYPES, FOUNDER } from "@/lib/constants";
 import { isOrangeCountyZip } from "@/lib/serviceArea";
 import { Hammer, Bell, FileText } from "lucide-react";
@@ -46,7 +46,7 @@ export default function OnboardingForm({
   );
   const [street, setStreet] = useState("");
   const [zip, setZip] = useState("");
-  const [facts, setFacts] = useState<ParcelFacts | null>(null);
+  const [facts, setFacts] = useState<PublicParcelFacts | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Whether the out-of-area waitlist save actually went through - drives the
@@ -129,22 +129,23 @@ export default function OnboardingForm({
 
     setBusy(true);
     try {
-      await claimPropertyAction(formData);
+      const result = await claimPropertyAction(formData);
+      // claimPropertyAction redirects to the dashboard on success (redirect()
+      // throws a NEXT_REDIRECT-digest error for Next's router to catch higher
+      // up), so anything it actually RETURNS here is a user-facing failure -
+      // its own launch-area / validation / DB-error message. Render it inline.
+      // This is the path that keeps the intentional out-of-area message
+      // visible: a thrown message would be masked by Next in production.
+      if (result && !result.ok) {
+        setError(result.error);
+      }
     } catch (err: any) {
-      // Trap: claimPropertyAction redirects to the dashboard on success, and
-      // redirect() does that by throwing a NEXT_REDIRECT-digest error for
-      // Next's router to catch higher up. A bare catch here swallows that
-      // throw and reports a successful claim as "that didn't go through" -
-      // rethrow it so the redirect still happens.
+      // Trap: the successful-claim redirect() surfaces as a NEXT_REDIRECT-digest
+      // throw. A bare catch here would swallow it and report a successful claim
+      // as "that didn't go through" - rethrow it so the redirect still happens.
+      // Anything else is a genuine network/server blip.
       if (err?.digest?.startsWith("NEXT_REDIRECT")) throw err;
-      // Surface claimPropertyAction's own validation message (e.g. an
-      // address rejected server-side) when there is one; fall back to the
-      // generic copy for network blips and other unexpected failures.
-      setError(
-        err instanceof Error && err.message
-          ? err.message
-          : "That didn't go through. Please try again."
-      );
+      setError("That didn't go through. Please try again.");
     } finally {
       setBusy(false);
     }

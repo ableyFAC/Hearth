@@ -594,11 +594,20 @@ export default function LeadChat({
       setNotice(
         "SVG images aren't supported. Please send a PNG, JPEG, or WEBP photo."
       );
+      setTimeout(() => setNotice(null), 5000);
       return;
     }
-    if (!CHAT_IMAGE_TYPES.has(file.type)) return;
+    // The file input accepts image/*, so a pick can still be a type the
+    // bucket rejects (GIF, HEIC, AVIF, BMP). Name what works instead of a
+    // bare return, which reads as "nothing happened" / a broken button.
+    if (!CHAT_IMAGE_TYPES.has(file.type)) {
+      setNotice("That image type isn't supported. Please send a PNG, JPEG, or WEBP photo.");
+      setTimeout(() => setNotice(null), 5000);
+      return;
+    }
     if (file.size > MAX_CHAT_IMAGE_BYTES) {
       setNotice("That photo is too large. Please send one under 15MB.");
+      setTimeout(() => setNotice(null), 5000);
       return;
     }
     setBusy(true);
@@ -631,6 +640,7 @@ export default function LeadChat({
       setBusy(false);
       setPendingPhoto(null);
       setNotice("Could not send the photo. Please try again.");
+      setTimeout(() => setNotice(null), 5000);
     }
   }
 

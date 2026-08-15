@@ -158,6 +158,16 @@ export async function updateSession(request: NextRequest) {
     // the anonymous landing page's demo player; a 307 to /signin here makes
     // the narration silently fail.
     path.startsWith("/demo-vo/") ||
+    // Anonymous analytics beacons (src/app/api/track): the landing page fires
+    // pre-auth events (hero_demo_play, signup_homeowner, post_job_from_chat)
+    // from signed-out visitors via sendBeacon. WITHOUT this entry the
+    // middleware 307s the POST to /signin AND converts it to GET, so every
+    // anonymous beacon is silently dropped and never recorded. It must not
+    // redirect. The route is built to be publicly reachable: it accepts only a
+    // fixed client-event allowlist (server-only events like job_won are
+    // refused), caps the body at 2048 chars, caps props at 1024, and
+    // rate-limits per IP (60 / 5 min) before doing any work.
+    path.startsWith("/api/track") ||
     // Cron routes authenticate via CRON_SECRET (Bearer/header/query), not a
     // user session. Vercel Cron sends no session cookie, so WITHOUT this
     // entry every scheduled job would 307 to /signin (an HTML 200!) before
