@@ -69,12 +69,21 @@ export default async function ProBillingPage({
   const proMember = await hasProPlan();
 
   // The Pro-side subscription row itself, for the upgrade card below the
-  // deposit form. The free trial is for brand-new members only and the row
-  // outlives a cancellation, so a pro who churned and came back must never be
-  // offered a trial they will not get. Free to ask for: hasProPlan() above
-  // reads the same request-cached rows.
-  const proSub = proMember ? null : await getProSubscription();
+  // deposit form and for the boost gate just below. The free trial is for
+  // brand-new members only and the row outlives a cancellation, so a pro who
+  // churned and came back must never be offered a trial they will not get.
+  // Free to ask for: hasProPlan() above reads the same request-cached rows.
+  const proSub = await getProSubscription();
   const trialEligible = !proMember && !proSub;
+
+  // The deposit match is the one perk that does NOT switch on during the free
+  // trial. The Stripe webhook grants it only against an "active" row (see the
+  // activePro check in creditDepositSession), because a boost is real money and
+  // a trial has not paid for it yet. So a trialing member has to see the plain
+  // tier bonus and be told when the match starts, never a boosted number their
+  // deposit will not actually earn. hasProPlan() is true for both statuses, so
+  // it cannot be the signal here.
+  const boostActive = proMember && proSub?.status === "active";
 
   const supabase = createClient();
 
@@ -190,9 +199,21 @@ export default async function ProBillingPage({
         <DepositForm
           tiers={(tiers as any) ?? []}
           need={need ?? undefined}
-          boostPts={proMember ? PRO_DEPOSIT_BOOST_PTS : 0}
+          boostPts={boostActive ? PRO_DEPOSIT_BOOST_PTS : 0}
         />
-        {proMember ? (
+        {proMember && !boostActive ? (
+          // Trialing member: the form above is deliberately showing the plain
+          // tier bonus, because that is what this deposit will actually earn.
+          // Say when the match starts rather than let the number look broken.
+          <div className="rounded-xl border border-hearth-200 bg-hearth-50 p-3 text-xs text-hearth-800 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
+            <span className="font-semibold">
+              Your +{PRO_DEPOSIT_BOOST_PTS}% deposit match starts when your free
+              trial converts.
+            </span>{" "}
+            Deposits you make during the trial earn the normal tier bonus shown
+            above. Every other Pro perk is already on.
+          </div>
+        ) : proMember ? (
           <div className="rounded-xl border border-hearth-200 bg-hearth-50 p-3 text-xs text-hearth-800 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
             <span className="font-semibold">Pro member bonus applied:</span>{" "}
             every tier below earns +{PRO_DEPOSIT_BOOST_PTS} pts

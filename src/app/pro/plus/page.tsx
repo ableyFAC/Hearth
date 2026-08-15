@@ -110,16 +110,20 @@ export default async function ProPlusPage({
             </li>
           ))}
         </ul>
-        {/* The wallet credit is a perk of a PAID cycle: the Stripe webhook
-            grants it off the first real invoice, not the $0 one a trial start
-            finalizes, so say so rather than let a trialer go looking for $10
-            that has not landed yet. Gated on the row actually reading
-            "trialing" - this screen can render before the webhook has written
-            it, and a stale row must not produce a wrong promise either way. */}
+        {/* The two perks with money attached are perks of a PAID cycle: the
+            Stripe webhook grants the wallet credit off the first real invoice
+            (not the $0 one a trial start finalizes) and applies the deposit
+            match only against an "active" row. Say so rather than let a trialer
+            go looking for $10 that has not landed or deposit expecting a match
+            that will not apply. Gated on the row actually reading "trialing" -
+            this screen can render before the webhook has written it, and a
+            stale row must not produce a wrong promise either way. */}
         {sub?.status === "trialing" && (
           <p className="mx-auto max-w-md text-left text-xs text-stone-500 dark:text-stone-400">
-            Your first $10 of lead credit lands when the free trial converts and
-            your first payment goes through. Everything else is on right now.
+            Two of these start when your free trial converts and your first
+            payment goes through: your first $10 of lead credit, and your{" "}
+            +{PRO_DEPOSIT_BOOST_PTS}% deposit match. Deposits during the trial
+            earn the normal tier bonus. Every other perk is on right now.
           </p>
         )}
         {/* Post-purchase acknowledgment (Bus. & Prof. Code 17602(a)(3)): the
@@ -244,6 +248,19 @@ export default async function ProPlusPage({
               </li>
             ))}
           </ul>
+          {/* Every perk above carries a green check, which is true for all but
+              two while the trial runs: the wallet credit needs a paid invoice
+              and the deposit match needs an "active" row (see creditDepositSession
+              in the Stripe webhook). Name both here rather than leave a check
+              standing next to money that will not move yet. */}
+          {sub?.status === "trialing" && (
+            <p className="mt-3 border-t border-stone-100 pt-3 text-xs text-stone-500 dark:border-white/10 dark:text-stone-400">
+              While your free trial runs, the $10 lead credit and the{" "}
+              +{PRO_DEPOSIT_BOOST_PTS}% deposit match are the two that are still
+              waiting: both start when the trial converts and your first payment
+              goes through. Deposits before then earn the normal tier bonus.
+            </p>
+          )}
         </div>
         <p className="text-center text-xs text-stone-500 dark:text-stone-400">
           Membership never changes which jobs you can see or apply to. Leads

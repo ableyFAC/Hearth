@@ -67,8 +67,10 @@ export default async function ProToolsPage() {
           </p>
           <p className="mt-1 text-sm text-hearth-700 dark:text-hearth-300">
             The AI back office is part of the Hearth Pro membership.{" "}
+            {/* The trial line must not promise the deposit boost: that perk
+                starts only when the trial converts to a paid membership. */}
             {trialEligible
-              ? "Start your free trial to unlock all three tools, along with instant alerts and deposit bonuses."
+              ? "Start your free trial to unlock all three tools, along with instant alerts. Your +5% deposit match starts when the trial converts."
               : "Join to unlock all three tools, along with instant alerts and deposit bonuses."}
           </p>
           <ProUpgradeCta

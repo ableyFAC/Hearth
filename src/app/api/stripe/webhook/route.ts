@@ -212,9 +212,16 @@ async function creditDepositSession(
         .eq("user_id", proRow.user_id)
         .like("plan", "pro_%")
         .maybeSingle();
+      // "active" only, NOT "trialing": same perk-before-payment reasoning as
+      // the $10 membership credit gate in the checkout branch below. The boost
+      // is real money (up to +5% of a $2,000 deposit) and a trial has not paid
+      // for it yet, so a trialer who deposits and cancels on day two can't walk
+      // off with the match. Deposits made during the trial simply earn the
+      // normal tier bonus; nothing is granted retroactively when the trial
+      // converts, so what a pro is shown at deposit time is always what lands.
       const activePro =
         proSub?.plan?.startsWith("pro_") &&
-        (proSub.status === "active" || proSub.status === "trialing") &&
+        proSub.status === "active" &&
         (!proSub.current_period_end ||
           new Date(proSub.current_period_end) > new Date());
       if (activePro) boostPts = PRO_DEPOSIT_BOOST_PTS;
