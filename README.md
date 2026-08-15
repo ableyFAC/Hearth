@@ -103,24 +103,27 @@ npm run typecheck  # optional: verify types
 npm run db:types   # supabase gen types typescript --local > src/lib/database.types.ts
 ```
 
-## Known local limitation (Windows)
+## Known local limitation (Windows) - FIXED by the Next 15 upgrade
 
-`npm run build` fails during static prerender of `/opengraph-image` on
-Windows, with `TypeError: Invalid URL` thrown from
+Historical, kept because the workaround it explains is still in the code.
+
+On Next 14, `npm run build` failed during static prerender of
+`/opengraph-image` on Windows with `TypeError: Invalid URL` thrown from
 `node_modules/next/dist/compiled/@vercel/og/index.node.js`. That bundled file
-calls `fileURLToPath(join(import.meta.url, ...))` to locate its default font
-at ES module load time, and Node's `path.join` on Windows mangles a
-`file://` URL into an invalid path. This runs before any application code,
-so it can't be worked around from our side (see the writeup in
-`src/lib/ogFont.ts`, which already routes around the same bug for `npm run
-dev` by loading the font ourselves). Vercel builds on Linux, where the
-bundled path logic is correct, so production OG images are unaffected.
+called `fileURLToPath(join(import.meta.url, ...))` to locate its default font
+at ES module load time, and Node's `path.join` on Windows mangled a
+`file://` URL into an invalid path. It ran before any application code, so it
+could not be worked around from our side (see the writeup in
+`src/lib/ogFont.ts`, which routes around the same bug for `npm run dev` by
+loading the font ourselves). Vercel builds on Linux, where the bundled path
+logic was correct, so production OG images were never affected.
 
-To confirm a change hasn't introduced a new problem, run `npm run build` and
-check that it compiles, typechecks, and reaches `Generating static pages
-(113/113)` with the only reported export error being `/opengraph-image`.
-Every other route, including the dynamic `/p/[id]/opengraph-image`, is
-unaffected.
+Next 15 ships a newer bundled `@vercel/og` and the failure is gone: a full
+`npm run build` on Windows now reaches `Generating static pages (113/113)`
+and exits 0 with no export errors, `/opengraph-image` included. So the bar
+for "a change hasn't introduced a new problem" is now simply that
+`npm run build` succeeds. `src/lib/ogFont.ts` is left in place: it is
+harmless, and it still covers the dev-server path.
 
 ## Data → revenue, honestly
 
