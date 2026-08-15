@@ -7,6 +7,28 @@ import { DEFAULT_LIFESPANS } from "@/lib/health";
 import { setFlash } from "@/lib/flash";
 import { ok, err, type ActionResult } from "@/lib/actionResult";
 import { labelFor, SYSTEM_TYPES } from "@/lib/constants";
+import {
+  boundedNumber,
+  boundedInt,
+  cappedFieldOrNull,
+  isAllowedValue,
+} from "@/lib/formFields";
+
+// Server-side ceilings for the free-text columns on home_systems. The form's
+// maxLength is a hint; a server action takes whatever FormData it is handed,
+// so a paste of arbitrary size would otherwise land in the row. Truncate
+// rather than reject: losing the tail of a long note is better than losing
+// the whole save.
+const MAX_MATERIAL = 120;
+const MAX_NOTES = 2000;
+
+// Ranges for the numeric columns, matching confirmSystemAction
+// (src/app/(app)/walkthrough/actions.ts) so a system's year and condition mean
+// the same thing however it was entered.
+const INSTALL_YEAR_MIN = 1900;
+const INSTALL_YEAR_MAX = 2100;
+const CONDITION_MIN = 1;
+const CONDITION_MAX = 5;
 
 // "MM/YYYY" from the simple text field back to a "YYYY-MM-01" date for storage.
 // Returns null if blank or not in that format.
@@ -118,23 +140,38 @@ export async function addSystemAction(
   }
   const supabase = createClient();
 
-  const num = (k: string) => {
-    const v = formData.get(k);
-    return v ? Number(v) : null;
-  };
   const systemType = formData.get("system_type") as string;
+  // The type drives the default lifespan, the icon, the label, and the "find a
+  // pro" category, so an unknown value would write a system nothing in the app
+  // can read back. Re-checked here because the <select> is only a client hint.
+  if (!isAllowedValue(SYSTEM_TYPES, systemType)) {
+    setFlash("Couldn't add that system. Try again.", "error");
+    return err("Couldn't add that system. Please pick a type from the list.");
+  }
 
   const baseRow = {
     property_id: property.id,
     system_type: systemType,
-    material_or_model: (formData.get("material_or_model") as string) || null,
-    install_year: num("install_year"),
+    material_or_model: cappedFieldOrNull(
+      formData,
+      "material_or_model",
+      MAX_MATERIAL
+    ),
+    install_year: boundedInt(
+      formData.get("install_year"),
+      INSTALL_YEAR_MIN,
+      INSTALL_YEAR_MAX
+    ),
     last_serviced: mmYyyyToDate(formData.get("last_serviced") as string),
-    condition_rating: num("condition_rating"),
+    condition_rating: boundedInt(
+      formData.get("condition_rating"),
+      CONDITION_MIN,
+      CONDITION_MAX
+    ),
     // Seed the expected lifespan from the type default so the dashboard works
     // immediately; the owner never has to know typical lifespans.
     expected_lifespan_years: DEFAULT_LIFESPANS[systemType] ?? null,
-    notes: (formData.get("notes") as string) || null,
+    notes: cappedFieldOrNull(formData, "notes", MAX_NOTES),
   };
 
   // Optional columns that a live DB might not have yet (HVAC filter reminder
@@ -199,6 +236,12 @@ export async function quickAddSystemAction(formData: FormData) {
   const supabase = createClient();
 
   const systemType = formData.get("system_type") as string;
+  // Same allow-list as addSystemAction: the quick-add chips post a known type,
+  // but the action itself will take any FormData.
+  if (!isAllowedValue(SYSTEM_TYPES, systemType)) {
+    setFlash("Couldn't add that system. Try again.", "error");
+    return;
+  }
   const { error } = await supabase.from("home_systems").insert({
     property_id: property.id,
     system_type: systemType,
@@ -236,16 +279,27 @@ export async function updateSystemAction(
 ): Promise<ActionResult> {
   const id = formData.get("id") as string;
   const supabase = createClient();
-  const num = (k: string) => {
-    const v = formData.get(k);
-    return v ? Number(v) : null;
-  };
+  // Same caps and ranges as addSystemAction: an edit is just as forgeable as
+  // the original add, so it gets the same treatment. system_type isn't
+  // editable here, so there is nothing to allow-list on this path.
   const baseUpdate = {
-    material_or_model: (formData.get("material_or_model") as string) || null,
-    install_year: num("install_year"),
+    material_or_model: cappedFieldOrNull(
+      formData,
+      "material_or_model",
+      MAX_MATERIAL
+    ),
+    install_year: boundedInt(
+      formData.get("install_year"),
+      INSTALL_YEAR_MIN,
+      INSTALL_YEAR_MAX
+    ),
     last_serviced: mmYyyyToDate(formData.get("last_serviced") as string),
-    condition_rating: num("condition_rating"),
-    notes: (formData.get("notes") as string) || null,
+    condition_rating: boundedInt(
+      formData.get("condition_rating"),
+      CONDITION_MIN,
+      CONDITION_MAX
+    ),
+    notes: cappedFieldOrNull(formData, "notes", MAX_NOTES),
   };
 
   // Optional columns a live DB might not have yet (filter reminder fields,
@@ -298,19 +352,20 @@ export async function updatePropertyAction(formData: FormData) {
   }
   const supabase = createClient();
 
-  const num = (k: string) => {
-    const v = formData.get(k);
-    return v ? Number(v) : null;
-  };
+  // Same finite-and-in-range treatment the systems above get, with the same
+  // ranges onboarding uses for these columns: a NaN or a wild value would
+  // otherwise be written straight onto the home.
+  const num = (k: string, min: number, max: number) =>
+    boundedNumber(formData.get(k), min, max);
 
   const { error } = await supabase
     .from("properties")
     .update({
-      year_built: num("year_built"),
-      sqft: num("sqft"),
-      beds: num("beds"),
-      baths: num("baths"),
-      lot_size_sqft: num("lot_size_sqft"),
+      year_built: num("year_built", 1700, 2100),
+      sqft: num("sqft", 1, 1_000_000),
+      beds: num("beds", 0, 100),
+      baths: num("baths", 0, 100),
+      lot_size_sqft: num("lot_size_sqft", 0, 100_000_000),
       purchase_date: validPurchaseDate(
         (formData.get("purchase_date") as string) || null
       ),

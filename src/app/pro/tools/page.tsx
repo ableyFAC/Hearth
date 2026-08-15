@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import { ClipboardList, ReceiptText, Mail, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
-import { hasProPlan } from "@/lib/subscription";
+import { hasProPlan, getProSubscription } from "@/lib/subscription";
+import ProUpgradeCta from "@/components/pro/ProUpgradeCta";
 import ProToolsClient from "./ProToolsClient";
 
 // AI back office (Hearth Pro membership perk): three writing tools that turn a
@@ -38,6 +38,12 @@ export default async function ProToolsPage() {
   const member = await hasProPlan();
 
   if (!member) {
+    // The free trial is for first-time members only, and the pro-side
+    // subscriptions row survives a cancellation, so a lapsed member gets the
+    // plain "See Hearth Pro" button instead of a trial they cannot have.
+    // Request-cached: hasProPlan() above already read the same rows.
+    const trialEligible = !(await getProSubscription());
+
     return (
       <div className="mx-auto max-w-2xl space-y-6">
         <div className="text-center">
@@ -60,13 +66,16 @@ export default async function ProToolsPage() {
             Pro membership tool
           </p>
           <p className="mt-1 text-sm text-hearth-700 dark:text-hearth-300">
-            The AI back office is part of the Hearth Pro membership. Join to
-            unlock all three tools, along with instant alerts and deposit
-            bonuses.
+            The AI back office is part of the Hearth Pro membership.{" "}
+            {trialEligible
+              ? "Start your free trial to unlock all three tools, along with instant alerts and deposit bonuses."
+              : "Join to unlock all three tools, along with instant alerts and deposit bonuses."}
           </p>
-          <Link href="/pro/plus" className="btn-primary mt-3 inline-block">
-            See Hearth Pro
-          </Link>
+          <ProUpgradeCta
+            trialEligible={trialEligible}
+            className="btn-primary mt-3 inline-block"
+            sublineClassName="mt-2 text-xs text-hearth-700 dark:text-hearth-300"
+          />
         </div>
 
         <section className="grid gap-4 sm:grid-cols-1">

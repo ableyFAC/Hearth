@@ -12,7 +12,7 @@ import { Hammer, Bell, FileText } from "lucide-react";
 // hand since a "use server" file can only export async functions, not a
 // shared string constant, to a client component like this one.
 const OC_ONLY_MESSAGE =
-  "Hearth is Orange County only right now. We added you to the waitlist and will email you the moment we expand to your area.";
+  "Hearth serves Huntington Beach and Fountain Valley right now. We added you to the waitlist and will email you the moment we expand to your area.";
 
 // A trimmed length floor for "this is actually an address," not just "this
 // field isn't literally empty." Browsers treat a single space as satisfying
@@ -515,8 +515,9 @@ export default function OnboardingForm({
               : `We couldn't save you to the waitlist. Email us at ${FOUNDER.email} and we'll add you by hand.`}
           </p>
           <p className="text-sm text-stone-500 dark:text-stone-400">
-            There&apos;s nothing else to set up here yet since Hearth only
-            covers Orange County, CA right now.
+            There&apos;s nothing else to set up here yet since Hearth covers
+            Huntington Beach and Fountain Valley right now. Don&apos;t see
+            your city yet? You will soon.
           </p>
           <button
             type="button"

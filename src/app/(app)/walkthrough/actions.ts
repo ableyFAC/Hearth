@@ -6,9 +6,16 @@ import { homeHealthScore } from "@/lib/health";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import type { HomeSystem, Issue } from "@/lib/database.types";
 
-function s(formData: FormData, key: string): string | null {
+// Trim, cap, and normalize empty to null. The cap matters because the values
+// arrive from a vision read the client can edit before confirming, and a
+// server action takes whatever FormData it is handed: without it, an arbitrary
+// paste lands in material_or_model / model_number / the notes column. Numeric
+// fields get their own range check below rather than a length one.
+const MAX_FIELD = 120;
+
+function s(formData: FormData, key: string, max = MAX_FIELD): string | null {
   const v = formData.get(key);
-  const t = typeof v === "string" ? v.trim() : "";
+  const t = typeof v === "string" ? v.trim().slice(0, max) : "";
   return t.length ? t : null;
 }
 

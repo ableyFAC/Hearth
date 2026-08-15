@@ -3,15 +3,24 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
+import { cappedField, cappedFieldOrNull, FIELD_MAX } from "@/lib/formFields";
 import { setFlash } from "@/lib/flash";
 
+// Upper bound on a single logged maintenance cost, in cents ($1,000,000). A
+// real repair never reaches it, and without a ceiling a typed (or forged)
+// number rolls straight into the report's lifetime-spend totals and makes
+// every figure on the page nonsense.
+const MAX_COST_CENTS = 100_000_000;
+
 // Owner-entered dollars -> integer cents, so money never touches the database
-// as a float. Returns null for blank/invalid/zero input (cost is optional).
+// as a float. Returns null for blank/invalid/zero/implausible input (cost is
+// optional, so an unusable value is simply not recorded).
 function toCents(v: FormDataEntryValue | null): number | null {
   if (!v) return null;
   const n = Number(String(v).trim().replace(/[^0-9.]/g, ""));
   if (!Number.isFinite(n) || n <= 0) return null;
-  return Math.round(n * 100);
+  const cents = Math.round(n * 100);
+  return cents > MAX_COST_CENTS ? null : cents;
 }
 
 // Log a maintenance record the owner already knows happened (a past service,
@@ -24,14 +33,20 @@ export async function addMaintenanceHistoryAction(formData: FormData) {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
 
-  const title = ((formData.get("title") as string) || "").trim();
+  // Capped server-side: both fields render on the report and in the exported
+  // PDF, so an unbounded paste would land in front of the owner as well as in
+  // the database. The inputs' maxLength is only a client hint.
+  const title = cappedField(formData, "title", FIELD_MAX.title);
   const date = ((formData.get("completed_date") as string) || "").trim();
   if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     setFlash("Add what was done and a date.", "error");
     return;
   }
-  const performedBy =
-    ((formData.get("performed_by") as string) || "").trim() || null;
+  const performedBy = cappedFieldOrNull(
+    formData,
+    "performed_by",
+    FIELD_MAX.name
+  );
   const costCents = toCents(formData.get("cost"));
   // Noon UTC avoids a date shifting a day in either direction across
   // timezones; only the date part is ever shown or deduped on.

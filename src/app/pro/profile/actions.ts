@@ -6,10 +6,37 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as createJsClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentContractor } from "@/lib/contractor";
+import { passwordStatusFor } from "@/lib/auth";
 import { hasProPlan } from "@/lib/subscription";
 import { setFlash } from "@/lib/flash";
+import { friendlyAuthError } from "@/lib/friendlyAuthError";
 import { stripe } from "@/lib/stripe";
 import { eraseUserData, type EraseSummary } from "@/lib/privacy";
+import { cappedField, FIELD_MAX } from "@/lib/formFields";
+
+// Password re-verification is a brute-force surface: updatePasswordAction,
+// updateEmailAction, and deleteAccountAction each take a current password and
+// tell the caller whether it was right. Holding the session proves who they
+// are, but a borrowed or hijacked one must not get unlimited guesses at the
+// password behind it, and the typed-email delete confirmation shouldn't be
+// infinitely retryable either. Same fixed-window limiter (migration 0068),
+// same shared bucket, and same fail-open posture as the homeowner twin in
+// src/app/(app)/account/actions.ts: only an explicit `allowed === false`
+// blocks, so a limiter outage never locks a pro out of their own account.
+const PW_VERIFY_LIMIT = 5;
+const PW_VERIFY_WINDOW_SECONDS = 900;
+const PW_VERIFY_MESSAGE =
+  "Too many attempts. Please wait a few minutes and try again.";
+
+async function passwordAttemptsExhausted(userId: string): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data: allowed } = await admin.rpc("rate_limit_hit", {
+    p_bucket: `pwverify:${userId}`,
+    p_limit: PW_VERIFY_LIMIT,
+    p_window_seconds: PW_VERIFY_WINDOW_SECONDS,
+  });
+  return allowed === false;
+}
 
 // Change the signed-in user's password. Verifies the current password first by
 // re-authenticating with a throwaway client (so the live session/cookies aren't
@@ -31,6 +58,11 @@ export async function updatePasswordAction(formData: FormData) {
   }
   if (next !== confirm) {
     setFlash("New passwords don't match.", "error");
+    redirect("/pro/profile");
+  }
+
+  if (await passwordAttemptsExhausted(user.id)) {
+    setFlash(PW_VERIFY_MESSAGE, "error");
     redirect("/pro/profile");
   }
 
@@ -60,8 +92,17 @@ export async function updatePasswordAction(formData: FormData) {
 }
 
 // Change the signed-in pro's email. Supabase sends a confirmation link to the
-// new address; nothing changes until it's clicked, so this is safe to offer
-// without a current-password gate (the link itself is the proof).
+// new address; nothing changes until it's clicked.
+//
+// The sign-in email is where every recovery link goes, so moving it is an
+// account-takeover step, not a profile edit. An account that HAS a password
+// re-enters it here, verified the same way updatePasswordAction does and
+// behind the same pwverify budget, so a borrowed session alone can't start
+// walking the account to an attacker's inbox. That check is ours, not the
+// Supabase project's: whether the OLD address also has to approve the change
+// depends on the "Secure email change" toggle in the dashboard, and this must
+// be safe whatever that toggle is set to. Mirrors the homeowner twin in
+// src/app/(app)/account/actions.ts.
 export async function updateEmailAction(formData: FormData) {
   const supabase = createClient();
   const {
@@ -69,7 +110,7 @@ export async function updateEmailAction(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/signin");
 
-  const email = (formData.get("email") as string)?.trim() || "";
+  const email = cappedField(formData, "email", FIELD_MAX.email);
   if (!email || !email.includes("@")) {
     setFlash("That email address doesn't look right.", "error");
     redirect("/pro/profile");
@@ -79,9 +120,44 @@ export async function updateEmailAction(formData: FormData) {
     redirect("/pro/profile");
   }
 
+  // Which proof this account can actually give, decided from the account's
+  // real identities and never from what the form posted - same rule as
+  // deleteAccountAction below.
+  const { hasPassword } = passwordStatusFor(user);
+  if (hasPassword && user.email) {
+    if (await passwordAttemptsExhausted(user.id)) {
+      setFlash(PW_VERIFY_MESSAGE, "error");
+      redirect("/pro/profile");
+    }
+
+    const current = (formData.get("current_password") as string) || "";
+    // Verify the current password without disturbing the active session.
+    const verifier = createJsClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { auth: { persistSession: false } }
+    );
+    const { error: verifyError } = await verifier.auth.signInWithPassword({
+      email: user.email,
+      password: current,
+    });
+    if (verifyError) {
+      setFlash("Current password is incorrect.", "error");
+      redirect("/pro/profile");
+    }
+  }
+  // No password on this account (a Google signup that never set one), so
+  // there is nothing to re-enter and the confirmation link to the new address
+  // is the only proof available. Keep "Secure email change" ON in the Supabase
+  // dashboard as defense in depth: that is what also mails the OLD address for
+  // approval, which is the protection this branch can't provide itself.
+
   const { error } = await supabase.auth.updateUser({ email });
   if (error) {
-    setFlash(error.message, "error");
+    // friendlyAuthError, not error.message: the raw Supabase text is terse
+    // jargon and can echo server internals. Same treatment as the homeowner
+    // twin in src/app/(app)/account/actions.ts.
+    setFlash(friendlyAuthError(error), "error");
     redirect("/pro/profile");
   }
 
@@ -101,7 +177,8 @@ export async function signOutOthersAction() {
 
   const { error } = await supabase.auth.signOut({ scope: "others" });
   if (error) {
-    setFlash(error.message, "error");
+    // Same reasoning as updateEmailAction above: never show raw auth text.
+    setFlash(friendlyAuthError(error), "error");
     redirect("/pro/profile");
   }
 
@@ -266,7 +343,9 @@ export async function savePublicPageAction(formData: FormData) {
 // remove the auth user (cascading to their public.users row and anything keyed
 // to it), then clears the session. Requires re-entering the current password
 // first (same bar as updatePasswordAction) so a hijacked / shared session - or
-// a stray click - can't destroy the account with no proof of identity.
+// a stray click - can't destroy the account with no proof of identity. Google
+// accounts have no password to re-enter, so they type their email address
+// instead; see the branch below.
 export async function deleteAccountAction(formData: FormData) {
   const supabase = createClient();
   const {
@@ -274,25 +353,56 @@ export async function deleteAccountAction(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user?.email) redirect("/signin");
 
-  const current = (formData.get("current_password") as string) || "";
-  if (!current) {
-    setFlash("Current password is incorrect.", "error");
+  // Which confirmation this account can actually give. A pro who signed up
+  // with Google has no password to re-enter, so demanding one locked them out
+  // of deleting their own account. Decided HERE, from the account's real
+  // identities, never from what the form posted - see the homeowner twin in
+  // src/app/(app)/account/actions.ts.
+  const { hasPassword } = passwordStatusFor(user);
+
+  // Both branches below, not just the password one: a wrong typed email is
+  // cheap to check, but nothing here should be retryable without limit.
+  if (await passwordAttemptsExhausted(user.id)) {
+    setFlash(PW_VERIFY_MESSAGE, "error");
     redirect("/pro/profile");
   }
 
-  // Verify the current password without disturbing the active session.
-  const verifier = createJsClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { auth: { persistSession: false } }
-  );
-  const { error: verifyError } = await verifier.auth.signInWithPassword({
-    email: user.email,
-    password: current,
-  });
-  if (verifyError) {
-    setFlash("Current password is incorrect.", "error");
-    redirect("/pro/profile");
+  if (hasPassword) {
+    const current = (formData.get("current_password") as string) || "";
+    if (!current) {
+      setFlash("Current password is incorrect.", "error");
+      redirect("/pro/profile");
+    }
+
+    // Verify the current password without disturbing the active session.
+    const verifier = createJsClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { auth: { persistSession: false } }
+    );
+    const { error: verifyError } = await verifier.auth.signInWithPassword({
+      email: user.email,
+      password: current,
+    });
+    if (verifyError) {
+      setFlash("Current password is incorrect.", "error");
+      redirect("/pro/profile");
+    }
+  } else {
+    // No password to check, so the confirmation is typing the account's own
+    // email exactly: nobody should be able to destroy a business listing with
+    // one click. Compared server-side too, because a server action accepts any
+    // FormData regardless of what the page rendered.
+    const typed = ((formData.get("confirm_email") as string) || "")
+      .trim()
+      .toLowerCase();
+    if (typed !== user.email.toLowerCase()) {
+      setFlash(
+        "That doesn't match the email on this account. Type it exactly to confirm.",
+        "error"
+      );
+      redirect("/pro/profile");
+    }
   }
 
   const admin = createAdminClient();

@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentContractor } from "@/lib/contractor";
 import { createClient } from "@/lib/supabase/server";
-import { hasProPlan } from "@/lib/subscription";
+import { hasProPlan, getProSubscription } from "@/lib/subscription";
 import {
   labelFor,
   JOB_CATEGORIES,
@@ -14,6 +13,7 @@ import {
 } from "@/lib/constants";
 import DepositForm from "./DepositForm";
 import FadingBanner from "@/components/FadingBanner";
+import ProUpgradeCta from "@/components/pro/ProUpgradeCta";
 
 function dollars(cents: number | string | null) {
   const v = Number(cents ?? 0);
@@ -21,8 +21,9 @@ function dollars(cents: number | string | null) {
 }
 
 // One vocabulary for the whole apply-fee lifecycle, so a charge, its
-// ghost-protection return, and a post-refund re-charge all clearly describe
-// the same fee.
+// ghost-protection return, and a post-return re-charge all clearly describe
+// the same fee. Every return is wallet credit, never cash, so the labels say
+// credit.
 const TX_LABEL: Record<string, string> = {
   deposit: "Deposit",
   bonus_grant: "Bonus credit",
@@ -30,10 +31,17 @@ const TX_LABEL: Record<string, string> = {
   apply_fee: "Apply fee",
   bonus_expiry: "Bonus expired",
   adjustment: "Adjustment",
-  ghost_refund: "Apply fee returned",
-  ghost_recharge: "Apply fee re-charged: homeowner chose you after the refund",
+  ghost_refund: "Apply fee returned as credit",
+  ghost_recharge: "Apply fee re-charged: homeowner chose you after the credit",
   ghost_recharge_waived: "Re-charge waived",
   apply_credit_back: "Apply fee returned as credit: homeowner picked another pro",
+  first_apply_guarantee: "First application guarantee: fee returned as credit",
+  winback_credit: "Welcome-back credit",
+  direct_unlock: "Direct request unlocked",
+  membership_credit: "Membership credit",
+  membership_credit_reversal: "Membership credit reversed",
+  referral_reward: "Referral credit",
+  chargeback_reversal: "Deposit reversed after a chargeback",
 };
 
 // Never show a raw transaction type like "apply_fee": mapped label first,
@@ -59,6 +67,14 @@ export default async function ProBillingPage({
   // Pro members earn extra points on every deposit bonus (display only here;
   // the webhook applies the real boost when the payment lands).
   const proMember = await hasProPlan();
+
+  // The Pro-side subscription row itself, for the upgrade card below the
+  // deposit form. The free trial is for brand-new members only and the row
+  // outlives a cancellation, so a pro who churned and came back must never be
+  // offered a trial they will not get. Free to ask for: hasProPlan() above
+  // reads the same request-cached rows.
+  const proSub = proMember ? null : await getProSubscription();
+  const trialEligible = !proMember && !proSub;
 
   const supabase = createClient();
 
@@ -201,12 +217,25 @@ export default async function ProBillingPage({
             .
           </div>
         ) : (
-          <p className="text-xs text-stone-500 dark:text-stone-400">
-            Pro members get +{PRO_DEPOSIT_BOOST_PTS}% on every deposit.{" "}
-            <Link href="/pro/plus" className="text-hearth-700 hover:underline">
-              See Hearth Pro
-            </Link>
-          </p>
+          // Upgrade card on the add-funds surface: the deposit boost is the
+          // one Pro perk that pays off right here, so it is worth its own
+          // card next to the form. The button leads with the free trial only
+          // when this pro will actually get one; /pro/plus still owns the
+          // full auto-renewal disclosure and the checkout itself.
+          <div className="rounded-xl border border-hearth-200 bg-hearth-50 p-4 dark:border-hearth-500/30 dark:bg-hearth-500/15">
+            <p className="text-sm font-semibold text-hearth-800 dark:text-hearth-200">
+              Pro members get +{PRO_DEPOSIT_BOOST_PTS}% on every deposit
+            </p>
+            <p className="mt-1 text-sm text-hearth-700 dark:text-hearth-300">
+              Same money in, more lead credit out. Membership never changes
+              which jobs you can see or apply to.
+            </p>
+            <ProUpgradeCta
+              trialEligible={trialEligible}
+              className="btn-primary mt-3 inline-block"
+              sublineClassName="mt-2 text-xs text-hearth-700 dark:text-hearth-300"
+            />
+          </div>
         )}
       </section>
 
@@ -251,10 +280,12 @@ export default async function ProBillingPage({
         {txns.length > 0 && (
           <p className="text-xs text-stone-500 dark:text-stone-400">
             Ghost protection: if the homeowner never responds within{" "}
-            {GHOST_PROTECTION_DAYS} days, your apply fee comes back on its own.
-            If they choose you after that refund, the same fee is re-charged.
-            If they pick another pro, your fee comes back as credit, good for 60
-            days.
+            {GHOST_PROTECTION_DAYS} days, your apply fee comes back to this
+            wallet on its own as credit for your next application. If they
+            choose you after that, the same fee is re-charged. If they pick
+            another pro, your fee comes back as credit too, good for 60 days.
+            Every return is wallet credit you spend on leads, never cash back
+            to your card.
           </p>
         )}
       </section>

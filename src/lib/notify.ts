@@ -1,3 +1,7 @@
+// Build-time guard: this module reads the Resend/Twilio secrets and pulls in
+// the service-role client, so importing it from a Client Component must fail
+// the build, not ship any of that.
+import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { createAdminClient } from "@/lib/supabase/admin";

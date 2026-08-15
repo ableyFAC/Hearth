@@ -31,7 +31,33 @@ export async function inviteMemberAction(formData: FormData) {
   if (!user) redirect("/signin");
 
   const propertyId = (formData.get("property_id") as string) || "";
-  const email = ((formData.get("email") as string) || "").trim().toLowerCase();
+  // Capped at the longest address an email standard allows, before it is
+  // stored or matched on: the input's type is a client hint, not a guard.
+  const email = ((formData.get("email") as string) || "")
+    .trim()
+    .toLowerCase()
+    .slice(0, 254);
+
+  // An invite sends mail to an address the caller typed, so an unlimited
+  // invite loop is a way to send mail to strangers with Hearth's name on it.
+  // The per-home member cap below doesn't stop that on its own: a rejected or
+  // deleted invite frees the slot again. Same fixed-window limiter (migration
+  // 0068) and same fail-open posture as the rest of the app - only an explicit
+  // `allowed === false` blocks - so a limiter outage never stops a real
+  // homeowner from adding their partner.
+  const rlAdmin = createAdminClient();
+  const { data: allowed } = await rlAdmin.rpc("rate_limit_hit", {
+    p_bucket: `invite:${user.id}`,
+    p_limit: 10,
+    p_window_seconds: 86400,
+  });
+  if (allowed === false) {
+    setFlash(
+      "You've sent a lot of invites today. Please try again tomorrow.",
+      "error"
+    );
+    redirect(HOUSEHOLD_PATH);
+  }
 
   if (!propertyId) {
     setFlash("Choose a home to invite someone to.", "error");

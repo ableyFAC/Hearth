@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
+import { ISSUE_CATEGORIES, SEVERITIES } from "@/lib/constants";
+import { isAllowedValue } from "@/lib/formFields";
 import { setFlash } from "@/lib/flash";
 
 // Server-side length cap for free-text fields: trim, then quietly slice
@@ -30,13 +32,27 @@ export async function reportIssueAction(formData: FormData) {
   const supabase = createClient();
 
   const category = formData.get("category") as string;
+  const severity = formData.get("severity") as string;
+  // The <select>s aren't the guard: a server action takes whatever FormData it
+  // is handed. Re-check both against the same lists the rest of the app reads
+  // (same pattern as saveInspectionFindingsAction in inspection/actions.ts), so
+  // a forged value can't write an enum that has no label, no icon, and no
+  // matching contractor category.
+  if (
+    !isAllowedValue(ISSUE_CATEGORIES, category) ||
+    !isAllowedValue(SEVERITIES, severity)
+  ) {
+    setFlash("Couldn't log that issue. Try again.", "error");
+    return;
+  }
+
   const { data: issue, error } = await supabase
     .from("issues")
     .insert({
       property_id: property.id,
       system_id: (formData.get("system_id") as string) || null,
       category,
-      severity: formData.get("severity") as string,
+      severity,
       description: clipText(formData.get("description"), 4000),
     })
     .select("id")
@@ -82,12 +98,25 @@ export async function reportIssueAction(formData: FormData) {
 export async function updateIssueAction(formData: FormData) {
   const id = formData.get("id") as string;
   const supabase = createClient();
+
+  const category = formData.get("category") as string;
+  const severity = formData.get("severity") as string;
+  // Same allow-list as reportIssueAction above: an edit is just as forgeable
+  // as the original post, so it gets the same check.
+  if (
+    !isAllowedValue(ISSUE_CATEGORIES, category) ||
+    !isAllowedValue(SEVERITIES, severity)
+  ) {
+    setFlash("Couldn't save your changes. Try again.", "error");
+    return;
+  }
+
   // RLS limits the update to an issue on a property the caller owns.
   const { error } = await supabase
     .from("issues")
     .update({
-      category: formData.get("category") as string,
-      severity: formData.get("severity") as string,
+      category,
+      severity,
       description: clipText(formData.get("description"), 4000),
     })
     .eq("id", id);

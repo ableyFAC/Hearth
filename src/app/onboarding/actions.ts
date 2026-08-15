@@ -1,6 +1,6 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -15,12 +15,22 @@ import { safeNextPath } from "@/lib/safeNext";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import { isOrangeCountyZip } from "@/lib/serviceArea";
 import { ok, err, type ActionResult } from "@/lib/actionResult";
+import { boundedNumber } from "@/lib/formFields";
 
-// The one message shown by every OC-only gate (this file's two checks, plus
+// Ceiling on the two raw JSON blobs the confirm step carries in as hidden
+// fields. They are client input like everything else here, so the string is
+// bounded BEFORE JSON.parse rather than after: parsing a multi-megabyte blob
+// to then throw it away still costs the parse. Generous enough for a real
+// RentCast payload (a handful of tax years, a dozen system facts) and small
+// enough that a crafted post can't turn a claim into a memory spike.
+const MAX_ENRICHMENT_JSON_CHARS = 20000;
+
+// The one message shown by every service-area gate (this file's two checks,
+// plus
 // the fast client-side copy in OnboardingForm.tsx) - kept as a single
 // constant so the wording can never drift between them.
 const OC_ONLY_MESSAGE =
-  "Hearth is Orange County only right now. We added you to the waitlist and will email you the moment we expand to your area.";
+  "Hearth serves Huntington Beach and Fountain Valley right now. We added you to the waitlist and will email you the moment we expand to your area.";
 
 // Systems virtually every home has, auto-added so the owner doesn't start from
 // a blank inventory. Install years are ESTIMATED from the build year; real
@@ -64,9 +74,32 @@ export async function joinMarketWaitlistAction(
   }
 
   const admin = createAdminClient();
+
+  // Throttle before the insert. This row is written with the SERVICE-ROLE
+  // client (market_waitlist has no policy for `authenticated`), so RLS is not
+  // the ceiling here and 0074's uniqueness only covers (lower(email), role) -
+  // a reviewer deliberately kept it that way rather than adding an email-only
+  // index, which makes this action-level limit the abuse control. Keyed on IP,
+  // not user id, because that is what a burst of fresh throwaway accounts
+  // actually shares. Same derivation and same fail-open posture as
+  // src/app/contact/actions.ts and /api/track: only an explicit
+  // `allowed === false` blocks, so a limiter outage never costs a real
+  // out-of-area homeowner their place on the list.
+  const ip = headers().get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  const { data: allowed } = await admin.rpc("rate_limit_hit", {
+    p_bucket: `waitlist:${ip ?? "unknown"}`,
+    p_limit: 5,
+    p_window_seconds: 3600,
+  });
+  if (allowed === false) {
+    return err("We couldn't save you to the waitlist. Please try again later.");
+  }
+
   const { error } = await (admin as any).from("market_waitlist").insert({
     role: "homeowner",
-    email: user.email,
+    // Capped like every other stored string, even though this one comes from
+    // the auth record rather than the form.
+    email: user.email.slice(0, 254),
     zip: zip.trim().slice(0, 5) || null,
   });
 
@@ -203,10 +236,17 @@ export async function claimPropertyAction(formData: FormData) {
     throw new Error(OC_ONLY_MESSAGE);
   }
 
-  const num = (key: string) => {
-    const v = formData.get(key);
-    return v ? Number(v) : null;
-  };
+  // Every number on the claim is client input (the confirm step posts the
+  // RentCast figures as hidden fields, and the owner can edit the visible
+  // ones), so each one has to be finite AND plausible before it lands on the
+  // home. Without the Number.isFinite half, a non-numeric value became NaN and
+  // sailed past the old `v ? Number(v) : null` guard; without the range, a
+  // typo'd year or a forged price wrote a home nothing downstream can reason
+  // about (the forecast, the health score, and /value all read these).
+  // Out-of-range stores null, same as a blank field: an implausible number is
+  // worse than no number.
+  const num = (key: string, min: number, max: number) =>
+    boundedNumber(formData.get(key), min, max);
   // Empty string (an unset hidden input) must normalize to null, same as
   // num() does for the numeric fields - a "" purchase_date would otherwise
   // fail the `date` column type rather than just staying unset.
@@ -220,16 +260,24 @@ export async function claimPropertyAction(formData: FormData) {
   // client-controlled form input, not a trusted server value. A parse
   // failure degrades to "nothing extra to store" rather than failing the
   // whole claim.
+  // Bounded before the parse (see MAX_ENRICHMENT_JSON_CHARS): an oversized
+  // blob is dropped whole rather than truncated, because half a JSON string
+  // only throws inside the try below anyway.
+  const enrichmentJson = (key: string): string | null => {
+    const raw = formData.get(key);
+    if (typeof raw !== "string" || !raw) return null;
+    return raw.length > MAX_ENRICHMENT_JSON_CHARS ? null : raw;
+  };
   let propertyTaxHistory: { year: number; amount: number }[] | null = null;
   try {
-    const raw = formData.get("property_tax_history") as string | null;
+    const raw = enrichmentJson("property_tax_history");
     propertyTaxHistory = raw ? JSON.parse(raw) : null;
   } catch {
     propertyTaxHistory = null;
   }
   let systemFacts: Record<string, string> | null = null;
   try {
-    const raw = formData.get("system_facts") as string | null;
+    const raw = enrichmentJson("system_facts");
     systemFacts = raw ? JSON.parse(raw) : {};
   } catch {
     systemFacts = {};
@@ -253,34 +301,34 @@ export async function claimPropertyAction(formData: FormData) {
     // the ownership check below looks up with), so the persisted zip and
     // the ownership-check input can never diverge.
     zip: claimZip || null,
-    year_built: num("year_built"),
-    sqft: num("sqft"),
-    beds: num("beds"),
-    baths: num("baths"),
-    lot_size_sqft: num("lot_size_sqft"),
+    year_built: num("year_built", 1700, 2100),
+    sqft: num("sqft", 1, 1_000_000),
+    beds: num("beds", 0, 100),
+    baths: num("baths", 0, 100),
+    lot_size_sqft: num("lot_size_sqft", 0, 100_000_000),
     property_type: (formData.get("property_type") as string) || null,
     // ownership_verified was self-attested for MVP and is now dead: it's
     // server-locked to false by migration 0093's trigger regardless of what
     // this insert asks for. ownership_status (set below, after the insert,
     // via the server-side assessor-record check) supersedes it.
     purchase_date: str("purchase_date"),
-    purchase_price: num("purchase_price"),
-    assessed_value: num("assessed_value"),
-    assessed_year: num("assessed_year"),
+    purchase_price: num("purchase_price", 0, 1_000_000_000),
+    assessed_value: num("assessed_value", 0, 1_000_000_000),
+    assessed_year: num("assessed_year", 1700, 2100),
   };
   // extendedRow: baseRow plus the columns migration 0066 actually adds.
   // Attempted first, with baseRow as the fallback below if the live DB
   // hasn't run 0066 yet.
   const extendedRow = {
     ...baseRow,
-    latitude: num("latitude"),
-    longitude: num("longitude"),
-    hoa_fee: num("hoa_fee"),
+    latitude: num("latitude", -90, 90),
+    longitude: num("longitude", -180, 180),
+    hoa_fee: num("hoa_fee", 0, 100_000),
     county: str("county"),
     property_tax_history: propertyTaxHistory,
-    market_value: num("market_value"),
-    market_value_low: num("market_value_low"),
-    market_value_high: num("market_value_high"),
+    market_value: num("market_value", 0, 1_000_000_000),
+    market_value_low: num("market_value_low", 0, 1_000_000_000),
+    market_value_high: num("market_value_high", 0, 1_000_000_000),
   };
 
   // extendedRow's enrichment fields (everything migration 0066 adds) aren't
@@ -413,7 +461,7 @@ export async function claimPropertyAction(formData: FormData) {
   // years as guesses rather than owner-verified facts. Don't set the column
   // explicitly here - the live DB may not have run 0056 yet (see the fallback
   // in walkthrough/actions.ts), and the default is already correct.
-  const yearBuilt = num("year_built");
+  const yearBuilt = num("year_built", 1700, 2100);
   const starterRows = STARTER_SYSTEMS.map((system_type) => {
     const lifespan = DEFAULT_LIFESPANS[system_type] ?? 20;
     let install_year: number | null = null;

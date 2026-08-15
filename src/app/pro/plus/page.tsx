@@ -110,19 +110,32 @@ export default async function ProPlusPage({
             </li>
           ))}
         </ul>
+        {/* The wallet credit is a perk of a PAID cycle: the Stripe webhook
+            grants it off the first real invoice, not the $0 one a trial start
+            finalizes, so say so rather than let a trialer go looking for $10
+            that has not landed yet. Gated on the row actually reading
+            "trialing" - this screen can render before the webhook has written
+            it, and a stale row must not produce a wrong promise either way. */}
+        {sub?.status === "trialing" && (
+          <p className="mx-auto max-w-md text-left text-xs text-stone-500 dark:text-stone-400">
+            Your first $10 of lead credit lands when the free trial converts and
+            your first payment goes through. Everything else is on right now.
+          </p>
+        )}
         {/* Post-purchase acknowledgment (Bus. & Prof. Code 17602(a)(3)): the
-            renewal terms, the cancellation policy, and how to cancel.
-            Yearly is unambiguous, so it states the real numbers. Monthly is
-            not: the intro month is a coupon, not a trial, so nothing on the
-            subscriptions row says whether it applied, and guessing would
-            state a step-up that may not exist. That case defers to the
-            emailed acknowledgment, which the Stripe webhook builds from the
-            discount actually on the subscription. */}
+            renewal terms, the cancellation policy, and how to cancel. Both
+            cadences can state the real numbers now that the offer is a Stripe
+            trial rather than a coupon: the trial either shows on the row as
+            status "trialing" or it doesn't, so nothing has to be guessed. The
+            fallback still covers the real race here - this screen renders off
+            ?welcome=1 and can beat the Stripe webhook that writes the row - and
+            defers to the emailed acknowledgment, which the webhook builds from
+            the subscription Stripe actually created. */}
         <div className="mx-auto max-w-md">
-          {sub?.status !== "canceled" && sub?.plan === "pro_yearly" ? (
+          {sub?.status && sub.status !== "canceled" && sub.plan ? (
             <AutoRenewalTerms
-              plan="pro_yearly"
-              introEligible={false}
+              plan={sub.plan === "pro_yearly" ? "pro_yearly" : "pro_monthly"}
+              introEligible={sub.status === "trialing"}
               variant="acknowledgment"
             />
           ) : (
@@ -132,11 +145,14 @@ export default async function ProPlusPage({
               </p>
               <p className="mt-2 text-xs text-stone-600 dark:text-stone-300">
                 Hearth Pro renews automatically until you cancel. Your
-                confirmation email lists the exact amount and renewal date,
-                including what changes after any intro month. Cancel anytime on
-                this page using the &quot;Cancel membership&quot; button.
-                Cancelling takes effect at the end of the period you have
-                already paid for, and there is nothing to call or email.
+                confirmation email lists the exact amount and the renewal
+                terms; refresh this page in a moment to see the date your free
+                trial ends and the first charge lands. Cancel
+                anytime on this page using the &quot;Cancel membership&quot;
+                button. Cancel before the trial ends and you will not be
+                charged; after that, cancelling takes effect at the end of the
+                period you have already paid for. There is nothing to call or
+                email.
               </p>
             </div>
           )}
@@ -164,10 +180,15 @@ export default async function ProPlusPage({
           <p className="text-lg font-medium text-hearth-700 dark:text-hearth-300">
             You&apos;re a Hearth Pro member
           </p>
+          {/* During the trial, current_period_end IS the trial end, so calling
+              it a renewal would hide the thing that actually matters: the date
+              the first charge lands. Say which it is. */}
           <p className="text-sm text-stone-500 dark:text-stone-400">
             {sub?.plan === "pro_yearly" ? "Yearly" : "Monthly"} plan
             {sub?.current_period_end
-              ? ` · renews ${new Date(sub.current_period_end).toLocaleDateString()}`
+              ? sub.status === "trialing"
+                ? ` · free trial, first charge ${new Date(sub.current_period_end).toLocaleDateString()}`
+                : ` · renews ${new Date(sub.current_period_end).toLocaleDateString()}`
               : ""}
           </p>
           <form action={manageProBillingAction}>
@@ -187,10 +208,18 @@ export default async function ProPlusPage({
           {sub?.stripe_subscription_id && !cancelsAt && (
             <div className="border-t border-stone-100 pt-4 dark:border-white/10">
               <form action={cancelProMembershipAction}>
+                {/* Cancelling during the trial is the case the law cares most
+                    about, and "the time you've paid for" would be wrong for it:
+                    nothing has been paid yet, and the point is that nothing
+                    will be. */}
                 <ConfirmSubmit
                   subtle
                   label="Cancel membership"
-                  note="You'd keep every perk through the time you've paid for, and it just won't renew. Your lead access stays exactly the same. Cancel?"
+                  note={
+                    sub.status === "trialing"
+                      ? "Your free trial ends and you won't be charged anything. You keep every perk until the trial's last day. Your lead access stays exactly the same. Cancel?"
+                      : "You'd keep every perk through the time you've paid for, and it just won't renew. Your lead access stays exactly the same. Cancel?"
+                  }
                   yesLabel="Yes, cancel my membership"
                 />
               </form>
@@ -270,6 +299,12 @@ export default async function ProPlusPage({
     );
   }
 
+  // Mirrors startProCheckoutAction's own trial gate exactly: the free trial is
+  // for brand-new members, and the Pro-side row survives cancellation (it lands
+  // on "canceled", it is not deleted), so a member who churned and came back
+  // must not be shown trial copy for a trial they will not get.
+  const trialEligible = !sub;
+
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <div className="text-center">
@@ -282,13 +317,19 @@ export default async function ProPlusPage({
           paperwork.
         </p>
         <div className="mt-5">
+          {/* Trial-first: the button leads with the free trial and the price is
+              the follow-through line under it, never the lead. `trialEligible`
+              is the same no-existing-Pro-row signal startProCheckoutAction
+              uses, so a returning member sees the plain price instead. */}
           <a href="#pricing" className="btn-primary">
-            Start my Pro membership
+            {trialEligible
+              ? `Try Pro free for ${PRO_PLAN.trialDays} days`
+              : "Start my Pro membership"}
           </a>
           <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
-            First month ${PRO_PLAN.introFirstMonth}, then ${PRO_PLAN.monthly}
-            /month after, cancel anytime. Or ${PRO_PLAN.yearly}/year, save $
-            {Math.round(PRO_PLAN.monthly * 12 - PRO_PLAN.yearly)} vs monthly.
+            {trialEligible
+              ? `Then $${PRO_PLAN.monthly}/month. Auto-renews. Cancel anytime before the trial ends and you won't be charged. Or $${PRO_PLAN.yearly}/year, save $${Math.round(PRO_PLAN.monthly * 12 - PRO_PLAN.yearly)} vs monthly.`
+              : `$${PRO_PLAN.monthly}/month, auto-renews until you cancel. Or $${PRO_PLAN.yearly}/year, save $${Math.round(PRO_PLAN.monthly * 12 - PRO_PLAN.yearly)} vs monthly.`}
           </p>
         </div>
       </div>
@@ -311,7 +352,7 @@ export default async function ProPlusPage({
         ))}
       </section>
 
-      <ProPlanToggle />
+      <ProPlanToggle trialEligible={trialEligible} />
 
       <p className="text-center text-xs text-stone-500 dark:text-stone-400">
         Questions about billing?{" "}

@@ -44,13 +44,24 @@ export async function updateSession(request: NextRequest) {
   // auth cookies, fail open instead of bouncing a signed-in user to /signin:
   // RLS still guards every read downstream, and the segment error boundaries
   // show a retry screen if data loads fail too.
+  //
+  // Reads only. The fail-open is a UX cushion for someone LOOKING at a page,
+  // and the cost of being wrong there is a rendered shell with no data. On a
+  // POST it is a different trade: that's a server action or form submit that
+  // WRITES, and the only thing standing between an unverified caller and the
+  // handler would be RLS alone. Anything reached with the service-role client
+  // (admin lookups, notifications, wallet RPCs) sits outside RLS entirely, so
+  // a forged/expired cookie during an outage must not get that far. Unsafe
+  // methods keep the strict behavior and bounce to /signin; the user retries
+  // the write once auth is back.
+  const isReadMethod = request.method === "GET" || request.method === "HEAD";
   const authUnreachable =
     authError != null &&
     (authError.name === "AuthRetryableFetchError" || authError.status === 0);
   const hasAuthCookies = request.cookies
     .getAll()
     .some((c) => c.name.startsWith("sb-") && c.name.includes("-auth-token"));
-  if (authUnreachable && hasAuthCookies) {
+  if (authUnreachable && hasAuthCookies && isReadMethod) {
     return response;
   }
 

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getUserProfile } from "@/lib/user";
-import { getUser } from "@/lib/auth";
+import { getUser, getPasswordStatus, providerLabel } from "@/lib/auth";
 import AccountSecurityPanel from "@/components/AccountSecurityPanel";
 import AccountTabs from "../AccountTabs";
 import {
@@ -22,11 +22,18 @@ export default async function AccountSecurityPage() {
   const user = await getUser();
   const email = user?.email || profile.email || null;
 
+  // Read on every load, so the Password card shows the set-a-password flow to
+  // a Google signup and the normal change-password form the moment they have
+  // one.
+  const { hasPassword, provider } = await getPasswordStatus();
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <AccountTabs active="security" />
       <AccountSecurityPanel
         email={email}
+        hasPassword={hasPassword}
+        providerName={providerLabel(provider)}
         updateEmailAction={updateEmailAction}
         updatePasswordAction={updatePasswordAction}
         signOutOthersAction={signOutOthersAction}
