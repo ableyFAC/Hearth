@@ -42,7 +42,7 @@ export default async function SearchPage(
   const ql = q.toLowerCase();
 
   const property = (await getActiveProperty())!;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const has = (text: string | null | undefined) =>
     !!text && text.toLowerCase().includes(ql);

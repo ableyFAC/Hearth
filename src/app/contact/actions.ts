@@ -26,7 +26,7 @@ const HONEST_SUCCESS =
 // the redirect, and the root layout (src/app/layout.tsx) reads it on every
 // route, so the confirmation toast still shows at the destination.
 async function successDestination(): Promise<string> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -44,7 +44,7 @@ export async function sendContactMessageAction(formData: FormData) {
   // real success path below - so it gets no signal to adapt on.
   const honeypot = ((formData.get("company_website") as string) || "").trim();
   if (honeypot) {
-    setFlash(HONEST_SUCCESS, "success");
+    await setFlash(HONEST_SUCCESS, "success");
     redirect(await successDestination());
   }
 
@@ -54,15 +54,15 @@ export async function sendContactMessageAction(formData: FormData) {
   const message = cappedField(formData, "message", FIELD_MAX.message);
 
   if (message.length < MIN_MESSAGE) {
-    setFlash("Please write a few more words so we know what you need.", "error");
+    await setFlash("Please write a few more words so we know what you need.", "error");
     return;
   }
   if (!email && !phone) {
-    setFlash("Please add an email or a phone number so we can reply.", "error");
+    await setFlash("Please add an email or a phone number so we can reply.", "error");
     return;
   }
   if (email && !email.includes("@")) {
-    setFlash("That doesn't look like a valid email address.", "error");
+    await setFlash("That doesn't look like a valid email address.", "error");
     return;
   }
 
@@ -83,7 +83,7 @@ export async function sendContactMessageAction(formData: FormData) {
     p_window_seconds: 3600,
   });
   if (allowed === false) {
-    setFlash(
+    await setFlash(
       "You've sent several messages already. Please wait a bit before sending another.",
       "error"
     );
@@ -140,12 +140,12 @@ export async function sendContactMessageAction(formData: FormData) {
 
   if (error) {
     console.error("sendContactMessageAction: insert failed", error);
-    setFlash("Couldn't send your message. Please try again.", "error");
+    await setFlash("Couldn't send your message. Please try again.", "error");
     return;
   }
 
   // redirect() throws to unwind the action, so nothing may run after it; the
   // error paths above stay put on /contact so the visitor can fix and resend.
-  setFlash(HONEST_SUCCESS, "success");
+  await setFlash(HONEST_SUCCESS, "success");
   redirect(await successDestination());
 }

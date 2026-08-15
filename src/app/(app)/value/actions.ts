@@ -32,7 +32,7 @@ export async function saveHomeValueAction(
   const mortgageBalance = balanceRaw ? Number(balanceRaw) : null;
 
   if (!purchasePrice || purchasePrice <= 0 || !purchaseYear) {
-    setFlash(
+    await setFlash(
       "Add what you paid and the year you bought your home to continue.",
       "error"
     );
@@ -56,7 +56,7 @@ export async function saveHomeValueAction(
         mortgageBalance < 0 ||
         mortgageBalance > 100_000_000))
   ) {
-    setFlash(
+    await setFlash(
       "Those numbers don't look right. Double-check the year and amounts.",
       "error"
     );
@@ -64,7 +64,7 @@ export async function saveHomeValueAction(
     return { ok: false };
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   try {
     // RLS's existing "owner selects/updates own property" policy covers this,
     // same as updatePropertyAction in profile/actions.ts.
@@ -76,12 +76,12 @@ export async function saveHomeValueAction(
       })
       .eq("id", property.id);
     if (error) throw error;
-    setFlash("Home value saved");
+    await setFlash("Home value saved");
   } catch {
     // Migration 0029 may not have run yet against this database, or the
     // write failed for some other reason. Fail soft: the page just shows the
     // setup form again instead of a 500.
-    setFlash("Couldn't save right now. Please try again in a bit.", "error");
+    await setFlash("Couldn't save right now. Please try again in a bit.", "error");
     revalidatePath("/value");
     revalidatePath("/dashboard");
     return { ok: false };
@@ -136,7 +136,7 @@ export async function fetchAndSaveMarketValueAction(): Promise<{
     const facts = await lookupMarketValue(street, zip);
     if (facts.market_value == null) return { ok: false };
 
-    const supabase = createClient();
+    const supabase = await createClient();
     const { error } = await (supabase.from("properties") as any)
       .update({
         market_value: facts.market_value,

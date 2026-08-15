@@ -20,7 +20,7 @@ import {
 
 // One shared toast stack. Two feeders push into it: client components via
 // useToast(), and the server flash cookie via FlashBridge. Both land in the
-// same queue and render with the same look, so every setFlash() call site is
+// same queue and render with the same look, so every await setFlash() call site is
 // upgraded without edits. See toast-system-plan for the full rationale.
 
 export type ToastType = "success" | "error" | "info" | "warning";

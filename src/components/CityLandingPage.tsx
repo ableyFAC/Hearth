@@ -93,7 +93,7 @@ export default async function CityLandingPage({
   city: string;
   housingParagraph: string;
 }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

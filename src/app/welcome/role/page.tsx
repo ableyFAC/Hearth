@@ -34,7 +34,7 @@ export default async function WelcomeRolePage(
   // Signed-out visitors have no choice to make here; the middleware already
   // bounces them, but guard directly too so the page never renders role
   // controls for a request with no user behind it.
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

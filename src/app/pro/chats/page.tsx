@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { cookies, type UnsafeUnwrappedCookies } from "next/headers";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
@@ -18,9 +18,9 @@ import {
 // Seen-state cookie shared with the layout's unread badge.
 const SEEN_COOKIE = "hearth_chat_seen"; // { [leadId]: ISO timestamp last viewed }
 
-function readSeenMap(): Record<string, string> {
+async function readSeenMap(): Promise<Record<string, string>> {
   try {
-    return JSON.parse((cookies() as unknown as UnsafeUnwrappedCookies).get(SEEN_COOKIE)?.value || "{}");
+    return JSON.parse((await cookies()).get(SEEN_COOKIE)?.value || "{}");
   } catch {
     return {};
   }
@@ -50,14 +50,14 @@ export default async function ProChatsPage(
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: leads } = await supabase
     .from("contractor_leads")
     .select("*")
     .eq("contractor_id", contractor.id)
     .order("created_at", { ascending: false });
 
-  const seen = readSeenMap();
+  const seen = await readSeenMap();
 
   // The inbox is every lead assigned to this contractor (the homeowner picked
   // them). The old `paid` unlock flag predates the apply flow: the fee is now

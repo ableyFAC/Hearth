@@ -39,7 +39,7 @@ const getSubscriptionRows = cache(async (): Promise<Subscription[]> => {
   const user = await getUser();
   if (!user) return [];
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("subscriptions")
     .select("*")
@@ -217,7 +217,7 @@ export async function hasProPlan(): Promise<boolean> {
 // true so a farmer can never turn an outage into a repeat intro. Returns
 // false only when the DB positively confirms no claim exists.
 export async function hasClaimedPromo(key: string): Promise<boolean> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase.rpc("has_claimed_promo", {
     p_key: key,
   });

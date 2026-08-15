@@ -65,7 +65,7 @@ const MIN_ADDRESS_LENGTH = 5;
 export async function joinMarketWaitlistAction(
   zip: string
 ): Promise<ActionResult<null>> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -118,7 +118,7 @@ export async function lookupParcelAction(
   street: string,
   zip: string
 ): Promise<ParcelFacts> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -178,7 +178,7 @@ export async function lookupParcelAction(
 
 // Step 2: create the property (self-attested ownership for MVP).
 export async function claimPropertyAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -207,7 +207,7 @@ export async function claimPropertyAction(formData: FormData) {
     if (!plus) {
       redirect("/plus?reason=home_limit");
     }
-    setFlash(
+    await setFlash(
       `You're using all ${cap} of your homes. You can add more homes anytime from the Plus page.`,
       "error"
     );

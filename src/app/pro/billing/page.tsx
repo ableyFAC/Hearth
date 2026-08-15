@@ -86,7 +86,7 @@ export default async function ProBillingPage(
   // it cannot be the signal here.
   const boostActive = proMember && proSub?.status === "active";
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: wallet } = await supabase
     .from("wallets")

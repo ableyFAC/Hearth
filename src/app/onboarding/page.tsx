@@ -27,7 +27,7 @@ export default async function OnboardingPage(
   // bounces every page back to /onboarding, this page had no sign-out, and
   // an account with contractor role metadata but no contractors row (pro
   // signup never finished) failed the isContractor() redirect above too.
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

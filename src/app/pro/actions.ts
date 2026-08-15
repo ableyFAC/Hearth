@@ -86,7 +86,7 @@ const LICENSE_RECHECK_DEBOUNCE_MS = 10 * 60 * 1000;
 // changed) NEVER changes license_verified_status: a fetch failure must never
 // be treated as a failed license check.
 async function verifyContractorLicense(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   contractorId: string,
   licenseNumber: string,
   currentVerifiedAt: string | null | undefined,
@@ -158,7 +158,7 @@ async function verifyContractorLicense(
 // be blocked by RLS, so the three lookups (full id, slug, 8-hex prefix) live
 // in one SECURITY DEFINER function instead.
 async function resolveReferralCode(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   raw: FormDataEntryValue | null
 ): Promise<string | null> {
   try {
@@ -174,7 +174,7 @@ async function resolveReferralCode(
 
 // Create (onboarding) or update (profile) the current user's contractor company.
 export async function saveCompanyAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -264,7 +264,7 @@ export async function saveCompanyAction(formData: FormData) {
   // on the waitlist panel either. Answering nothing is not the same as
   // answering "I'm outside your area", so send them back to pick one.
   if (hasCityWrite && citySelection.cities.length === 0) {
-    setFlash("Pick at least one city you serve.", "error");
+    await setFlash("Pick at least one city you serve.", "error");
     redirect("/pro/onboarding");
   }
   if (hasCityWrite) {
@@ -290,7 +290,7 @@ export async function saveCompanyAction(formData: FormData) {
   // would otherwise create (or rename to) a nameless listing on the job board
   // and the public /p/<id> page.
   if (!fields.name) {
-    setFlash("Enter your company name.", "error");
+    await setFlash("Enter your company name.", "error");
     redirect(existing ? "/pro/profile" : "/pro/onboarding");
   }
 
@@ -312,7 +312,7 @@ export async function saveCompanyAction(formData: FormData) {
   if (yelpEntry !== null) {
     const r = validateYelpUrl(String(yelpEntry));
     if (!r.ok) {
-      setFlash(r.error, "error");
+      await setFlash(r.error, "error");
       redirect(reviewLinkBack);
     }
     reviewLinkWrite.yelp_url = r.value;
@@ -320,7 +320,7 @@ export async function saveCompanyAction(formData: FormData) {
   if (googleEntry !== null) {
     const r = validateGoogleReviewsUrl(String(googleEntry));
     if (!r.ok) {
-      setFlash(r.error, "error");
+      await setFlash(r.error, "error");
       redirect(reviewLinkBack);
     }
     reviewLinkWrite.google_reviews_url = r.value;
@@ -425,7 +425,7 @@ export async function saveCompanyAction(formData: FormData) {
       }
     }
 
-    setFlash("Profile saved.");
+    await setFlash("Profile saved.");
     revalidatePath("/pro/profile");
     redirect("/pro/profile");
   }
@@ -601,7 +601,7 @@ export async function saveCompanyAction(formData: FormData) {
     }
   }
 
-  setFlash("You're all set. Leads will appear here.");
+  await setFlash("You're all set. Leads will appear here.");
   revalidatePath("/", "layout");
   redirect("/pro");
 }
@@ -637,7 +637,7 @@ export async function verifyLicenseNowAction(formData: FormData) {
   const licenseNumber =
     licenseVerified || licenseEntry === null ? stored : typed;
   if (!licenseNumber) {
-    setFlash("Add a license number first.", "error");
+    await setFlash("Add a license number first.", "error");
     revalidatePath("/pro/profile");
     return;
   }
@@ -651,7 +651,7 @@ export async function verifyLicenseNowAction(formData: FormData) {
   const serviceState =
     (((contractor as any).service_state as string | null) ?? null) || null;
   if (serviceState !== null && serviceState !== "CA") {
-    setFlash(
+    await setFlash(
       "Automatic license checks currently cover California (CSLB) licenses only. Yours stays on file; set State You Serve to California to run a CSLB check.",
       "info"
     );
@@ -659,7 +659,7 @@ export async function verifyLicenseNowAction(formData: FormData) {
     return;
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // A corrected (unsaved) number is persisted first, resetting verification
   // to square one: any earlier check proved a different license. If this
@@ -671,7 +671,7 @@ export async function verifyLicenseNowAction(formData: FormData) {
       .eq("id", contractor.id);
     if (error) {
       console.error("verifyLicenseNowAction: license save failed:", error.message);
-      setFlash("Couldn't save the corrected license number. Try again.", "error");
+      await setFlash("Couldn't save the corrected license number. Try again.", "error");
       revalidatePath("/pro/profile");
       return;
     }
@@ -693,7 +693,7 @@ export async function verifyLicenseNowAction(formData: FormData) {
         "verifyLicenseNowAction: license reset failed:",
         resetError.message
       );
-      setFlash("Couldn't save the corrected license number. Try again.", "error");
+      await setFlash("Couldn't save the corrected license number. Try again.", "error");
       revalidatePath("/pro/profile");
       return;
     }
@@ -710,18 +710,18 @@ export async function verifyLicenseNowAction(formData: FormData) {
   );
 
   if (!result) {
-    setFlash("Already checked recently. Try again in a few minutes.", "info");
+    await setFlash("Already checked recently. Try again in a few minutes.", "info");
   } else if (result.outcome === "active") {
-    setFlash("License verified against the CSLB database.", "success");
+    await setFlash("License verified against the CSLB database.", "success");
   } else if (result.outcome === "not_found" || result.outcome === "inactive") {
-    setFlash(
+    await setFlash(
       result.statusText
         ? `CSLB says: ${result.statusText}`
         : "CSLB could not confirm this license.",
       "error"
     );
   } else {
-    setFlash("Couldn't reach the CSLB site. Try again later.", "info");
+    await setFlash("Couldn't reach the CSLB site. Try again later.", "info");
   }
   revalidatePath("/pro/profile");
 }
@@ -744,7 +744,7 @@ export async function startBackgroundCheckAction(formData: FormData) {
     ((contractor as any).background_check_status as string | undefined) ??
     "none";
   if (status !== "none" && status !== "consider") {
-    setFlash(
+    await setFlash(
       status === "clear"
         ? "Your background check has already cleared."
         : "Your background check is already in progress. Check your email for Checkr's invitation.",
@@ -756,7 +756,7 @@ export async function startBackgroundCheckAction(formData: FormData) {
 
   const email = contractor.contact_email;
   if (!email) {
-    setFlash("Add an email address to your profile first.", "error");
+    await setFlash("Add an email address to your profile first.", "error");
     revalidatePath("/pro/profile");
     return;
   }
@@ -772,7 +772,7 @@ export async function startBackgroundCheckAction(formData: FormData) {
     .trim()
     .slice(0, 80);
   if (!firstName || !lastName) {
-    setFlash("Enter your legal first and last name to start.", "error");
+    await setFlash("Enter your legal first and last name to start.", "error");
     revalidatePath("/pro/profile");
     return;
   }
@@ -793,7 +793,7 @@ export async function startBackgroundCheckAction(formData: FormData) {
 
   if (!result.ok) {
     console.error("startBackgroundCheckAction failed:", result.error);
-    setFlash(
+    await setFlash(
       "Couldn't start your background check. Try again in a few minutes.",
       "error"
     );
@@ -815,7 +815,7 @@ export async function startBackgroundCheckAction(formData: FormData) {
     .eq("id", contractor.id);
   if (error) {
     console.error("startBackgroundCheckAction: save failed:", error.message);
-    setFlash(
+    await setFlash(
       "Your check started, but we couldn't save it here. Contact support.",
       "error"
     );
@@ -823,7 +823,7 @@ export async function startBackgroundCheckAction(formData: FormData) {
     return;
   }
 
-  setFlash(
+  await setFlash(
     "Background check started. Check your email for Checkr's invitation.",
     "success"
   );
@@ -835,11 +835,11 @@ export async function updateLeadStatusAction(formData: FormData) {
   const status = formData.get("status") as string;
   // Only accept a known status value; never write arbitrary client input.
   if (!LEAD_STATUSES.some((s) => s.value === status)) {
-    setFlash("Unknown status.", "error");
+    await setFlash("Unknown status.", "error");
     return;
   }
   const contractor = await assertContractor();
-  const supabase = createClient();
+  const supabase = await createClient();
   // Read the current status first so the review ask below fires only on a real
   // transition INTO Won, not on a re-save of an already-closed job. RLS scopes
   // the read to this contractor's own leads, same as the update.
@@ -854,7 +854,7 @@ export async function updateLeadStatusAction(formData: FormData) {
     .update({ status })
     .eq("id", leadId);
   if (error) throw new Error(error.message);
-  setFlash(`Lead marked ${labelFor(LEAD_STATUSES, status)}`);
+  await setFlash(`Lead marked ${labelFor(LEAD_STATUSES, status)}`);
 
   // Hearth Pro perk: when a member marks a job Won, ask the homeowner for a
   // review automatically. Only on the closed transition (never for lost /
@@ -960,7 +960,7 @@ export async function applyToJobAction(formData: FormData) {
   // already loaded the full row via the admin client, so this is a read of
   // data already in hand, not a second query.
   if (!(contractor as any).serves_orange_county) {
-    setFlash(
+    await setFlash(
       "Hearth serves Huntington Beach and Fountain Valley right now.",
       "error"
     );
@@ -976,7 +976,7 @@ export async function applyToJobAction(formData: FormData) {
   const conflicts = await findActiveJobConflicts(contractor.id, [leadId]);
   const conflict = conflicts.get(leadId);
   if (conflict) {
-    setFlash(
+    await setFlash(
       `You already have an active ${labelFor(JOB_CATEGORIES, conflict.category)} job with this homeowner. Message them there instead; once that job wraps up, you can apply to their new ones again.`,
       "error"
     );
@@ -1008,7 +1008,7 @@ export async function applyToJobAction(formData: FormData) {
     );
   }
   if (!leadClosedError && (leadClosedCheck as any)?.owner_closed_at) {
-    setFlash(
+    await setFlash(
       "The homeowner closed this job before you applied, so you were not charged.",
       "error"
     );
@@ -1035,7 +1035,7 @@ export async function applyToJobAction(formData: FormData) {
       .eq("contractor_id", contractor.id)
       .maybeSingle();
     if (!existingAppError && existingApp) {
-      setFlash("You already applied to this job.");
+      await setFlash("You already applied to this job.");
       revalidatePath("/pro");
       return;
     }
@@ -1043,7 +1043,7 @@ export async function applyToJobAction(formData: FormData) {
     // Best-effort: on a read hiccup, fall through to the RPC as before.
   }
 
-  const supabase = createClient() as any;
+  const supabase = await createClient() as any;
 
   // Stale-tab price guard (staleDisplayedFeeError above): if the live price
   // is now HIGHER than the fee this confirm form displayed (typically the
@@ -1055,7 +1055,7 @@ export async function applyToJobAction(formData: FormData) {
     leadClosedError ? null : ((leadClosedCheck as any) ?? null)
   );
   if (staleError) {
-    setFlash(staleError, "error");
+    await setFlash(staleError, "error");
     revalidatePath("/pro");
     return;
   }
@@ -1072,23 +1072,23 @@ export async function applyToJobAction(formData: FormData) {
     // on, so it's logged server-side and shown as a plain generic: raw
     // Postgres text names our tables, columns and constraints.
     if (error.message.includes("Job is full")) {
-      setFlash(
+      await setFlash(
         "This job is full: 3 pros already applied. Try another job.",
         "error"
       );
     } else if (error.message.includes("Already working with this homeowner")) {
-      setFlash(
+      await setFlash(
         "You already have an active job with this homeowner in this category. Message them there instead.",
         "error"
       );
     } else {
       console.error("applyToJobAction: apply_to_lead failed:", error);
-      setFlash("Couldn't apply just now. Please try again.", "error");
+      await setFlash("Couldn't apply just now. Please try again.", "error");
     }
   } else if (data === false)
-    setFlash("Not enough balance. Add funds to apply.", "error");
+    await setFlash("Not enough balance. Add funds to apply.", "error");
   else {
-    setFlash("Applied. The homeowner will review your application.", "success");
+    await setFlash("Applied. The homeowner will review your application.", "success");
     // Receipt notification: what they applied to and what it cost. Rows are
     // service-role-only inserts (no client policy), so this uses the admin
     // client. Best-effort: a hiccup here must never break a paid application.
@@ -1185,7 +1185,7 @@ export async function unlockDirectRequestAction(formData: FormData) {
     // Best-effort: on a read hiccup, fall through and notify as before.
   }
 
-  const supabase = createClient() as any;
+  const supabase = await createClient() as any;
 
   // Stale-tab price guard (staleDisplayedFeeError above): if the live price
   // is now HIGHER than the fee this confirm form displayed (typically the
@@ -1200,7 +1200,7 @@ export async function unlockDirectRequestAction(formData: FormData) {
       leadRow
     );
     if (staleError) {
-      setFlash(staleError, "error");
+      await setFlash(staleError, "error");
       revalidatePath("/pro");
       return;
     }
@@ -1213,12 +1213,12 @@ export async function unlockDirectRequestAction(formData: FormData) {
     // Raw Postgres text names our tables, columns and constraints, so it's
     // logged server-side and the pro sees a plain generic instead.
     console.error("unlockDirectRequestAction: unlock_direct_request failed:", error);
-    setFlash("Couldn't unlock this request just now. Please try again.", "error");
+    await setFlash("Couldn't unlock this request just now. Please try again.", "error");
     revalidatePath("/pro");
     return;
   }
   if (data === false) {
-    setFlash("Not enough balance. Add funds to unlock.", "error");
+    await setFlash("Not enough balance. Add funds to unlock.", "error");
     revalidatePath("/pro");
     revalidatePath("/pro/billing");
     return;
@@ -1314,7 +1314,7 @@ export async function declineDirectRequestAction(formData: FormData) {
     // Best-effort: a lookup hiccup just means no homeowner notification.
   }
 
-  const supabase = createClient() as any;
+  const supabase = await createClient() as any;
   const { error } = await supabase.rpc("decline_direct_request", {
     p_lead: leadId,
   });
@@ -1322,7 +1322,7 @@ export async function declineDirectRequestAction(formData: FormData) {
     // Same reasoning as unlockDirectRequestAction above: log the raw error,
     // show copy that doesn't leak the schema.
     console.error("declineDirectRequestAction: decline_direct_request failed:", error);
-    setFlash("Couldn't pass on this request just now. Please try again.", "error");
+    await setFlash("Couldn't pass on this request just now. Please try again.", "error");
     revalidatePath("/pro");
     return;
   }
@@ -1353,7 +1353,7 @@ export async function declineDirectRequestAction(formData: FormData) {
     }
   }
 
-  setFlash("You passed on this request.");
+  await setFlash("You passed on this request.");
   revalidatePath("/pro");
 }
 

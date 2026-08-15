@@ -20,7 +20,7 @@ export default async function GuideCta({
   signedInHref?: string;
   signedInLabel?: string;
 }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

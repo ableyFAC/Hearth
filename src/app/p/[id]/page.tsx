@@ -86,7 +86,7 @@ const loadProfile = cache(
   async (
     id: string
   ): Promise<{ profile: PublicProfile | null; unavailable: boolean }> => {
-    const supabase = createClient();
+    const supabase = await createClient();
     // Cast: the generated types don't know this RPC (database.types.ts is not
     // regenerated here).
     const { data, error } = await (supabase.rpc as any)("public_pro_profile", {
@@ -112,7 +112,7 @@ const resolveContractorId = cache(
     param: string
   ): Promise<{ id: string | null; unavailable: boolean }> => {
     if (UUID_RE.test(param)) return { id: param, unavailable: false };
-    const supabase = createClient();
+    const supabase = await createClient();
     // Cast: the generated types don't know this RPC (database.types.ts is not
     // regenerated here).
     const { data, error } = await (supabase.rpc as any)(
@@ -258,7 +258,7 @@ export default async function PublicProPage(
   // keep the create-an-account-first behavior, carrying the pro's primary
   // category through ?next= so the job form is prefilled after signup (same
   // pattern as /onboarding and /signin).
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

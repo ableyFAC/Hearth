@@ -43,7 +43,7 @@ async function passwordAttemptsExhausted(userId: string): Promise<boolean> {
 // only by the /account/security actions below - this action ignores any
 // email/password fields a crafted POST might include.
 export async function saveAccountAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -58,7 +58,7 @@ export async function saveAccountAction(formData: FormData) {
   const sms_consent = formData.get("sms_consent") === "on";
 
   if (!full_name) {
-    setFlash("Please enter your name.", "error");
+    await setFlash("Please enter your name.", "error");
     redirect("/account");
   }
 
@@ -115,11 +115,11 @@ export async function saveAccountAction(formData: FormData) {
     data: { full_name },
   });
   if (authError) {
-    setFlash("Couldn't save your name just now. Please try again.", "error");
+    await setFlash("Couldn't save your name just now. Please try again.", "error");
     redirect("/account");
   }
 
-  setFlash("Account updated.");
+  await setFlash("Account updated.");
   // Revalidate the whole layout tree so the toolbar (in the app layout, not the
   // page) picks up the new name everywhere.
   revalidatePath("/", "layout");
@@ -138,7 +138,7 @@ export async function saveAccountAction(formData: FormData) {
 // depends on the "Secure email change" toggle in the dashboard, and this must
 // be safe whatever that toggle is set to.
 export async function updateEmailAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -146,11 +146,11 @@ export async function updateEmailAction(formData: FormData) {
 
   const email = cappedField(formData, "email", FIELD_MAX.email);
   if (!email || !email.includes("@")) {
-    setFlash("That email address doesn't look right.", "error");
+    await setFlash("That email address doesn't look right.", "error");
     redirect("/account/security");
   }
   if (email === user.email) {
-    setFlash("That's already your sign-in email.", "error");
+    await setFlash("That's already your sign-in email.", "error");
     redirect("/account/security");
   }
 
@@ -160,7 +160,7 @@ export async function updateEmailAction(formData: FormData) {
   const { hasPassword } = passwordStatusFor(user);
   if (hasPassword && user.email) {
     if (await passwordAttemptsExhausted(user.id)) {
-      setFlash(PW_VERIFY_MESSAGE, "error");
+      await setFlash(PW_VERIFY_MESSAGE, "error");
       redirect("/account/security");
     }
 
@@ -176,7 +176,7 @@ export async function updateEmailAction(formData: FormData) {
       password: current,
     });
     if (verifyError) {
-      setFlash("Current password is incorrect.", "error");
+      await setFlash("Current password is incorrect.", "error");
       redirect("/account/security");
     }
   }
@@ -188,11 +188,11 @@ export async function updateEmailAction(formData: FormData) {
 
   const { error } = await supabase.auth.updateUser({ email });
   if (error) {
-    setFlash(friendlyAuthError(error), "error");
+    await setFlash(friendlyAuthError(error), "error");
     redirect("/account/security");
   }
 
-  setFlash("Check your new email to confirm the change.");
+  await setFlash("Check your new email to confirm the change.");
   redirect("/account/security");
 }
 
@@ -200,7 +200,7 @@ export async function updateEmailAction(formData: FormData) {
 // re-authenticating with a throwaway client (so the live session/cookies aren't
 // touched), then checks the new password matches its confirmation.
 export async function updatePasswordAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -211,16 +211,16 @@ export async function updatePasswordAction(formData: FormData) {
   const confirm = (formData.get("confirm_password") as string) || "";
 
   if (next.length < 8) {
-    setFlash("New password must be at least 8 characters.", "error");
+    await setFlash("New password must be at least 8 characters.", "error");
     redirect("/account/security");
   }
   if (next !== confirm) {
-    setFlash("New passwords don't match.", "error");
+    await setFlash("New passwords don't match.", "error");
     redirect("/account/security");
   }
 
   if (await passwordAttemptsExhausted(user.id)) {
-    setFlash(PW_VERIFY_MESSAGE, "error");
+    await setFlash(PW_VERIFY_MESSAGE, "error");
     redirect("/account/security");
   }
 
@@ -235,17 +235,17 @@ export async function updatePasswordAction(formData: FormData) {
     password: current,
   });
   if (verifyError) {
-    setFlash("Current password is incorrect.", "error");
+    await setFlash("Current password is incorrect.", "error");
     redirect("/account/security");
   }
 
   const { error } = await supabase.auth.updateUser({ password: next });
   if (error) {
-    setFlash(friendlyAuthError(error), "error");
+    await setFlash(friendlyAuthError(error), "error");
     redirect("/account/security");
   }
 
-  setFlash("Password updated.");
+  await setFlash("Password updated.");
   redirect("/account/security");
 }
 
@@ -253,7 +253,7 @@ export async function updatePasswordAction(formData: FormData) {
 // Supabase doesn't expose a per-device session list to us, so this is the
 // whole feature: one honest button instead of a fake device list.
 export async function signOutOthersAction() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -261,14 +261,14 @@ export async function signOutOthersAction() {
 
   const { error } = await supabase.auth.signOut({ scope: "others" });
   if (error) {
-    setFlash(
+    await setFlash(
       "Couldn't sign out your other devices just now. Please try again.",
       "error"
     );
     redirect("/account/security");
   }
 
-  setFlash("Signed out everywhere else. This device stays signed in.");
+  await setFlash("Signed out everywhere else. This device stays signed in.");
   redirect("/account/security");
 }
 
@@ -291,7 +291,7 @@ export async function signOutOthersAction() {
 // accounts have no password to re-enter, so they type their email address
 // instead; see the branch below.
 export async function deleteAccountAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -308,14 +308,14 @@ export async function deleteAccountAction(formData: FormData) {
   // Both branches below, not just the password one: a wrong typed email is
   // cheap to check, but nothing here should be retryable without limit.
   if (await passwordAttemptsExhausted(user.id)) {
-    setFlash(PW_VERIFY_MESSAGE, "error");
+    await setFlash(PW_VERIFY_MESSAGE, "error");
     redirect("/account/security");
   }
 
   if (hasPassword) {
     const current = (formData.get("current_password") as string) || "";
     if (!current) {
-      setFlash("Current password is incorrect.", "error");
+      await setFlash("Current password is incorrect.", "error");
       redirect("/account/security");
     }
 
@@ -330,7 +330,7 @@ export async function deleteAccountAction(formData: FormData) {
       password: current,
     });
     if (verifyError) {
-      setFlash("Current password is incorrect.", "error");
+      await setFlash("Current password is incorrect.", "error");
       redirect("/account/security");
     }
   } else {
@@ -344,7 +344,7 @@ export async function deleteAccountAction(formData: FormData) {
       .trim()
       .toLowerCase();
     if (typed !== user.email.toLowerCase()) {
-      setFlash(
+      await setFlash(
         "That doesn't match the email on this account. Type it exactly to confirm.",
         "error"
       );
@@ -368,7 +368,7 @@ export async function deleteAccountAction(formData: FormData) {
     try {
       await stripe.subscriptions.cancel(sub.stripe_subscription_id);
     } catch {
-      setFlash(
+      await setFlash(
         "We couldn't cancel your subscription, so we didn't delete your account. Please try again.",
         "error"
       );
@@ -402,7 +402,7 @@ export async function deleteAccountAction(formData: FormData) {
   // path (src/app/pro/profile/actions.ts).
   if (summary?.contractorDeleteFailed) {
     console.error("eraseUserData contractor delete failed for", user.id);
-    setFlash(
+    await setFlash(
       "Couldn't fully delete your account. Please try again.",
       "error"
     );
@@ -411,7 +411,7 @@ export async function deleteAccountAction(formData: FormData) {
 
   const { error } = await admin.auth.admin.deleteUser(user.id);
   if (error) {
-    setFlash(
+    await setFlash(
       "Couldn't fully delete your account. Please try again, or contact support.",
       "error"
     );
@@ -419,6 +419,6 @@ export async function deleteAccountAction(formData: FormData) {
   }
 
   await supabase.auth.signOut();
-  setFlash("Your account has been deleted.");
+  await setFlash("Your account has been deleted.");
   redirect("/");
 }

@@ -114,7 +114,7 @@ async function attachPhotos(
 ) {
   const urls = (formData.getAll("photo_urls") as string[]).filter(Boolean);
   if (!urls.length) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("photos").insert(
     urls.map((url) => ({
       property_id: propertyId,
@@ -135,17 +135,17 @@ export async function addSystemAction(
 ): Promise<ActionResult<{ id: string }>> {
   const property = await getActiveProperty();
   if (!property) {
-    setFlash("Add your home first, then you can add its systems.", "error");
+    await setFlash("Add your home first, then you can add its systems.", "error");
     return err("Add your home first, then you can add its systems.");
   }
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const systemType = formData.get("system_type") as string;
   // The type drives the default lifespan, the icon, the label, and the "find a
   // pro" category, so an unknown value would write a system nothing in the app
   // can read back. Re-checked here because the <select> is only a client hint.
   if (!isAllowedValue(SYSTEM_TYPES, systemType)) {
-    setFlash("Couldn't add that system. Try again.", "error");
+    await setFlash("Couldn't add that system. Try again.", "error");
     return err("Couldn't add that system. Please pick a type from the list.");
   }
 
@@ -207,11 +207,11 @@ export async function addSystemAction(
     // attach those same photo URLs once the insert succeeds. Sweeping up
     // true orphans (the owner gives up instead of retrying) is left to
     // future janitor work, not built here.
-    setFlash("Couldn't add that system. Try again.", "error");
+    await setFlash("Couldn't add that system. Try again.", "error");
     return err("Couldn't add that system just now. Please try again.");
   }
   await attachPhotos(formData, property.id, row.id);
-  setFlash(`Added ${labelFor(SYSTEM_TYPES, systemType)}`);
+  await setFlash(`Added ${labelFor(SYSTEM_TYPES, systemType)}`);
   revalidatePath("/dashboard");
   revalidatePath("/home-report");
   return ok({ id: row.id });
@@ -230,16 +230,16 @@ export async function addSystemFormAction(formData: FormData): Promise<void> {
 export async function quickAddSystemAction(formData: FormData) {
   const property = await getActiveProperty();
   if (!property) {
-    setFlash("Couldn't add that system. Try again.", "error");
+    await setFlash("Couldn't add that system. Try again.", "error");
     return;
   }
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const systemType = formData.get("system_type") as string;
   // Same allow-list as addSystemAction: the quick-add chips post a known type,
   // but the action itself will take any FormData.
   if (!isAllowedValue(SYSTEM_TYPES, systemType)) {
-    setFlash("Couldn't add that system. Try again.", "error");
+    await setFlash("Couldn't add that system. Try again.", "error");
     return;
   }
   const { error } = await supabase.from("home_systems").insert({
@@ -248,10 +248,10 @@ export async function quickAddSystemAction(formData: FormData) {
     expected_lifespan_years: DEFAULT_LIFESPANS[systemType] ?? null,
   });
   if (error) {
-    setFlash("Couldn't add that system. Try again.", "error");
+    await setFlash("Couldn't add that system. Try again.", "error");
     return;
   }
-  setFlash(`Added ${labelFor(SYSTEM_TYPES, systemType)}`);
+  await setFlash(`Added ${labelFor(SYSTEM_TYPES, systemType)}`);
   revalidatePath("/dashboard");
   revalidatePath("/home-report");
 }
@@ -260,14 +260,14 @@ export async function quickAddSystemAction(formData: FormData) {
 // error (rather than an ActionResult no one reads) is the right signal.
 export async function deleteSystemAction(formData: FormData) {
   const id = formData.get("id") as string;
-  const supabase = createClient();
+  const supabase = await createClient();
   // RLS guarantees the row belongs to the caller's property.
   const { error } = await supabase.from("home_systems").delete().eq("id", id);
   if (error) {
-    setFlash("Couldn't remove that system. Try again.", "error");
+    await setFlash("Couldn't remove that system. Try again.", "error");
     return;
   }
-  setFlash("System removed", "info");
+  await setFlash("System removed", "info");
   revalidatePath("/dashboard");
   revalidatePath("/home-report");
 }
@@ -278,7 +278,7 @@ export async function updateSystemAction(
   formData: FormData
 ): Promise<ActionResult> {
   const id = formData.get("id") as string;
-  const supabase = createClient();
+  const supabase = await createClient();
   // Same caps and ranges as addSystemAction: an edit is just as forgeable as
   // the original add, so it gets the same treatment. system_type isn't
   // editable here, so there is nothing to allow-list on this path.
@@ -336,7 +336,7 @@ export async function updateSystemAction(
 
   const property = await getActiveProperty();
   if (property) await attachPhotos(formData, property.id, id);
-  setFlash("System updated");
+  await setFlash("System updated");
   revalidatePath("/dashboard");
   revalidatePath("/home-report");
   return ok();
@@ -347,10 +347,10 @@ export async function updateSystemAction(
 export async function updatePropertyAction(formData: FormData) {
   const property = await getActiveProperty();
   if (!property) {
-    setFlash("Couldn't save home details. Try again.", "error");
+    await setFlash("Couldn't save home details. Try again.", "error");
     return;
   }
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Same finite-and-in-range treatment the systems above get, with the same
   // ranges onboarding uses for these columns: a NaN or a wild value would
@@ -373,10 +373,10 @@ export async function updatePropertyAction(formData: FormData) {
     .eq("id", property.id);
 
   if (error) {
-    setFlash("Couldn't save home details. Try again.", "error");
+    await setFlash("Couldn't save home details. Try again.", "error");
     return;
   }
-  setFlash("Home details saved");
+  await setFlash("Home details saved");
   revalidatePath("/dashboard");
   revalidatePath("/home-report");
 }

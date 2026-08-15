@@ -27,7 +27,7 @@ export async function saveTaxAssessmentAction(
   const assessedYear = yearRaw ? Number(yearRaw) : null;
 
   if (!assessedValue || assessedValue <= 0 || !assessedYear) {
-    setFlash(
+    await setFlash(
       "Add the assessed value and the assessment year from your notice to continue.",
       "error"
     );
@@ -47,7 +47,7 @@ export async function saveTaxAssessmentAction(
     !Number.isFinite(assessedValue) ||
     assessedValue > 100_000_000
   ) {
-    setFlash(
+    await setFlash(
       "Those numbers don't look right. Double-check the year and the assessed value.",
       "error"
     );
@@ -55,7 +55,7 @@ export async function saveTaxAssessmentAction(
     return { ok: false };
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   try {
     // RLS's existing "owner selects/updates own property" policy covers this,
     // same as saveHomeValueAction in value/actions.ts.
@@ -66,12 +66,12 @@ export async function saveTaxAssessmentAction(
       })
       .eq("id", property.id);
     if (error) throw error;
-    setFlash("Assessment saved");
+    await setFlash("Assessment saved");
   } catch {
     // Migration 0039 may not have run yet against this database, or the
     // write failed for some other reason. Fail soft: the page just shows the
     // setup form again instead of a 500.
-    setFlash("Couldn't save right now. Please try again in a bit.", "error");
+    await setFlash("Couldn't save right now. Please try again in a bit.", "error");
     revalidatePath("/taxes");
     return { ok: false };
   }

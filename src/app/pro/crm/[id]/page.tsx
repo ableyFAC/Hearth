@@ -40,7 +40,7 @@ export default async function ClientDetailPage(
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: client } = await supabase
     .from("pro_clients")

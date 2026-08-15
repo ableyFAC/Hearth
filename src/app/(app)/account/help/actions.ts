@@ -10,14 +10,14 @@ import { setFlash } from "@/lib/flash";
 // homeowner's contact details are prefilled from their account, but they can
 // edit them here.
 export async function saveSupportMessageAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   // Require a session: this endpoint stores attacker-controllable name/email/
   // message that staff later read, so don't accept anonymous writes.
   if (!user) {
-    setFlash("Please sign in to contact support.", "error");
+    await setFlash("Please sign in to contact support.", "error");
     return;
   }
 
@@ -32,7 +32,7 @@ export async function saveSupportMessageAction(formData: FormData) {
     p_window_seconds: 3600,
   });
   if (allowed === false) {
-    setFlash(
+    await setFlash(
       "You've sent several messages already. Please wait a bit before sending another.",
       "error"
     );
@@ -45,7 +45,7 @@ export async function saveSupportMessageAction(formData: FormData) {
   // client hint - a server action takes whatever FormData it is handed.
   const message = cappedField(formData, "message", FIELD_MAX.message);
   if (!message) {
-    setFlash("Please write a short message first.", "error");
+    await setFlash("Please write a short message first.", "error");
     return;
   }
 
@@ -57,7 +57,7 @@ export async function saveSupportMessageAction(formData: FormData) {
     message,
   });
 
-  if (error) setFlash("Couldn't send your message. Please try again.", "error");
-  else setFlash("Thanks. We got your message and will get back to you.", "success");
+  if (error) await setFlash("Couldn't send your message. Please try again.", "error");
+  else await setFlash("Thanks. We got your message and will get back to you.", "success");
   revalidatePath("/account/help");
 }

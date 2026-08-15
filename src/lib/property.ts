@@ -24,7 +24,7 @@ export const getProperties = cache(async (): Promise<PropertyWithShared[]> => {
   const user = await getUser();
   if (!user) return [];
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("properties")
     .select("*")

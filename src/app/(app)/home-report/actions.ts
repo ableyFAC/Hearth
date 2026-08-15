@@ -39,7 +39,7 @@ export async function addMaintenanceHistoryAction(formData: FormData) {
   const title = cappedField(formData, "title", FIELD_MAX.title);
   const date = ((formData.get("completed_date") as string) || "").trim();
   if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    setFlash("Add what was done and a date.", "error");
+    await setFlash("Add what was done and a date.", "error");
     return;
   }
   const performedBy = cappedFieldOrNull(
@@ -52,7 +52,7 @@ export async function addMaintenanceHistoryAction(formData: FormData) {
   // timezones; only the date part is ever shown or deduped on.
   const completedAt = new Date(`${date}T12:00:00Z`).toISOString();
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Guard duplicate inserts here too (belt-and-suspenders with the DB unique
   // index from migration 0061, which may not be applied to the live database
@@ -70,7 +70,7 @@ export async function addMaintenanceHistoryAction(formData: FormData) {
       t.completed_at?.slice(0, 10) === date
   );
   if (isDupe) {
-    setFlash("That's already in your maintenance history.", "info");
+    await setFlash("That's already in your maintenance history.", "info");
     return;
   }
 
@@ -94,11 +94,11 @@ export async function addMaintenanceHistoryAction(formData: FormData) {
     ({ error } = await supabase.from("maintenance_tasks").insert(baseRow));
   }
   if (error) {
-    setFlash("Couldn't save that entry. Please try again.", "error");
+    await setFlash("Couldn't save that entry. Please try again.", "error");
     return;
   }
 
-  setFlash("Added to your maintenance history.");
+  await setFlash("Added to your maintenance history.");
   revalidatePath("/home-report");
   revalidatePath("/dashboard");
 }

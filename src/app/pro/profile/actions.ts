@@ -42,7 +42,7 @@ async function passwordAttemptsExhausted(userId: string): Promise<boolean> {
 // re-authenticating with a throwaway client (so the live session/cookies aren't
 // touched), then checks the new password matches its confirmation.
 export async function updatePasswordAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -53,16 +53,16 @@ export async function updatePasswordAction(formData: FormData) {
   const confirm = (formData.get("confirm_password") as string) || "";
 
   if (next.length < 8) {
-    setFlash("New password must be at least 8 characters.", "error");
+    await setFlash("New password must be at least 8 characters.", "error");
     redirect("/pro/profile");
   }
   if (next !== confirm) {
-    setFlash("New passwords don't match.", "error");
+    await setFlash("New passwords don't match.", "error");
     redirect("/pro/profile");
   }
 
   if (await passwordAttemptsExhausted(user.id)) {
-    setFlash(PW_VERIFY_MESSAGE, "error");
+    await setFlash(PW_VERIFY_MESSAGE, "error");
     redirect("/pro/profile");
   }
 
@@ -77,17 +77,17 @@ export async function updatePasswordAction(formData: FormData) {
     password: current,
   });
   if (verifyError) {
-    setFlash("Current password is incorrect.", "error");
+    await setFlash("Current password is incorrect.", "error");
     redirect("/pro/profile");
   }
 
   const { error } = await supabase.auth.updateUser({ password: next });
   if (error) {
-    setFlash("Couldn't save your changes. Please try again.", "error");
+    await setFlash("Couldn't save your changes. Please try again.", "error");
     redirect("/pro/profile");
   }
 
-  setFlash("Password updated.");
+  await setFlash("Password updated.");
   redirect("/pro/profile");
 }
 
@@ -104,7 +104,7 @@ export async function updatePasswordAction(formData: FormData) {
 // be safe whatever that toggle is set to. Mirrors the homeowner twin in
 // src/app/(app)/account/actions.ts.
 export async function updateEmailAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -112,11 +112,11 @@ export async function updateEmailAction(formData: FormData) {
 
   const email = cappedField(formData, "email", FIELD_MAX.email);
   if (!email || !email.includes("@")) {
-    setFlash("That email address doesn't look right.", "error");
+    await setFlash("That email address doesn't look right.", "error");
     redirect("/pro/profile");
   }
   if (email === user.email) {
-    setFlash("That's already your sign-in email.", "error");
+    await setFlash("That's already your sign-in email.", "error");
     redirect("/pro/profile");
   }
 
@@ -126,7 +126,7 @@ export async function updateEmailAction(formData: FormData) {
   const { hasPassword } = passwordStatusFor(user);
   if (hasPassword && user.email) {
     if (await passwordAttemptsExhausted(user.id)) {
-      setFlash(PW_VERIFY_MESSAGE, "error");
+      await setFlash(PW_VERIFY_MESSAGE, "error");
       redirect("/pro/profile");
     }
 
@@ -142,7 +142,7 @@ export async function updateEmailAction(formData: FormData) {
       password: current,
     });
     if (verifyError) {
-      setFlash("Current password is incorrect.", "error");
+      await setFlash("Current password is incorrect.", "error");
       redirect("/pro/profile");
     }
   }
@@ -157,11 +157,11 @@ export async function updateEmailAction(formData: FormData) {
     // friendlyAuthError, not error.message: the raw Supabase text is terse
     // jargon and can echo server internals. Same treatment as the homeowner
     // twin in src/app/(app)/account/actions.ts.
-    setFlash(friendlyAuthError(error), "error");
+    await setFlash(friendlyAuthError(error), "error");
     redirect("/pro/profile");
   }
 
-  setFlash("Check your new email to confirm the change.");
+  await setFlash("Check your new email to confirm the change.");
   redirect("/pro/profile");
 }
 
@@ -169,7 +169,7 @@ export async function updateEmailAction(formData: FormData) {
 // Supabase doesn't expose a per-device session list to us, so this is the
 // whole feature: one honest button instead of a fake device list.
 export async function signOutOthersAction() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -178,11 +178,11 @@ export async function signOutOthersAction() {
   const { error } = await supabase.auth.signOut({ scope: "others" });
   if (error) {
     // Same reasoning as updateEmailAction above: never show raw auth text.
-    setFlash(friendlyAuthError(error), "error");
+    await setFlash(friendlyAuthError(error), "error");
     redirect("/pro/profile");
   }
 
-  setFlash("Signed out everywhere else. This device stays signed in.");
+  await setFlash("Signed out everywhere else. This device stays signed in.");
   redirect("/pro/profile");
 }
 
@@ -216,7 +216,7 @@ function isOwnedStoragePath(raw: string, pathPrefix: string): boolean {
 // the unrestricted saveCompanyAction pattern (no plan gate). A failed write
 // (e.g. migration 0033 not applied yet) degrades to a soft flash, not a crash.
 export async function saveLicenseInsuranceAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -235,7 +235,7 @@ export async function saveLicenseInsuranceAction(formData: FormData) {
 
   const stateRaw = str("license_state").toUpperCase();
   if (stateRaw && !/^[A-Z]{2}$/.test(stateRaw)) {
-    setFlash("License state should be a 2-letter code, like CA.", "error");
+    await setFlash("License state should be a 2-letter code, like CA.", "error");
     redirect("/pro/profile");
   }
 
@@ -243,7 +243,7 @@ export async function saveLicenseInsuranceAction(formData: FormData) {
 
   const expiresRaw = str("insurance_expires");
   if (expiresRaw && Number.isNaN(new Date(expiresRaw).getTime())) {
-    setFlash("That insurance expiry date doesn't look right.", "error");
+    await setFlash("That insurance expiry date doesn't look right.", "error");
     redirect("/pro/profile");
   }
 
@@ -264,14 +264,14 @@ export async function saveLicenseInsuranceAction(formData: FormData) {
     .update(fields)
     .eq("id", contractor.id);
   if (error) {
-    setFlash(
+    await setFlash(
       "Couldn't save your license and insurance. Please try again.",
       "error"
     );
     redirect("/pro/profile");
   }
 
-  setFlash("License and insurance saved.");
+  await setFlash("License and insurance saved.");
   revalidatePath("/pro/profile");
   redirect("/pro/profile");
 }
@@ -282,7 +282,7 @@ export async function saveLicenseInsuranceAction(formData: FormData) {
 // saveLicenseInsuranceAction above). Everything is validated here, membership
 // is re-checked server-side, and a failed write degrades to a soft flash.
 export async function savePublicPageAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -292,7 +292,7 @@ export async function savePublicPageAction(formData: FormData) {
   if (!contractor) redirect("/pro/onboarding");
 
   if (!(await hasProPlan())) {
-    setFlash("Page extras are a Hearth Pro member perk.", "error");
+    await setFlash("Page extras are a Hearth Pro member perk.", "error");
     redirect("/pro/profile");
   }
 
@@ -301,7 +301,7 @@ export async function savePublicPageAction(formData: FormData) {
   // About: cap server-side; the textarea's maxLength is only a hint.
   const about = str("about");
   if (about.length > 1000) {
-    setFlash("The about section must be 1,000 characters or fewer.", "error");
+    await setFlash("The about section must be 1,000 characters or fewer.", "error");
     redirect("/pro/profile");
   }
 
@@ -330,11 +330,11 @@ export async function savePublicPageAction(formData: FormData) {
     .update(fields)
     .eq("id", contractor.id);
   if (error) {
-    setFlash("Couldn't save your page extras. Please try again.", "error");
+    await setFlash("Couldn't save your page extras. Please try again.", "error");
     redirect("/pro/profile");
   }
 
-  setFlash("Public page updated.");
+  await setFlash("Public page updated.");
   revalidatePath("/pro/profile");
   redirect("/pro/profile");
 }
@@ -347,7 +347,7 @@ export async function savePublicPageAction(formData: FormData) {
 // accounts have no password to re-enter, so they type their email address
 // instead; see the branch below.
 export async function deleteAccountAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -363,14 +363,14 @@ export async function deleteAccountAction(formData: FormData) {
   // Both branches below, not just the password one: a wrong typed email is
   // cheap to check, but nothing here should be retryable without limit.
   if (await passwordAttemptsExhausted(user.id)) {
-    setFlash(PW_VERIFY_MESSAGE, "error");
+    await setFlash(PW_VERIFY_MESSAGE, "error");
     redirect("/pro/profile");
   }
 
   if (hasPassword) {
     const current = (formData.get("current_password") as string) || "";
     if (!current) {
-      setFlash("Current password is incorrect.", "error");
+      await setFlash("Current password is incorrect.", "error");
       redirect("/pro/profile");
     }
 
@@ -385,7 +385,7 @@ export async function deleteAccountAction(formData: FormData) {
       password: current,
     });
     if (verifyError) {
-      setFlash("Current password is incorrect.", "error");
+      await setFlash("Current password is incorrect.", "error");
       redirect("/pro/profile");
     }
   } else {
@@ -397,7 +397,7 @@ export async function deleteAccountAction(formData: FormData) {
       .trim()
       .toLowerCase();
     if (typed !== user.email.toLowerCase()) {
-      setFlash(
+      await setFlash(
         "That doesn't match the email on this account. Type it exactly to confirm.",
         "error"
       );
@@ -421,7 +421,7 @@ export async function deleteAccountAction(formData: FormData) {
     try {
       await stripe.subscriptions.cancel(sub.stripe_subscription_id);
     } catch {
-      setFlash(
+      await setFlash(
         "We couldn't cancel your subscription, so we didn't delete your account. Please try again.",
         "error"
       );
@@ -460,17 +460,17 @@ export async function deleteAccountAction(formData: FormData) {
   // whole company record would be orphaned forever once the auth user is gone.
   // Abort before deleteUser rather than leave that behind.
   if (summary?.contractorDeleteFailed) {
-    setFlash("Couldn't save your changes. Please try again.", "error");
+    await setFlash("Couldn't save your changes. Please try again.", "error");
     redirect("/pro/profile");
   }
 
   const { error } = await admin.auth.admin.deleteUser(user.id);
   if (error) {
-    setFlash("Couldn't save your changes. Please try again.", "error");
+    await setFlash("Couldn't save your changes. Please try again.", "error");
     redirect("/pro/profile");
   }
 
   await supabase.auth.signOut();
-  setFlash("Your account has been deleted.");
+  await setFlash("Your account has been deleted.");
   redirect("/");
 }

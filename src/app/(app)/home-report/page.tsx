@@ -73,7 +73,7 @@ export default async function HomeReportPage() {
   if (!plus) redirect("/plus?reason=report");
 
   const property = propertyOrNull!;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const [
     { data: systems },

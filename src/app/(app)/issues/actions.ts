@@ -26,10 +26,10 @@ function validPhotoUrls(formData: FormData): string[] {
 export async function reportIssueAction(formData: FormData) {
   const property = await getActiveProperty();
   if (!property) {
-    setFlash("Couldn't log that issue. Try again.", "error");
+    await setFlash("Couldn't log that issue. Try again.", "error");
     return;
   }
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const category = formData.get("category") as string;
   const severity = formData.get("severity") as string;
@@ -42,7 +42,7 @@ export async function reportIssueAction(formData: FormData) {
     !isAllowedValue(ISSUE_CATEGORIES, category) ||
     !isAllowedValue(SEVERITIES, severity)
   ) {
-    setFlash("Couldn't log that issue. Try again.", "error");
+    await setFlash("Couldn't log that issue. Try again.", "error");
     return;
   }
 
@@ -66,7 +66,7 @@ export async function reportIssueAction(formData: FormData) {
     // which will attach those same photo URLs once the insert succeeds.
     // Sweeping up true orphans (the owner gives up instead) is left to
     // future janitor work, not built here.
-    setFlash("Couldn't log that issue. Try again.", "error");
+    await setFlash("Couldn't log that issue. Try again.", "error");
     return;
   }
 
@@ -83,7 +83,7 @@ export async function reportIssueAction(formData: FormData) {
     );
   }
 
-  setFlash("Issue logged. Let's find you a pro.");
+  await setFlash("Issue logged. Let's find you a pro.");
   revalidatePath("/issues");
   revalidatePath("/dashboard");
   revalidatePath("/forecast");
@@ -97,7 +97,7 @@ export async function reportIssueAction(formData: FormData) {
 
 export async function updateIssueAction(formData: FormData) {
   const id = formData.get("id") as string;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const category = formData.get("category") as string;
   const severity = formData.get("severity") as string;
@@ -107,7 +107,7 @@ export async function updateIssueAction(formData: FormData) {
     !isAllowedValue(ISSUE_CATEGORIES, category) ||
     !isAllowedValue(SEVERITIES, severity)
   ) {
-    setFlash("Couldn't save your changes. Try again.", "error");
+    await setFlash("Couldn't save your changes. Try again.", "error");
     return;
   }
 
@@ -121,10 +121,10 @@ export async function updateIssueAction(formData: FormData) {
     })
     .eq("id", id);
   if (error) {
-    setFlash("Couldn't save your changes. Try again.", "error");
+    await setFlash("Couldn't save your changes. Try again.", "error");
     return;
   }
-  setFlash("Issue updated");
+  await setFlash("Issue updated");
   revalidatePath("/issues");
   revalidatePath("/dashboard");
   revalidatePath("/forecast");
@@ -161,17 +161,17 @@ async function liftSystemConditionForIssue(supabase: any, issueId: string) {
 
 export async function resolveIssueAction(formData: FormData) {
   const id = formData.get("id") as string;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("issues")
     .update({ status: "resolved" })
     .eq("id", id);
   if (error) {
-    setFlash("Couldn't resolve that issue. Try again.", "error");
+    await setFlash("Couldn't resolve that issue. Try again.", "error");
     return;
   }
   await liftSystemConditionForIssue(supabase, id);
-  setFlash("Issue resolved");
+  await setFlash("Issue resolved");
   revalidatePath("/issues");
   revalidatePath("/dashboard");
   revalidatePath("/forecast");
@@ -179,13 +179,13 @@ export async function resolveIssueAction(formData: FormData) {
 
 // Undo: reopen a resolved issue (accidental check-off).
 export async function reopenIssueAction(id: string) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("issues")
     .update({ status: "open" })
     .eq("id", id);
   if (error) {
-    setFlash("Couldn't reopen that issue. Try again.", "error");
+    await setFlash("Couldn't reopen that issue. Try again.", "error");
     return;
   }
   revalidatePath("/issues");
@@ -195,13 +195,13 @@ export async function reopenIssueAction(id: string) {
 
 // Resolve via the checkbox toggle (takes an id, not FormData).
 export async function checkResolveIssueAction(id: string) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("issues")
     .update({ status: "resolved" })
     .eq("id", id);
   if (error) {
-    setFlash("Couldn't update that issue. Try again.", "error");
+    await setFlash("Couldn't update that issue. Try again.", "error");
     return;
   }
   await liftSystemConditionForIssue(supabase, id);

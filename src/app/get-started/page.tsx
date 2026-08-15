@@ -33,7 +33,7 @@ export default async function GetStarted(
   );
   const nextQuery = next ? `?next=${encodeURIComponent(next)}` : "";
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

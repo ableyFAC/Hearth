@@ -64,7 +64,7 @@ export default async function ContractorsPage(
   }
 ) {
   const searchParams = await props.searchParams;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Nothing here depends on anything else on the page (property/plus/auth
   // are all independent lookups) - run them together instead of stacking

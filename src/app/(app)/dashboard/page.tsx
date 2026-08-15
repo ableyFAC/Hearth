@@ -80,7 +80,7 @@ export default async function HomePage(
   // together instead of stacking two round trips before the redirect check.
   const [property, plus] = await Promise.all([getActiveProperty(), hasPlus()]);
   if (!property) redirect("/onboarding");
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const [
     { data: systems },

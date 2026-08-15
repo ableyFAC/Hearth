@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { cookies, type UnsafeUnwrappedCookies } from "next/headers";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
@@ -31,9 +31,9 @@ const SEEN_COOKIE = "hearth_ho_chat_seen";
 // amount even after the quote itself is withdrawn.
 const isQuoteCompanionBody = (body: string) => body.startsWith("Sent a quote:");
 
-function readSeenMap(): Record<string, string> {
+async function readSeenMap(): Promise<Record<string, string>> {
   try {
-    return JSON.parse((cookies() as unknown as UnsafeUnwrappedCookies).get(SEEN_COOKIE)?.value || "{}");
+    return JSON.parse((await cookies()).get(SEEN_COOKIE)?.value || "{}");
   } catch {
     return {};
   }
@@ -79,7 +79,7 @@ export default async function HomeownerChatsPage(
     getProactiveGreeting(),
   ]);
   if (!property) redirect("/onboarding");
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // The homeowner's conversations are jobs where they've PICKED a pro. Open
   // postings with no chosen pro yet aren't chats - there's no one to message.
@@ -97,7 +97,7 @@ export default async function HomeownerChatsPage(
     .order("created_at", { ascending: false });
 
   const convos = leads ?? [];
-  const seen = readSeenMap();
+  const seen = await readSeenMap();
   const nameOf = (l: any) => l.contractors?.name ?? "Sourcing a pro";
 
   // Latest message per conversation, for preview + unread.

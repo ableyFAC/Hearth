@@ -82,7 +82,7 @@ function validPhotoUrls(formData: FormData): string[] {
 export async function postJobAction(formData: FormData) {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const {
     data: { user },
@@ -106,7 +106,7 @@ export async function postJobAction(formData: FormData) {
     p_window_seconds: 3600,
   });
   if (allowed === false) {
-    setFlash("You're posting jobs too quickly, please wait a bit.", "error");
+    await setFlash("You're posting jobs too quickly, please wait a bit.", "error");
     redirect("/contractors");
   }
   // Daily cap on top of the hourly one (security audit finding #3): the hourly
@@ -123,7 +123,7 @@ export async function postJobAction(formData: FormData) {
     p_window_seconds: 86400,
   });
   if (allowedDay === false) {
-    setFlash(
+    await setFlash(
       "You've reached today's posting limit. Please try again tomorrow.",
       "error"
     );
@@ -299,7 +299,7 @@ export async function postJobAction(formData: FormData) {
   // the setFlash + redirect style this action uses.
   if (!isAllowedValue(JOB_CATEGORIES, category)) {
     await cleanupOrphanPhotos();
-    setFlash("Please pick a valid job category.", "error");
+    await setFlash("Please pick a valid job category.", "error");
     redirect("/contractors");
   }
 
@@ -307,7 +307,7 @@ export async function postJobAction(formData: FormData) {
   // require a real description (at least 20 characters) before it goes live.
   if ((issueDescription ?? "").trim().length < 20) {
     await cleanupOrphanPhotos();
-    setFlash(
+    await setFlash(
       photoUrls.length
         ? "Please describe the job in at least 20 characters so pros know what they're applying to. Your photos weren't kept, so please re-attach them."
         : "Please describe the job in at least 20 characters so pros know what they're applying to.",
@@ -324,7 +324,7 @@ export async function postJobAction(formData: FormData) {
   // page, can't bypass it).
   if (isMajor && !budgetRange) {
     await cleanupOrphanPhotos();
-    setFlash(
+    await setFlash(
       "Pros need a budget range to bid seriously on projects this size. Please pick one and post again.",
       "error"
     );
@@ -609,7 +609,7 @@ export async function postJobAction(formData: FormData) {
 export async function updateJobAction(
   formData: FormData
 ): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const {
     data: { user },
@@ -692,7 +692,7 @@ export async function updateJobAction(
 
   // The flash cookie survives revalidatePath, so this still shows even
   // though EditJobForm closes the panel itself on ok() rather than reloading.
-  setFlash("Job updated.", "success");
+  await setFlash("Job updated.", "success");
   revalidatePath("/contractors");
   return ok();
 }
@@ -715,7 +715,7 @@ export async function updateJobAction(
 //    ghost-protection schedule if nobody was chosen - this action moves zero
 //    money and reads no wallet/fee columns.
 export async function closeJobAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const leadId = String(formData.get("lead_id"));
   // Capped before it ever reaches notification bodies or the flash message:
   // it's a free-text field with no length limit at the source.
@@ -728,7 +728,7 @@ export async function closeJobAction(formData: FormData) {
     .eq("id", leadId)
     .maybeSingle();
   if (!lead) {
-    setFlash("Couldn't find that job. Please refresh and try again.", "error");
+    await setFlash("Couldn't find that job. Please refresh and try again.", "error");
     revalidatePath("/contractors");
     return;
   }
@@ -736,7 +736,7 @@ export async function closeJobAction(formData: FormData) {
     // A pro is already assigned (or the lead is otherwise not a plain open
     // posting): closing here would be meaningless, and the UI never renders
     // this form for that job. Guard anyway against a forged/replayed submit.
-    setFlash(
+    await setFlash(
       "This job already has a pro assigned, so it can't be closed here.",
       "error"
     );
@@ -766,7 +766,7 @@ export async function closeJobAction(formData: FormData) {
     if (error && isMissingSchemaError(error)) {
       // Migration 0092 hasn't run against this database yet: degrade to the
       // old refusal instead of crashing or silently no-oping.
-      setFlash(
+      await setFlash(
         "Pros have already applied, so this job can't be closed. Pick one from the applicants.",
         "error"
       );
@@ -774,7 +774,7 @@ export async function closeJobAction(formData: FormData) {
       return;
     }
     if (error) {
-      setFlash("Couldn't close that job just now. Please try again.", "error");
+      await setFlash("Couldn't close that job just now. Please try again.", "error");
       revalidatePath("/contractors");
       return;
     }
@@ -851,7 +851,7 @@ export async function closeJobAction(formData: FormData) {
       }
     }
 
-    setFlash(reason ? `Job closed: ${reason}.` : "Job closed.", "info");
+    await setFlash(reason ? `Job closed: ${reason}.` : "Job closed.", "info");
     revalidatePath("/contractors");
     revalidatePath("/dashboard");
     return;
@@ -862,8 +862,8 @@ export async function closeJobAction(formData: FormData) {
     .from("contractor_leads")
     .delete()
     .eq("id", leadId);
-  if (error) setFlash("Couldn't close that job just now. Please try again.", "error");
-  else setFlash(reason ? `Job closed: ${reason}.` : "Job closed.", "info");
+  if (error) await setFlash("Couldn't close that job just now. Please try again.", "error");
+  else await setFlash(reason ? `Job closed: ${reason}.` : "Job closed.", "info");
   revalidatePath("/contractors");
   revalidatePath("/dashboard");
 }
@@ -871,7 +871,7 @@ export async function closeJobAction(formData: FormData) {
 // Homeowner picks a pro from the applicants. The DB function assigns + unlocks
 // the chosen pro (they get contact + chat) and declines the rest.
 export async function chooseApplicantAction(formData: FormData) {
-  const supabase = createClient() as any;
+  const supabase = await createClient() as any;
   const applicationId = String(formData.get("application_id"));
   const {
     data: { user },
@@ -917,9 +917,9 @@ export async function chooseApplicantAction(formData: FormData) {
   const { error } = await supabase.rpc("choose_applicant", {
     p_application: applicationId,
   });
-  if (error) setFlash("Couldn't select that pro just now. Please try again.", "error");
+  if (error) await setFlash("Couldn't select that pro just now. Please try again.", "error");
   else {
-    setFlash(
+    await setFlash(
       "Pro selected. They now have your contact and can message you.",
       "success"
     );
@@ -1013,7 +1013,7 @@ const REVIEW_COMMENT_MAX = 600;
 export async function saveReviewAction(
   formData: FormData
 ): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const leadId = String(formData.get("lead_id") || "");
   const rating = Number(formData.get("rating"));
   const comment = String(formData.get("comment") || "").trim();
@@ -1105,7 +1105,7 @@ export async function saveReviewAction(
 
   // The flash cookie survives revalidatePath, so this still shows even
   // though ReviewButton closes the modal itself on ok() rather than reloading.
-  setFlash("Thanks for your review!", "success");
+  await setFlash("Thanks for your review!", "success");
   revalidatePath("/contractors");
   revalidatePath("/chats");
   return ok();
@@ -1128,7 +1128,7 @@ export async function requestProAction(
 ): Promise<ActionResult> {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const {
     data: { user },
@@ -1331,7 +1331,7 @@ export async function requestProAction(
 // to a lead on a property the caller owns; the direct_to / contractor_id guards
 // stop this from touching a normal open job or an already-unlocked one.
 export async function cancelDirectRequestAction(formData: FormData) {
-  const supabase = createClient() as any;
+  const supabase = await createClient() as any;
   const leadId = String(formData.get("lead_id") || "");
 
   const { data: lead } = await supabase
@@ -1342,7 +1342,7 @@ export async function cancelDirectRequestAction(formData: FormData) {
   if (!lead || !lead.direct_to || lead.contractor_id) {
     // Not a pending direct request (or already unlocked): nothing to cancel
     // here. Guard against a forged/replayed submit.
-    setFlash("Couldn't cancel that request just now. Please try again.", "error");
+    await setFlash("Couldn't cancel that request just now. Please try again.", "error");
     revalidatePath("/contractors");
     return;
   }
@@ -1352,8 +1352,8 @@ export async function cancelDirectRequestAction(formData: FormData) {
     .delete()
     .eq("id", leadId)
     .is("contractor_id", null);
-  if (error) setFlash("Couldn't cancel that request just now. Please try again.", "error");
-  else setFlash("Request cancelled.", "info");
+  if (error) await setFlash("Couldn't cancel that request just now. Please try again.", "error");
+  else await setFlash("Request cancelled.", "info");
   revalidatePath("/contractors");
 }
 
@@ -1366,7 +1366,7 @@ export async function cancelDirectRequestAction(formData: FormData) {
 export async function postDirectPubliclyAction(formData: FormData) {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
-  const supabase = createClient() as any;
+  const supabase = await createClient() as any;
   const leadId = String(formData.get("lead_id") || "");
 
   // RLS scopes this read to a lead the caller owns. It must still be a pending
@@ -1382,7 +1382,7 @@ export async function postDirectPubliclyAction(formData: FormData) {
     lead.contractor_id ||
     lead.property_id !== property.id
   ) {
-    setFlash("Couldn't post that job just now. Please try again.", "error");
+    await setFlash("Couldn't post that job just now. Please try again.", "error");
     revalidatePath("/contractors");
     return;
   }
@@ -1406,7 +1406,7 @@ export async function postDirectPubliclyAction(formData: FormData) {
     p_window_seconds: 3600,
   });
   if (allowed === false) {
-    setFlash("You're posting jobs too quickly, please wait a bit.", "error");
+    await setFlash("You're posting jobs too quickly, please wait a bit.", "error");
     redirect("/contractors");
   }
   const { data: allowedDay } = await admin.rpc("rate_limit_hit", {
@@ -1415,7 +1415,7 @@ export async function postDirectPubliclyAction(formData: FormData) {
     p_window_seconds: 86400,
   });
   if (allowedDay === false) {
-    setFlash(
+    await setFlash(
       "You've reached today's posting limit. Please try again tomorrow.",
       "error"
     );
@@ -1432,7 +1432,7 @@ export async function postDirectPubliclyAction(formData: FormData) {
     .select("id")
     .maybeSingle();
   if (error || !updated) {
-    setFlash("Couldn't post that job just now. Please try again.", "error");
+    await setFlash("Couldn't post that job just now. Please try again.", "error");
     revalidatePath("/contractors");
     return;
   }
@@ -1482,7 +1482,7 @@ export async function postDirectPubliclyAction(formData: FormData) {
     // Notifications are a nice-to-have here, not part of the conversion.
   }
 
-  setFlash("Posted to all local pros. Matching pros can now apply.", "success");
+  await setFlash("Posted to all local pros. Matching pros can now apply.", "success");
   revalidatePath("/contractors");
 }
 
@@ -1503,7 +1503,7 @@ export async function rehireProAction(
 ): Promise<ActionResult> {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const {
     data: { user },

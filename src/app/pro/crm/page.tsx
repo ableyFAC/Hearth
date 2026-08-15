@@ -83,7 +83,7 @@ export default async function ProCrmPage(
     redirect("/pro/onboarding");
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const q = (searchParams.q ?? "").trim();
 
   const [{ data: clientRows }, { data: leadRows }, member, proSub] = await Promise.all([

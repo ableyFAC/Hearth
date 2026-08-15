@@ -70,7 +70,7 @@ export async function startPlusCheckoutAction(formData: FormData) {
   // attribute the resulting subscription, so a cookie-edited id would let an
   // attacker misattribute a subscription to a victim. supabase.auth.getUser()
   // re-checks the id against Supabase's auth server.
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -131,7 +131,7 @@ export async function startPlusCheckoutAction(formData: FormData) {
       // If Stripe is unreachable, fall through to checkout as before.
     }
     if (alreadySubscribed) {
-      setFlash(
+      await setFlash(
         "You already have a Hearth Plus membership. No need to buy it twice.",
         "info"
       );
@@ -202,7 +202,7 @@ export async function startPlusCheckoutAction(formData: FormData) {
       { idempotencyKey }
     );
   } catch {
-    setFlash("We couldn't start checkout. Please try again.", "error");
+    await setFlash("We couldn't start checkout. Please try again.", "error");
     redirect("/plus");
   }
 
@@ -233,7 +233,7 @@ export async function setExtraHomesAction(formData: FormData) {
 
   const sub = await getSubscription();
   if (!sub?.stripe_subscription_id) {
-    setFlash("Start Hearth Plus first, then you can add extra homes.", "error");
+    await setFlash("Start Hearth Plus first, then you can add extra homes.", "error");
     redirect("/plus");
   }
 
@@ -246,7 +246,7 @@ export async function setExtraHomesAction(formData: FormData) {
     (sub.status === "active" || sub.status === "trialing") &&
     (!sub.current_period_end || new Date(sub.current_period_end) > new Date());
   if (!subLive) {
-    setFlash(
+    await setFlash(
       "Fix your payment method first, then you can add extra homes.",
       "error"
     );
@@ -257,7 +257,7 @@ export async function setExtraHomesAction(formData: FormData) {
   // monthly/yearly only, and the interval has to match the base plan. Tell
   // them to switch cadence first.
   if (sub.plan !== "monthly" && sub.plan !== "yearly") {
-    setFlash(
+    await setFlash(
       "Extra homes come with the monthly and yearly plans. Switch your plan first, then add homes.",
       "error"
     );
@@ -277,7 +277,7 @@ export async function setExtraHomesAction(formData: FormData) {
   try {
     stripeSub = await stripe.subscriptions.retrieve(sub.stripe_subscription_id);
   } catch {
-    setFlash(
+    await setFlash(
       "Something went sideways talking to Stripe. Try Manage billing instead.",
       "error"
     );
@@ -335,7 +335,7 @@ export async function setExtraHomesAction(formData: FormData) {
       });
     }
   } catch {
-    setFlash(
+    await setFlash(
       "We couldn't update your homes. Please try again, or use Manage billing.",
       "error"
     );
@@ -355,7 +355,7 @@ export async function setExtraHomesAction(formData: FormData) {
     // Ignore: the webhook is the source of truth.
   }
 
-  setFlash(
+  await setFlash(
     quantity > 0
       ? `Done. You can now track up to ${5 + quantity} homes.`
       : "Done. Your extra homes were removed."
@@ -375,11 +375,11 @@ export async function upgradeToYearlyAction() {
   // subscription id is theirs by construction.
   const sub = await getSubscription();
   if (!sub?.stripe_subscription_id) {
-    setFlash("No active subscription to change.", "error");
+    await setFlash("No active subscription to change.", "error");
     redirect("/plus");
   }
   if (sub.plan === "yearly") {
-    setFlash("You're already on the yearly plan.", "info");
+    await setFlash("You're already on the yearly plan.", "info");
     redirect("/plus");
   }
 
@@ -389,7 +389,7 @@ export async function upgradeToYearlyAction() {
       sub.stripe_subscription_id
     );
   } catch {
-    setFlash(
+    await setFlash(
       "Something went sideways talking to Stripe. Try Manage billing instead.",
       "error"
     );
@@ -459,7 +459,7 @@ export async function upgradeToYearlyAction() {
       ...(stripeSub.status === "trialing" ? { trial_end: "now" as const } : {}),
     });
   } catch {
-    setFlash(
+    await setFlash(
       "Something went sideways talking to Stripe. Try Manage billing instead.",
       "error"
     );
@@ -467,7 +467,7 @@ export async function upgradeToYearlyAction() {
   }
 
   // The webhook flips the stored plan once Stripe confirms the update.
-  setFlash("You're on yearly now. Unused monthly time was credited.");
+  await setFlash("You're on yearly now. Unused monthly time was credited.");
   revalidatePath("/plus");
 }
 
@@ -485,13 +485,13 @@ export async function downgradeToMonthlyAction() {
 
   const sub = await getSubscription();
   if (!sub?.stripe_subscription_id) {
-    setFlash("No active subscription to change.", "error");
+    await setFlash("No active subscription to change.", "error");
     redirect("/plus");
   }
   // Only monthly subscribers have nothing to switch to. Yearly and legacy
   // weekly rows both switch to monthly through the same schedule below.
   if (sub.plan === "monthly") {
-    setFlash("You're already on the monthly plan.", "info");
+    await setFlash("You're already on the monthly plan.", "info");
     redirect("/plus");
   }
 
@@ -501,14 +501,14 @@ export async function downgradeToMonthlyAction() {
       sub.stripe_subscription_id
     );
   } catch {
-    setFlash(
+    await setFlash(
       "Something went sideways talking to Stripe. Try Manage billing instead.",
       "error"
     );
     redirect("/plus");
   }
   if (stripeSub.schedule) {
-    setFlash("Your switch to monthly is already scheduled.", "info");
+    await setFlash("Your switch to monthly is already scheduled.", "info");
     redirect("/plus");
   }
 
@@ -518,7 +518,7 @@ export async function downgradeToMonthlyAction() {
       from_subscription: sub.stripe_subscription_id,
     });
   } catch {
-    setFlash(
+    await setFlash(
       "Couldn't schedule the switch. If your plan is set to cancel, use Manage billing instead.",
       "error"
     );
@@ -621,7 +621,7 @@ export async function downgradeToMonthlyAction() {
     throw err;
   }
 
-  setFlash("Done. You'll switch to monthly at your renewal date.");
+  await setFlash("Done. You'll switch to monthly at your renewal date.");
   revalidatePath("/plus");
 }
 
@@ -633,7 +633,7 @@ export async function keepYearlyAction() {
 
   const sub = await getSubscription();
   if (!sub?.stripe_subscription_id) {
-    setFlash("No active subscription to change.", "error");
+    await setFlash("No active subscription to change.", "error");
     redirect("/plus");
   }
 
@@ -643,7 +643,7 @@ export async function keepYearlyAction() {
       sub.stripe_subscription_id
     );
   } catch {
-    setFlash(
+    await setFlash(
       "Something went sideways talking to Stripe. Try Manage billing instead.",
       "error"
     );
@@ -657,7 +657,7 @@ export async function keepYearlyAction() {
     await stripe.subscriptionSchedules.release(scheduleId);
   }
 
-  setFlash("You're keeping the yearly plan.");
+  await setFlash("You're keeping the yearly plan.");
   revalidatePath("/plus");
 }
 
@@ -671,7 +671,7 @@ export async function cancelMembershipAction() {
 
   const sub = await getSubscription();
   if (!sub?.stripe_subscription_id) {
-    setFlash("No active subscription to cancel.", "error");
+    await setFlash("No active subscription to cancel.", "error");
     redirect("/plus");
   }
 
@@ -681,7 +681,7 @@ export async function cancelMembershipAction() {
       sub.stripe_subscription_id
     );
   } catch {
-    setFlash(
+    await setFlash(
       "Something went sideways talking to Stripe. Try Manage billing instead.",
       "error"
     );
@@ -700,14 +700,14 @@ export async function cancelMembershipAction() {
       cancel_at_period_end: true,
     });
   } catch {
-    setFlash(
+    await setFlash(
       "Something went sideways talking to Stripe. Try Manage billing instead.",
       "error"
     );
     redirect("/plus");
   }
 
-  setFlash("Your membership won't renew. You keep Plus until it ends.");
+  await setFlash("Your membership won't renew. You keep Plus until it ends.");
   revalidatePath("/plus");
 }
 
@@ -718,7 +718,7 @@ export async function resumeMembershipAction() {
 
   const sub = await getSubscription();
   if (!sub?.stripe_subscription_id) {
-    setFlash("No subscription to resume.", "error");
+    await setFlash("No subscription to resume.", "error");
     redirect("/plus");
   }
 
@@ -727,14 +727,14 @@ export async function resumeMembershipAction() {
       cancel_at_period_end: false,
     });
   } catch {
-    setFlash(
+    await setFlash(
       "Something went sideways talking to Stripe. Try Manage billing instead.",
       "error"
     );
     redirect("/plus");
   }
 
-  setFlash("Welcome back. Your membership will keep renewing.");
+  await setFlash("Welcome back. Your membership will keep renewing.");
   revalidatePath("/plus");
 }
 

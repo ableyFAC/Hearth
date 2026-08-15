@@ -72,12 +72,12 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const flash = readFlash();
+  const flash = await readFlash();
   return (
     // suppressHydrationWarning: the theme script adds .dark to <html> before
     // React hydrates, which is an expected server/client mismatch.

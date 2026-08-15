@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 // request, and the database enforces real auth via RLS, so this is safe and
 // much faster. React's cache() also dedupes it to once per render.
 export const getUser = cache(async () => {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -89,7 +89,7 @@ export function passwordStatusFor(user: User | null): PasswordStatus {
 }
 
 export const getPasswordStatus = cache(async (): Promise<PasswordStatus> => {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

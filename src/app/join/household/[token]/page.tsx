@@ -63,7 +63,7 @@ export default async function JoinHouseholdPage(
       .gt("expires_at", nowIso);
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

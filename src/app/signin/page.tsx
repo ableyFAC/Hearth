@@ -18,7 +18,7 @@ export default async function SignInPage(
     typeof searchParams?.next === "string" ? searchParams.next : null
   );
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

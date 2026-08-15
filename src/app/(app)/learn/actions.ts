@@ -17,7 +17,7 @@ export async function requestTopicAction(formData: FormData) {
     .slice(0, MAX_QUESTION);
   if (!question) return;
 
-  const supabase = createClient() as any;
+  const supabase = await createClient() as any;
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -34,7 +34,7 @@ export async function requestTopicAction(formData: FormData) {
     p_window_seconds: 3600,
   });
   if (allowed === false) {
-    setFlash(
+    await setFlash(
       "You've asked for a few guides already. Please wait a bit before asking for another.",
       "error"
     );
@@ -45,7 +45,7 @@ export async function requestTopicAction(formData: FormData) {
     .from("learning_requests")
     .insert({ user_id: user.id, question });
 
-  if (error) setFlash("Couldn't save that request. Please try again.", "error");
-  else setFlash("Thanks. We'll add a guide for that.", "success");
+  if (error) await setFlash("Couldn't save that request. Please try again.", "error");
+  else await setFlash("Thanks. We'll add a guide for that.", "success");
   revalidatePath("/learn");
 }

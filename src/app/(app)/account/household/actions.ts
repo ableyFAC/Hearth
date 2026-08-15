@@ -24,7 +24,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // "household_members owner insert" policy re-checks ownership server side, so
 // this validation is about friendly error messages, not the real gate.
 export async function inviteMemberAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -52,7 +52,7 @@ export async function inviteMemberAction(formData: FormData) {
     p_window_seconds: 86400,
   });
   if (allowed === false) {
-    setFlash(
+    await setFlash(
       "You've sent a lot of invites today. Please try again tomorrow.",
       "error"
     );
@@ -60,15 +60,15 @@ export async function inviteMemberAction(formData: FormData) {
   }
 
   if (!propertyId) {
-    setFlash("Choose a home to invite someone to.", "error");
+    await setFlash("Choose a home to invite someone to.", "error");
     redirect(HOUSEHOLD_PATH);
   }
   if (!EMAIL_RE.test(email)) {
-    setFlash("Enter a valid email address.", "error");
+    await setFlash("Enter a valid email address.", "error");
     redirect(HOUSEHOLD_PATH);
   }
   if (user.email && email === user.email.trim().toLowerCase()) {
-    setFlash("You can't invite yourself.", "error");
+    await setFlash("You can't invite yourself.", "error");
     redirect(HOUSEHOLD_PATH);
   }
 
@@ -78,11 +78,11 @@ export async function inviteMemberAction(formData: FormData) {
     .select("id", { count: "exact", head: true })
     .eq("property_id", propertyId);
   if (countError) {
-    setFlash("Couldn't send the invite. Please try again.", "error");
+    await setFlash("Couldn't send the invite. Please try again.", "error");
     redirect(HOUSEHOLD_PATH);
   }
   if ((count ?? 0) >= MAX_MEMBERS_PER_HOME) {
-    setFlash(
+    await setFlash(
       `This home already has the maximum of ${MAX_MEMBERS_PER_HOME} members.`,
       "error"
     );
@@ -99,14 +99,14 @@ export async function inviteMemberAction(formData: FormData) {
     // 23505: the unique index on (property_id, lower(invited_email)) caught a
     // duplicate invite, either already pending or already an active member.
     if (error.code === "23505") {
-      setFlash("That email has already been invited to this home.", "error");
+      await setFlash("That email has already been invited to this home.", "error");
     } else {
-      setFlash("Couldn't send the invite. Please try again.", "error");
+      await setFlash("Couldn't send the invite. Please try again.", "error");
     }
     redirect(HOUSEHOLD_PATH);
   }
 
-  setFlash(
+  await setFlash(
     `Invited ${email}. If they don't have a Hearth account yet, the invite waits until they sign up with that email.`
   );
   revalidatePath(HOUSEHOLD_PATH);
@@ -117,7 +117,7 @@ export async function inviteMemberAction(formData: FormData) {
 // reach a row that still belongs to someone else, enforced by the
 // "household_members owner delete" policy.
 export async function removeMemberAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -126,10 +126,10 @@ export async function removeMemberAction(formData: FormData) {
   const id = (formData.get("id") as string) || "";
   const { error } = await supabase.from("household_members").delete().eq("id", id);
   if (error) {
-    setFlash("Couldn't remove that person. Please try again.", "error");
+    await setFlash("Couldn't remove that person. Please try again.", "error");
     redirect(HOUSEHOLD_PATH);
   }
-  setFlash("Removed from the home.");
+  await setFlash("Removed from the home.");
   revalidatePath(HOUSEHOLD_PATH);
   redirect(HOUSEHOLD_PATH);
 }
@@ -139,7 +139,7 @@ export async function removeMemberAction(formData: FormData) {
 // this can only move a legitimate invite (status invited, no member yet, the
 // caller's own email) into an active membership tied to the caller's uid.
 export async function acceptInviteAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -155,10 +155,10 @@ export async function acceptInviteAction(formData: FormData) {
     })
     .eq("id", id);
   if (error) {
-    setFlash("Couldn't accept that invite. Please try again.", "error");
+    await setFlash("Couldn't accept that invite. Please try again.", "error");
     redirect(HOUSEHOLD_PATH);
   }
-  setFlash("You're in. That home now shows up in your homes list.");
+  await setFlash("You're in. That home now shows up in your homes list.");
   revalidatePath("/", "layout");
   redirect(HOUSEHOLD_PATH);
 }
@@ -166,7 +166,7 @@ export async function acceptInviteAction(formData: FormData) {
 // Decline an invite before claiming it, covered by the
 // "household_members invitee decline" policy.
 export async function declineInviteAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -175,10 +175,10 @@ export async function declineInviteAction(formData: FormData) {
   const id = (formData.get("id") as string) || "";
   const { error } = await supabase.from("household_members").delete().eq("id", id);
   if (error) {
-    setFlash("Couldn't decline that invite. Please try again.", "error");
+    await setFlash("Couldn't decline that invite. Please try again.", "error");
     redirect(HOUSEHOLD_PATH);
   }
-  setFlash("Invite declined.");
+  await setFlash("Invite declined.");
   revalidatePath(HOUSEHOLD_PATH);
   redirect(HOUSEHOLD_PATH);
 }
@@ -186,7 +186,7 @@ export async function declineInviteAction(formData: FormData) {
 // Leave a home the caller is an active member of, covered by the
 // "household_members member leave" policy (member_user_id = auth.uid()).
 export async function leaveHomeAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -195,10 +195,10 @@ export async function leaveHomeAction(formData: FormData) {
   const id = (formData.get("id") as string) || "";
   const { error } = await supabase.from("household_members").delete().eq("id", id);
   if (error) {
-    setFlash("Couldn't leave that home. Please try again.", "error");
+    await setFlash("Couldn't leave that home. Please try again.", "error");
     redirect(HOUSEHOLD_PATH);
   }
-  setFlash("You've left that home.");
+  await setFlash("You've left that home.");
   revalidatePath("/", "layout");
   redirect(HOUSEHOLD_PATH);
 }
@@ -234,7 +234,7 @@ export async function mintHouseholdQrTokenAction(
   propertyId: string
 ): Promise<ActionResult<HouseholdQrToken>> {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -303,7 +303,7 @@ export async function mintHouseholdQrTokenAction(
     // whatever host this request actually came in on (localhost while
     // developing, the LAN IP, a tunnel, or the real domain in prod) - same
     // reasoning as requestOrigin() itself.
-    const origin = requestOriginFromHeaders();
+    const origin = await requestOriginFromHeaders();
     return ok({
       token: inserted.token,
       joinUrl: `${origin}/join/household/${inserted.token}`,

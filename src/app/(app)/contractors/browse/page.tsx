@@ -41,7 +41,7 @@ export default async function BrowseProsPage(
   }
 ) {
   const searchParams = await props.searchParams;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Same guard the rest of (app) uses: no active property means the owner
   // hasn't onboarded a home yet.

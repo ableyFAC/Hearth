@@ -134,7 +134,7 @@ export default async function ProDashboard(
     redirect("/pro/onboarding");
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const ASSIGNED_BASE_COLUMNS =
     "id, issue_id, status, category, issue_severity, issue_description, homeowner_name, homeowner_email, homeowner_phone, property_address, created_at";
