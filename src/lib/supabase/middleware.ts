@@ -68,6 +68,14 @@ export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isPublic =
     path === "/" ||
+    // The root social-preview image (src/app/opengraph-image.tsx). Link
+    // scrapers (iMessage, Slack, Facebook) fetch it with no cookies and no
+    // account; without this entry they get a 307 to /signin and every share
+    // of the root URL renders with a broken preview. The matcher's extension
+    // exclusions never catch it because the route is extensionless.
+    // startsWith, not exact: Next can serve metadata variants with generated
+    // suffixes, and every path in that family is equally public.
+    path.startsWith("/opengraph-image") ||
     path.startsWith("/get-started") ||
     path.startsWith("/signin") ||
     // Password reset request page: a signed-out user is exactly who needs it,
