@@ -27,7 +27,11 @@ coherent, but no UI is wired for them yet.
 
 ## Stack
 
-- **Next.js 14** (App Router, TypeScript, Server Actions)
+- **Next.js 15** + **React 19** (App Router, TypeScript, Server Actions)
+  - `cookies()`, `headers()`, and a page's `params`/`searchParams` are async
+    here: server code awaits them, client pages unwrap them with React's
+    `use()`. `createClient()` from `src/lib/supabase/server.ts` is async for
+    the same reason, so every call site awaits it.
 - **Tailwind CSS**
 - **Supabase** — Postgres + Auth (email/phone OTP) + Storage (photos)
 - Row-Level Security on every table: an owner can only ever touch their own
