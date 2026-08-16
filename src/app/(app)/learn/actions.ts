@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { setFlash } from "@/lib/flash";
+import { ok, err, type ActionResult } from "@/lib/actionResult";
 
 // A request is one short question, not an essay. Capped server-side because
 // the textarea's maxLength is only a client hint.
@@ -11,17 +11,19 @@ const MAX_QUESTION = 2000;
 
 // A homeowner asks for a guide we don't have yet. Captured so we know what to
 // add next.
-export async function requestTopicAction(formData: FormData) {
+export async function requestTopicAction(
+  formData: FormData
+): Promise<ActionResult> {
   const question = ((formData.get("question") as string) || "")
     .trim()
     .slice(0, MAX_QUESTION);
-  if (!question) return;
+  if (!question) return err("Add a topic so we know what to write.");
 
   const supabase = createClient() as any;
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return; // no anonymous writes
+  if (!user) return err("Please sign in to request a topic."); // no anonymous writes
 
   // Free-text a person on the team reads, so it gets the same throttle as the
   // support forms (migration 0068). Fails open on a DB hiccup: only an
@@ -34,18 +36,18 @@ export async function requestTopicAction(formData: FormData) {
     p_window_seconds: 3600,
   });
   if (allowed === false) {
-    setFlash(
-      "You've asked for a few guides already. Please wait a bit before asking for another.",
-      "error"
+    return err(
+      "You've asked for a few guides already. Please wait a bit before asking for another."
     );
-    return;
   }
 
   const { error } = await supabase
     .from("learning_requests")
     .insert({ user_id: user.id, question });
 
-  if (error) setFlash("Couldn't save that request. Please try again.", "error");
-  else setFlash("Thanks. We'll add a guide for that.", "success");
+  if (error) return err("Couldn't save that request. Please try again.");
+  // This action stays on /learn, so the confirmation comes back as an
+  // ActionResult the form renders inline (the flash cookie is unread here).
   revalidatePath("/learn");
+  return ok();
 }

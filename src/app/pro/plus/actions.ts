@@ -10,6 +10,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   getSubscription,
   getProSubscription,
+  isProTrialEligible,
   hasClaimedPromo,
 } from "@/lib/subscription";
 import { PRO_PLAN } from "@/lib/constants";
@@ -154,12 +155,15 @@ export async function startProCheckoutAction(formData: FormData) {
   // subscription converts to paid on its own when the trial ends, and
   // cancelling before then costs nothing.
   //
-  // Scoped to `existing` - the Pro-side subscriptions row - for the same
-  // reason startPlusCheckoutAction scopes its trial: that row survives
-  // cancellation (it lands on status "canceled", it is not deleted), so a
-  // subscriber who churns and comes back pays from day one instead of farming
-  // a fresh free trial on every resubscribe.
-  const freeTrial = !existing;
+  // Scoped to the Pro-side subscriptions row for the same reason
+  // startPlusCheckoutAction scopes its trial: that row survives cancellation
+  // (it lands on status "canceled", it is not deleted), so a subscriber who
+  // churns and comes back pays from day one instead of farming a fresh free
+  // trial on every resubscribe. Uses isProTrialEligible rather than `!existing`
+  // so it fails CLOSED: if the subscriptions read errored (transient/RLS),
+  // `existing` would be null and `!existing` would wrongly grant a repeat
+  // trial. isProTrialEligible returns false on an errored read.
+  const freeTrial = await isProTrialEligible();
 
   // Brand-new Pro subscribers on the monthly plan get an intro month: $9.99
   // for the first month via a one-time coupon, then full price. Yearly is

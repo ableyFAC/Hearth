@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getRole } from "@/lib/contractor";
 import { cappedField, FIELD_MAX } from "@/lib/formFields";
 import { setFlash } from "@/lib/flash";
+import { err, type ActionResult } from "@/lib/actionResult";
 
 // Length caps for an endpoint with no session and no per-user rate limit to
 // fall back on - account/help's saveSupportMessageAction (which this mirrors)
@@ -37,7 +38,9 @@ async function successDestination(): Promise<string> {
 // Saves a message from the public /contact form (src/app/contact/page.tsx)
 // so the team can read and reply, the same way saveSupportMessageAction
 // (src/app/(app)/account/help/actions.ts) does for signed-in homeowners.
-export async function sendContactMessageAction(formData: FormData) {
+export async function sendContactMessageAction(
+  formData: FormData
+): Promise<ActionResult> {
   // Honeypot: see ContactForm.tsx for how "company_website" is hidden from a
   // real visitor. A bot that fills every field in the form fills this one
   // too. Pretend success and store nothing - same flash, same redirect as the
@@ -54,16 +57,13 @@ export async function sendContactMessageAction(formData: FormData) {
   const message = cappedField(formData, "message", FIELD_MAX.message);
 
   if (message.length < MIN_MESSAGE) {
-    setFlash("Please write a few more words so we know what you need.", "error");
-    return;
+    return err("Please write a few more words so we know what you need.");
   }
   if (!email && !phone) {
-    setFlash("Please add an email or a phone number so we can reply.", "error");
-    return;
+    return err("Please add an email or a phone number so we can reply.");
   }
   if (email && !email.includes("@")) {
-    setFlash("That doesn't look like a valid email address.", "error");
-    return;
+    return err("That doesn't look like a valid email address.");
   }
 
   // Unauthenticated and public, so it needs its own throttle before touching
@@ -83,11 +83,9 @@ export async function sendContactMessageAction(formData: FormData) {
     p_window_seconds: 3600,
   });
   if (allowed === false) {
-    setFlash(
-      "You've sent several messages already. Please wait a bit before sending another.",
-      "error"
+    return err(
+      "You've sent several messages already. Please wait a bit before sending another."
     );
-    return;
   }
 
   // Silent account match (migration 0115): most people who write in already
@@ -140,8 +138,7 @@ export async function sendContactMessageAction(formData: FormData) {
 
   if (error) {
     console.error("sendContactMessageAction: insert failed", error);
-    setFlash("Couldn't send your message. Please try again.", "error");
-    return;
+    return err("Couldn't send your message. Please try again.");
   }
 
   // redirect() throws to unwind the action, so nothing may run after it; the

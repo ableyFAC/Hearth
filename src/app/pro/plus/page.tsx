@@ -115,10 +115,13 @@ export default async function ProPlusPage({
             (not the $0 one a trial start finalizes) and applies the deposit
             match only against an "active" row. Say so rather than let a trialer
             go looking for $10 that has not landed or deposit expecting a match
-            that will not apply. Gated on the row actually reading "trialing" -
-            this screen can render before the webhook has written it, and a
-            stale row must not produce a wrong promise either way. */}
-        {sub?.status === "trialing" && (
+            that will not apply. This screen renders off ?welcome=1 and
+            routinely BEATS the webhook, so the row is usually still null here:
+            gating only on "trialing" would suppress the caveat exactly when a
+            fresh trial buyer needs it. Show it whenever the row is absent or
+            reads "trialing" - both are the held-back case - so a trial buyer is
+            never told to go looking for $10 that has not landed. */}
+        {(!sub || sub.status === "trialing") && (
           <p className="mx-auto max-w-md text-left text-xs text-stone-500 dark:text-stone-400">
             Two of these start when your free trial converts and your first
             payment goes through: your first $10 of lead credit, and your{" "}
@@ -150,13 +153,12 @@ export default async function ProPlusPage({
               <p className="mt-2 text-xs text-stone-600 dark:text-stone-300">
                 Hearth Pro renews automatically until you cancel. Your
                 confirmation email lists the exact amount and the renewal
-                terms; refresh this page in a moment to see the date your free
-                trial ends and the first charge lands. Cancel
-                anytime on this page using the &quot;Cancel membership&quot;
-                button. Cancel before the trial ends and you will not be
-                charged; after that, cancelling takes effect at the end of the
-                period you have already paid for. There is nothing to call or
-                email.
+                terms; refresh this page in a moment to see your billing dates.
+                Cancel anytime on this page using the &quot;Cancel
+                membership&quot; button. If you started on a free trial, cancel
+                before it ends and you will not be charged; otherwise
+                cancelling takes effect at the end of the period you have
+                already paid for. There is nothing to call or email.
               </p>
             </div>
           )}
@@ -368,6 +370,23 @@ export default async function ProPlusPage({
           </div>
         ))}
       </section>
+
+      {/* The perks grid above leads with the two perks that money is attached
+          to, but on the free trial those two are held back: the wallet credit
+          needs a paid invoice and the deposit match needs an "active" row (see
+          creditDepositSession in the Stripe webhook). A pre-purchase visitor
+          about to start a trial has no subscription row yet, so this must show
+          for a trial-eligible visitor as well, not only a "trialing" row. A
+          returning member (trialEligible false) starts paying right away, so
+          their perks are on from day one and they don't see this. */}
+      {trialEligible && (
+        <p className="text-center text-xs text-stone-500 dark:text-stone-400">
+          Two of these start when your free trial converts and your first
+          payment goes through: your first $10 of lead credit, and your{" "}
+          +{PRO_DEPOSIT_BOOST_PTS}% deposit match. During the trial, deposits
+          earn the normal tier bonus and every other perk is already on.
+        </p>
+      )}
 
       <ProPlanToggle trialEligible={trialEligible} />
 

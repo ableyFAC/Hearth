@@ -130,24 +130,43 @@ describe("photoUrlsByLead", () => {
 });
 
 describe("totalSpentCents", () => {
-  it("sums only the debits, as a positive number", () => {
+  it("sums only genuine spend types, as a positive number", () => {
     expect(
       totalSpentCents([
-        { cash_delta_cents: -2500, bonus_delta_cents: 0 },
-        { cash_delta_cents: 0, bonus_delta_cents: -1000 },
-        { cash_delta_cents: 20000, bonus_delta_cents: 2000 },
+        { type: "apply_fee", cash_delta_cents: -2500, bonus_delta_cents: 0 },
+        { type: "lead_charge", cash_delta_cents: 0, bonus_delta_cents: -1000 },
+        { type: "deposit", cash_delta_cents: 20000, bonus_delta_cents: 2000 },
       ])
     ).toBe(3500);
   });
 
-  it("treats a mixed row by its net effect", () => {
-    // A deposit that also lands bonus credit is not spending.
+  it("counts direct unlocks and post-ghost re-charges too", () => {
     expect(
-      totalSpentCents([{ cash_delta_cents: 5000, bonus_delta_cents: -100 }])
-    ).toBe(0);
-    // A bonus-funded apply that also touches cash is.
+      totalSpentCents([
+        { type: "direct_unlock", cash_delta_cents: -1500, bonus_delta_cents: 0 },
+        { type: "ghost_recharge", cash_delta_cents: -500, bonus_delta_cents: -500 },
+      ])
+    ).toBe(2500);
+  });
+
+  it("ignores negative rows that are not spend", () => {
+    // An expired bonus and a chargeback reversal are both negative, but a pro
+    // never "spent" them: they must not inflate the total.
     expect(
-      totalSpentCents([{ cash_delta_cents: -100, bonus_delta_cents: -4900 }])
+      totalSpentCents([
+        { type: "apply_fee", cash_delta_cents: -2500, bonus_delta_cents: 0 },
+        { type: "bonus_expiry", cash_delta_cents: 0, bonus_delta_cents: -1000 },
+        { type: "chargeback_reversal", cash_delta_cents: -20000, bonus_delta_cents: 0 },
+      ])
+    ).toBe(2500);
+  });
+
+  it("treats a mixed spend row by its net effect", () => {
+    // A bonus-funded apply that also touches cash is spending.
+    expect(
+      totalSpentCents([
+        { type: "apply_fee", cash_delta_cents: -100, bonus_delta_cents: -4900 },
+      ])
     ).toBe(5000);
   });
 

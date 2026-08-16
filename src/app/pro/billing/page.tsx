@@ -207,8 +207,8 @@ export default async function ProBillingPage({
           // Say when the match starts rather than let the number look broken.
           <div className="rounded-xl border border-hearth-200 bg-hearth-50 p-3 text-xs text-hearth-800 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
             <span className="font-semibold">
-              Your +{PRO_DEPOSIT_BOOST_PTS}% deposit match starts when your free
-              trial converts.
+              Your +{PRO_DEPOSIT_BOOST_PTS}% deposit match and your $10 monthly
+              lead credit start when your free trial converts.
             </span>{" "}
             Deposits you make during the trial earn the normal tier bonus shown
             above. Every other Pro perk is already on.
@@ -251,6 +251,19 @@ export default async function ProBillingPage({
               Same money in, more lead credit out. Membership never changes
               which jobs you can see or apply to.
             </p>
+            {/* This card headlines the deposit match right next to the deposit
+                form, so a trial buyer must be told it is the one perk held back
+                until the trial converts (the webhook applies it only against an
+                "active" row, see boostActive above). A returning member
+                (trialEligible false) starts paying right away, so their match
+                is live from day one and they don't see this line. */}
+            {trialEligible && (
+              <p className="mt-1 text-xs text-hearth-700 dark:text-hearth-300">
+                Your +{PRO_DEPOSIT_BOOST_PTS}% match starts when your free trial
+                converts and your first payment goes through. Deposits during
+                the trial earn the normal tier bonus.
+              </p>
+            )}
             <ProUpgradeCta
               trialEligible={trialEligible}
               className="btn-primary mt-3 inline-block"

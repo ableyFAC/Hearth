@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { cappedField, cappedFieldOrNull, FIELD_MAX } from "@/lib/formFields";
 import { setFlash } from "@/lib/flash";
+import { ok, err, type ActionResult } from "@/lib/actionResult";
 
 // Upper bound on a single logged maintenance cost, in cents ($1,000,000). A
 // real repair never reaches it, and without a ceiling a typed (or forged)
@@ -29,9 +30,11 @@ function toCents(v: FormDataEntryValue | null): number | null {
 // a reminder, and it writes to the exact same maintenance_tasks table/status
 // the dashboard's "mark done" flow uses, so a manual entry here shows up
 // anywhere else that reads completed tasks, and vice versa.
-export async function addMaintenanceHistoryAction(formData: FormData) {
+export async function addMaintenanceHistoryAction(
+  formData: FormData
+): Promise<ActionResult> {
   const property = await getActiveProperty();
-  if (!property) throw new Error("No active property");
+  if (!property) return err("Couldn't save that entry. Please try again.");
 
   // Capped server-side: both fields render on the report and in the exported
   // PDF, so an unbounded paste would land in front of the owner as well as in
@@ -39,8 +42,7 @@ export async function addMaintenanceHistoryAction(formData: FormData) {
   const title = cappedField(formData, "title", FIELD_MAX.title);
   const date = ((formData.get("completed_date") as string) || "").trim();
   if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    setFlash("Add what was done and a date.", "error");
-    return;
+    return err("Add what was done and a date.");
   }
   const performedBy = cappedFieldOrNull(
     formData,
@@ -70,8 +72,7 @@ export async function addMaintenanceHistoryAction(formData: FormData) {
       t.completed_at?.slice(0, 10) === date
   );
   if (isDupe) {
-    setFlash("That's already in your maintenance history.", "info");
-    return;
+    return err("That's already in your maintenance history.");
   }
 
   const baseRow = {
@@ -94,11 +95,11 @@ export async function addMaintenanceHistoryAction(formData: FormData) {
     ({ error } = await supabase.from("maintenance_tasks").insert(baseRow));
   }
   if (error) {
-    setFlash("Couldn't save that entry. Please try again.", "error");
-    return;
+    return err("Couldn't save that entry. Please try again.");
   }
 
   setFlash("Added to your maintenance history.");
   revalidatePath("/home-report");
   revalidatePath("/dashboard");
+  return ok();
 }

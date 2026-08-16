@@ -68,12 +68,31 @@ export function photoUrlsByLead(
   return byLead;
 }
 
-// Total the pro has spent: every wallet transaction whose combined cash+bonus
-// delta is negative, as a positive number of cents. Credits (positive deltas)
-// don't net against it - this is "spent on applications", not a balance.
+// The wallet transaction types that represent genuine spend on leads: the
+// apply fee (apply_fee / lead_charge), a direct-request unlock (direct_unlock),
+// and a post-ghost-protection re-charge when the homeowner comes back
+// (ghost_recharge). These are the only rows a pro actually paid out. Verified
+// against the migrations that insert them (0012/0025/0058/0065/0077/0087/0113
+// apply_fee, 0008/0010/0059/0065/0077 lead_charge, 0104/0113 direct_unlock,
+// 0028/0058/0065/0077/0106 ghost_recharge). Deliberately NOT counted: other
+// negative rows that are not spend, such as bonus_expiry (credit expiring) and
+// chargeback_reversal (a deposit clawed back), which would otherwise inflate
+// the total.
+const SPEND_TX_TYPES = new Set([
+  "apply_fee",
+  "lead_charge",
+  "direct_unlock",
+  "ghost_recharge",
+]);
+
+// Total the pro has spent on applications: the negative rows of a genuine spend
+// type, as a positive number of cents. Only real spend counts, so a non-spend
+// negative like an expired bonus or a chargeback reversal never inflates it,
+// and credits (positive deltas) don't net against it either.
 export function totalSpentCents(
   txnRows:
     | {
+        type?: string | null;
         cash_delta_cents?: number | string | null;
         bonus_delta_cents?: number | string | null;
       }[]
@@ -81,6 +100,7 @@ export function totalSpentCents(
     | undefined
 ): number {
   return (txnRows ?? []).reduce((sum, t) => {
+    if (!SPEND_TX_TYPES.has(t.type ?? "")) return sum;
     const delta =
       Number(t.cash_delta_cents ?? 0) + Number(t.bonus_delta_cents ?? 0);
     return delta < 0 ? sum + Math.abs(delta) : sum;

@@ -77,14 +77,25 @@ function SetPasswordCard({ providerName }: { providerName: string }) {
     if (busy || cooldown > 0) return;
     setBusy(true);
     setError(null);
-    const result = await sendSetPasswordLinkAction();
-    setBusy(false);
-    if (!result.ok) {
-      setError(result.message);
-      return;
+    // finally, not a bare setBusy(false) on the happy path:
+    // sendSetPasswordLinkAction can THROW rather than return an ok:false
+    // (a missing Host header, a dropped connection), and if it did, busy
+    // stayed true forever and every later click was a silent no-op. Clearing
+    // it in finally guarantees the button comes back, and the catch turns the
+    // throw into a message instead of nothing.
+    try {
+      const result = await sendSetPasswordLinkAction();
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      setSent(result.message);
+      setCooldown(60);
+    } catch {
+      setError("Couldn't send that link just now. Please try again.");
+    } finally {
+      setBusy(false);
     }
-    setSent(result.message);
-    setCooldown(60);
   }
 
   return (

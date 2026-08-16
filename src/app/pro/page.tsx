@@ -298,7 +298,7 @@ export default async function ProDashboard({
         ? (async () => {
             const { data } = await (supabase as any)
               .from("wallet_transactions")
-              .select("cash_delta_cents, bonus_delta_cents")
+              .select("type, cash_delta_cents, bonus_delta_cents")
               .eq("wallet_id", wallet.id);
             return (data ?? []) as any[];
           })()
