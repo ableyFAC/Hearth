@@ -54,6 +54,20 @@ export async function deleteReminderAction(id: string): Promise<ActionResult> {
   return ok();
 }
 
+// Only store a real calendar date, or null. The shape regex alone was not
+// enough: it accepts "2026-13-45", which Postgres then rejects (22008),
+// killing the whole update. Round-trip through Date so an impossible month or
+// day (2026-13-45, 2026-02-31) is caught here and degrades to null instead.
+// No year bounds - a reminder's due date is legitimately in the future.
+function validDueDate(v: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+  const d = new Date(`${v}T00:00:00Z`);
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== v) {
+    return null;
+  }
+  return v;
+}
+
 // Edit a reminder's title / due date.
 export async function editReminderAction(formData: FormData) {
   const id = formData.get("id") as string;
@@ -65,7 +79,7 @@ export async function editReminderAction(formData: FormData) {
   // YYYY-MM-DD becomes null rather than being handed to a `date` column that
   // would reject the whole update.
   const rawDate = ((formData.get("due_date") as string) || "").trim();
-  const dueDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null;
+  const dueDate = validDueDate(rawDate);
 
   const { error } = await supabase
     .from("maintenance_tasks")

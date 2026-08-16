@@ -22,20 +22,32 @@ import {
 const MAX_MATERIAL = 120;
 const MAX_NOTES = 2000;
 
-// Ranges for the numeric columns, matching confirmSystemAction
-// (src/app/(app)/walkthrough/actions.ts) so a system's year and condition mean
-// the same thing however it was entered.
-const INSTALL_YEAR_MIN = 1900;
+// Ranges for the numeric columns. The install-year floor matches
+// properties.year_built (which allows back to 1700, see updatePropertyAction
+// below and onboarding/actions.ts): an owner of an 1885 home types 1885 as a
+// real install year, and a 1900 floor here would silently null it out under a
+// "System updated" toast. condition still matches confirmSystemAction
+// (src/app/(app)/walkthrough/actions.ts) so a rating means the same thing
+// however it was entered.
+const INSTALL_YEAR_MIN = 1700;
 const INSTALL_YEAR_MAX = 2100;
 const CONDITION_MIN = 1;
 const CONDITION_MAX = 5;
 
 // "MM/YYYY" from the simple text field back to a "YYYY-MM-01" date for storage.
-// Returns null if blank or not in that format.
+// Returns null if blank, not in that format, or the month isn't 1-12. The
+// month check matters: without it "13/2024" became "2024-13-01", which
+// Postgres rejects with 22008 (datetime field overflow) and kills the WHOLE
+// update - and the retry that only drops optional columns still carried the
+// bad date, so the owner got "Couldn't save" forever with no field named.
+// Catching a bad month here turns that dead end into a clear, recoverable
+// error at the call site instead.
 function mmYyyyToDate(v: string | null): string | null {
   if (!v) return null;
   const m = v.trim().match(/^(\d{1,2})\/(\d{4})$/);
   if (!m) return null;
+  const month = Number(m[1]);
+  if (month < 1 || month > 12) return null;
   return `${m[2]}-${m[1].padStart(2, "0")}-01`;
 }
 
@@ -279,6 +291,44 @@ export async function updateSystemAction(
 ): Promise<ActionResult> {
   const id = formData.get("id") as string;
   const supabase = createClient();
+
+  // Edit-specific guard against a silent field wipe. On an EDIT the owner
+  // usually already has a good value in these fields, so a non-empty entry
+  // that fails validation - an out-of-range install year, or a bad month like
+  // 13/2024 - must NOT be quietly written as null under a "System updated"
+  // toast the way an intentionally-cleared field is. Return a named,
+  // recoverable error instead; SystemRow renders it inline (res.error) and
+  // keeps the edit form open with the owner's entry intact. A genuinely blank
+  // field still means "clear this" and parses to null with no error, exactly
+  // as before.
+  const rawInstallYear = formData.get("install_year");
+  const installYear = boundedInt(
+    rawInstallYear,
+    INSTALL_YEAR_MIN,
+    INSTALL_YEAR_MAX
+  );
+  if (
+    typeof rawInstallYear === "string" &&
+    rawInstallYear.trim() !== "" &&
+    installYear === null
+  ) {
+    return err(
+      `Install year should be a 4-digit year between ${INSTALL_YEAR_MIN} and ${INSTALL_YEAR_MAX}. Please check it and try again.`
+    );
+  }
+
+  const rawLastServiced = formData.get("last_serviced");
+  const lastServiced = mmYyyyToDate(rawLastServiced as string);
+  if (
+    typeof rawLastServiced === "string" &&
+    rawLastServiced.trim() !== "" &&
+    lastServiced === null
+  ) {
+    return err(
+      "Last serviced should be a month and year like 03/2024. Please check it and try again."
+    );
+  }
+
   // Same caps and ranges as addSystemAction: an edit is just as forgeable as
   // the original add, so it gets the same treatment. system_type isn't
   // editable here, so there is nothing to allow-list on this path.
@@ -288,12 +338,8 @@ export async function updateSystemAction(
       "material_or_model",
       MAX_MATERIAL
     ),
-    install_year: boundedInt(
-      formData.get("install_year"),
-      INSTALL_YEAR_MIN,
-      INSTALL_YEAR_MAX
-    ),
-    last_serviced: mmYyyyToDate(formData.get("last_serviced") as string),
+    install_year: installYear,
+    last_serviced: lastServiced,
     condition_rating: boundedInt(
       formData.get("condition_rating"),
       CONDITION_MIN,

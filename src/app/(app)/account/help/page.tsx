@@ -86,15 +86,17 @@ export default async function HelpPage() {
         <SupportForm name={name} email={email} phone={phone} />
       </div>
 
-      {/* Bug bounty, small and honest. Reports go through the support form on
-          this page, same inbox as everything else - not a mailto link, which
-          dumped people into whatever desktop mail app the OS picked. */}
+      {/* Found a bug: reports go through the support form on this page, same
+          inbox as everything else - not a mailto link, which dumped people
+          into whatever desktop mail app the OS picked. No credit offer here:
+          Hearth has no homeowner wallet or credit to pay one out (that's a
+          pro-side thing), so promising one would be a bug of its own. */}
       <div className="card">
         <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">
           Found a bug?
         </h2>
         <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
-          Tell us about it and get up to $15 in Hearth credit.
+          Tell us about it. We read every report and fix what we can.
         </p>
         <a
           href="#support-form"
