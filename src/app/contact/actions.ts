@@ -114,7 +114,7 @@ export async function sendContactMessageAction(
 
   // ADMIN client, not the normal request-scoped client: a visitor here has no
   // session, and support_messages' RLS only grants insert to the
-  // `authenticated` role (supabase/migrations/0021_support_messages.sql) -
+  // `authenticated` role (supabase/migrations/0024_support_messages.sql) -
   // by design, since the same table backs the signed-in-only Help page.
   // user_id stays null; that alone is how the team tells an anonymous
   // /contact message apart from a signed-in homeowner's, no schema change

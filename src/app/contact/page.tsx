@@ -9,7 +9,7 @@ import ContactForm from "./ContactForm";
 // links here instead, since a real address on a public page got scraped for
 // spam almost immediately.
 //
-// Submissions land in support_messages (supabase/migrations/0021), the same
+// Submissions land in support_messages (supabase/migrations/0024), the same
 // table and inbox the in-app Help page (src/app/(app)/account/help) already
 // uses - just with user_id left null, since a visitor here has no account.
 // See ./actions.ts for the insert, honeypot, and rate limiting.

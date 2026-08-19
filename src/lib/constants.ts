@@ -333,7 +333,7 @@ export const TIMING_OPTIONS = [
 // Rough budget bands a homeowner can attach to a job posting. Purely a signal
 // so pros can quote realistically, never a commitment or a binding number.
 // Keep the values in sync with the column comment on
-// contractor_leads.budget_range (supabase/migrations/0047_job_budget.sql).
+// contractor_leads.budget_range (supabase/migrations/0050_job_budget.sql).
 export const BUDGET_RANGES = [
   { value: "under-500", label: "Under $500" },
   { value: "500-1500", label: "$500-1,500" },
@@ -495,18 +495,18 @@ export function extraHomeUnitPrice(
 // Extra percentage points a Pro member earns on top of the deposit-bonus tier
 // percentage, applied to every deposit. Display-side mirror of the
 // p_bonus_boost_pts argument the Stripe webhook passes to apply_deposit
-// (supabase/migrations/0032_pro_membership.sql).
+// (supabase/migrations/0035_pro_membership.sql).
 export const PRO_DEPOSIT_BOOST_PTS = 5;
 
 // Applicant cap: this many live (non-refunded) applications fill a posted job,
 // so pros stop burning fees on crowded postings. Must match the check in
-// apply_to_lead (supabase/migrations/0028_ghost_protection.sql).
+// apply_to_lead (supabase/migrations/0031_ghost_protection.sql).
 export const MAX_APPLICANTS_PER_JOB = 3;
 
 // Ghost protection: an application the homeowner never responds to gets its
 // fee back as wallet credit after this many days (credit only, never cash).
 // Display-only mirror of the cron window in
-// supabase/migrations/0028_ghost_protection.sql.
+// supabase/migrations/0031_ghost_protection.sql.
 export const GHOST_PROTECTION_DAYS = 7;
 
 // Default lifetime (days) of granted bonus credit. Display-only mirror of the

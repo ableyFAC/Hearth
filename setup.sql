@@ -1639,7 +1639,7 @@ $$;
 
 
 -- =====================================================================
--- file: supabase/migrations/0021_private_storage.sql (mirrored)
+-- file: supabase/migrations/0023_private_storage.sql (mirrored)
 -- =====================================================================
 -- Safe text->uuid cast (null instead of throwing) so a storage policy evaluated
 -- against a non-uuid path segment (e.g. the "chat" prefix) never errors.
@@ -1685,7 +1685,7 @@ update storage.buckets set public = false where id = 'home-photos';
 
 
 -- =====================================================================
--- file: supabase/migrations/0022_subscriptions.sql (mirrored)
+-- file: supabase/migrations/0025_subscriptions.sql (mirrored)
 -- =====================================================================
 -- Hearth Plus: tracks a homeowner's Stripe subscription so "finding a pro" can
 -- be gated behind an active plan. Written only by the Stripe webhook (service
@@ -1712,7 +1712,7 @@ create policy "subscriptions owner read" on public.subscriptions
 
 
 -- =====================================================================
--- file: supabase/migrations/0023_notifications.sql (mirrored)
+-- file: supabase/migrations/0026_notifications.sql (mirrored)
 -- =====================================================================
 -- In-app notification center (weather alerts, recalls, etc.). Rows are written
 -- by the home-alerts cron via the service role; a user reads/marks-read only

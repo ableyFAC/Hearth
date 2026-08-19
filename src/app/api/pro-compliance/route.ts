@@ -29,7 +29,7 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10MB, matches extract-document's cap
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // Exactly what the pro-docs bucket's own allowed_mime_types permits
-// (supabase/migrations/0079_storage_mime_limits.sql). Kept in sync by hand
+// (supabase/migrations/0081_storage_mime_limits.sql). Kept in sync by hand
 // because the bucket config lives in SQL; anything not on this list is stored
 // as application/octet-stream rather than under the type the client claimed.
 const ALLOWED_UPLOAD_TYPES = new Set([
