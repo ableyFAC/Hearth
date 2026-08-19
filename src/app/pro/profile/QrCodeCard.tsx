@@ -1,13 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import QRCode from "qrcode";
 
 // QR code for the pro's public /p/<id> page. Free for EVERY pro, member or
 // not: the whole point is getting the page in front of customers, so pros can
 // print it on trucks, invoices, and business cards. Generated entirely
 // client-side (the `qrcode` package renders to a data URL); nothing is
 // uploaded or stored.
+//
+// `qrcode` is imported dynamically inside the effect rather than at module
+// scope. A static import puts the whole encoder in this route's first-load
+// JS, where it is downloaded and parsed by every pro who opens the profile
+// page even though the only thing that ever touches it is the one call below.
+// The dynamic import makes it its own chunk, fetched after mount, and the
+// card already renders nothing until the data URL exists, so nothing about
+// what the pro sees changes.
 export default function QrCodeCard({
   url,
   businessName,
@@ -23,12 +30,15 @@ export default function QrCodeCard({
     let cancelled = false;
     // 480px with a 2-module quiet zone scans reliably even printed at
     // business-card size.
-    QRCode.toDataURL(url, {
-      width: 480,
-      margin: 2,
-      errorCorrectionLevel: "M",
-      color: { dark: "#1c1917", light: "#ffffff" },
-    })
+    import("qrcode")
+      .then(({ default: QRCode }) =>
+        QRCode.toDataURL(url, {
+          width: 480,
+          margin: 2,
+          errorCorrectionLevel: "M",
+          color: { dark: "#1c1917", light: "#ffffff" },
+        })
+      )
       .then((d) => {
         if (!cancelled) setDataUrl(d);
       })

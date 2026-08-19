@@ -24,6 +24,7 @@ import { sendNotification } from "@/lib/notify";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import { redactContact } from "@/lib/redact";
 import { ok, err, type ActionResult } from "@/lib/actionResult";
+import { launchCityForZip } from "@/lib/serviceArea";
 import { isAllowedValue } from "@/lib/formFields";
 import type { Json } from "@/lib/database.types";
 
@@ -82,6 +83,20 @@ function validPhotoUrls(formData: FormData): string[] {
 export async function postJobAction(formData: FormData) {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
+
+  // Launch-area gate (0124). Onboarding only accepts launch-city ZIPs now,
+  // but homes claimed before that change can carry any Orange County ZIP.
+  // open_jobs_for_me and apply_to_lead both refuse jobs outside the two
+  // launch cities, so a post from such a home would succeed, notify nobody,
+  // and sit invisible forever - the homeowner deserves the honest answer at
+  // post time instead.
+  if (!launchCityForZip(property.zip ?? "")) {
+    setFlash(
+      "Hearth pros serve Huntington Beach and Fountain Valley right now, and this home is outside that area. We'll email you the moment we expand.",
+      "error"
+    );
+    redirect("/contractors");
+  }
   const supabase = await createClient();
 
   const {
@@ -106,7 +121,7 @@ export async function postJobAction(formData: FormData) {
     p_window_seconds: 3600,
   });
   if (allowed === false) {
-    await setFlash("You're posting jobs too quickly, please wait a bit.", "error");
+    setFlash("You're posting jobs too quickly, please wait a bit.", "error");
     redirect("/contractors");
   }
   // Daily cap on top of the hourly one (security audit finding #3): the hourly
@@ -123,7 +138,7 @@ export async function postJobAction(formData: FormData) {
     p_window_seconds: 86400,
   });
   if (allowedDay === false) {
-    await setFlash(
+    setFlash(
       "You've reached today's posting limit. Please try again tomorrow.",
       "error"
     );
@@ -299,7 +314,7 @@ export async function postJobAction(formData: FormData) {
   // the setFlash + redirect style this action uses.
   if (!isAllowedValue(JOB_CATEGORIES, category)) {
     await cleanupOrphanPhotos();
-    await setFlash("Please pick a valid job category.", "error");
+    setFlash("Please pick a valid job category.", "error");
     redirect("/contractors");
   }
 
@@ -307,7 +322,7 @@ export async function postJobAction(formData: FormData) {
   // require a real description (at least 20 characters) before it goes live.
   if ((issueDescription ?? "").trim().length < 20) {
     await cleanupOrphanPhotos();
-    await setFlash(
+    setFlash(
       photoUrls.length
         ? "Please describe the job in at least 20 characters so pros know what they're applying to. Your photos weren't kept, so please re-attach them."
         : "Please describe the job in at least 20 characters so pros know what they're applying to.",
@@ -324,7 +339,7 @@ export async function postJobAction(formData: FormData) {
   // page, can't bypass it).
   if (isMajor && !budgetRange) {
     await cleanupOrphanPhotos();
-    await setFlash(
+    setFlash(
       "Pros need a budget range to bid seriously on projects this size. Please pick one and post again.",
       "error"
     );
@@ -547,6 +562,9 @@ export async function postJobAction(formData: FormData) {
     // For the cold-start free-alerts path's state-level locality check
     // (null-safe, mirroring 0046: missing data never hides a job).
     property_state: property.state ?? null,
+    // For the launch-city filter (0124), so a pro isn't texted about a job
+    // the board and apply gate will both refuse them. Null-safe the same way.
+    property_zip: property.zip ?? null,
     // Fan-out-cannon gate (migration 0093): an unverified property must not
     // be able to trigger up to 200 real emails/texts to pros on someone
     // else's say-so. In-app notifications still go out either way - only
@@ -692,7 +710,7 @@ export async function updateJobAction(
 
   // The flash cookie survives revalidatePath, so this still shows even
   // though EditJobForm closes the panel itself on ok() rather than reloading.
-  await setFlash("Job updated.", "success");
+  setFlash("Job updated.", "success");
   revalidatePath("/contractors");
   return ok();
 }
@@ -728,7 +746,7 @@ export async function closeJobAction(formData: FormData) {
     .eq("id", leadId)
     .maybeSingle();
   if (!lead) {
-    await setFlash("Couldn't find that job. Please refresh and try again.", "error");
+    setFlash("Couldn't find that job. Please refresh and try again.", "error");
     revalidatePath("/contractors");
     return;
   }
@@ -736,7 +754,7 @@ export async function closeJobAction(formData: FormData) {
     // A pro is already assigned (or the lead is otherwise not a plain open
     // posting): closing here would be meaningless, and the UI never renders
     // this form for that job. Guard anyway against a forged/replayed submit.
-    await setFlash(
+    setFlash(
       "This job already has a pro assigned, so it can't be closed here.",
       "error"
     );
@@ -766,7 +784,7 @@ export async function closeJobAction(formData: FormData) {
     if (error && isMissingSchemaError(error)) {
       // Migration 0092 hasn't run against this database yet: degrade to the
       // old refusal instead of crashing or silently no-oping.
-      await setFlash(
+      setFlash(
         "Pros have already applied, so this job can't be closed. Pick one from the applicants.",
         "error"
       );
@@ -774,7 +792,7 @@ export async function closeJobAction(formData: FormData) {
       return;
     }
     if (error) {
-      await setFlash("Couldn't close that job just now. Please try again.", "error");
+      setFlash("Couldn't close that job just now. Please try again.", "error");
       revalidatePath("/contractors");
       return;
     }
@@ -851,7 +869,7 @@ export async function closeJobAction(formData: FormData) {
       }
     }
 
-    await setFlash(reason ? `Job closed: ${reason}.` : "Job closed.", "info");
+    setFlash(reason ? `Job closed: ${reason}.` : "Job closed.", "info");
     revalidatePath("/contractors");
     revalidatePath("/dashboard");
     return;
@@ -862,8 +880,8 @@ export async function closeJobAction(formData: FormData) {
     .from("contractor_leads")
     .delete()
     .eq("id", leadId);
-  if (error) await setFlash("Couldn't close that job just now. Please try again.", "error");
-  else await setFlash(reason ? `Job closed: ${reason}.` : "Job closed.", "info");
+  if (error) setFlash("Couldn't close that job just now. Please try again.", "error");
+  else setFlash(reason ? `Job closed: ${reason}.` : "Job closed.", "info");
   revalidatePath("/contractors");
   revalidatePath("/dashboard");
 }
@@ -871,7 +889,7 @@ export async function closeJobAction(formData: FormData) {
 // Homeowner picks a pro from the applicants. The DB function assigns + unlocks
 // the chosen pro (they get contact + chat) and declines the rest.
 export async function chooseApplicantAction(formData: FormData) {
-  const supabase = await createClient() as any;
+  const supabase = (await createClient()) as any;
   const applicationId = String(formData.get("application_id"));
   const {
     data: { user },
@@ -917,9 +935,9 @@ export async function chooseApplicantAction(formData: FormData) {
   const { error } = await supabase.rpc("choose_applicant", {
     p_application: applicationId,
   });
-  if (error) await setFlash("Couldn't select that pro just now. Please try again.", "error");
+  if (error) setFlash("Couldn't select that pro just now. Please try again.", "error");
   else {
-    await setFlash(
+    setFlash(
       "Pro selected. They now have your contact and can message you.",
       "success"
     );
@@ -1105,7 +1123,7 @@ export async function saveReviewAction(
 
   // The flash cookie survives revalidatePath, so this still shows even
   // though ReviewButton closes the modal itself on ok() rather than reloading.
-  await setFlash("Thanks for your review!", "success");
+  setFlash("Thanks for your review!", "success");
   revalidatePath("/contractors");
   revalidatePath("/chats");
   return ok();
@@ -1128,6 +1146,15 @@ export async function requestProAction(
 ): Promise<ActionResult> {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
+
+  // Launch-area gate, same reasoning as postJobAction: a pre-launch-gate home
+  // outside Huntington Beach / Fountain Valley must not create a request a
+  // pro would then pay to unlock for a job outside the launch area.
+  if (!launchCityForZip(property.zip ?? "")) {
+    return err(
+      "Hearth pros serve Huntington Beach and Fountain Valley right now, and this home is outside that area. We'll email you the moment we expand."
+    );
+  }
   const supabase = await createClient();
 
   const {
@@ -1331,7 +1358,7 @@ export async function requestProAction(
 // to a lead on a property the caller owns; the direct_to / contractor_id guards
 // stop this from touching a normal open job or an already-unlocked one.
 export async function cancelDirectRequestAction(formData: FormData) {
-  const supabase = await createClient() as any;
+  const supabase = (await createClient()) as any;
   const leadId = String(formData.get("lead_id") || "");
 
   const { data: lead } = await supabase
@@ -1342,7 +1369,7 @@ export async function cancelDirectRequestAction(formData: FormData) {
   if (!lead || !lead.direct_to || lead.contractor_id) {
     // Not a pending direct request (or already unlocked): nothing to cancel
     // here. Guard against a forged/replayed submit.
-    await setFlash("Couldn't cancel that request just now. Please try again.", "error");
+    setFlash("Couldn't cancel that request just now. Please try again.", "error");
     revalidatePath("/contractors");
     return;
   }
@@ -1352,8 +1379,8 @@ export async function cancelDirectRequestAction(formData: FormData) {
     .delete()
     .eq("id", leadId)
     .is("contractor_id", null);
-  if (error) await setFlash("Couldn't cancel that request just now. Please try again.", "error");
-  else await setFlash("Request cancelled.", "info");
+  if (error) setFlash("Couldn't cancel that request just now. Please try again.", "error");
+  else setFlash("Request cancelled.", "info");
   revalidatePath("/contractors");
 }
 
@@ -1366,7 +1393,17 @@ export async function cancelDirectRequestAction(formData: FormData) {
 export async function postDirectPubliclyAction(formData: FormData) {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
-  const supabase = await createClient() as any;
+
+  // Launch-area gate, same reasoning as postJobAction: converting a direct
+  // request into an open posting must not create a board job no pro can see.
+  if (!launchCityForZip(property.zip ?? "")) {
+    setFlash(
+      "Hearth pros serve Huntington Beach and Fountain Valley right now, and this home is outside that area. We'll email you the moment we expand.",
+      "error"
+    );
+    redirect("/contractors");
+  }
+  const supabase = (await createClient()) as any;
   const leadId = String(formData.get("lead_id") || "");
 
   // RLS scopes this read to a lead the caller owns. It must still be a pending
@@ -1382,7 +1419,7 @@ export async function postDirectPubliclyAction(formData: FormData) {
     lead.contractor_id ||
     lead.property_id !== property.id
   ) {
-    await setFlash("Couldn't post that job just now. Please try again.", "error");
+    setFlash("Couldn't post that job just now. Please try again.", "error");
     revalidatePath("/contractors");
     return;
   }
@@ -1406,7 +1443,7 @@ export async function postDirectPubliclyAction(formData: FormData) {
     p_window_seconds: 3600,
   });
   if (allowed === false) {
-    await setFlash("You're posting jobs too quickly, please wait a bit.", "error");
+    setFlash("You're posting jobs too quickly, please wait a bit.", "error");
     redirect("/contractors");
   }
   const { data: allowedDay } = await admin.rpc("rate_limit_hit", {
@@ -1415,7 +1452,7 @@ export async function postDirectPubliclyAction(formData: FormData) {
     p_window_seconds: 86400,
   });
   if (allowedDay === false) {
-    await setFlash(
+    setFlash(
       "You've reached today's posting limit. Please try again tomorrow.",
       "error"
     );
@@ -1432,7 +1469,7 @@ export async function postDirectPubliclyAction(formData: FormData) {
     .select("id")
     .maybeSingle();
   if (error || !updated) {
-    await setFlash("Couldn't post that job just now. Please try again.", "error");
+    setFlash("Couldn't post that job just now. Please try again.", "error");
     revalidatePath("/contractors");
     return;
   }
@@ -1449,6 +1486,7 @@ export async function postDirectPubliclyAction(formData: FormData) {
     timing,
     issue_description: issueDescription,
     property_state: property.state ?? null,
+    property_zip: property.zip ?? null,
     externalChannels: property.ownership_status === "verified",
   });
 
@@ -1482,7 +1520,7 @@ export async function postDirectPubliclyAction(formData: FormData) {
     // Notifications are a nice-to-have here, not part of the conversion.
   }
 
-  await setFlash("Posted to all local pros. Matching pros can now apply.", "success");
+  setFlash("Posted to all local pros. Matching pros can now apply.", "success");
   revalidatePath("/contractors");
 }
 

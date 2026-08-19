@@ -42,27 +42,57 @@ export async function findActiveJobConflicts(
   try {
     const admin = createAdminClient();
 
-    // The pro's active jobs: assigned to them and still in flight. "Active"
-    // matches the pro dashboard's own definition (anything not closed/lost).
-    const { data: activeLeads } = await admin
-      .from("contractor_leads")
-      .select("id, category, property_id, homeowner_name, created_at")
-      .eq("contractor_id", contractorId)
-      .not("status", "in", "(closed,lost)")
-      .order("created_at", { ascending: false });
+    // Two independent lookups, so they go out together rather than one after
+    // the other. The pro's active jobs are keyed off contractorId alone, and
+    // the open jobs being considered are keyed off the openLeadIds the caller
+    // already handed us: neither needs anything from the other. Serially they
+    // were two round trips; now they are one.
+    //
+    // The one thing this gives up: the old code returned early when the pro had
+    // no active jobs, before it ever asked about the open ones. That case now
+    // issues a query whose result is discarded. It costs no extra wall time
+    // (the two run concurrently) and the early return below still fires, so
+    // nothing downstream can see the difference.
+    const [{ data: activeLeads }, { data: openLeads }] = await Promise.all([
+      // The pro's active jobs: assigned to them and still in flight. "Active"
+      // matches the pro dashboard's own definition (anything not closed/lost).
+      admin
+        .from("contractor_leads")
+        .select("id, category, property_id, homeowner_name, created_at")
+        .eq("contractor_id", contractorId)
+        .not("status", "in", "(closed,lost)")
+        .order("created_at", { ascending: false }),
+      // The open jobs being considered: same owner + category as an active job
+      // means the pro already has this relationship live.
+      admin
+        .from("contractor_leads")
+        .select("id, category, property_id")
+        .in("id", openLeadIds),
+    ]);
     if (!activeLeads || activeLeads.length === 0) return conflicts;
 
-    // Resolve each active lead's property to its owner.
+    // Resolve each lead's property to its owner. Both sides need the same
+    // properties table keyed by id, so they are ONE query over the union of
+    // the two id sets instead of a second round trip for the open-job half.
+    // The old code deduped by skipping open ids already resolved from the
+    // active half; the Set below does the same job in memory, so the resulting
+    // ownerByProperty map holds exactly the same entries.
     const activePropertyIds = Array.from(
       new Set(activeLeads.map((l) => l.property_id).filter(Boolean))
     );
     if (activePropertyIds.length === 0) return conflicts;
-    const { data: activeProps } = await admin
+    const propertyIds = Array.from(
+      new Set([
+        ...activePropertyIds,
+        ...(openLeads ?? []).map((l) => l.property_id).filter(Boolean),
+      ])
+    );
+    const { data: props } = await admin
       .from("properties")
       .select("id, user_id")
-      .in("id", activePropertyIds);
+      .in("id", propertyIds);
     const ownerByProperty = new Map<string, string>(
-      (activeProps ?? []).map((p) => [p.id, p.user_id])
+      (props ?? []).map((p) => [p.id, p.user_id])
     );
 
     // owner + category -> the pro's newest active lead for that relationship
@@ -82,28 +112,7 @@ export async function findActiveJobConflicts(
     }
     if (activeByRelationship.size === 0) return conflicts;
 
-    // Now the open jobs being considered: same owner + category means the pro
-    // already has this relationship live.
-    const { data: openLeads } = await admin
-      .from("contractor_leads")
-      .select("id, category, property_id")
-      .in("id", openLeadIds);
     if (!openLeads || openLeads.length === 0) return conflicts;
-
-    const openPropertyIds = Array.from(
-      new Set(
-        openLeads
-          .map((l) => l.property_id)
-          .filter((id) => Boolean(id) && !ownerByProperty.has(id))
-      )
-    );
-    if (openPropertyIds.length > 0) {
-      const { data: openProps } = await admin
-        .from("properties")
-        .select("id, user_id")
-        .in("id", openPropertyIds);
-      for (const p of openProps ?? []) ownerByProperty.set(p.id, p.user_id);
-    }
 
     for (const job of openLeads) {
       const owner = ownerByProperty.get(job.property_id);

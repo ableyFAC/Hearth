@@ -5,7 +5,7 @@
 // the whole feature stays testable and server-render friendly.
 //
 // Structural interfaces below mirror the RPC return shape declared in
-// supabase/migrations/0028_ghost_protection.sql on purpose: the RPC is not
+// supabase/migrations/0031_ghost_protection.sql on purpose: the RPC is not
 // in the generated database.types.ts (the page casts it with `as any`), so
 // we type what we actually read and nothing more.
 

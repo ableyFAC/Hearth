@@ -31,44 +31,21 @@ export async function inviteMemberAction(formData: FormData) {
   if (!user) redirect("/signin");
 
   const propertyId = (formData.get("property_id") as string) || "";
-  // Capped at the longest address an email standard allows, before it is
-  // stored or matched on: the input's type is a client hint, not a guard.
-  const email = ((formData.get("email") as string) || "")
-    .trim()
-    .toLowerCase()
-    .slice(0, 254);
-
-  // An invite sends mail to an address the caller typed, so an unlimited
-  // invite loop is a way to send mail to strangers with Hearth's name on it.
-  // The per-home member cap below doesn't stop that on its own: a rejected or
-  // deleted invite frees the slot again. Same fixed-window limiter (migration
-  // 0068) and same fail-open posture as the rest of the app - only an explicit
-  // `allowed === false` blocks - so a limiter outage never stops a real
-  // homeowner from adding their partner.
-  const rlAdmin = createAdminClient();
-  const { data: allowed } = await rlAdmin.rpc("rate_limit_hit", {
-    p_bucket: `invite:${user.id}`,
-    p_limit: 10,
-    p_window_seconds: 86400,
-  });
-  if (allowed === false) {
-    await setFlash(
-      "You've sent a lot of invites today. Please try again tomorrow.",
-      "error"
-    );
-    redirect(HOUSEHOLD_PATH);
-  }
+  // NOT sliced to a ceiling like other free-text fields: this address is mailed
+  // an invite, and a truncated address still has an "@" and would reach a
+  // stranger, so an over-length value is REJECTED below rather than trimmed.
+  const email = ((formData.get("email") as string) || "").trim().toLowerCase();
 
   if (!propertyId) {
-    await setFlash("Choose a home to invite someone to.", "error");
+    setFlash("Choose a home to invite someone to.", "error");
     redirect(HOUSEHOLD_PATH);
   }
-  if (!EMAIL_RE.test(email)) {
-    await setFlash("Enter a valid email address.", "error");
+  if (!EMAIL_RE.test(email) || email.length > 254) {
+    setFlash("Enter a valid email address.", "error");
     redirect(HOUSEHOLD_PATH);
   }
   if (user.email && email === user.email.trim().toLowerCase()) {
-    await setFlash("You can't invite yourself.", "error");
+    setFlash("You can't invite yourself.", "error");
     redirect(HOUSEHOLD_PATH);
   }
 
@@ -78,12 +55,36 @@ export async function inviteMemberAction(formData: FormData) {
     .select("id", { count: "exact", head: true })
     .eq("property_id", propertyId);
   if (countError) {
-    await setFlash("Couldn't send the invite. Please try again.", "error");
+    setFlash("Couldn't send the invite. Please try again.", "error");
     redirect(HOUSEHOLD_PATH);
   }
   if ((count ?? 0) >= MAX_MEMBERS_PER_HOME) {
-    await setFlash(
+    setFlash(
       `This home already has the maximum of ${MAX_MEMBERS_PER_HOME} members.`,
+      "error"
+    );
+    redirect(HOUSEHOLD_PATH);
+  }
+
+  // An invite sends mail to an address the caller typed, so an unlimited invite
+  // loop is a way to send mail to strangers with Hearth's name on it. The
+  // per-home member cap above doesn't stop that on its own: a rejected or
+  // deleted invite frees the slot again. Charged HERE, immediately before the
+  // insert and only after every cheap check (property, email shape, not-self,
+  // cap) has passed, so a mistyped or self-addressed invite never burns a slot.
+  // Same fixed-window limiter (migration 0068) and same fail-open posture as
+  // the rest of the spam-class buckets - only an explicit `allowed === false`
+  // blocks - so a limiter outage never stops a real homeowner from adding their
+  // partner.
+  const rlAdmin = createAdminClient();
+  const { data: allowed } = await rlAdmin.rpc("rate_limit_hit", {
+    p_bucket: `invite:${user.id}`,
+    p_limit: 10,
+    p_window_seconds: 86400,
+  });
+  if (allowed === false) {
+    setFlash(
+      "You've sent a lot of invites today. Please try again tomorrow.",
       "error"
     );
     redirect(HOUSEHOLD_PATH);
@@ -99,14 +100,14 @@ export async function inviteMemberAction(formData: FormData) {
     // 23505: the unique index on (property_id, lower(invited_email)) caught a
     // duplicate invite, either already pending or already an active member.
     if (error.code === "23505") {
-      await setFlash("That email has already been invited to this home.", "error");
+      setFlash("That email has already been invited to this home.", "error");
     } else {
-      await setFlash("Couldn't send the invite. Please try again.", "error");
+      setFlash("Couldn't send the invite. Please try again.", "error");
     }
     redirect(HOUSEHOLD_PATH);
   }
 
-  await setFlash(
+  setFlash(
     `Invited ${email}. If they don't have a Hearth account yet, the invite waits until they sign up with that email.`
   );
   revalidatePath(HOUSEHOLD_PATH);
@@ -126,10 +127,10 @@ export async function removeMemberAction(formData: FormData) {
   const id = (formData.get("id") as string) || "";
   const { error } = await supabase.from("household_members").delete().eq("id", id);
   if (error) {
-    await setFlash("Couldn't remove that person. Please try again.", "error");
+    setFlash("Couldn't remove that person. Please try again.", "error");
     redirect(HOUSEHOLD_PATH);
   }
-  await setFlash("Removed from the home.");
+  setFlash("Removed from the home.");
   revalidatePath(HOUSEHOLD_PATH);
   redirect(HOUSEHOLD_PATH);
 }
@@ -155,10 +156,10 @@ export async function acceptInviteAction(formData: FormData) {
     })
     .eq("id", id);
   if (error) {
-    await setFlash("Couldn't accept that invite. Please try again.", "error");
+    setFlash("Couldn't accept that invite. Please try again.", "error");
     redirect(HOUSEHOLD_PATH);
   }
-  await setFlash("You're in. That home now shows up in your homes list.");
+  setFlash("You're in. That home now shows up in your homes list.");
   revalidatePath("/", "layout");
   redirect(HOUSEHOLD_PATH);
 }
@@ -175,10 +176,10 @@ export async function declineInviteAction(formData: FormData) {
   const id = (formData.get("id") as string) || "";
   const { error } = await supabase.from("household_members").delete().eq("id", id);
   if (error) {
-    await setFlash("Couldn't decline that invite. Please try again.", "error");
+    setFlash("Couldn't decline that invite. Please try again.", "error");
     redirect(HOUSEHOLD_PATH);
   }
-  await setFlash("Invite declined.");
+  setFlash("Invite declined.");
   revalidatePath(HOUSEHOLD_PATH);
   redirect(HOUSEHOLD_PATH);
 }
@@ -195,10 +196,10 @@ export async function leaveHomeAction(formData: FormData) {
   const id = (formData.get("id") as string) || "";
   const { error } = await supabase.from("household_members").delete().eq("id", id);
   if (error) {
-    await setFlash("Couldn't leave that home. Please try again.", "error");
+    setFlash("Couldn't leave that home. Please try again.", "error");
     redirect(HOUSEHOLD_PATH);
   }
-  await setFlash("You've left that home.");
+  setFlash("You've left that home.");
   revalidatePath("/", "layout");
   redirect(HOUSEHOLD_PATH);
 }
@@ -303,7 +304,7 @@ export async function mintHouseholdQrTokenAction(
     // whatever host this request actually came in on (localhost while
     // developing, the LAN IP, a tunnel, or the real domain in prod) - same
     // reasoning as requestOrigin() itself.
-    const origin = await requestOriginFromHeaders();
+    const origin = requestOriginFromHeaders();
     return ok({
       token: inserted.token,
       joinUrl: `${origin}/join/household/${inserted.token}`,

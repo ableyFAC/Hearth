@@ -18,11 +18,11 @@ import { cappedField, cappedFieldOrNull, FIELD_MAX } from "@/lib/formFields";
 // tell the caller whether it was right. Holding the session proves who they
 // are, but a borrowed or hijacked one must not get unlimited guesses at the
 // password behind it, and the typed-email delete confirmation shouldn't be
-// infinitely retryable either. Same fixed-window limiter (migration 0068) and
-// same fail-open posture as every other call site: only an explicit
-// `allowed === false` blocks, so a limiter outage never locks someone out of
-// their own account. One shared bucket across all three actions, so attempts
-// can't be spread between them to triple the budget.
+// infinitely retryable either. Same fixed-window limiter (migration 0068), but
+// UNLIKE the spam-class buckets this one fails CLOSED (see
+// passwordAttemptsExhausted): a limiter outage blocks rather than handing a
+// borrowed session unlimited tries. One shared bucket across all three actions,
+// so attempts can't be spread between them to triple the budget.
 const PW_VERIFY_LIMIT = 5;
 const PW_VERIFY_WINDOW_SECONDS = 900;
 const PW_VERIFY_MESSAGE =
@@ -30,11 +30,20 @@ const PW_VERIFY_MESSAGE =
 
 async function passwordAttemptsExhausted(userId: string): Promise<boolean> {
   const admin = createAdminClient();
-  const { data: allowed } = await admin.rpc("rate_limit_hit", {
+  const { data: allowed, error } = await admin.rpc("rate_limit_hit", {
     p_bucket: `pwverify:${userId}`,
     p_limit: PW_VERIFY_LIMIT,
     p_window_seconds: PW_VERIFY_WINDOW_SECONDS,
   });
+  // This bucket alone fails CLOSED: it guards password guessing and typed-email
+  // delete confirmation, so an RPC outage must NOT hand a borrowed session
+  // unlimited attempts. Unlike the spam-class buckets (invite/support/quote),
+  // where a limiter blip should never lock a real user out, here the safe
+  // direction on the unknown is to block. Treat the error as "exhausted."
+  if (error) {
+    console.error("pwverify rate_limit_hit failed - failing CLOSED:", error);
+    return true;
+  }
   return allowed === false;
 }
 
@@ -58,7 +67,7 @@ export async function saveAccountAction(formData: FormData) {
   const sms_consent = formData.get("sms_consent") === "on";
 
   if (!full_name) {
-    await setFlash("Please enter your name.", "error");
+    setFlash("Please enter your name.", "error");
     redirect("/account");
   }
 
@@ -115,11 +124,11 @@ export async function saveAccountAction(formData: FormData) {
     data: { full_name },
   });
   if (authError) {
-    await setFlash("Couldn't save your name just now. Please try again.", "error");
+    setFlash("Couldn't save your name just now. Please try again.", "error");
     redirect("/account");
   }
 
-  await setFlash("Account updated.");
+  setFlash("Account updated.");
   // Revalidate the whole layout tree so the toolbar (in the app layout, not the
   // page) picks up the new name everywhere.
   revalidatePath("/", "layout");
@@ -144,23 +153,34 @@ export async function updateEmailAction(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/signin");
 
-  const email = cappedField(formData, "email", FIELD_MAX.email);
+  // Read raw and REJECT an over-length address rather than cappedField's silent
+  // truncate: this is the routing address every recovery link goes to, and a
+  // truncated string still has an "@" and would mail a stranger. A too-long
+  // paste is a mistake to stop, not half-keep.
+  const email = (formData.get("email") as string | null)?.trim() ?? "";
   if (!email || !email.includes("@")) {
-    await setFlash("That email address doesn't look right.", "error");
+    setFlash("That email address doesn't look right.", "error");
     redirect("/account/security");
   }
-  if (email === user.email) {
-    await setFlash("That's already your sign-in email.", "error");
+  if (email.length > FIELD_MAX.email) {
+    setFlash("That email address is too long.", "error");
+    redirect("/account/security");
+  }
+  // Case-insensitive: Supabase stores the address lowercased, so a re-typed
+  // "Me@x.com" would slip past an exact === and start a pointless change to the
+  // very same mailbox.
+  if (user.email && email.toLowerCase() === user.email.toLowerCase()) {
+    setFlash("That's already your sign-in email.", "error");
     redirect("/account/security");
   }
 
   // Which proof this account can actually give, decided from the account's
   // real identities and never from what the form posted - same rule as
   // deleteAccountAction below.
-  const { hasPassword } = passwordStatusFor(user);
+  const { hasPassword } = await passwordStatusFor(user);
   if (hasPassword && user.email) {
     if (await passwordAttemptsExhausted(user.id)) {
-      await setFlash(PW_VERIFY_MESSAGE, "error");
+      setFlash(PW_VERIFY_MESSAGE, "error");
       redirect("/account/security");
     }
 
@@ -176,7 +196,7 @@ export async function updateEmailAction(formData: FormData) {
       password: current,
     });
     if (verifyError) {
-      await setFlash("Current password is incorrect.", "error");
+      setFlash("Current password is incorrect.", "error");
       redirect("/account/security");
     }
   }
@@ -188,11 +208,11 @@ export async function updateEmailAction(formData: FormData) {
 
   const { error } = await supabase.auth.updateUser({ email });
   if (error) {
-    await setFlash(friendlyAuthError(error), "error");
+    setFlash(friendlyAuthError(error), "error");
     redirect("/account/security");
   }
 
-  await setFlash("Check your new email to confirm the change.");
+  setFlash("Check your new email to confirm the change.");
   redirect("/account/security");
 }
 
@@ -211,16 +231,16 @@ export async function updatePasswordAction(formData: FormData) {
   const confirm = (formData.get("confirm_password") as string) || "";
 
   if (next.length < 8) {
-    await setFlash("New password must be at least 8 characters.", "error");
+    setFlash("New password must be at least 8 characters.", "error");
     redirect("/account/security");
   }
   if (next !== confirm) {
-    await setFlash("New passwords don't match.", "error");
+    setFlash("New passwords don't match.", "error");
     redirect("/account/security");
   }
 
   if (await passwordAttemptsExhausted(user.id)) {
-    await setFlash(PW_VERIFY_MESSAGE, "error");
+    setFlash(PW_VERIFY_MESSAGE, "error");
     redirect("/account/security");
   }
 
@@ -235,17 +255,17 @@ export async function updatePasswordAction(formData: FormData) {
     password: current,
   });
   if (verifyError) {
-    await setFlash("Current password is incorrect.", "error");
+    setFlash("Current password is incorrect.", "error");
     redirect("/account/security");
   }
 
   const { error } = await supabase.auth.updateUser({ password: next });
   if (error) {
-    await setFlash(friendlyAuthError(error), "error");
+    setFlash(friendlyAuthError(error), "error");
     redirect("/account/security");
   }
 
-  await setFlash("Password updated.");
+  setFlash("Password updated.");
   redirect("/account/security");
 }
 
@@ -261,14 +281,14 @@ export async function signOutOthersAction() {
 
   const { error } = await supabase.auth.signOut({ scope: "others" });
   if (error) {
-    await setFlash(
+    setFlash(
       "Couldn't sign out your other devices just now. Please try again.",
       "error"
     );
     redirect("/account/security");
   }
 
-  await setFlash("Signed out everywhere else. This device stays signed in.");
+  setFlash("Signed out everywhere else. This device stays signed in.");
   redirect("/account/security");
 }
 
@@ -303,19 +323,19 @@ export async function deleteAccountAction(formData: FormData) {
   // account's real identities, never from what the form posted: an account
   // that has a password can't opt into the typed confirmation by leaving the
   // password field out.
-  const { hasPassword } = passwordStatusFor(user);
+  const { hasPassword } = await passwordStatusFor(user);
 
   // Both branches below, not just the password one: a wrong typed email is
   // cheap to check, but nothing here should be retryable without limit.
   if (await passwordAttemptsExhausted(user.id)) {
-    await setFlash(PW_VERIFY_MESSAGE, "error");
+    setFlash(PW_VERIFY_MESSAGE, "error");
     redirect("/account/security");
   }
 
   if (hasPassword) {
     const current = (formData.get("current_password") as string) || "";
     if (!current) {
-      await setFlash("Current password is incorrect.", "error");
+      setFlash("Current password is incorrect.", "error");
       redirect("/account/security");
     }
 
@@ -330,7 +350,16 @@ export async function deleteAccountAction(formData: FormData) {
       password: current,
     });
     if (verifyError) {
-      await setFlash("Current password is incorrect.", "error");
+      // Distinguish a genuinely wrong password from a throttle/network blip:
+      // only "invalid login credentials" means the password was wrong. A
+      // Supabase sign-in throttle or a dropped connection is NOT the user's
+      // password being wrong, and telling them it is sends them retrying a
+      // password that was actually correct - on the delete path especially,
+      // where a wrong "incorrect password" reading blocks a right-to-delete.
+      const msg = /invalid login credentials/i.test(verifyError.message ?? "")
+        ? "Current password is incorrect."
+        : friendlyAuthError(verifyError);
+      setFlash(msg, "error");
       redirect("/account/security");
     }
   } else {
@@ -344,7 +373,7 @@ export async function deleteAccountAction(formData: FormData) {
       .trim()
       .toLowerCase();
     if (typed !== user.email.toLowerCase()) {
-      await setFlash(
+      setFlash(
         "That doesn't match the email on this account. Type it exactly to confirm.",
         "error"
       );
@@ -368,7 +397,7 @@ export async function deleteAccountAction(formData: FormData) {
     try {
       await stripe.subscriptions.cancel(sub.stripe_subscription_id);
     } catch {
-      await setFlash(
+      setFlash(
         "We couldn't cancel your subscription, so we didn't delete your account. Please try again.",
         "error"
       );
@@ -402,7 +431,7 @@ export async function deleteAccountAction(formData: FormData) {
   // path (src/app/pro/profile/actions.ts).
   if (summary?.contractorDeleteFailed) {
     console.error("eraseUserData contractor delete failed for", user.id);
-    await setFlash(
+    setFlash(
       "Couldn't fully delete your account. Please try again.",
       "error"
     );
@@ -411,7 +440,7 @@ export async function deleteAccountAction(formData: FormData) {
 
   const { error } = await admin.auth.admin.deleteUser(user.id);
   if (error) {
-    await setFlash(
+    setFlash(
       "Couldn't fully delete your account. Please try again, or contact support.",
       "error"
     );
@@ -419,6 +448,6 @@ export async function deleteAccountAction(formData: FormData) {
   }
 
   await supabase.auth.signOut();
-  await setFlash("Your account has been deleted.");
+  setFlash("Your account has been deleted.");
   redirect("/");
 }

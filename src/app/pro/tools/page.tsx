@@ -4,6 +4,7 @@ import { ClipboardList, ReceiptText, Mail, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
+import { PRO_DEPOSIT_BOOST_PTS, COLD_START_FREE_ALERTS } from "@/lib/constants";
 import ProUpgradeCta from "@/components/pro/ProUpgradeCta";
 import ProToolsClient from "./ProToolsClient";
 
@@ -67,11 +68,23 @@ export default async function ProToolsPage() {
           </p>
           <p className="mt-1 text-sm text-hearth-700 dark:text-hearth-300">
             The AI back office is part of the Hearth Pro membership.{" "}
-            {/* The trial line must not promise the deposit boost: that perk
-                starts only when the trial converts to a paid membership. */}
+            {/* The real membership unlock here is the three tools. Two things
+                must stay honest: instant alerts are free for every pro while
+                COLD_START_FREE_ALERTS is on, so we don't sell them as a
+                membership unlock (mirrors /pros and /pro/business); and the
+                deposit match is the one perk that does NOT start during the
+                free trial, so the trial line never promises it early. */}
             {trialEligible
-              ? "Start your free trial to unlock all three tools, along with instant alerts. Your +5% deposit match starts when the trial converts."
-              : "Join to unlock all three tools, along with instant alerts and deposit bonuses."}
+              ? `Start your free trial to unlock all three tools.${
+                  COLD_START_FREE_ALERTS
+                    ? " Instant job alerts are already free for every pro while Hearth is new."
+                    : " You also get instant job alerts."
+                } Your +${PRO_DEPOSIT_BOOST_PTS}% deposit match starts when the trial converts.`
+              : `Join to unlock all three tools.${
+                  COLD_START_FREE_ALERTS
+                    ? " Instant job alerts are already free for every pro while Hearth is new."
+                    : " You also get instant job alerts."
+                } Members earn +${PRO_DEPOSIT_BOOST_PTS}% on every deposit.`}
           </p>
           <ProUpgradeCta
             trialEligible={trialEligible}

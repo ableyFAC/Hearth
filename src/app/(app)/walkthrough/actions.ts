@@ -74,12 +74,14 @@ export async function confirmSystemAction(
   const model = s(formData, "model");
   const serial = s(formData, "serial");
   // Server actions are callable with arbitrary FormData, so the client's
-  // input types are not a guard. Same 1900-2100 clamp the vision route uses;
-  // Number.isFinite also screens out NaN, which would otherwise slip through
-  // the ?? fallback below (NaN is not nullish) and null out a good value.
+  // input types are not a guard. Same 1700-2100 range the profile edit and
+  // vision route use (properties.year_built accepts back to 1700, so a real
+  // 1885 home's install year is kept, not ignored); Number.isFinite also
+  // screens out NaN, which would otherwise slip through the ?? fallback below
+  // (NaN is not nullish) and null out a good value.
   const yearNum = Number(s(formData, "install_year"));
   const install_year =
-    Number.isFinite(yearNum) && yearNum >= 1900 && yearNum <= 2100
+    Number.isFinite(yearNum) && yearNum >= 1700 && yearNum <= 2100
       ? Math.trunc(yearNum)
       : null;
   const conditionNum = Number(s(formData, "condition_rating"));

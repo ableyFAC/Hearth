@@ -2,7 +2,66 @@ import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth";
+import { isMissingSchemaError } from "@/lib/dbErrors";
 import type { Contractor } from "@/lib/database.types";
+
+// Every contractors column any caller of getCurrentContractor() actually
+// reads, and nothing else. Traced from all ~60 call sites: the pro layout and
+// dashboard, the profile/business/billing screens, the license verify and
+// background check flows in pro/actions.ts, the AI routes (pro-ask,
+// draft-apply, pro-tools, pro-compliance), and the OG card routes.
+//
+// Deliberately NOT selected, because nothing downstream of this helper reads
+// them:
+//   balance                 - the wallets table is the live source; pro/page
+//                             and pro/business both query it directly
+//   vetted                  - written once at signup (pro/actions.ts), a
+//                             matchability flag no read path consults
+//   checkr_candidate_id     - only the Checkr webhook reads it, from its own
+//   background_check_detail   admin query, never through this helper
+//   created_at              - the one contractor.created_at read is in the
+//                             pro-winback cron, off its own query
+//   license_insurance_updated_at - written, never read back
+//
+// That is not just bytes. src/app/pro/profile/page.tsx hands this whole row to
+// ProfileTabs, which is a client component, so every column here is serialized
+// into the browser's RSC payload on every /pro/profile load. Trimming keeps
+// the pro's wallet balance and their raw background-check detail out of it.
+const CONTRACTOR_COLUMNS = [
+  "id",
+  "user_id",
+  "name",
+  "license_number",
+  "license_expires",
+  "license_doc_path",
+  "insurance_doc_path",
+  "license_verified_status",
+  "license_verified_at",
+  "license_verify_detail",
+  "background_check_status",
+  "background_checked_at",
+  "categories",
+  "service_area",
+  "serves_orange_county",
+  "launch_cities",
+  "contact_email",
+  "contact_phone",
+  "rating",
+  "review_count",
+  // Post-0033 columns that are absent from the generated Database type and so
+  // are read everywhere as (contractor as any).x. They are real columns; the
+  // types file simply has not been regenerated. Same reason the whole query
+  // below goes through an `any` cast.
+  "service_state",
+  "license_state",
+  "slug",
+  "logo_url",
+  "about",
+  "yelp_url",
+  "google_reviews_url",
+  "insurance_carrier",
+  "insurance_expires",
+].join(", ");
 
 // The current user's contractor company, or null if they aren't a pro.
 // A user is treated as a contractor iff a contractors row links to their uid.
@@ -30,13 +89,36 @@ export const getCurrentContractor = cache(
     // `.eq("user_id", user.id)`, so the admin client still returns only the
     // caller's own row.
     const supabase = createAdminClient();
-    const { data } = await supabase
-      .from("contractors")
-      .select("*")
+    // The `any` cast is unavoidable: CONTRACTOR_COLUMNS names real columns
+    // (migrations 0033/0043/0046/0051) that src/lib/database.types.ts has not
+    // been regenerated for, and the typed client rejects a select string
+    // mentioning a column it does not know about. Same convention the app
+    // already uses for these fields at every read site. The result is asserted
+    // back to Contractor because the projection also drops keys the generated
+    // Row type marks required; every property any caller reads is present.
+    const { data, error } = await (supabase.from("contractors") as any)
+      .select(CONTRACTOR_COLUMNS)
       .eq("user_id", user.id)
       .maybeSingle();
 
-    return data ?? null;
+    // An explicit column list is not resilient the way select("*") was: on a
+    // database that has not run one of the migrations above, Postgres rejects
+    // the WHOLE query with 42703 rather than quietly omitting the column. That
+    // would make this helper return null, which reads as "not a pro" and
+    // bounces every contractor to /pro/onboarding. So a missing-column failure
+    // falls back to the old wide select instead, exactly as before. Any other
+    // error keeps the previous behavior too (null, no throw).
+    if (error) {
+      if (!isMissingSchemaError(error)) return null;
+      const { data: wide } = await supabase
+        .from("contractors")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      return wide ?? null;
+    }
+
+    return (data as Contractor | null) ?? null;
   }
 );
 

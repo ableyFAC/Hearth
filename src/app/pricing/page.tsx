@@ -1,6 +1,14 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { PLUS_PLAN, COLD_START_FREE_POSTING } from "@/lib/constants";
+import {
+  PLUS_PLAN,
+  COLD_START_FREE_POSTING,
+  formatUsd,
+  yearlyAsMonthly,
+  yearlyPerDay,
+  yearlyRunRate,
+  yearlySavings,
+} from "@/lib/constants";
 
 // Public top-level pricing page, same pattern as src/app/privacy/page.tsx:
 // see the allowlist entry in src/lib/supabase/middleware.ts. A logged-out
@@ -22,12 +30,18 @@ export const metadata: Metadata = {
 };
 
 // Prices are rendered from PLUS_PLAN so a one-line edit in constants moves
-// them everywhere. toFixed(2) keeps $4.99 / $39.99 from ever showing as
-// "4.9". The yearly plan reframed as a monthly cost, the same math the /plus
-// PlanToggle uses, so the sticker price isn't doing all the work alone.
-const MONTHLY = `$${PLUS_PLAN.monthly.toFixed(2)}`;
-const YEARLY = `$${PLUS_PLAN.yearly.toFixed(2)}`;
-const YEARLY_PER_MONTH = `$${(PLUS_PLAN.yearly / 12).toFixed(2)}`;
+// them everywhere, and formatUsd keeps $4.99 / $39.99 from ever showing as
+// "4.9". The derived figures come from the shared plan-math helpers in
+// constants, the same ones the /plus PlanToggle uses, so the two pages cannot
+// drift: the saving is always twelve charges at the real monthly price minus
+// the yearly price (never an invented list price), and the per-day figure is
+// the yearly price over 365 days, rounded UP to the cent.
+const MONTHLY = formatUsd(PLUS_PLAN.monthly); // $4.99
+const YEARLY = formatUsd(PLUS_PLAN.yearly); // $39.99
+const YEARLY_PER_MONTH = formatUsd(yearlyAsMonthly(PLUS_PLAN)); // about $3.33
+const YEARLY_PER_DAY = formatUsd(yearlyPerDay(PLUS_PLAN)); // about $0.11
+const MONTHLY_YEAR_TOTAL = formatUsd(yearlyRunRate(PLUS_PLAN)); // $59.88
+const YEARLY_SAVING = formatUsd(yearlySavings(PLUS_PLAN)); // $19.89
 const TRIAL_DAYS = PLUS_PLAN.trialDays;
 
 // Free tier: what a homeowner gets with no card, forever. Mirrors the "Free"
@@ -56,7 +70,10 @@ const PLUS_FEATURES = [
 
 export default function PricingPage() {
   return (
-    <main className="mx-auto max-w-3xl px-6 pb-16 pt-10">
+    // Wider than the other public prose pages: the plan block below is three
+    // real columns, and max-w-3xl squeezes them to the point of wrapping every
+    // price line.
+    <main className="mx-auto max-w-4xl px-6 pb-16 pt-10">
       <p className="text-base">
         <Link
           href="/"
@@ -75,24 +92,82 @@ export default function PricingPage() {
         Here is exactly what each one costs and what you get.
       </p>
 
-      {/* Two plans, single column on phones, side by side from md up. */}
-      <div className="mt-8 grid gap-4 md:grid-cols-2">
-        {/* Free */}
-        <div className="card flex flex-col">
+      {/* Three real reference points: Free, the yearly plan, the monthly
+          plan. Nothing invented - Free is a plan people actually run on, and
+          Monthly is the full price the yearly plan is measured against.
+          Single column on phones with the yearly hero first, three across from
+          md up. */}
+      <div className="mt-8 grid items-stretch gap-4 md:grid-cols-3">
+        {/* --- Free --- */}
+        <div className="card order-2 flex flex-col md:order-1">
           <div>
             <span className="chip chip-muted">Free forever</span>
             <p className="mt-3 text-3xl font-semibold text-stone-900 dark:text-stone-100">
               $0
             </p>
-            <p className="mt-1 text-base text-stone-600 dark:text-stone-300">
-              First home free. No card, ever.
+            <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
+              First home free. Yours forever, no card.
             </p>
           </div>
-          <ul className="mt-5 space-y-2.5">
+          <ul className="mt-5 space-y-2">
             {FREE_FEATURES.map((f) => (
               <li
                 key={f}
-                className="flex items-start gap-2 text-base leading-relaxed text-stone-700 dark:text-stone-300"
+                className="flex items-start gap-2 text-sm leading-relaxed text-stone-700 dark:text-stone-300"
+              >
+                <span className="mt-0.5 font-bold text-green-600" aria-hidden>
+                  ✓
+                </span>
+                <span>{f}</span>
+              </li>
+            ))}
+          </ul>
+          {/* The real caps, named in the same column as the capabilities, so
+              "free" is a plan rather than a teaser. */}
+          <p className="mt-auto pt-4 text-sm text-stone-500 dark:text-stone-400">
+            Caps: one home, one plan build, one quote check, 25 Ask Hearth
+            questions a day.
+          </p>
+        </div>
+
+        {/* --- Yearly: the hero --- */}
+        <div className="card-hero relative order-1 flex flex-col md:order-2">
+          <span className="absolute -top-2.5 left-5 whitespace-nowrap rounded-full bg-bark-600 px-2.5 py-0.5 text-xs font-medium text-white">
+            Best value
+          </span>
+          <div>
+            <p className="text-xl font-semibold text-stone-900 dark:text-stone-100">
+              Hearth Plus, yearly
+            </p>
+            <p className="mt-3 text-3xl font-semibold text-stone-900 dark:text-stone-100">
+              {YEARLY}
+              <span className="text-base font-normal text-stone-500 dark:text-stone-400">
+                /year
+              </span>
+            </p>
+            {/* Honest arithmetic, not a discount claim: the yearly price
+                divided by 365, rounded up to the cent. */}
+            <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+              About {YEARLY_PER_DAY} a day.
+            </p>
+            <p className="mt-2 text-sm font-medium text-bark-700 dark:text-stone-200">
+              Save {YEARLY_SAVING} vs monthly
+            </p>
+            <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+              About {YEARLY_PER_MONTH} a month, billed once a year.
+            </p>
+            <p className="mt-3 text-sm font-medium text-bark-700 dark:text-stone-300">
+              Starts with a free {TRIAL_DAYS}-day trial.
+            </p>
+          </div>
+          <ul className="mt-5 space-y-2">
+            <li className="text-sm font-medium text-stone-900 dark:text-stone-100">
+              Everything in Free, plus:
+            </li>
+            {PLUS_FEATURES.map((f) => (
+              <li
+                key={f}
+                className="flex items-start gap-2 text-sm leading-relaxed text-stone-700 dark:text-stone-300"
               >
                 <span className="mt-0.5 font-bold text-green-600" aria-hidden>
                   ✓
@@ -103,53 +178,34 @@ export default function PricingPage() {
           </ul>
         </div>
 
-        {/* Plus */}
-        <div className="card-hero flex flex-col">
+        {/* --- Monthly: the full-price reference --- */}
+        <div className="card order-3 flex flex-col">
           <div>
-            <span className="chip border border-bark-200 bg-bark-50 text-bark-700 dark:border-bark-600/40 dark:bg-bark-700/30 dark:text-stone-300">
-              Optional
-            </span>
-            <p className="mt-3 text-xl font-semibold text-stone-900 dark:text-stone-100">
-              Hearth Plus
+            <p className="text-xl font-semibold text-stone-900 dark:text-stone-100">
+              Hearth Plus, monthly
             </p>
-            {/* Two billing options, pulled from PLUS_PLAN. */}
-            <div className="mt-3 space-y-1.5 text-base text-stone-700 dark:text-stone-300">
-              <p>
-                <span className="font-semibold text-stone-900 dark:text-stone-100">
-                  {MONTHLY}
-                </span>{" "}
-                a month
-              </p>
-              <p>
-                <span className="font-semibold text-stone-900 dark:text-stone-100">
-                  {YEARLY}
-                </span>{" "}
-                a year{" "}
-                <span className="text-stone-500 dark:text-stone-400">
-                  (about {YEARLY_PER_MONTH} a month, the best value)
-                </span>
-              </p>
-            </div>
-            <p className="mt-3 text-base font-medium text-bark-700 dark:text-stone-300">
+            <p className="mt-3 text-3xl font-semibold text-stone-900 dark:text-stone-100">
+              {MONTHLY}
+              <span className="text-base font-normal text-stone-500 dark:text-stone-400">
+                /month
+              </span>
+            </p>
+            <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+              = {MONTHLY_YEAR_TOTAL} a year.
+            </p>
+            <p className="mt-2 text-sm text-stone-700 dark:text-stone-300">
+              The same Plus, month to month.
+            </p>
+            <p className="mt-3 text-sm font-medium text-bark-700 dark:text-stone-300">
               Starts with a free {TRIAL_DAYS}-day trial.
             </p>
           </div>
-          <ul className="mt-5 space-y-2.5">
-            <li className="text-base font-medium text-stone-900 dark:text-stone-100">
-              Everything in Free, plus:
-            </li>
-            {PLUS_FEATURES.map((f) => (
-              <li
-                key={f}
-                className="flex items-start gap-2 text-base leading-relaxed text-stone-700 dark:text-stone-300"
-              >
-                <span className="mt-0.5 font-bold text-green-600" aria-hidden>
-                  ✓
-                </span>
-                <span>{f}</span>
-              </li>
-            ))}
-          </ul>
+          {/* The page's one loss-framed line, and the loss is real today: the
+              actual delta between the two plans on offer, not urgency or
+              scarcity. */}
+          <p className="mt-auto pt-5 text-sm text-stone-500 dark:text-stone-400">
+            Monthly pays {YEARLY_SAVING} more for the same year.
+          </p>
         </div>
       </div>
 

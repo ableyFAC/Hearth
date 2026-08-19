@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import QRCode from "qrcode";
 import { mintHouseholdQrTokenAction } from "./actions";
 import InlineSpinner from "@/components/InlineSpinner";
 
@@ -54,6 +53,13 @@ export default function HouseholdQrCode({ propertyId }: { propertyId: string }) 
         return;
       }
       const expiresMs = new Date(result.data.expiresAt).getTime();
+      // `qrcode` is loaded on demand rather than imported at module scope. A
+      // static import drags the whole encoder into the account route's
+      // first-load JS for every visitor, including the many who never open
+      // the household tab. Awaited here, inside the same try/catch that
+      // already guards the encoding step, so a chunk that fails to load
+      // surfaces as the existing "Try again" error rather than a blank card.
+      const { default: QRCode } = await import("qrcode");
       const dataUrl = await QRCode.toDataURL(result.data.joinUrl, {
         margin: 1,
         width: 240,

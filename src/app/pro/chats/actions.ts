@@ -56,12 +56,6 @@ export async function sendQuoteAction(formData: FormData) {
     .maybeSingle();
   if (!ownLead) return;
 
-  // Returning silently is the file's existing failure shape here: LeadChat
-  // confirms a send by looking for the new row and shows "The quote could not
-  // be sent. Please try again." when it doesn't appear, keeping everything the
-  // pro typed.
-  if (await sendBudgetExhausted(contractor.id)) return;
-
   const labels = formData.getAll("label").map((v) => String(v).trim());
   const amounts = formData.getAll("amount").map((v) => String(v));
   const note =
@@ -83,6 +77,15 @@ export async function sendQuoteAction(formData: FormData) {
 
   const totalCents = lineItems.reduce((sum, li) => sum + li.amount_cents, 0);
   if (totalCents <= 0) return;
+
+  // Charge the shared send budget only now, immediately before the insert -
+  // after the cheap ownership and line-item checks have already passed. Spent
+  // any earlier (before parsing), a pro whose form failed validation would
+  // burn a slot for a quote that was never going to send. Returning silently
+  // is the file's existing failure shape: LeadChat confirms a send by looking
+  // for the new row and shows "The quote could not be sent. Please try again."
+  // when it doesn't appear, keeping everything the pro typed.
+  if (await sendBudgetExhausted(contractor.id)) return;
 
   const { data: quote, error } = await supabase
     .from("lead_quotes")
@@ -206,10 +209,6 @@ export async function createInvoiceAction(formData: FormData) {
     .maybeSingle();
   if (!ownLead) return;
 
-  // Shares sendQuoteAction's budget, and fails the same silent way (LeadChat
-  // confirms the send by looking for the new invoice row).
-  if (await sendBudgetExhausted(contractor.id)) return;
-
   const descriptions = formData.getAll("description").map((v) => String(v).trim());
   const amounts = formData.getAll("amount").map((v) => String(v));
 
@@ -229,6 +228,12 @@ export async function createInvoiceAction(formData: FormData) {
 
   const totalCents = lineItems.reduce((sum, li) => sum + li.amount_cents, 0);
   if (totalCents <= 0) return;
+
+  // Charge the shared send budget only now, immediately before the insert -
+  // after the cheap ownership and line-item checks. Shares sendQuoteAction's
+  // budget, and fails the same silent way (LeadChat confirms the send by
+  // looking for the new invoice row).
+  if (await sendBudgetExhausted(contractor.id)) return;
 
   const { data: invoice, error } = await supabase
     .from("invoices")

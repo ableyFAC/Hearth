@@ -10,11 +10,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   getSubscription,
   getProSubscription,
+  isProTrialEligible,
   hasClaimedPromo,
 } from "@/lib/subscription";
 import { PRO_PLAN } from "@/lib/constants";
 import { billingTermsText } from "@/lib/billingTerms";
-import { subscriptionCheckoutData } from "@/lib/checkoutSubscriptionData";
+import {
+  checkoutCadence,
+  subscriptionCheckoutData,
+} from "@/lib/checkoutSubscriptionData";
 import { setFlash } from "@/lib/flash";
 
 const siteUrl = () =>
@@ -61,8 +65,15 @@ async function proIntroCouponId(): Promise<string | null> {
 // Stripe Price if one is configured, otherwise falls back to inline
 // price_data so the flow works before Products/Prices are set up in Stripe.
 export async function startProCheckoutAction(formData: FormData) {
+  // Yearly is the default cadence (see checkoutCadence): it is what the
+  // pricing card preselects, so a form arriving without a readable "plan"
+  // field lands on the plan the pro was looking at. Every downstream quote
+  // (the Stripe line item, the consent record, the acknowledgment) derives
+  // from this one value, so they can never disagree about what is charged.
   const plan =
-    (formData.get("plan") as string) === "yearly" ? "pro_yearly" : "pro_monthly";
+    checkoutCadence(formData.get("plan")) === "monthly"
+      ? "pro_monthly"
+      : "pro_yearly";
 
   // Deliberately NOT src/lib/auth.ts's getUser(): that helper trusts
   // getSession(), which reads the user id straight off the (unverified)
@@ -154,12 +165,15 @@ export async function startProCheckoutAction(formData: FormData) {
   // subscription converts to paid on its own when the trial ends, and
   // cancelling before then costs nothing.
   //
-  // Scoped to `existing` - the Pro-side subscriptions row - for the same
-  // reason startPlusCheckoutAction scopes its trial: that row survives
-  // cancellation (it lands on status "canceled", it is not deleted), so a
-  // subscriber who churns and comes back pays from day one instead of farming
-  // a fresh free trial on every resubscribe.
-  const freeTrial = !existing;
+  // Scoped to the Pro-side subscriptions row for the same reason
+  // startPlusCheckoutAction scopes its trial: that row survives cancellation
+  // (it lands on status "canceled", it is not deleted), so a subscriber who
+  // churns and comes back pays from day one instead of farming a fresh free
+  // trial on every resubscribe. Uses isProTrialEligible rather than `!existing`
+  // so it fails CLOSED: if the subscriptions read errored (transient/RLS),
+  // `existing` would be null and `!existing` would wrongly grant a repeat
+  // trial. isProTrialEligible returns false on an errored read.
+  const freeTrial = await isProTrialEligible();
 
   // Brand-new Pro subscribers on the monthly plan get an intro month: $9.99
   // for the first month via a one-time coupon, then full price. Yearly is

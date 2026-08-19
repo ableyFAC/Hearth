@@ -11,18 +11,28 @@ import InviteNeighbor from "./InviteNeighbor";
 // presented as a sibling tab of Edit profile (see AccountTabs), so each
 // setting exists in exactly one place.
 export default async function AccountPage() {
-  const profile = await getUserProfile();
+  // Three independent reads, issued together instead of one after the other.
+  // Nothing here feeds anything else here: the profile row, the auth user, and
+  // the invite code are separate lookups that only meet in the JSX below.
+  //
+  // The redirect guard now runs after all three are in flight rather than in
+  // front of them. That is deliberate and safe: getOrCreateReferralCode()
+  // resolves to null for a caller with no session, and its generate step is
+  // guarded by an UPDATE against the user's own row, so a visitor who is about
+  // to be bounced to /signin cannot cause a write.
+  const [profile, user, inviteCode] = await Promise.all([
+    getUserProfile(),
+    // Mirror the toolbar's name resolution so the field shows the same value.
+    getUser(),
+    // Lazily produce this homeowner's invite link. Null (feature not live on
+    // this DB yet, or an unusual failure) just hides the invite card - it never
+    // affects the rest of the account page.
+    getOrCreateReferralCode(),
+  ]);
   if (!profile) redirect("/signin");
 
-  // Mirror the toolbar's name resolution so the field shows the same value.
-  const user = await getUser();
   const metaName = (user?.user_metadata?.full_name as string | undefined)?.trim();
   const name = profile.full_name || metaName || "";
-
-  // Lazily produce this homeowner's invite link. Null (feature not live on
-  // this DB yet, or an unusual failure) just hides the invite card - it never
-  // affects the rest of the account page.
-  const inviteCode = await getOrCreateReferralCode();
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">

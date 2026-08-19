@@ -3,15 +3,15 @@
 import NoticeAtCollection from "@/components/NoticeAtCollection";
 import { useState } from "react";
 import { lookupParcelAction, claimPropertyAction, joinMarketWaitlistAction } from "./actions";
-import type { ParcelFacts } from "@/lib/parcel";
+import type { PublicParcelFacts } from "@/lib/parcel";
 import { PROPERTY_TYPES, FOUNDER } from "@/lib/constants";
-import { isOrangeCountyZip } from "@/lib/serviceArea";
+import { isLaunchZip } from "@/lib/serviceArea";
 import { Hammer, Bell, FileText } from "lucide-react";
 
-// Must read the same as OC_ONLY_MESSAGE in ./actions.ts - kept in sync by
+// Must read the same as LAUNCH_ONLY_MESSAGE in ./actions.ts - kept in sync by
 // hand since a "use server" file can only export async functions, not a
 // shared string constant, to a client component like this one.
-const OC_ONLY_MESSAGE =
+const LAUNCH_ONLY_MESSAGE =
   "Hearth serves Huntington Beach and Fountain Valley right now. We added you to the waitlist and will email you the moment we expand to your area.";
 
 // A trimmed length floor for "this is actually an address," not just "this
@@ -46,7 +46,7 @@ export default function OnboardingForm({
   );
   const [street, setStreet] = useState("");
   const [zip, setZip] = useState("");
-  const [facts, setFacts] = useState<ParcelFacts | null>(null);
+  const [facts, setFacts] = useState<PublicParcelFacts | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Whether the out-of-area waitlist save actually went through - drives the
@@ -71,14 +71,15 @@ export default function OnboardingForm({
       setError("Enter a valid 5-digit ZIP code.");
       return;
     }
-    // Fast client-side feedback for the launch restriction so an out-of-area
+    // Fast client-side feedback for the launch restriction - the two launch
+    // cities only (isLaunchZip), not all of Orange County - so an out-of-area
     // ZIP never even reaches the server lookup. lookupParcelAction enforces
     // the same check server-side (before its RentCast call) - that's the
     // real gate, this is just quicker, kinder feedback. Because this check
     // short-circuits BEFORE lookupParcelAction ever runs, the waitlist save
     // has to happen right here too, or a rejected visitor would never
     // actually land on the list despite being told they had.
-    if (!isOrangeCountyZip(z)) {
+    if (!isLaunchZip(z)) {
       setBusy(true);
       try {
         const result = await joinMarketWaitlistAction(z);
@@ -129,22 +130,23 @@ export default function OnboardingForm({
 
     setBusy(true);
     try {
-      await claimPropertyAction(formData);
+      const result = await claimPropertyAction(formData);
+      // claimPropertyAction redirects to the dashboard on success (redirect()
+      // throws a NEXT_REDIRECT-digest error for Next's router to catch higher
+      // up), so anything it actually RETURNS here is a user-facing failure -
+      // its own launch-area / validation / DB-error message. Render it inline.
+      // This is the path that keeps the intentional out-of-area message
+      // visible: a thrown message would be masked by Next in production.
+      if (result && !result.ok) {
+        setError(result.error);
+      }
     } catch (err: any) {
-      // Trap: claimPropertyAction redirects to the dashboard on success, and
-      // redirect() does that by throwing a NEXT_REDIRECT-digest error for
-      // Next's router to catch higher up. A bare catch here swallows that
-      // throw and reports a successful claim as "that didn't go through" -
-      // rethrow it so the redirect still happens.
+      // Trap: the successful-claim redirect() surfaces as a NEXT_REDIRECT-digest
+      // throw. A bare catch here would swallow it and report a successful claim
+      // as "that didn't go through" - rethrow it so the redirect still happens.
+      // Anything else is a genuine network/server blip.
       if (err?.digest?.startsWith("NEXT_REDIRECT")) throw err;
-      // Surface claimPropertyAction's own validation message (e.g. an
-      // address rejected server-side) when there is one; fall back to the
-      // generic copy for network blips and other unexpected failures.
-      setError(
-        err instanceof Error && err.message
-          ? err.message
-          : "That didn't go through. Please try again."
-      );
+      setError("That didn't go through. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -511,7 +513,7 @@ export default function OnboardingForm({
           </h2>
           <p className="break-words text-sm text-stone-600 dark:text-stone-300">
             {waitlistSaved
-              ? OC_ONLY_MESSAGE
+              ? LAUNCH_ONLY_MESSAGE
               : `We couldn't save you to the waitlist. Email us at ${FOUNDER.email} and we'll add you by hand.`}
           </p>
           <p className="text-sm text-stone-500 dark:text-stone-400">

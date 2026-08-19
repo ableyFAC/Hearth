@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/safeNext";
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
+import AppleSignInButton from "@/components/AppleSignInButton";
 import PasswordStrengthMeter from "@/components/PasswordStrengthMeter";
 import { LEAD_TIER_FEES, MAJOR_INTRO_FEE } from "@/lib/constants";
 import { Eye, EyeOff } from "lucide-react";
@@ -69,18 +70,18 @@ export default function ContractorSignUpPage(props: {
   // since a crafted or programmatic submit can bypass HTML validation.
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
-  // Where the confirmation email's link (and the Google button below) should
-  // land: the auth callback exchanges the code for a session, then follows
-  // next= to company setup (with the original ?next= and any ?ref= still
-  // riding along, double-encoded so they survive the callback's own
-  // redirect). The /pro/onboarding prefix also tells the callback this is a
-  // contractor signup, so it backfills role=contractor for a brand-new
-  // Google user (see src/app/auth/callback/route.ts).
-  const googleNextPath = `/pro/onboarding${onboardingQuery}`;
+  // Where the confirmation email's link (and the Google / Apple buttons
+  // below) should land: the auth callback exchanges the code for a session,
+  // then follows next= to company setup (with the original ?next= and any
+  // ?ref= still riding along, double-encoded so they survive the callback's
+  // own redirect). The /pro/onboarding prefix also tells the callback this is
+  // a contractor signup, so it backfills role=contractor for a brand-new
+  // OAuth user (see src/app/auth/callback/route.ts).
+  const oauthNextPath = `/pro/onboarding${onboardingQuery}`;
 
   function confirmRedirectUrl(): string {
     return `${window.location.origin}/auth/callback?next=${encodeURIComponent(
-      googleNextPath
+      oauthNextPath
     )}`;
   }
 
@@ -332,14 +333,17 @@ export default function ContractorSignUpPage(props: {
             <span className="text-xs text-stone-500 dark:text-stone-400">or</span>
             <div className="h-px flex-1 bg-stone-200 dark:bg-white/10" />
           </div>
-          <GoogleSignInButton next={googleNextPath} onError={setError} />
+          <div className="space-y-3">
+            <GoogleSignInButton next={oauthNextPath} onError={setError} />
+            <AppleSignInButton next={oauthNextPath} onError={setError} />
+          </div>
           {/* OAuth signups skip the checkbox above entirely, so the same
               agreement - including the 18+ age representation - needs to be
-              restated here instead. Links to /pro-terms, same as the checkbox
-              (the B2B contractor terms). */}
+              restated here instead. Covers both buttons above. Links to
+              /pro-terms, same as the checkbox (the B2B contractor terms). */}
           <p className="text-center text-xs text-stone-500 dark:text-stone-400">
-            By continuing with Google you confirm you are 18 or older and agree
-            to the{" "}
+            By continuing with Google or Apple you confirm you are 18 or older
+            and agree to the{" "}
             <Link href="/pro-terms" className="text-bark-700 hover:underline dark:text-stone-300">
               Contractor Terms
             </Link>{" "}

@@ -8,26 +8,18 @@ the CLI so that stops.
 The CLI is now a devDependency (`supabase`), so `npm run db:push` works without a
 global install. Use `npx supabase ...` for anything not covered by an npm script.
 
-## BLOCKER: duplicate version numbers must be resolved first
+## Duplicate version numbers: RESOLVED (PR #6, 2026-08-19)
 
 The CLI keys every migration by the number before the first underscore, so two
-files cannot share a prefix. Three pairs currently collide:
+files cannot share a prefix. The three duplicate pairs (old 0019/0020/0021) were
+renumbered in PR #6, before any baseline was recorded, so every file now has a
+unique version. Two pairs ended up in alphabetical rather than historical order
+(`0021_lower_bonus_threshold` before `0022_notification_prefs`, and
+`0023_private_storage` before `0024_support_messages`); both pairs were verified
+to touch disjoint objects, so the order does not matter. The numbering has gaps
+(e.g. 0109, 0111, 0122) - harmless, the CLI does not require contiguity.
 
-| Version | Files |
-| --- | --- |
-| `0019` | `0019_documents_vault.sql`, `0019_security_hardening.sql` |
-| `0020` | `0020_lower_bonus_threshold.sql`, `0020_notification_prefs.sql` |
-| `0021` | `0021_private_storage.sql`, `0021_support_messages.sql` |
-
-There is also a gap: `0051` is followed by `0053`, with no `0052`. The gap is
-harmless (the CLI does not require contiguous numbering); the duplicates are not.
-
-Renaming a file changes its version identity, so this must be settled BEFORE the
-baseline below, and the chosen numbers must match whatever gets repaired. The
-safe fix is to renumber one file of each pair into the free slots, preserving the
-order in which they were actually applied to the live database - which needs to
-be confirmed from git history, not guessed, since applying
-`0021_private_storage` before or after `0021_support_messages` may not commute.
+The baseline below must use these post-rename version numbers.
 
 ## One-time setup (not done yet - needs two credentials)
 

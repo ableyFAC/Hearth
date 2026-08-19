@@ -6,16 +6,22 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ACTIVE_HOME_COOKIE, getProperties } from "@/lib/property";
-import { lookupParcel, type ParcelFacts } from "@/lib/parcel";
+import { lookupParcel, type PublicParcelFacts } from "@/lib/parcel";
 import { deriveOwnershipStatus } from "@/lib/ownershipMatch";
 import { DEFAULT_LIFESPANS } from "@/lib/health";
 import { ownsPlus, getExtraHomeSlots } from "@/lib/subscription";
 import { setFlash } from "@/lib/flash";
 import { safeNextPath } from "@/lib/safeNext";
 import { isMissingSchemaError } from "@/lib/dbErrors";
-import { isOrangeCountyZip } from "@/lib/serviceArea";
+import { isLaunchZip } from "@/lib/serviceArea";
+import { PROPERTY_TYPES } from "@/lib/constants";
 import { ok, err, type ActionResult } from "@/lib/actionResult";
-import { boundedNumber } from "@/lib/formFields";
+import {
+  boundedNumber,
+  boundedInt,
+  cappedFieldOrNull,
+  isAllowedValue,
+} from "@/lib/formFields";
 
 // Ceiling on the two raw JSON blobs the confirm step carries in as hidden
 // fields. They are client input like everything else here, so the string is
@@ -29,7 +35,7 @@ const MAX_ENRICHMENT_JSON_CHARS = 20000;
 // plus
 // the fast client-side copy in OnboardingForm.tsx) - kept as a single
 // constant so the wording can never drift between them.
-const OC_ONLY_MESSAGE =
+const LAUNCH_ONLY_MESSAGE =
   "Hearth serves Huntington Beach and Fountain Valley right now. We added you to the waitlist and will email you the moment we expand to your area.";
 
 // Systems virtually every home has, auto-added so the owner doesn't start from
@@ -54,9 +60,38 @@ const CURRENT_YEAR = new Date().getFullYear();
 // only there for faster client-side feedback.
 const MIN_ADDRESS_LENGTH = 5;
 
+// Server-side ceilings for the free-text location columns (city/state/county
+// are all `text`). The form's fields are client hints only; a server action
+// takes whatever FormData it is handed, so each string is trimmed and capped
+// before it lands on the row. Generous vs. any real place name, small enough
+// that a crafted post can't stuff the column.
+const MAX_CITY = 120;
+const MAX_STATE = 60;
+const MAX_COUNTY = 120;
+
+// The purchase date arrives from the form as a plain string. Only store a real
+// YYYY-MM-DD with a year between 1900 and today; anything else becomes null so
+// a typo (or a forged value) never fails the `date` column and kills the whole
+// claim. Mirrors validPurchaseDate in src/app/(app)/profile/actions.ts, kept
+// as a local copy rather than importing across the (app) route boundary.
+function validPurchaseDate(v: string | null): string | null {
+  if (!v) return null;
+  const s = v.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const year = Number(s.slice(0, 4));
+  if (year < 1900 || year > new Date().getFullYear()) return null;
+  // Round-trip through Date to reject impossible days like 2020-02-31, which
+  // would otherwise make Postgres reject the whole insert.
+  const d = new Date(`${s}T00:00:00Z`);
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== s) {
+    return null;
+  }
+  return s;
+}
+
 // Records an out-of-area lead in market_waitlist (0074) for the signed-in
 // user, so Hearth can email them when it expands to their ZIP. Shared by
-// every OC-only gate below AND by OnboardingForm.tsx's own faster
+// every launch-city gate below AND by OnboardingForm.tsx's own faster
 // client-side ZIP check: that check short-circuits before ever calling
 // lookupParcelAction, so without a direct call here someone rejected right
 // there would never actually land on the waitlist. Returns an honest
@@ -117,7 +152,7 @@ export async function joinMarketWaitlistAction(
 export async function lookupParcelAction(
   street: string,
   zip: string
-): Promise<ParcelFacts> {
+): Promise<PublicParcelFacts> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -130,15 +165,19 @@ export async function lookupParcelAction(
   if (!/^\d{5}(-\d{4})?$/.test(zip.trim())) {
     throw new Error("Enter a valid 5-digit ZIP code.");
   }
-  // Launch-restriction gate: checked before the rate limiter/RentCast call
+  // Launch-restriction gate: the two launch cities only (isLaunchZip), not
+  // all of Orange County - Hearth has no pros anywhere else, and the pro-side
+  // gates (open_jobs_for_me / apply_to_lead, migration 0124) now refuse those
+  // jobs too, so accepting the address here would strand the homeowner with a
+  // job no pro can ever see. Checked before the rate limiter/RentCast call
   // below so an out-of-area address never spends a billed RentCast lookup.
   // OnboardingForm.tsx runs the same check client-side first and normally
   // never lets a rejected ZIP reach this action at all - this is the
   // fallback path (JS disabled, a modified client, or a direct call), so it
   // still logs the lead to the waitlist rather than silently dropping it.
-  if (!isOrangeCountyZip(zip.trim())) {
+  if (!isLaunchZip(zip.trim())) {
     await joinMarketWaitlistAction(zip.trim());
-    throw new Error(OC_ONLY_MESSAGE);
+    throw new Error(LAUNCH_ONLY_MESSAGE);
   }
 
   // Each lookup can make up to 2 billed RentCast calls, so gate abuse per user
@@ -173,11 +212,30 @@ export async function lookupParcelAction(
     );
   }
 
-  return lookupParcel(street.trim(), zip.trim());
+  // Strip the county assessor's owner-of-record before returning to the
+  // client. owner_names/owner_type/owner_occupied are the values
+  // claimPropertyAction later matches the typed name against to verify
+  // ownership, so shipping them here (they're visible in the action response
+  // in devtools) would hand a forged claim the answer key. claimPropertyAction
+  // re-fetches the full ParcelFacts server-side via lookupParcel, so nothing
+  // that legitimately needs them loses access.
+  const { owner_names, owner_type, owner_occupied, ...publicFacts } =
+    await lookupParcel(street.trim(), zip.trim());
+  return publicFacts;
 }
 
 // Step 2: create the property (self-attested ownership for MVP).
-export async function claimPropertyAction(formData: FormData) {
+//
+// Returns an ActionResult on any user-facing failure rather than throwing:
+// Next masks a thrown server-action message in production, which would hide
+// not just a raw DB error but the intentional out-of-area launch message too,
+// leaving an out-of-area homeowner with a generic "digest" instead of the real
+// explanation. OnboardingForm renders result.error directly. The happy path
+// still ends in redirect() (which throws NEXT_REDIRECT for the framework to
+// catch), so a normal successful claim never returns here.
+export async function claimPropertyAction(
+  formData: FormData
+): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -207,7 +265,7 @@ export async function claimPropertyAction(formData: FormData) {
     if (!plus) {
       redirect("/plus?reason=home_limit");
     }
-    await setFlash(
+    setFlash(
       `You're using all ${cap} of your homes. You can add more homes anytime from the Plus page.`,
       "error"
     );
@@ -222,18 +280,19 @@ export async function claimPropertyAction(formData: FormData) {
   // guards the insert below.
   const addressLine1 = ((formData.get("address_line1") as string) ?? "").trim();
   if (addressLine1.length < MIN_ADDRESS_LENGTH) {
-    throw new Error("Enter your home's address before claiming it.");
+    return err("Enter your home's address before claiming it.");
   }
 
   // Launch-restriction gate: the authoritative one, since this is the step
-  // that actually commits the address to a claimed home. Log the lead to the
+  // that actually commits the address to a claimed home. Two launch cities
+  // only (isLaunchZip), same reasoning as lookupParcelAction above. Log the lead to the
   // waitlist (joinMarketWaitlistAction above) before rejecting - a failed
   // save (e.g. live DB hasn't run 0074 yet) must never block the message
   // itself from being shown, so its result is ignored here, not surfaced.
   const claimZip = ((formData.get("zip") as string) ?? "").trim().slice(0, 5);
-  if (!isOrangeCountyZip(claimZip)) {
+  if (!isLaunchZip(claimZip)) {
     await joinMarketWaitlistAction(claimZip);
-    throw new Error(OC_ONLY_MESSAGE);
+    return err(LAUNCH_ONLY_MESSAGE);
   }
 
   // Every number on the claim is client input (the confirm step posts the
@@ -247,13 +306,12 @@ export async function claimPropertyAction(formData: FormData) {
   // worse than no number.
   const num = (key: string, min: number, max: number) =>
     boundedNumber(formData.get(key), min, max);
-  // Empty string (an unset hidden input) must normalize to null, same as
-  // num() does for the numeric fields - a "" purchase_date would otherwise
-  // fail the `date` column type rather than just staying unset.
-  const str = (key: string) => {
-    const v = formData.get(key);
-    return v ? (v as string) : null;
-  };
+  // int() for the columns that store whole numbers (year_built, sqft, beds,
+  // lot_size_sqft, assessed_year are all `int`): a fractional value like
+  // 8712.5 passes a plain range check but Postgres then rejects the whole
+  // insert, so truncate to an integer after the range check via boundedInt.
+  const int = (key: string, min: number, max: number) =>
+    boundedInt(formData.get(key), min, max);
 
   // The RentCast enrichment carried in as hidden JSON fields (see
   // OnboardingForm.tsx's confirm step): parsed defensively since it's still
@@ -290,31 +348,45 @@ export async function claimPropertyAction(formData: FormData) {
   // 0001/0029/0039, unrelated to 0066, so a DB missing only 0066 can still
   // take them - dropping them into the fallback would lose data for no
   // reason.
+  // property_type is a <select> that renders exactly PROPERTY_TYPES, but a
+  // server action takes whatever FormData it is handed, so validate against
+  // that same list and drop an unrecognized value to null rather than writing
+  // a type the rest of the app has no entry for.
+  const rawPropertyType = (formData.get("property_type") as string) || null;
+  const propertyType = isAllowedValue(PROPERTY_TYPES, rawPropertyType)
+    ? rawPropertyType
+    : null;
+
   const baseRow = {
     user_id: user.id,
     parcel_id: (formData.get("parcel_id") as string) || null,
     address_line1: addressLine1,
-    city: (formData.get("city") as string) || null,
-    state: (formData.get("state") as string) || null,
+    city: cappedFieldOrNull(formData, "city", MAX_CITY),
+    state: cappedFieldOrNull(formData, "state", MAX_STATE),
     // claimZip, not the raw form field: it's already trimmed/sliced to 5
     // digits (the same value the launch-restriction gate above checked and
     // the ownership check below looks up with), so the persisted zip and
     // the ownership-check input can never diverge.
     zip: claimZip || null,
-    year_built: num("year_built", 1700, 2100),
-    sqft: num("sqft", 1, 1_000_000),
-    beds: num("beds", 0, 100),
-    baths: num("baths", 0, 100),
-    lot_size_sqft: num("lot_size_sqft", 0, 100_000_000),
-    property_type: (formData.get("property_type") as string) || null,
+    year_built: int("year_built", 1700, 2100),
+    sqft: int("sqft", 1, 1_000_000),
+    beds: int("beds", 0, 100),
+    // numeric(3,1): 100 overflows the column and kills the whole insert (and
+    // the fallback retry would carry the same value and fail again), so the
+    // ceiling is 99.9. num(), not int(): baths is a fractional column.
+    baths: num("baths", 0, 99.9),
+    lot_size_sqft: int("lot_size_sqft", 0, 100_000_000),
+    property_type: propertyType,
     // ownership_verified was self-attested for MVP and is now dead: it's
     // server-locked to false by migration 0093's trigger regardless of what
     // this insert asks for. ownership_status (set below, after the insert,
     // via the server-side assessor-record check) supersedes it.
-    purchase_date: str("purchase_date"),
+    purchase_date: validPurchaseDate(
+      (formData.get("purchase_date") as string) || null
+    ),
     purchase_price: num("purchase_price", 0, 1_000_000_000),
     assessed_value: num("assessed_value", 0, 1_000_000_000),
-    assessed_year: num("assessed_year", 1700, 2100),
+    assessed_year: int("assessed_year", 1700, 2100),
   };
   // extendedRow: baseRow plus the columns migration 0066 actually adds.
   // Attempted first, with baseRow as the fallback below if the live DB
@@ -324,7 +396,7 @@ export async function claimPropertyAction(formData: FormData) {
     latitude: num("latitude", -90, 90),
     longitude: num("longitude", -180, 180),
     hoa_fee: num("hoa_fee", 0, 100_000),
-    county: str("county"),
+    county: cappedFieldOrNull(formData, "county", MAX_COUNTY),
     property_tax_history: propertyTaxHistory,
     market_value: num("market_value", 0, 1_000_000_000),
     market_value_low: num("market_value_low", 0, 1_000_000_000),
@@ -355,7 +427,11 @@ export async function claimPropertyAction(formData: FormData) {
   }
 
   if (error || !created) {
-    throw new Error(`Could not claim property: ${error?.message ?? "unknown"}`);
+    // Log the raw DB error server-side for debugging, but never surface it to
+    // the client: return a plain, user-safe message through the same
+    // ActionResult path as the checks above.
+    console.error("Could not claim property:", error);
+    return err("We couldn't claim your home just now. Please try again.");
   }
 
   // Ownership verification (migration 0093): re-run the same street/zip
@@ -461,7 +537,7 @@ export async function claimPropertyAction(formData: FormData) {
   // years as guesses rather than owner-verified facts. Don't set the column
   // explicitly here - the live DB may not have run 0056 yet (see the fallback
   // in walkthrough/actions.ts), and the default is already correct.
-  const yearBuilt = num("year_built", 1700, 2100);
+  const yearBuilt = int("year_built", 1700, 2100);
   const starterRows = STARTER_SYSTEMS.map((system_type) => {
     const lifespan = DEFAULT_LIFESPANS[system_type] ?? 20;
     let install_year: number | null = null;

@@ -51,30 +51,58 @@ function txLabel(type: string | null | undefined): string {
   return TX_LABEL[type] ?? type.replace(/_/g, " ");
 }
 
-export default async function ProBillingPage(
-  props: {
-    searchParams: Promise<{
-      paid?: string;
-      canceled?: string;
-      need?: string;
-      category?: string;
-    }>;
-  }
-) {
+export default async function ProBillingPage(props: {
+  searchParams: Promise<{
+    paid?: string;
+    canceled?: string;
+    need?: string;
+    category?: string;
+  }>;
+}) {
   const searchParams = await props.searchParams;
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");
 
-  // Pro members earn extra points on every deposit bonus (display only here;
-  // the webhook applies the real boost when the payment lands).
-  const proMember = await hasProPlan();
+  const supabase = await createClient();
 
-  // The Pro-side subscription row itself, for the upgrade card below the
-  // deposit form and for the boost gate just below. The free trial is for
-  // brand-new members only and the row outlives a cancellation, so a pro who
-  // churned and came back must never be offered a trial they will not get.
-  // Free to ask for: hasProPlan() above reads the same request-cached rows.
-  const proSub = await getProSubscription();
+  // Everything this page needs beyond the contractor row itself, in ONE wave.
+  // These were five sequential awaits, and nothing in the list depends on
+  // anything else in it: the two subscription reads share a request-cached
+  // query, the wallet and the application history key off the contractor we
+  // already have, and the deposit tiers are a static table. Serially that was
+  // five round trips stacked in front of first byte; concurrently it is one.
+  // The only genuinely dependent read (wallet transactions, which needs the
+  // wallet id) stays behind in its own wave below.
+  const [proMember, proSub, { data: wallet }, { data: tiers }, { data: allApps }] =
+    await Promise.all([
+      // Pro members earn extra points on every deposit bonus (display only
+      // here; the webhook applies the real boost when the payment lands).
+      hasProPlan(),
+      // The Pro-side subscription row itself, for the upgrade card below the
+      // deposit form and for the boost gate just below. The free trial is for
+      // brand-new members only and the row outlives a cancellation, so a pro
+      // who churned and came back must never be offered a trial they will not
+      // get. Free to ask for alongside hasProPlan(): both resolve from the
+      // same request-cached subscription query, so running them together
+      // dedupes to a single read rather than racing into two.
+      getProSubscription(),
+      supabase
+        .from("wallets")
+        .select("id, cash_balance_cents, bonus_balance_cents")
+        .eq("contractor_id", contractor.id)
+        .maybeSingle(),
+      supabase
+        .from("deposit_tiers")
+        .select("min_cents, max_cents, bonus_pct")
+        .order("min_cents", { ascending: true }),
+      // Whether this pro still has their first big-ticket lead intro price
+      // ($49.99, migration 0113) ahead of them: no paid application on a
+      // major-tier lead yet. Mirrors the DB's own check; the intro line below
+      // only shows while it is still true, so the page never advertises a
+      // discount this pro can no longer get.
+      (supabase as any).rpc("my_applications"),
+    ]);
+
   const trialEligible = !proMember && !proSub;
 
   // The deposit match is the one perk that does NOT switch on during the free
@@ -86,28 +114,9 @@ export default async function ProBillingPage(
   // it cannot be the signal here.
   const boostActive = proMember && proSub?.status === "active";
 
-  const supabase = await createClient();
-
-  const { data: wallet } = await supabase
-    .from("wallets")
-    .select("id, cash_balance_cents, bonus_balance_cents")
-    .eq("contractor_id", contractor.id)
-    .maybeSingle();
-
   const cash = Number((wallet as any)?.cash_balance_cents ?? 0);
   const bonus = Number((wallet as any)?.bonus_balance_cents ?? 0);
 
-  const { data: tiers } = await supabase
-    .from("deposit_tiers")
-    .select("min_cents, max_cents, bonus_pct")
-    .order("min_cents", { ascending: true });
-
-  // Whether this pro still has their first big-ticket lead intro price
-  // ($49.99, migration 0113) ahead of them: no paid application on a
-  // major-tier lead yet. Mirrors the DB's own check; the intro line below
-  // only shows while it is still true, so the page never advertises a
-  // discount this pro can no longer get.
-  const { data: allApps } = await (supabase as any).rpc("my_applications");
   const hasPaidMajor = ((allApps ?? []) as any[]).some(
     (a) => Number(a.fee_cents ?? 0) > 0 && isMajorCategory(a.category)
   );
@@ -208,8 +217,8 @@ export default async function ProBillingPage(
           // Say when the match starts rather than let the number look broken.
           <div className="rounded-xl border border-hearth-200 bg-hearth-50 p-3 text-xs text-hearth-800 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
             <span className="font-semibold">
-              Your +{PRO_DEPOSIT_BOOST_PTS}% deposit match starts when your free
-              trial converts.
+              Your +{PRO_DEPOSIT_BOOST_PTS}% deposit match and your $10 monthly
+              lead credit start when your free trial converts.
             </span>{" "}
             Deposits you make during the trial earn the normal tier bonus shown
             above. Every other Pro perk is already on.
@@ -252,6 +261,19 @@ export default async function ProBillingPage(
               Same money in, more lead credit out. Membership never changes
               which jobs you can see or apply to.
             </p>
+            {/* This card headlines the deposit match right next to the deposit
+                form, so a trial buyer must be told it is the one perk held back
+                until the trial converts (the webhook applies it only against an
+                "active" row, see boostActive above). A returning member
+                (trialEligible false) starts paying right away, so their match
+                is live from day one and they don't see this line. */}
+            {trialEligible && (
+              <p className="mt-1 text-xs text-hearth-700 dark:text-hearth-300">
+                Your +{PRO_DEPOSIT_BOOST_PTS}% match starts when your free trial
+                converts and your first payment goes through. Deposits during
+                the trial earn the normal tier bonus.
+              </p>
+            )}
             <ProUpgradeCta
               trialEligible={trialEligible}
               className="btn-primary mt-3 inline-block"

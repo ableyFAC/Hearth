@@ -120,21 +120,15 @@ someone deliberately clicking restore and waiting.
 building).** Per `handoff.md`, migrations 0062-0066 were hand-pasted into the
 Supabase SQL editor because no CLI link / DB password exists yet, so there is
 no rollback and no reliable record of exactly what ran against the live
-database. Compounding this, `supabase/migrations/` currently has duplicate
-numbering: 0019, 0020, and 0021 each exist twice
-(`0019_documents_vault.sql` / `0019_security_hardening.sql`,
-`0020_notification_prefs.sql` / `0020_lower_bonus_threshold.sql`,
-`0021_support_messages.sql` / `0021_private_storage.sql`). Until this is
-fixed, the migrations folder is not a clean, replayable history against a
-fresh database, and a `supabase db push` baseline would collide on those
-filenames today. Mitigation, in order:
+database. (The old duplicate 0019/0020/0021 numbering was resolved in PR #6
+on 2026-08-19 - every migration now has a unique version prefix, so a
+`supabase db push` baseline no longer collides.) Mitigation, in order:
 1. Finish adopting the `supabase db push` CLI workflow (`npm run db:push`
    already exists) so the SQL editor stops being the apply path, per the
    "Future migrations" section above.
-2. Resolve the duplicate 0019/0020/0021 numbering in its own reviewed
-   session (order-sensitive, see above), then `supabase migration list
-   --linked` + `migration repair --status applied` to reconcile with what
-   the live DB already has.
+2. Run `supabase migration list --linked` + `migration repair --status
+   applied` (using the post-rename version numbers) to reconcile the
+   bookkeeping table with what the live DB already has.
 3. Keep migrations from 0067 onward idempotent (`if not exists`,
    `create or replace`, guarded `create policy`) so a partial or
    accidentally double-applied migration stays recoverable without manual

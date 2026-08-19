@@ -1,7 +1,7 @@
 // Aging-lead deals: a job that sits unclaimed gets an automatic markdown on the
 // per-apply fee, so pros get a deal and stale inventory clears.
 //
-// These tiers MUST match supabase/migrations/0028_ghost_protection.sql
+// These tiers MUST match supabase/migrations/0031_ghost_protection.sql
 // (lead_fee_cents), which is the source of truth for what a pro is actually
 // charged. This helper is display-only, so the leads board can advertise the deal.
 // (Softened from 25/40% in 0028: ghost protection now covers dead-lead risk, so

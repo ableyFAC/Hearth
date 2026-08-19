@@ -333,7 +333,7 @@ export const TIMING_OPTIONS = [
 // Rough budget bands a homeowner can attach to a job posting. Purely a signal
 // so pros can quote realistically, never a commitment or a binding number.
 // Keep the values in sync with the column comment on
-// contractor_leads.budget_range (supabase/migrations/0047_job_budget.sql).
+// contractor_leads.budget_range (supabase/migrations/0050_job_budget.sql).
 export const BUDGET_RANGES = [
   { value: "under-500", label: "Under $500" },
   { value: "500-1500", label: "$500-1,500" },
@@ -447,6 +447,69 @@ export const PLUS_PLAN = {
   trialDays: 3,
 } as const;
 
+// =============================================================================
+// PLAN MATH: derived helpers only. Every number below is COMPUTED from the
+// PLUS_PLAN / PRO_PLAN prices above, so a price edit moves the pricing pages
+// with it and no page can hardcode a saving, an annual total, or a per-day
+// figure that a card is not actually charged.
+//
+// The house rule these exist to enforce: an annual plan is only ever compared
+// against twelve charges at the real monthly price, never against an invented
+// list price. yearlyRunRate() IS that anchor.
+// =============================================================================
+
+type PlanPrices = { monthly: number; yearly: number };
+
+// Money as a display string, always two decimals, so $4.99 never renders as
+// "4.9" and a computed $120 never renders as "$120".
+export function formatUsd(amount: number): string {
+  return `$${amount.toFixed(2)}`;
+}
+
+// Cent-accurate rounding. Plain float math on prices drifts (4.99 * 12 is
+// 59.88000000000001 in IEEE 754), and a drifting cent in a price line is a
+// disclosure problem, not a cosmetic one.
+function toCents(amount: number): number {
+  return Math.round(amount * 100) / 100;
+}
+
+// What twelve months at the monthly price actually costs. The only honest
+// anchor for the yearly plan.
+export function yearlyRunRate(plan: PlanPrices): number {
+  return toCents(plan.monthly * 12);
+}
+
+// Dollars saved by paying yearly instead of twelve monthly charges. Positive
+// whenever yearly is the better deal; the pages only render it when it is.
+export function yearlySavings(plan: PlanPrices): number {
+  return toCents(yearlyRunRate(plan) - plan.yearly);
+}
+
+// The yearly price spread across a 365-day year, rounded UP to the next cent.
+// Rounding up is deliberate: a per-day line must never quote less than the
+// plan costs. The toFixed(6) pass absorbs float noise so a price that divides
+// evenly into cents does not get pushed a cent higher by 1e-15.
+export function perDayFromYearly(yearly: number): number {
+  const cents = (yearly / 365) * 100;
+  return Math.ceil(Number(cents.toFixed(6))) / 100;
+}
+
+// The per-day cost of the yearly plan, e.g. "about $0.11 a day".
+export function yearlyPerDay(plan: Pick<PlanPrices, "yearly">): number {
+  return perDayFromYearly(plan.yearly);
+}
+
+// The per-day cost of staying on monthly for a full year (monthly x 12 spread
+// over 365 days). Same arithmetic, applied to the honest annual run rate.
+export function monthlyPerDay(plan: Pick<PlanPrices, "monthly">): number {
+  return perDayFromYearly(toCents(plan.monthly * 12));
+}
+
+// The yearly plan re-expressed as a monthly figure, e.g. "about $3.33/mo".
+export function yearlyAsMonthly(plan: Pick<PlanPrices, "yearly">): number {
+  return toCents(plan.yearly / 12);
+}
+
 // Pay-per-extra-home add-on (Plus members only). The ONE place the add-on
 // pricing lives, so the /plus "More homes" UI, the setExtraHomesAction server
 // action's inline price_data fallback, and the recurring-total disclosure can
@@ -495,18 +558,18 @@ export function extraHomeUnitPrice(
 // Extra percentage points a Pro member earns on top of the deposit-bonus tier
 // percentage, applied to every deposit. Display-side mirror of the
 // p_bonus_boost_pts argument the Stripe webhook passes to apply_deposit
-// (supabase/migrations/0032_pro_membership.sql).
+// (supabase/migrations/0035_pro_membership.sql).
 export const PRO_DEPOSIT_BOOST_PTS = 5;
 
 // Applicant cap: this many live (non-refunded) applications fill a posted job,
 // so pros stop burning fees on crowded postings. Must match the check in
-// apply_to_lead (supabase/migrations/0028_ghost_protection.sql).
+// apply_to_lead (supabase/migrations/0031_ghost_protection.sql).
 export const MAX_APPLICANTS_PER_JOB = 3;
 
 // Ghost protection: an application the homeowner never responds to gets its
 // fee back as wallet credit after this many days (credit only, never cash).
 // Display-only mirror of the cron window in
-// supabase/migrations/0028_ghost_protection.sql.
+// supabase/migrations/0031_ghost_protection.sql.
 export const GHOST_PROTECTION_DAYS = 7;
 
 // Default lifetime (days) of granted bonus credit. Display-only mirror of the

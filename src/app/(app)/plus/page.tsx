@@ -22,6 +22,9 @@ import SubmitButton from "@/components/SubmitButton";
 import {
   COLD_START_FREE_POSTING,
   COLD_START_FREE_ALERTS,
+  PLUS_PLAN,
+  formatUsd,
+  yearlySavings,
 } from "@/lib/constants";
 
 const COMPARISON: Array<{ label: string; free: string; plus: string }> = [
@@ -177,7 +180,7 @@ export default async function PlusPage(
                 <>
                   <form action={upgradeToYearlyAction}>
                     <ConfirmSubmit
-                      label="Switch to yearly, $39.99/yr (save 33%)"
+                      label={`Switch to yearly, ${formatUsd(PLUS_PLAN.yearly)}/yr (save ${formatUsd(yearlySavings(PLUS_PLAN))} vs monthly)`}
                       note="You'll be charged today, with your unused time credited toward it. Switch to yearly?"
                       yesLabel="Yes, switch to yearly"
                     />
@@ -193,7 +196,7 @@ export default async function PlusPage(
                   <form action={downgradeToMonthlyAction}>
                     <ConfirmSubmit
                       label="Switch to monthly at renewal"
-                      note={`Nothing changes today. You keep what you have until ${renewsOn}, then it becomes $4.99/mo. Switch?`}
+                      note={`Nothing changes today. You keep what you have until ${renewsOn}, then it becomes ${formatUsd(PLUS_PLAN.monthly)}/mo. Switch?`}
                       yesLabel="Yes, switch at renewal"
                     />
                   </form>
@@ -314,7 +317,10 @@ export default async function PlusPage(
   const trialEligible = !sub;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-8">
+    // Wider than the other branches of this page: the pricing block below is
+    // three real columns (Free, Yearly, Monthly), and max-w-2xl squeezes them
+    // to the point of wrapping every price line.
+    <div className="mx-auto max-w-3xl space-y-8">
       {/* COLD START: the posting cap is off while COLD_START_FREE_POSTING is
           on, so this banner must not show even if the URL is hit directly.
           Keep it for when the flag flips back. */}
@@ -399,10 +405,13 @@ export default async function PlusPage(
         <h1 className="text-3xl font-semibold text-stone-900 dark:text-stone-100">
           Know what&apos;s coming before it costs you
         </h1>
+        {/* Prices computed from PLUS_PLAN, never typed in, so this line can
+            never quote something the card isn't charged. Yearly leads because
+            it is the plan the pricing block preselects. */}
         <p className="mt-2 text-sm font-medium text-bark-700 dark:text-stone-300">
           {trialEligible
-            ? "Free for 3 days, then $4.99/mo or $39.99/yr. Cancel anytime."
-            : "$4.99/mo or $39.99/yr. Cancel anytime."}
+            ? `Free for ${PLUS_PLAN.trialDays} days, then ${formatUsd(PLUS_PLAN.yearly)}/yr or ${formatUsd(PLUS_PLAN.monthly)}/mo. Cancel anytime.`
+            : `${formatUsd(PLUS_PLAN.yearly)}/yr or ${formatUsd(PLUS_PLAN.monthly)}/mo. Cancel anytime.`}
         </p>
         <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
           {COLD_START_FREE_POSTING
@@ -417,8 +426,9 @@ export default async function PlusPage(
         </p>
         <div className="mt-5">
           {/* Label mirrors the pricing card's button exactly, so the promise
-              made here is the one the button below keeps. Non-trial users
-              land on the yearly plan by default (see PlanToggle). */}
+              made here is the one the button below keeps. Everyone lands on
+              the yearly plan preselected (see PlanToggle), and
+              startPlusCheckoutAction defaults to the same cadence. */}
           <a href="#pricing" className="btn-primary">
             {trialEligible ? "Start my 3 days free" : "See plans"}
           </a>

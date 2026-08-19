@@ -9,6 +9,27 @@ type CookieToSet = { name: string; value: string; options: CookieOptions };
 // Public routes: "/", "/get-started", "/signin", "/reset-password", the
 // sign-up pages, "/auth/*". Everything else requires a session.
 export async function updateSession(request: NextRequest) {
+  const path = request.nextUrl.pathname;
+  const isPublic = isPublicPath(path);
+
+  // Public paths are readable with no session, so the auth check below can
+  // only ever produce a result we throw away. Answering them WITHOUT the
+  // supabase.auth.getUser() round trip is the difference between "middleware
+  // is free" and "every marketing page, every SEO guide, every webhook, and
+  // every <Link> prefetch of a public route pays a network hop to Supabase
+  // before Next even starts rendering".
+  //
+  // The cost of skipping it: getUser() is also what silently refreshes an
+  // expiring access token and writes the rotated cookie back on the response.
+  // On a public path we no longer do that, so a signed-in reader whose token
+  // expires while they sit on, say, a guide page keeps a stale cookie until
+  // their next protected navigation, where the refresh happens as it always
+  // has. The only visible effect is a session-aware public header briefly
+  // rendering its signed-out variant; nothing is granted, nothing is lost.
+  if (isPublic) {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient<Database>(
@@ -65,9 +86,39 @@ export async function updateSession(request: NextRequest) {
     return response;
   }
 
-  const path = request.nextUrl.pathname;
-  const isPublic =
+  if (!user) {
+    // Origin from requestOrigin, not nextUrl.clone(): nextUrl carries the
+    // dev server's bind address (`-H 0.0.0.0`) and strands the browser there.
+    const url = new URL("/signin", requestOrigin(request));
+    // One unified sign-in for everyone; "/" routes by role after login.
+    // The page they were headed to rides along as ?next= so signin can send
+    // them back instead of dropping them on the dashboard (GET pages only:
+    // a POST's destination would just 404 or sit empty after a redirect).
+    const next = request.nextUrl.pathname + request.nextUrl.search;
+    url.search =
+      request.method === "GET" && next.startsWith("/") && !next.startsWith("//")
+        ? `?next=${encodeURIComponent(next)}`
+        : "";
+    return NextResponse.redirect(url);
+  }
+
+  return response;
+}
+
+// Paths readable with no session. Hoisted out of updateSession so the check
+// can run BEFORE any Supabase client is built: everything in this list is
+// answered without an auth round trip.
+function isPublicPath(path: string): boolean {
+  return (
     path === "/" ||
+    // The root social-preview image (src/app/opengraph-image.tsx). Link
+    // scrapers (iMessage, Slack, Facebook) fetch it with no cookies and no
+    // account; without this entry they get a 307 to /signin and every share
+    // of the root URL renders with a broken preview. The matcher's extension
+    // exclusions never catch it because the route is extensionless.
+    // startsWith, not exact: Next can serve metadata variants with generated
+    // suffixes, and every path in that family is equally public.
+    path.startsWith("/opengraph-image") ||
     path.startsWith("/get-started") ||
     path.startsWith("/signin") ||
     // Password reset request page: a signed-out user is exactly who needs it,
@@ -150,6 +201,16 @@ export async function updateSession(request: NextRequest) {
     // the anonymous landing page's demo player; a 307 to /signin here makes
     // the narration silently fail.
     path.startsWith("/demo-vo/") ||
+    // Anonymous analytics beacons (src/app/api/track): the landing page fires
+    // pre-auth events (hero_demo_play, signup_homeowner, post_job_from_chat)
+    // from signed-out visitors via sendBeacon. WITHOUT this entry the
+    // middleware 307s the POST to /signin AND converts it to GET, so every
+    // anonymous beacon is silently dropped and never recorded. It must not
+    // redirect. The route is built to be publicly reachable: it accepts only a
+    // fixed client-event allowlist (server-only events like job_won are
+    // refused), caps the body at 2048 chars, caps props at 1024, and
+    // rate-limits per IP (60 / 5 min) before doing any work.
+    path.startsWith("/api/track") ||
     // Cron routes authenticate via CRON_SECRET (Bearer/header/query), not a
     // user session. Vercel Cron sends no session cookie, so WITHOUT this
     // entry every scheduled job would 307 to /signin (an HTML 200!) before
@@ -191,23 +252,6 @@ export async function updateSession(request: NextRequest) {
     // to /signin here would only ever offer one of the two paths. The page
     // still requires a session before it will redeem the token; this only
     // controls whether the page renders at all.
-    path.startsWith("/join/");
-
-  if (!user && !isPublic) {
-    // Origin from requestOrigin, not nextUrl.clone(): nextUrl carries the
-    // dev server's bind address (`-H 0.0.0.0`) and strands the browser there.
-    const url = new URL("/signin", requestOrigin(request));
-    // One unified sign-in for everyone; "/" routes by role after login.
-    // The page they were headed to rides along as ?next= so signin can send
-    // them back instead of dropping them on the dashboard (GET pages only:
-    // a POST's destination would just 404 or sit empty after a redirect).
-    const next = request.nextUrl.pathname + request.nextUrl.search;
-    url.search =
-      request.method === "GET" && next.startsWith("/") && !next.startsWith("//")
-        ? `?next=${encodeURIComponent(next)}`
-        : "";
-    return NextResponse.redirect(url);
-  }
-
-  return response;
+    path.startsWith("/join/")
+  );
 }

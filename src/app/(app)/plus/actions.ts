@@ -9,7 +9,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSubscription, getProSubscription } from "@/lib/subscription";
 import { billingTermsText } from "@/lib/billingTerms";
-import { subscriptionCheckoutData } from "@/lib/checkoutSubscriptionData";
+import {
+  checkoutCadence,
+  subscriptionCheckoutData,
+} from "@/lib/checkoutSubscriptionData";
 import { PLUS_PLAN, EXTRA_HOME, extraHomeUnitPrice } from "@/lib/constants";
 import { setFlash } from "@/lib/flash";
 
@@ -60,8 +63,12 @@ function productIdOf(item: Stripe.SubscriptionItem): string {
 // inline price_data so the flow works before Products/Prices are set up in
 // Stripe.
 export async function startPlusCheckoutAction(formData: FormData) {
-  const rawPlan = formData.get("plan") as string;
-  const plan = rawPlan === "yearly" ? "yearly" : "monthly";
+  // Yearly is the default cadence (see checkoutCadence): it is what the
+  // pricing card preselects, so a form arriving without a readable "plan"
+  // field lands on the plan the buyer was looking at. The line item, the
+  // consent record, and the idempotency key below all derive from this one
+  // value, so they can never quote different plans.
+  const plan = checkoutCadence(formData.get("plan"));
 
   // Deliberately NOT src/lib/auth.ts's getUser(): that helper trusts
   // getSession(), which reads the user id straight off the (unverified)

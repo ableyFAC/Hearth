@@ -13,16 +13,17 @@ import { friendlyAuthError } from "@/lib/friendlyAuthError";
 import { stripe } from "@/lib/stripe";
 import { eraseUserData, type EraseSummary } from "@/lib/privacy";
 import { cappedField, FIELD_MAX } from "@/lib/formFields";
+import { licenseDigits } from "@/lib/licenseMatch";
 
 // Password re-verification is a brute-force surface: updatePasswordAction,
 // updateEmailAction, and deleteAccountAction each take a current password and
 // tell the caller whether it was right. Holding the session proves who they
 // are, but a borrowed or hijacked one must not get unlimited guesses at the
 // password behind it, and the typed-email delete confirmation shouldn't be
-// infinitely retryable either. Same fixed-window limiter (migration 0068),
-// same shared bucket, and same fail-open posture as the homeowner twin in
-// src/app/(app)/account/actions.ts: only an explicit `allowed === false`
-// blocks, so a limiter outage never locks a pro out of their own account.
+// infinitely retryable either. Same fixed-window limiter (migration 0068) and
+// same shared bucket as the homeowner twin in src/app/(app)/account/actions.ts,
+// and like it this bucket fails CLOSED (see passwordAttemptsExhausted): a
+// limiter outage blocks rather than handing a borrowed session unlimited tries.
 const PW_VERIFY_LIMIT = 5;
 const PW_VERIFY_WINDOW_SECONDS = 900;
 const PW_VERIFY_MESSAGE =
@@ -30,11 +31,20 @@ const PW_VERIFY_MESSAGE =
 
 async function passwordAttemptsExhausted(userId: string): Promise<boolean> {
   const admin = createAdminClient();
-  const { data: allowed } = await admin.rpc("rate_limit_hit", {
+  const { data: allowed, error } = await admin.rpc("rate_limit_hit", {
     p_bucket: `pwverify:${userId}`,
     p_limit: PW_VERIFY_LIMIT,
     p_window_seconds: PW_VERIFY_WINDOW_SECONDS,
   });
+  // This bucket alone fails CLOSED: it guards password guessing and typed-email
+  // delete confirmation, so an RPC outage must NOT hand a borrowed session
+  // unlimited attempts. Unlike the spam-class buckets (invite/support/quote),
+  // where a limiter blip should never lock a real user out, here the safe
+  // direction on the unknown is to block. Treat the error as "exhausted."
+  if (error) {
+    console.error("pwverify rate_limit_hit failed - failing CLOSED:", error);
+    return true;
+  }
   return allowed === false;
 }
 
@@ -53,16 +63,16 @@ export async function updatePasswordAction(formData: FormData) {
   const confirm = (formData.get("confirm_password") as string) || "";
 
   if (next.length < 8) {
-    await setFlash("New password must be at least 8 characters.", "error");
+    setFlash("New password must be at least 8 characters.", "error");
     redirect("/pro/profile");
   }
   if (next !== confirm) {
-    await setFlash("New passwords don't match.", "error");
+    setFlash("New passwords don't match.", "error");
     redirect("/pro/profile");
   }
 
   if (await passwordAttemptsExhausted(user.id)) {
-    await setFlash(PW_VERIFY_MESSAGE, "error");
+    setFlash(PW_VERIFY_MESSAGE, "error");
     redirect("/pro/profile");
   }
 
@@ -77,17 +87,17 @@ export async function updatePasswordAction(formData: FormData) {
     password: current,
   });
   if (verifyError) {
-    await setFlash("Current password is incorrect.", "error");
+    setFlash("Current password is incorrect.", "error");
     redirect("/pro/profile");
   }
 
   const { error } = await supabase.auth.updateUser({ password: next });
   if (error) {
-    await setFlash("Couldn't save your changes. Please try again.", "error");
+    setFlash("Couldn't save your changes. Please try again.", "error");
     redirect("/pro/profile");
   }
 
-  await setFlash("Password updated.");
+  setFlash("Password updated.");
   redirect("/pro/profile");
 }
 
@@ -110,23 +120,34 @@ export async function updateEmailAction(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/signin");
 
-  const email = cappedField(formData, "email", FIELD_MAX.email);
+  // Read raw and REJECT an over-length address rather than cappedField's silent
+  // truncate: this is the routing address every recovery link goes to, and a
+  // truncated string still has an "@" and would mail a stranger. Mirrors the
+  // homeowner twin in src/app/(app)/account/actions.ts.
+  const email = (formData.get("email") as string | null)?.trim() ?? "";
   if (!email || !email.includes("@")) {
-    await setFlash("That email address doesn't look right.", "error");
+    setFlash("That email address doesn't look right.", "error");
     redirect("/pro/profile");
   }
-  if (email === user.email) {
-    await setFlash("That's already your sign-in email.", "error");
+  if (email.length > FIELD_MAX.email) {
+    setFlash("That email address is too long.", "error");
+    redirect("/pro/profile");
+  }
+  // Case-insensitive: Supabase stores the address lowercased, so a re-typed
+  // "Me@x.com" would slip past an exact === and start a pointless change to the
+  // very same mailbox.
+  if (user.email && email.toLowerCase() === user.email.toLowerCase()) {
+    setFlash("That's already your sign-in email.", "error");
     redirect("/pro/profile");
   }
 
   // Which proof this account can actually give, decided from the account's
   // real identities and never from what the form posted - same rule as
   // deleteAccountAction below.
-  const { hasPassword } = passwordStatusFor(user);
+  const { hasPassword } = await passwordStatusFor(user);
   if (hasPassword && user.email) {
     if (await passwordAttemptsExhausted(user.id)) {
-      await setFlash(PW_VERIFY_MESSAGE, "error");
+      setFlash(PW_VERIFY_MESSAGE, "error");
       redirect("/pro/profile");
     }
 
@@ -142,7 +163,7 @@ export async function updateEmailAction(formData: FormData) {
       password: current,
     });
     if (verifyError) {
-      await setFlash("Current password is incorrect.", "error");
+      setFlash("Current password is incorrect.", "error");
       redirect("/pro/profile");
     }
   }
@@ -157,11 +178,11 @@ export async function updateEmailAction(formData: FormData) {
     // friendlyAuthError, not error.message: the raw Supabase text is terse
     // jargon and can echo server internals. Same treatment as the homeowner
     // twin in src/app/(app)/account/actions.ts.
-    await setFlash(friendlyAuthError(error), "error");
+    setFlash(friendlyAuthError(error), "error");
     redirect("/pro/profile");
   }
 
-  await setFlash("Check your new email to confirm the change.");
+  setFlash("Check your new email to confirm the change.");
   redirect("/pro/profile");
 }
 
@@ -178,11 +199,11 @@ export async function signOutOthersAction() {
   const { error } = await supabase.auth.signOut({ scope: "others" });
   if (error) {
     // Same reasoning as updateEmailAction above: never show raw auth text.
-    await setFlash(friendlyAuthError(error), "error");
+    setFlash(friendlyAuthError(error), "error");
     redirect("/pro/profile");
   }
 
-  await setFlash("Signed out everywhere else. This device stays signed in.");
+  setFlash("Signed out everywhere else. This device stays signed in.");
   redirect("/pro/profile");
 }
 
@@ -235,7 +256,7 @@ export async function saveLicenseInsuranceAction(formData: FormData) {
 
   const stateRaw = str("license_state").toUpperCase();
   if (stateRaw && !/^[A-Z]{2}$/.test(stateRaw)) {
-    await setFlash("License state should be a 2-letter code, like CA.", "error");
+    setFlash("License state should be a 2-letter code, like CA.", "error");
     redirect("/pro/profile");
   }
 
@@ -243,7 +264,7 @@ export async function saveLicenseInsuranceAction(formData: FormData) {
 
   const expiresRaw = str("insurance_expires");
   if (expiresRaw && Number.isNaN(new Date(expiresRaw).getTime())) {
-    await setFlash("That insurance expiry date doesn't look right.", "error");
+    setFlash("That insurance expiry date doesn't look right.", "error");
     redirect("/pro/profile");
   }
 
@@ -264,14 +285,14 @@ export async function saveLicenseInsuranceAction(formData: FormData) {
     .update(fields)
     .eq("id", contractor.id);
   if (error) {
-    await setFlash(
+    setFlash(
       "Couldn't save your license and insurance. Please try again.",
       "error"
     );
     redirect("/pro/profile");
   }
 
-  await setFlash("License and insurance saved.");
+  setFlash("License and insurance saved.");
   revalidatePath("/pro/profile");
   redirect("/pro/profile");
 }
@@ -292,7 +313,7 @@ export async function savePublicPageAction(formData: FormData) {
   if (!contractor) redirect("/pro/onboarding");
 
   if (!(await hasProPlan())) {
-    await setFlash("Page extras are a Hearth Pro member perk.", "error");
+    setFlash("Page extras are a Hearth Pro member perk.", "error");
     redirect("/pro/profile");
   }
 
@@ -301,7 +322,7 @@ export async function savePublicPageAction(formData: FormData) {
   // About: cap server-side; the textarea's maxLength is only a hint.
   const about = str("about");
   if (about.length > 1000) {
-    await setFlash("The about section must be 1,000 characters or fewer.", "error");
+    setFlash("The about section must be 1,000 characters or fewer.", "error");
     redirect("/pro/profile");
   }
 
@@ -330,11 +351,11 @@ export async function savePublicPageAction(formData: FormData) {
     .update(fields)
     .eq("id", contractor.id);
   if (error) {
-    await setFlash("Couldn't save your page extras. Please try again.", "error");
+    setFlash("Couldn't save your page extras. Please try again.", "error");
     redirect("/pro/profile");
   }
 
-  await setFlash("Public page updated.");
+  setFlash("Public page updated.");
   revalidatePath("/pro/profile");
   redirect("/pro/profile");
 }
@@ -358,19 +379,19 @@ export async function deleteAccountAction(formData: FormData) {
   // of deleting their own account. Decided HERE, from the account's real
   // identities, never from what the form posted - see the homeowner twin in
   // src/app/(app)/account/actions.ts.
-  const { hasPassword } = passwordStatusFor(user);
+  const { hasPassword } = await passwordStatusFor(user);
 
   // Both branches below, not just the password one: a wrong typed email is
   // cheap to check, but nothing here should be retryable without limit.
   if (await passwordAttemptsExhausted(user.id)) {
-    await setFlash(PW_VERIFY_MESSAGE, "error");
+    setFlash(PW_VERIFY_MESSAGE, "error");
     redirect("/pro/profile");
   }
 
   if (hasPassword) {
     const current = (formData.get("current_password") as string) || "";
     if (!current) {
-      await setFlash("Current password is incorrect.", "error");
+      setFlash("Current password is incorrect.", "error");
       redirect("/pro/profile");
     }
 
@@ -385,7 +406,7 @@ export async function deleteAccountAction(formData: FormData) {
       password: current,
     });
     if (verifyError) {
-      await setFlash("Current password is incorrect.", "error");
+      setFlash("Current password is incorrect.", "error");
       redirect("/pro/profile");
     }
   } else {
@@ -397,7 +418,7 @@ export async function deleteAccountAction(formData: FormData) {
       .trim()
       .toLowerCase();
     if (typed !== user.email.toLowerCase()) {
-      await setFlash(
+      setFlash(
         "That doesn't match the email on this account. Type it exactly to confirm.",
         "error"
       );
@@ -421,7 +442,7 @@ export async function deleteAccountAction(formData: FormData) {
     try {
       await stripe.subscriptions.cancel(sub.stripe_subscription_id);
     } catch {
-      await setFlash(
+      setFlash(
         "We couldn't cancel your subscription, so we didn't delete your account. Please try again.",
         "error"
       );
@@ -460,17 +481,134 @@ export async function deleteAccountAction(formData: FormData) {
   // whole company record would be orphaned forever once the auth user is gone.
   // Abort before deleteUser rather than leave that behind.
   if (summary?.contractorDeleteFailed) {
-    await setFlash("Couldn't save your changes. Please try again.", "error");
+    setFlash("Couldn't save your changes. Please try again.", "error");
     redirect("/pro/profile");
   }
 
   const { error } = await admin.auth.admin.deleteUser(user.id);
   if (error) {
-    await setFlash("Couldn't save your changes. Please try again.", "error");
+    setFlash("Couldn't save your changes. Please try again.", "error");
     redirect("/pro/profile");
   }
 
   await supabase.auth.signOut();
-  await setFlash("Your account has been deleted.");
+  setFlash("Your account has been deleted.");
   redirect("/");
+}
+
+// "File a dispute" on the license card (migration 0125). The identity checks
+// that back the verified badge can be wrong about a real pro in two ways, and
+// both need a human, not a retry button:
+//   - name_mismatch: CSLB registered the license under a name that doesn't
+//     line up with this account (a legal entity name, a married name, a dba
+//     Hearth doesn't know about);
+//   - duplicate_license: the number is already verified on another Hearth
+//     account, which is either an honest mix-up or somebody using this pro's
+//     license.
+// Either way the pro writes to support and a person rules on it. There is NO
+// admin UI for this on purpose: it lands in support_messages (0024), the same
+// inbox the Help page and /contact already feed, read by the team through the
+// service role.
+//
+// Nothing here can change the pro's own verification state - the whole point
+// is that only a human moves it - so this action writes exactly one row to
+// support_messages and nothing else.
+const MAX_DISPUTE_MESSAGE = 2000;
+
+export async function licenseDisputeAction(formData: FormData) {
+  const contractor = await getCurrentContractor();
+  if (!contractor) redirect("/signin");
+
+  // Abuse guard, and honesty guard: a dispute only means something when there
+  // is a failed check to dispute. A pro with no number on file, or one whose
+  // license is verified/pending, gets a friendly refusal instead of a support
+  // ticket about nothing.
+  if (!contractor.license_number) {
+    setFlash("Add your license number first, then run a check.", "error");
+    redirect("/pro/profile");
+  }
+  if (contractor.license_verified_status !== "failed") {
+    setFlash(
+      "There's no failed license check to dispute right now.",
+      "error"
+    );
+    redirect("/pro/profile");
+  }
+
+  const detail = contractor.license_verify_detail;
+  const reason = detail?.failure_reason ?? "not_confirmed";
+  const digits = licenseDigits(contractor.license_number);
+
+  // Capped server-side: the textarea's maxLength is a client hint only, and a
+  // server action takes whatever FormData it is handed.
+  const written = cappedField(formData, "message", MAX_DISPUTE_MESSAGE);
+
+  // Same fixed-window limiter and same bucket as the homeowner Help form
+  // (migration 0068), so a burst of disputes can't flood the inbox. Spam-class
+  // bucket, so it fails OPEN: a limiter outage must never stop a pro whose
+  // livelihood badge is on the line from reaching a human.
+  const admin = createAdminClient();
+  const { data: allowed } = await admin.rpc("rate_limit_hit", {
+    p_bucket: `support:${contractor.user_id ?? contractor.id}`,
+    p_limit: 5,
+    p_window_seconds: 3600,
+  });
+  if (allowed === false) {
+    setFlash(
+      "You've sent a few of these already. We'll get back to you shortly.",
+      "info"
+    );
+    redirect("/pro/profile");
+  }
+
+  // The account's own email/phone, falling back to the contractors row's
+  // contact fields, so support can reply without digging. Read with the admin
+  // client (0067 stripped column-level SELECT), keyed on the id resolved from
+  // the session above, never client input.
+  let accountEmail: string | null = null;
+  let accountPhone: string | null = null;
+  if (contractor.user_id) {
+    const { data: account } = await admin
+      .from("users")
+      .select("email, phone")
+      .eq("id", contractor.user_id)
+      .maybeSingle();
+    accountEmail = account?.email ?? null;
+    accountPhone = account?.phone ?? null;
+  }
+
+  // Prefixed so the inbox can triage on sight, and so the license number and
+  // the machine reason are in the message body itself rather than only in a
+  // column support would have to join against.
+  const message =
+    `[License dispute] CSLB #${digits || "unknown"} - reason: ${reason} - ` +
+    (written || "(no message written)");
+
+  // Admin client, mirroring src/app/contact/actions.ts: support_messages' RLS
+  // only grants insert to `authenticated` with user_id = auth.uid(), which
+  // this row does satisfy, but the account lookup above already needs the
+  // admin client and one client for the whole action keeps the write from
+  // depending on RLS staying shaped that way.
+  const { error } = await admin.from("support_messages").insert({
+    user_id: contractor.user_id,
+    name: contractor.name.slice(0, FIELD_MAX.name),
+    email: (contractor.contact_email || accountEmail || "").slice(
+      0,
+      FIELD_MAX.email
+    ) || null,
+    phone: (contractor.contact_phone || accountPhone || "").slice(
+      0,
+      FIELD_MAX.phone
+    ) || null,
+    message,
+  });
+
+  if (error) {
+    console.error("licenseDisputeAction: insert failed", error);
+    setFlash("Couldn't send your dispute. Please try again.", "error");
+    redirect("/pro/profile");
+  }
+
+  setFlash("Got it - we will review and email you.", "success");
+  redirect("/pro/profile");
 }

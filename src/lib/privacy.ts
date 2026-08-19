@@ -490,7 +490,7 @@ export type EraseSummary = {
 //     leaves these rows in place with a null user id - and several of them
 //     hold personal information in the row itself, so nulling the id does not
 //     de-identify them. support_messages keeps name/email/phone/message
-//     verbatim (0021_support_messages.sql), learning_requests keeps the typed
+//     verbatim (0024_support_messages.sql), learning_requests keeps the typed
 //     question, messages keep their body, reports keep their reason.
 //  2. Storage objects. No FK and no trigger reaches these, so every photo,
 //     uploaded document, logo, licence scan and insurance certificate would
