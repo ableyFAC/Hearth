@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/safeNext";
 import { friendlyAuthError } from "@/lib/friendlyAuthError";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
+import AppleSignInButton from "@/components/AppleSignInButton";
 
 // Read ?next= straight off the browser URL (used at submit time). Guarded by
 // the shared safeNextPath so a malicious absolute/protocol-relative value
@@ -155,7 +156,10 @@ export default function SignInForm({
           <div className="h-px flex-1 bg-stone-200 dark:bg-white/10" />
         </div>
 
-        <GoogleSignInButton next={next} onError={setStatus} />
+        <div className="space-y-3">
+          <GoogleSignInButton next={next} onError={setStatus} />
+          <AppleSignInButton next={next} onError={setStatus} />
+        </div>
 
         <div className="mt-6 border-t border-stone-100 pt-4 text-center dark:border-white/10">
           <p className="text-sm text-stone-500 dark:text-stone-400">New to Hearth?</p>
