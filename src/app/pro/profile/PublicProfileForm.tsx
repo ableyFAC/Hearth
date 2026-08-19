@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useFormStatus } from "react-dom";
 import InlineSpinner from "@/components/InlineSpinner";
 import { saveCompanyAction, verifyLicenseNowAction } from "../actions";
+import { licenseDisputeAction } from "./actions";
 import CategoryPicker from "../CategoryPicker";
 import FieldIcon from "../FieldIcon";
 import PhoneInput from "@/components/PhoneInput";
-import ServiceAreaInput from "@/components/ServiceAreaInput";
+import LaunchCityCheckboxes from "../onboarding/LaunchCityCheckboxes";
 import type { Contractor } from "@/lib/database.types";
 
 // Small submit buttons for the form below. Each needs its own component
@@ -28,6 +29,26 @@ function VerifyLicenseButton({ label }: { label: string }) {
   );
 }
 
+// Sends the dispute textarea below to support (0125). Same trick as
+// VerifyLicenseButton: HTML forbids a nested <form>, so this is a formAction
+// on a submit button inside the profile's single form. It posts the whole
+// form, but licenseDisputeAction reads only the message field and never
+// touches the pro's verification state - only a human can move that.
+function DisputeLicenseButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      formAction={licenseDisputeAction}
+      disabled={pending}
+      className="mt-2 inline-flex items-center justify-center gap-1.5 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-700"
+    >
+      {pending && <InlineSpinner size={12} />}
+      Send dispute
+    </button>
+  );
+}
+
 function SaveChangesButton() {
   const { pending } = useFormStatus();
   return (
@@ -44,7 +65,8 @@ function SaveChangesButton() {
 
 // Redesigned contractor profile editor. Posts to the same saveCompanyAction the
 // onboarding form uses, so field names must stay: name, contact_email,
-// contact_phone, service_area, categories. The license is read-only once
+// contact_phone, service_cities (+ the service_cities_present marker),
+// categories. The license is read-only once
 // VERIFIED, matching saveCompanyAction: until a real CSLB check passes, the
 // pro can still fix a typo in the number.
 //
@@ -81,6 +103,15 @@ export default function PublicProfileForm({
   const licenseLocked = hasLicense && verifyStatus === "verified";
   const verifiedAt = contractor.license_verified_at ?? null;
   const verifyDetail = contractor.license_verify_detail ?? null;
+  // 0125: a failure Hearth caused (identity), not one CSLB reported. These two
+  // are the only ones a pro can appeal, because they're the only ones a human
+  // can resolve - a canceled or expired license is fixed with the state, not
+  // with support.
+  const failureReason = verifyDetail?.failure_reason ?? null;
+  const disputableReason =
+    failureReason === "name_mismatch" || failureReason === "duplicate_license"
+      ? failureReason
+      : null;
   // CSLB eligibility mirrors verifyLicenseNowAction: null/blank service_state
   // ("All states") can run an explicit check; an explicit non-CA state is
   // refused, so those pros get honest copy instead of a dead button.
@@ -180,22 +211,26 @@ export default function PublicProfileForm({
               </div>
 
               <div>
-                <label className="label">Service Area</label>
-                <div className="relative">
-                  <FieldIcon>
-                    <path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0118 0z" />
-                    <circle cx="12" cy="10" r="3" />
-                  </FieldIcon>
-                  <ServiceAreaInput
-                    name="service_area"
-                    className="input pl-9"
-                    defaultValue={contractor.service_area ?? ""}
-                    placeholder="e.g. Irvine, Tustin, Costa Mesa"
-                  />
-                </div>
+                <label className="label">Cities You Serve</label>
+                {/* The same two checkboxes signup uses, posting the same
+                    `service_cities` / `service_cities_present` field names to
+                    the same saveCompanyAction, so one parsing path
+                    (selectLaunchCities) covers both forms. Replaces the old
+                    free-text ServiceAreaInput: since migration 0124 this
+                    answer is a real gate - launch_cities is what
+                    open_jobs_for_me and apply_to_lead filter each job's ZIP
+                    against - so a free-text city list that nothing reads would
+                    have quietly left a pro's board wrong. */}
+                <LaunchCityCheckboxes
+                  defaultCities={
+                    ((contractor as { launch_cities?: string[] | null })
+                      .launch_cities ?? []) as string[]
+                  }
+                />
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  Where you are willing to travel for jobs. Start typing a city
-                  (even initials like &quot;fv&quot;) and pick from the list.
+                  Hearth serves Huntington Beach and Fountain Valley right now.
+                  You only see - and only pay for - jobs in the cities you
+                  check here.
                 </p>
               </div>
 
@@ -281,15 +316,57 @@ export default function PublicProfileForm({
                     )}
                     {hasLicense && verifyStatus === "failed" && (
                       <>
-                        <p className="mt-1 text-xs text-red-500 dark:text-red-400">
-                          {verifyDetail?.statusText
-                            ? `CSLB says: ${verifyDetail.statusText}`
-                            : "The CSLB public database did not confirm this license."}{" "}
-                          {cslbEligible
-                            ? "If this is out of date, update it with the state, then reverify below."
-                            : "State You Serve is already set to California for you, so if this is a CSLB license, save your changes and then reverify."}
-                        </p>
-                        {cslbEligible && <VerifyLicenseButton label="Reverify" />}
+                        {/* An identity failure (0125) is a different thing from
+                            "CSLB says this license is canceled", and must not
+                            wear the same copy: the license itself may be
+                            perfectly good, and reverifying will just fail the
+                            same way. Say what actually happened and offer the
+                            only thing that can fix it - a human. The
+                            CSLB-registered name is deliberately NOT echoed
+                            back: whoever is at this form may not be the person
+                            it belongs to. */}
+                        {disputableReason ? (
+                          <p className="mt-1 text-xs text-red-500 dark:text-red-400">
+                            {disputableReason === "name_mismatch"
+                              ? "The CSLB lists this license under a different name than your account. If this is your license, tell us and we will review it."
+                              : "This license number is already verified on another Hearth account. If someone else used your license, file a dispute and we will investigate."}
+                          </p>
+                        ) : (
+                          <p className="mt-1 text-xs text-red-500 dark:text-red-400">
+                            {verifyDetail?.statusText
+                              ? `CSLB says: ${verifyDetail.statusText}`
+                              : "The CSLB public database did not confirm this license."}{" "}
+                            {cslbEligible
+                              ? "If this is out of date, update it with the state, then reverify below."
+                              : "State You Serve is already set to California for you, so if this is a CSLB license, save your changes and then reverify."}
+                          </p>
+                        )}
+                        {cslbEligible && !disputableReason && (
+                          <VerifyLicenseButton label="Reverify" />
+                        )}
+                        {disputableReason && (
+                          <div className="mt-2 rounded-lg border border-stone-200 p-3 dark:border-white/10">
+                            <label
+                              className="text-xs font-medium text-stone-600 dark:text-stone-300"
+                              htmlFor="license_dispute_message"
+                            >
+                              File a dispute
+                            </label>
+                            <textarea
+                              id="license_dispute_message"
+                              name="message"
+                              rows={3}
+                              maxLength={2000}
+                              className="input mt-1 text-sm"
+                              placeholder={
+                                disputableReason === "name_mismatch"
+                                  ? "Tell us how this license is yours - the name it is registered under, your dba, anything that helps."
+                                  : "Tell us what you know about the other account using this license."
+                              }
+                            />
+                            <DisputeLicenseButton />
+                          </div>
+                        )}
                       </>
                     )}
                     {hasLicense &&

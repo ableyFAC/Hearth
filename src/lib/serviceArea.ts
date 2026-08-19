@@ -52,3 +52,46 @@ export function isOrangeCountyZip(zip: string): boolean {
   const normalized = (zip ?? "").trim().slice(0, 5);
   return ORANGE_COUNTY_ZIPS.has(normalized);
 }
+
+// The two cities Hearth actually launches in, keyed by ZIP. Narrower than
+// ORANGE_COUNTY_ZIPS above on purpose: Orange County is where the launch
+// cities sit, not where Hearth has pros. The homeowner onboarding gate and
+// the pro-side alert filter both read this; the DB gates read the identical
+// mapping in public.launch_city_for_zip() (migration 0124), and the two are
+// kept in sync by hand.
+//
+// 90742 (Sunset Beach) and 90743 (Surfside) are annexed parts of Huntington
+// Beach that route through 90xxx ZIPs - the same OC/LA border overlap
+// ORANGE_COUNTY_ZIPS documents, not a mistake.
+export const LAUNCH_CITY_BY_ZIP: Record<string, LaunchCityName> = {
+  "92646": "Huntington Beach",
+  "92647": "Huntington Beach",
+  "92648": "Huntington Beach",
+  "92649": "Huntington Beach",
+  "90742": "Huntington Beach",
+  "90743": "Huntington Beach",
+  "92708": "Fountain Valley",
+};
+
+export type LaunchCityName = "Huntington Beach" | "Fountain Valley";
+
+// Which launch city a ZIP belongs to, or null when it is neither. Same
+// normalization as isOrangeCountyZip (trim, first 5 characters) so a ZIP+4 or
+// a padded value resolves the same way it does everywhere else.
+export function launchCityForZip(zip: string): LaunchCityName | null {
+  const normalized = (zip ?? "").trim().slice(0, 5);
+  // hasOwnProperty, not a bare index: this reads a plain object with untrusted
+  // input, and a bare lookup would happily return Object.prototype's members
+  // for a crafted key. The 5-character slice happens to make that unreachable
+  // today, which is exactly the kind of accident a future edit removes.
+  return Object.prototype.hasOwnProperty.call(LAUNCH_CITY_BY_ZIP, normalized)
+    ? LAUNCH_CITY_BY_ZIP[normalized]
+    : null;
+}
+
+// True only for a ZIP inside one of the two launch cities. This is the gate
+// homeowner onboarding uses; isOrangeCountyZip stays exported for anything
+// that still needs the wider county question.
+export function isLaunchZip(zip: string): boolean {
+  return launchCityForZip(zip) !== null;
+}

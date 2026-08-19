@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/notify";
 import { isMissingSchemaError } from "@/lib/dbErrors";
+import { launchCityForZip } from "@/lib/serviceArea";
 import { redactContact } from "@/lib/redact";
 import {
   labelFor,
@@ -40,6 +41,10 @@ export type NewLeadAlertInput = {
   // Property's two-letter state, for the cold-start path's null-safe locality
   // check. Missing data never hides a pro (0046's rule).
   property_state?: string | null;
+  // Property's ZIP, for the launch-city filter (0124). Same null-safe rule as
+  // the state above: a ZIP that is not one of the two launch cities, or a pro
+  // whose launch_cities the database hasn't got yet, never hides anyone.
+  property_zip?: string | null;
   // Fan-out-cannon gate (migration 0093): when false, every pro still gets
   // the in-app notification row below, but email/SMS are held back by
   // simply not handing sendNotification any contact details - its own
@@ -96,16 +101,22 @@ export async function alertProsForNewLead(
     // reports 42703, and the old code-42703-or-literal-name pattern here
     // missed that, silently swallowing the whole query (and every alert with
     // it) on a live DB without 0046 instead of falling back cleanly.
+    // Which launch city this job actually sits in (0124), or null when the ZIP
+    // is neither one - null means "don't filter", exactly like an unknown
+    // state above.
+    const leadCity = launchCityForZip(lead.property_zip ?? "");
+
     type ContractorRow = {
       user_id: string | null;
       contact_phone?: string | null;
       service_state?: string | null;
+      launch_cities?: string[] | null;
     };
     let contractors: ContractorRow[] = [];
     {
       let query = (admin as any)
         .from("contractors")
-        .select("user_id, contact_phone, service_state")
+        .select("user_id, contact_phone, service_state, launch_cities")
         .not("user_id", "is", null)
         .or(`categories.is.null,categories.cs.{${lead.category}}`);
       // Server-side version of the COLD_START state filter below (the
@@ -122,10 +133,11 @@ export async function alertProsForNewLead(
       const res = await query.limit(1000);
       if (res.error) {
         if (!isMissingSchemaError(res.error)) throw res.error;
-        // Retry without service_state entirely: the column may not exist yet
-        // (pre-0046 database), so neither selecting it nor filtering on it is
-        // safe here. Every pro's state is treated as unknown, which the
-        // null-safe rule already includes.
+        // Retry without service_state OR launch_cities: either column may not
+        // exist yet (pre-0046 / pre-0124 database), so neither selecting them
+        // nor filtering on them is safe here. Every pro's state and city pick
+        // is then treated as unknown, which the null-safe rules below already
+        // include rather than exclude.
         const retry = await admin
           .from("contractors")
           .select("user_id, contact_phone")
@@ -158,6 +170,27 @@ export async function alertProsForNewLead(
       contractors = contractors.filter((c) => {
         const svcState = (c.service_state ?? "").trim().toUpperCase();
         return !svcState || !propState || svcState === propState;
+      });
+    }
+
+    // Launch-city locality (0124), mirroring in code the gate
+    // open_jobs_for_me() and apply_to_lead() apply in SQL: don't text a pro
+    // about a job they cannot see on the board or apply to. Applied on both
+    // the cold-start and membership paths, because an alert for an
+    // unappliable job is pure noise either way.
+    //
+    // Deliberately PERMISSIVE where the SQL gate is strict, exactly like the
+    // state filter above: a pro is excluded ONLY when the job's ZIP resolves
+    // to a launch city AND the row actually carries a launch_cities array that
+    // omits it. A null/missing column (pre-0124 database, or the retry path
+    // that dropped the column) or a ZIP that maps to neither city excludes
+    // nobody. This is a best-effort notifier, so the failure mode has to be an
+    // extra alert, never a silently missed one.
+    if (leadCity) {
+      contractors = contractors.filter((c) => {
+        const cities = c.launch_cities;
+        if (!Array.isArray(cities)) return true;
+        return cities.includes(leadCity);
       });
     }
 

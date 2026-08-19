@@ -24,6 +24,7 @@ import { sendNotification } from "@/lib/notify";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import { redactContact } from "@/lib/redact";
 import { ok, err, type ActionResult } from "@/lib/actionResult";
+import { launchCityForZip } from "@/lib/serviceArea";
 import { isAllowedValue } from "@/lib/formFields";
 import type { Json } from "@/lib/database.types";
 
@@ -82,6 +83,20 @@ function validPhotoUrls(formData: FormData): string[] {
 export async function postJobAction(formData: FormData) {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
+
+  // Launch-area gate (0124). Onboarding only accepts launch-city ZIPs now,
+  // but homes claimed before that change can carry any Orange County ZIP.
+  // open_jobs_for_me and apply_to_lead both refuse jobs outside the two
+  // launch cities, so a post from such a home would succeed, notify nobody,
+  // and sit invisible forever - the homeowner deserves the honest answer at
+  // post time instead.
+  if (!launchCityForZip(property.zip ?? "")) {
+    setFlash(
+      "Hearth pros serve Huntington Beach and Fountain Valley right now, and this home is outside that area. We'll email you the moment we expand.",
+      "error"
+    );
+    redirect("/contractors");
+  }
   const supabase = createClient();
 
   const {
@@ -547,6 +562,9 @@ export async function postJobAction(formData: FormData) {
     // For the cold-start free-alerts path's state-level locality check
     // (null-safe, mirroring 0046: missing data never hides a job).
     property_state: property.state ?? null,
+    // For the launch-city filter (0124), so a pro isn't texted about a job
+    // the board and apply gate will both refuse them. Null-safe the same way.
+    property_zip: property.zip ?? null,
     // Fan-out-cannon gate (migration 0093): an unverified property must not
     // be able to trigger up to 200 real emails/texts to pros on someone
     // else's say-so. In-app notifications still go out either way - only
@@ -1128,6 +1146,15 @@ export async function requestProAction(
 ): Promise<ActionResult> {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
+
+  // Launch-area gate, same reasoning as postJobAction: a pre-launch-gate home
+  // outside Huntington Beach / Fountain Valley must not create a request a
+  // pro would then pay to unlock for a job outside the launch area.
+  if (!launchCityForZip(property.zip ?? "")) {
+    return err(
+      "Hearth pros serve Huntington Beach and Fountain Valley right now, and this home is outside that area. We'll email you the moment we expand."
+    );
+  }
   const supabase = createClient();
 
   const {
@@ -1366,6 +1393,16 @@ export async function cancelDirectRequestAction(formData: FormData) {
 export async function postDirectPubliclyAction(formData: FormData) {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
+
+  // Launch-area gate, same reasoning as postJobAction: converting a direct
+  // request into an open posting must not create a board job no pro can see.
+  if (!launchCityForZip(property.zip ?? "")) {
+    setFlash(
+      "Hearth pros serve Huntington Beach and Fountain Valley right now, and this home is outside that area. We'll email you the moment we expand.",
+      "error"
+    );
+    redirect("/contractors");
+  }
   const supabase = createClient() as any;
   const leadId = String(formData.get("lead_id") || "");
 
@@ -1449,6 +1486,7 @@ export async function postDirectPubliclyAction(formData: FormData) {
     timing,
     issue_description: issueDescription,
     property_state: property.state ?? null,
+    property_zip: property.zip ?? null,
     externalChannels: property.ownership_status === "verified",
   });
 

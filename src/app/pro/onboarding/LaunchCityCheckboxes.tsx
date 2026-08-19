@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { LAUNCH_CITIES } from "./launchCities";
 
-// The signup service-area question: exactly the two cities Hearth serves,
-// checkboxes because a pro can serve both. Replaces the free-text city
-// combobox that used to live here (the profile editor still has that; see
-// ./launchCities.ts for why signup writes both service_area and
-// serves_orange_county from this one answer).
+// The service-area question: exactly the two cities Hearth serves, checkboxes
+// because a pro can serve both. Replaces the free-text city combobox that used
+// to live here, in signup AND in the profile editor
+// (src/app/pro/profile/PublicProfileForm.tsx), which posts the identical field
+// names to the identical action. See ./launchCities.ts for why one answer
+// writes service_area, serves_orange_county, and launch_cities.
 //
 // AT LEAST ONE REQUIRED, natively: `required` sits on BOTH boxes while zero
 // are checked, so the browser refuses the submit and points at the field;
@@ -17,10 +18,22 @@ import { LAUNCH_CITIES } from "./launchCities";
 //
 // The hidden marker is what tells saveCompanyAction this form actually asked
 // the question, matching the missing-field-safe discipline the rest of that
-// action uses: a form without the marker (the profile edit form) must never
-// have its stored service area rewritten from an absent answer.
-export default function LaunchCityCheckboxes() {
-  const [checked, setChecked] = useState<readonly string[]>([]);
+// action uses: a form without the marker must never have its stored service
+// area rewritten from an absent answer.
+// `defaultCities` is what the profile editor passes so a returning pro sees
+// their stored pick already checked (signup passes nothing and starts empty).
+// Anything that isn't a launch city is ignored here, and selectLaunchCities
+// drops it server-side too, so a stale or hand-edited value can never
+// pre-check a city Hearth doesn't serve.
+export default function LaunchCityCheckboxes({
+  defaultCities = [],
+}: {
+  defaultCities?: readonly string[];
+}) {
+  const initial = LAUNCH_CITIES.filter((city) =>
+    defaultCities.some((c) => String(c).trim().toLowerCase() === city.toLowerCase())
+  );
+  const [checked, setChecked] = useState<readonly string[]>(initial);
   const noneChecked = checked.length === 0;
 
   return (
@@ -35,6 +48,7 @@ export default function LaunchCityCheckboxes() {
             type="checkbox"
             name="service_cities"
             value={city}
+            defaultChecked={initial.includes(city)}
             required={noneChecked}
             onChange={(e) =>
               setChecked((prev) =>

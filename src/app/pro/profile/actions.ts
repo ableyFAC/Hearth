@@ -12,7 +12,8 @@ import { setFlash } from "@/lib/flash";
 import { friendlyAuthError } from "@/lib/friendlyAuthError";
 import { stripe } from "@/lib/stripe";
 import { eraseUserData, type EraseSummary } from "@/lib/privacy";
-import { FIELD_MAX } from "@/lib/formFields";
+import { cappedField, FIELD_MAX } from "@/lib/formFields";
+import { licenseDigits } from "@/lib/licenseMatch";
 
 // Password re-verification is a brute-force surface: updatePasswordAction,
 // updateEmailAction, and deleteAccountAction each take a current password and
@@ -493,4 +494,121 @@ export async function deleteAccountAction(formData: FormData) {
   await supabase.auth.signOut();
   setFlash("Your account has been deleted.");
   redirect("/");
+}
+
+// "File a dispute" on the license card (migration 0125). The identity checks
+// that back the verified badge can be wrong about a real pro in two ways, and
+// both need a human, not a retry button:
+//   - name_mismatch: CSLB registered the license under a name that doesn't
+//     line up with this account (a legal entity name, a married name, a dba
+//     Hearth doesn't know about);
+//   - duplicate_license: the number is already verified on another Hearth
+//     account, which is either an honest mix-up or somebody using this pro's
+//     license.
+// Either way the pro writes to support and a person rules on it. There is NO
+// admin UI for this on purpose: it lands in support_messages (0024), the same
+// inbox the Help page and /contact already feed, read by the team through the
+// service role.
+//
+// Nothing here can change the pro's own verification state - the whole point
+// is that only a human moves it - so this action writes exactly one row to
+// support_messages and nothing else.
+const MAX_DISPUTE_MESSAGE = 2000;
+
+export async function licenseDisputeAction(formData: FormData) {
+  const contractor = await getCurrentContractor();
+  if (!contractor) redirect("/signin");
+
+  // Abuse guard, and honesty guard: a dispute only means something when there
+  // is a failed check to dispute. A pro with no number on file, or one whose
+  // license is verified/pending, gets a friendly refusal instead of a support
+  // ticket about nothing.
+  if (!contractor.license_number) {
+    setFlash("Add your license number first, then run a check.", "error");
+    redirect("/pro/profile");
+  }
+  if (contractor.license_verified_status !== "failed") {
+    setFlash(
+      "There's no failed license check to dispute right now.",
+      "error"
+    );
+    redirect("/pro/profile");
+  }
+
+  const detail = contractor.license_verify_detail;
+  const reason = detail?.failure_reason ?? "not_confirmed";
+  const digits = licenseDigits(contractor.license_number);
+
+  // Capped server-side: the textarea's maxLength is a client hint only, and a
+  // server action takes whatever FormData it is handed.
+  const written = cappedField(formData, "message", MAX_DISPUTE_MESSAGE);
+
+  // Same fixed-window limiter and same bucket as the homeowner Help form
+  // (migration 0068), so a burst of disputes can't flood the inbox. Spam-class
+  // bucket, so it fails OPEN: a limiter outage must never stop a pro whose
+  // livelihood badge is on the line from reaching a human.
+  const admin = createAdminClient();
+  const { data: allowed } = await admin.rpc("rate_limit_hit", {
+    p_bucket: `support:${contractor.user_id ?? contractor.id}`,
+    p_limit: 5,
+    p_window_seconds: 3600,
+  });
+  if (allowed === false) {
+    setFlash(
+      "You've sent a few of these already. We'll get back to you shortly.",
+      "info"
+    );
+    redirect("/pro/profile");
+  }
+
+  // The account's own email/phone, falling back to the contractors row's
+  // contact fields, so support can reply without digging. Read with the admin
+  // client (0067 stripped column-level SELECT), keyed on the id resolved from
+  // the session above, never client input.
+  let accountEmail: string | null = null;
+  let accountPhone: string | null = null;
+  if (contractor.user_id) {
+    const { data: account } = await admin
+      .from("users")
+      .select("email, phone")
+      .eq("id", contractor.user_id)
+      .maybeSingle();
+    accountEmail = account?.email ?? null;
+    accountPhone = account?.phone ?? null;
+  }
+
+  // Prefixed so the inbox can triage on sight, and so the license number and
+  // the machine reason are in the message body itself rather than only in a
+  // column support would have to join against.
+  const message =
+    `[License dispute] CSLB #${digits || "unknown"} - reason: ${reason} - ` +
+    (written || "(no message written)");
+
+  // Admin client, mirroring src/app/contact/actions.ts: support_messages' RLS
+  // only grants insert to `authenticated` with user_id = auth.uid(), which
+  // this row does satisfy, but the account lookup above already needs the
+  // admin client and one client for the whole action keeps the write from
+  // depending on RLS staying shaped that way.
+  const { error } = await admin.from("support_messages").insert({
+    user_id: contractor.user_id,
+    name: contractor.name.slice(0, FIELD_MAX.name),
+    email: (contractor.contact_email || accountEmail || "").slice(
+      0,
+      FIELD_MAX.email
+    ) || null,
+    phone: (contractor.contact_phone || accountPhone || "").slice(
+      0,
+      FIELD_MAX.phone
+    ) || null,
+    message,
+  });
+
+  if (error) {
+    console.error("licenseDisputeAction: insert failed", error);
+    setFlash("Couldn't send your dispute. Please try again.", "error");
+    redirect("/pro/profile");
+  }
+
+  setFlash("Got it - we will review and email you.", "success");
+  redirect("/pro/profile");
 }

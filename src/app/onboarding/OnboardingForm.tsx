@@ -5,13 +5,13 @@ import { useState } from "react";
 import { lookupParcelAction, claimPropertyAction, joinMarketWaitlistAction } from "./actions";
 import type { PublicParcelFacts } from "@/lib/parcel";
 import { PROPERTY_TYPES, FOUNDER } from "@/lib/constants";
-import { isOrangeCountyZip } from "@/lib/serviceArea";
+import { isLaunchZip } from "@/lib/serviceArea";
 import { Hammer, Bell, FileText } from "lucide-react";
 
-// Must read the same as OC_ONLY_MESSAGE in ./actions.ts - kept in sync by
+// Must read the same as LAUNCH_ONLY_MESSAGE in ./actions.ts - kept in sync by
 // hand since a "use server" file can only export async functions, not a
 // shared string constant, to a client component like this one.
-const OC_ONLY_MESSAGE =
+const LAUNCH_ONLY_MESSAGE =
   "Hearth serves Huntington Beach and Fountain Valley right now. We added you to the waitlist and will email you the moment we expand to your area.";
 
 // A trimmed length floor for "this is actually an address," not just "this
@@ -71,14 +71,15 @@ export default function OnboardingForm({
       setError("Enter a valid 5-digit ZIP code.");
       return;
     }
-    // Fast client-side feedback for the launch restriction so an out-of-area
+    // Fast client-side feedback for the launch restriction - the two launch
+    // cities only (isLaunchZip), not all of Orange County - so an out-of-area
     // ZIP never even reaches the server lookup. lookupParcelAction enforces
     // the same check server-side (before its RentCast call) - that's the
     // real gate, this is just quicker, kinder feedback. Because this check
     // short-circuits BEFORE lookupParcelAction ever runs, the waitlist save
     // has to happen right here too, or a rejected visitor would never
     // actually land on the list despite being told they had.
-    if (!isOrangeCountyZip(z)) {
+    if (!isLaunchZip(z)) {
       setBusy(true);
       try {
         const result = await joinMarketWaitlistAction(z);
@@ -512,7 +513,7 @@ export default function OnboardingForm({
           </h2>
           <p className="break-words text-sm text-stone-600 dark:text-stone-300">
             {waitlistSaved
-              ? OC_ONLY_MESSAGE
+              ? LAUNCH_ONLY_MESSAGE
               : `We couldn't save you to the waitlist. Email us at ${FOUNDER.email} and we'll add you by hand.`}
           </p>
           <p className="text-sm text-stone-500 dark:text-stone-400">

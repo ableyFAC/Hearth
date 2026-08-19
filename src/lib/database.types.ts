@@ -19,6 +19,24 @@ export interface CslbVerifyDetail {
   statusText: string | null;
   classifications: string[] | null;
   expires: string | null;
+  // When the check ran. Written on every decided outcome since 0055's app code
+  // shipped; it is what the "already checked recently" debounce in
+  // src/app/pro/actions.ts reads.
+  checked_at?: string | null;
+  // Why a 'failed' status is failed, when the reason is NOT the CSLB status
+  // sentence itself (migration 0125). 'name_mismatch': the license is active,
+  // but CSLB registered it under a name that does not line up with this
+  // account (src/lib/licenseMatch.ts). 'duplicate_license': the number is
+  // already verified on another Hearth account - deliberately says nothing
+  // about which one. 'duplicate_license_demoted_0125': written by migration
+  // 0125's cleanup onto the later claimants of a number that had been verified
+  // more than once before the unique index existed. Absent on an ordinary
+  // CSLB-said-no failure.
+  failure_reason?:
+    | "name_mismatch"
+    | "duplicate_license"
+    | "duplicate_license_demoted_0125"
+    | null;
 }
 
 // contractors.background_check_detail (migration 0057): report id, package
@@ -323,6 +341,12 @@ export interface Database {
           // Launch-market gate: open_jobs_for_me / browse_pros / apply paths
           // all filter on it, and requestProAction re-checks it app-side.
           serves_orange_county: boolean | null;
+          // Migration 0124: the per-city half of the launch gate, from the two
+          // signup/profile checkboxes ("Huntington Beach", "Fountain Valley").
+          // open_jobs_for_me and apply_to_lead filter the job's ZIP against it.
+          // Nullable here because a database that has not run 0124 yet returns
+          // no column at all (the missing-column retries treat that as "skip").
+          launch_cities: string[] | null;
           contact_email: string | null;
           contact_phone: string | null;
           vetted: boolean;
@@ -348,6 +372,7 @@ export interface Database {
           background_check_detail?: BackgroundCheckDetail | null;
           categories?: string[] | null;
           service_area?: string | null;
+          launch_cities?: string[] | null;
           contact_email?: string | null;
           contact_phone?: string | null;
           vetted?: boolean;

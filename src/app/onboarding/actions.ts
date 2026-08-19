@@ -13,7 +13,7 @@ import { ownsPlus, getExtraHomeSlots } from "@/lib/subscription";
 import { setFlash } from "@/lib/flash";
 import { safeNextPath } from "@/lib/safeNext";
 import { isMissingSchemaError } from "@/lib/dbErrors";
-import { isOrangeCountyZip } from "@/lib/serviceArea";
+import { isLaunchZip } from "@/lib/serviceArea";
 import { PROPERTY_TYPES } from "@/lib/constants";
 import { ok, err, type ActionResult } from "@/lib/actionResult";
 import {
@@ -35,7 +35,7 @@ const MAX_ENRICHMENT_JSON_CHARS = 20000;
 // plus
 // the fast client-side copy in OnboardingForm.tsx) - kept as a single
 // constant so the wording can never drift between them.
-const OC_ONLY_MESSAGE =
+const LAUNCH_ONLY_MESSAGE =
   "Hearth serves Huntington Beach and Fountain Valley right now. We added you to the waitlist and will email you the moment we expand to your area.";
 
 // Systems virtually every home has, auto-added so the owner doesn't start from
@@ -91,7 +91,7 @@ function validPurchaseDate(v: string | null): string | null {
 
 // Records an out-of-area lead in market_waitlist (0074) for the signed-in
 // user, so Hearth can email them when it expands to their ZIP. Shared by
-// every OC-only gate below AND by OnboardingForm.tsx's own faster
+// every launch-city gate below AND by OnboardingForm.tsx's own faster
 // client-side ZIP check: that check short-circuits before ever calling
 // lookupParcelAction, so without a direct call here someone rejected right
 // there would never actually land on the waitlist. Returns an honest
@@ -165,15 +165,19 @@ export async function lookupParcelAction(
   if (!/^\d{5}(-\d{4})?$/.test(zip.trim())) {
     throw new Error("Enter a valid 5-digit ZIP code.");
   }
-  // Launch-restriction gate: checked before the rate limiter/RentCast call
+  // Launch-restriction gate: the two launch cities only (isLaunchZip), not
+  // all of Orange County - Hearth has no pros anywhere else, and the pro-side
+  // gates (open_jobs_for_me / apply_to_lead, migration 0124) now refuse those
+  // jobs too, so accepting the address here would strand the homeowner with a
+  // job no pro can ever see. Checked before the rate limiter/RentCast call
   // below so an out-of-area address never spends a billed RentCast lookup.
   // OnboardingForm.tsx runs the same check client-side first and normally
   // never lets a rejected ZIP reach this action at all - this is the
   // fallback path (JS disabled, a modified client, or a direct call), so it
   // still logs the lead to the waitlist rather than silently dropping it.
-  if (!isOrangeCountyZip(zip.trim())) {
+  if (!isLaunchZip(zip.trim())) {
     await joinMarketWaitlistAction(zip.trim());
-    throw new Error(OC_ONLY_MESSAGE);
+    throw new Error(LAUNCH_ONLY_MESSAGE);
   }
 
   // Each lookup can make up to 2 billed RentCast calls, so gate abuse per user
@@ -280,14 +284,15 @@ export async function claimPropertyAction(
   }
 
   // Launch-restriction gate: the authoritative one, since this is the step
-  // that actually commits the address to a claimed home. Log the lead to the
+  // that actually commits the address to a claimed home. Two launch cities
+  // only (isLaunchZip), same reasoning as lookupParcelAction above. Log the lead to the
   // waitlist (joinMarketWaitlistAction above) before rejecting - a failed
   // save (e.g. live DB hasn't run 0074 yet) must never block the message
   // itself from being shown, so its result is ignored here, not surfaced.
   const claimZip = ((formData.get("zip") as string) ?? "").trim().slice(0, 5);
-  if (!isOrangeCountyZip(claimZip)) {
+  if (!isLaunchZip(claimZip)) {
     await joinMarketWaitlistAction(claimZip);
-    return err(OC_ONLY_MESSAGE);
+    return err(LAUNCH_ONLY_MESSAGE);
   }
 
   // Every number on the claim is client input (the confirm step posts the

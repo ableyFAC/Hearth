@@ -20,6 +20,7 @@ import { agingLeadFee } from "@/lib/leadPricing";
 import { hasProPlan } from "@/lib/subscription";
 import { requestReviewForWonLead } from "@/lib/reviewRequest";
 import { lookupCslbLicense, type CslbLookupResult } from "@/lib/cslb";
+import { licenseDigits, licenseNameMatches } from "@/lib/licenseMatch";
 import { createCandidateAndInvite } from "@/lib/checkr";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import { findActiveJobConflicts } from "@/lib/activeJobConflicts";
@@ -78,20 +79,120 @@ async function trackServerEvent(
 // while a license keeps failing.
 const LICENSE_RECHECK_DEBOUNCE_MS = 10 * 60 * 1000;
 
+// Why a check failed for a reason that is NOT the CSLB status sentence
+// itself (migration 0125). Mirrors CslbVerifyDetail.failure_reason in
+// src/lib/database.types.ts, which is what gets persisted.
+export type LicenseVerifyFailureReason = "name_mismatch" | "duplicate_license";
+
+// What a check decided to write. 'unknown' means the row is left exactly as
+// it was - the never-downgrade-on-uncertainty rule.
+type LicenseVerifyDecision = "verified" | "failed" | "unknown";
+
+type LicenseVerifyResult = CslbLookupResult & {
+  decision: LicenseVerifyDecision;
+  failureReason: LicenseVerifyFailureReason | null;
+};
+
+// The account holder's own name, for the identity check below. A sole
+// proprietor's CSLB record is registered to the PERSON ("DOE JOHN"), not to
+// the trade name they typed into Hearth, so the personal name has to be one
+// of the candidates or every legitimate sole proprietor would fail. Reads the
+// users table with the admin client (0067 stripped column-level SELECT on
+// several tables and this runs server-side off an id resolved from the
+// session, never client input). Best-effort: any failure just means one fewer
+// candidate name, and licenseNameMatches ignores nulls.
+async function accountFullName(
+  userId: string | null | undefined
+): Promise<string | null> {
+  if (!userId) return null;
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from("users")
+      .select("full_name")
+      .eq("id", userId)
+      .maybeSingle();
+    return ((data?.full_name as string | null) ?? null) || null;
+  } catch {
+    return null;
+  }
+}
+
+// Is this license number already VERIFIED on some other Hearth account?
+//
+// One license, one account (migration 0125). This is the app-side half: it
+// gives the second claimant an honest, explainable "already verified
+// elsewhere" instead of a raw unique-violation, and it is what fills in
+// failure_reason. The database's partial unique index is the real guarantee -
+// this read can be raced, and the 23505 handler at the write below catches
+// exactly that.
+//
+// Comparison is on DIGITS, matching the index expression
+// regexp_replace(license_number, '\D', '', 'g') byte for byte, so "270-663"
+// and "LIC# 270663" are one identity on both sides. The digit extraction can't
+// be pushed into the PostgREST filter (no expression predicates), so this
+// pulls the verified rows and compares in memory - bounded by a limit, and
+// tiny in practice since only a CSLB-confirmed row can ever be 'verified'.
+// Fails OPEN on a query error: the unique index still stops a real duplicate,
+// and a transient read failure must not block a legitimate pro's badge.
+const MAX_VERIFIED_LICENSE_SCAN = 5000;
+
+async function verifiedElsewhere(
+  contractorId: string,
+  licenseNumber: string
+): Promise<boolean> {
+  const digits = licenseDigits(licenseNumber);
+  if (!digits) return false;
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from("contractors")
+      .select("id, license_number")
+      .eq("license_verified_status", "verified")
+      .not("license_number", "is", null)
+      .neq("id", contractorId)
+      .limit(MAX_VERIFIED_LICENSE_SCAN);
+    if (error) {
+      console.error("duplicate license pre-check failed:", error.message);
+      return false;
+    }
+    return (data ?? []).some(
+      (row) => licenseDigits(row.license_number) === digits
+    );
+  } catch (err) {
+    console.error(
+      "duplicate license pre-check failed:",
+      err instanceof Error ? err.message : err
+    );
+    return false;
+  }
+}
+
 // Runs a real CSLB lookup for a contractor's license number and writes the
 // result onto license_verified_status/_at/_verify_detail (0037/0055).
-// Returns null if the debounce window skipped the fetch, otherwise the raw
-// CSLB result (so callers can show the pro why a check did or didn't pass).
-// An 'error' outcome (CSLB unreachable, timed out, or its page shape
-// changed) NEVER changes license_verified_status: a fetch failure must never
-// be treated as a failed license check.
+// Returns null if the debounce window skipped the fetch, otherwise the CSLB
+// result plus the decision this made from it (so callers can show the pro why
+// a check did or didn't pass). An 'error' outcome (CSLB unreachable, timed
+// out, or its page shape changed) NEVER changes license_verified_status: a
+// fetch failure must never be treated as a failed license check.
+//
+// 0125: an 'active' license is not enough on its own. The CSLB-registered
+// name has to line up with a name Hearth knows for this account
+// (src/lib/licenseMatch.ts), and the number must not already be verified on
+// another account. Either gate failing writes 'failed' with a failure_reason
+// the profile page turns into plain-English copy plus a dispute form.
 async function verifyContractorLicense(
   supabase: ReturnType<typeof createClient>,
   contractorId: string,
   licenseNumber: string,
   currentVerifiedAt: string | null | undefined,
-  currentDetail?: unknown
-): Promise<CslbLookupResult | null> {
+  currentDetail?: unknown,
+  // Every name Hearth knows for this account: the company name on the
+  // contractors row and the account holder's own full name. A CSLB record
+  // that matches NONE of them is somebody else's license (0125). Callers pass
+  // what they have; nulls are ignored.
+  candidateNames: Array<string | null | undefined> = []
+): Promise<LicenseVerifyResult | null> {
   const lastCheckedAt =
     ((currentDetail as { checked_at?: string } | null | undefined)
       ?.checked_at as string | undefined) ?? currentVerifiedAt;
@@ -110,24 +211,62 @@ async function verifyContractorLicense(
     checked_at: new Date().toISOString(),
   };
 
+  // What CSLB said maps to a decision: 'verified', 'failed', or 'unknown'
+  // (leave the row exactly as it is). Before 0125 this was outcome === 'active'
+  // and nothing else, which is precisely how a pro could verify against a
+  // stranger's valid license number. The two identity gates below run ONLY
+  // inside the 'active' branch, so neither can ever downgrade anyone off an
+  // 'error' outcome.
+  let failureReason: LicenseVerifyFailureReason | null = null;
+  let decision: LicenseVerifyDecision =
+    result.outcome === "active"
+      ? "verified"
+      : result.outcome === "not_found" || result.outcome === "inactive"
+        ? "failed"
+        : "unknown";
+
+  if (decision === "verified") {
+    if (!result.businessName) {
+      // Active, but the parser got no name off the page. There is nothing to
+      // check the account against, so this is UNKNOWN, not confirmed and not
+      // failed - treated exactly like an 'error' outcome, status untouched.
+      // Verifying here would reopen the whole hole: a badge granted purely on
+      // a number, with no evidence it belongs to this pro.
+      decision = "unknown";
+    } else if (!licenseNameMatches(result.businessName, candidateNames)) {
+      decision = "failed";
+      failureReason = "name_mismatch";
+    } else if (await verifiedElsewhere(contractorId, licenseNumber)) {
+      // One license, one account. See migration 0125: the first account to
+      // verify a number holds it until a human rules otherwise, and this pro
+      // gets the dispute path instead of a second badge on the same license.
+      decision = "failed";
+      failureReason = "duplicate_license";
+    }
+  }
+
+  const failedDetail = failureReason
+    ? { ...detail, failure_reason: failureReason }
+    : detail;
+
   let fields: Record<string, unknown> | null = null;
-  if (result.outcome === "active") {
+  if (decision === "verified") {
     fields = {
       license_verified_status: "verified",
       license_verified_at: new Date().toISOString(),
       license_verify_detail: detail,
     };
-  } else if (result.outcome === "not_found" || result.outcome === "inactive") {
+  } else if (decision === "failed") {
     fields = {
       license_verified_status: "failed",
       // Cleared, not kept: the public badge on /p/<id> keys off
       // license_verified_at alone, so leaving a stale timestamp here would
       // keep showing "License verified" for a license that just failed.
       license_verified_at: null,
-      license_verify_detail: detail,
+      license_verify_detail: failedDetail,
     };
   }
-  // outcome === 'error': fields stays null, status is left exactly as-is.
+  // decision === 'unknown': fields stays null, status is left exactly as-is.
 
   if (fields) {
     // 0078 revokes UPDATE on license_verified_status/_at/_verify_detail from
@@ -142,11 +281,37 @@ async function verifyContractorLicense(
       .update(fields)
       .eq("id", contractorId);
     if (error) {
+      // 23505 = migration 0125's partial unique index on the verified license
+      // digits. The verifiedElsewhere() pre-check above is a read, so two
+      // accounts submitting the same number at the same moment can both pass
+      // it and race to the write; the database settles that race and exactly
+      // one update comes back 23505. This is the backstop, not the primary
+      // path: convert the loser into the same "failed, duplicate_license"
+      // result the pre-check would have produced, rather than surfacing a raw
+      // constraint error to a pro who did nothing wrong.
+      if (error.code === "23505") {
+        failureReason = "duplicate_license";
+        decision = "failed";
+        const { error: dupError } = await (admin.from("contractors") as any)
+          .update({
+            license_verified_status: "failed",
+            license_verified_at: null,
+            license_verify_detail: {
+              ...detail,
+              failure_reason: "duplicate_license",
+            },
+          })
+          .eq("id", contractorId);
+        if (dupError) {
+          console.error("license duplicate write failed:", dupError.message);
+        }
+        return { ...result, decision, failureReason };
+      }
       console.error("license verification write failed:", error.message);
     }
   }
 
-  return result;
+  return { ...result, decision, failureReason };
 }
 
 // Resolve a referral code to a contractor id, or null. A code is another
@@ -241,32 +406,27 @@ export async function saveCompanyAction(formData: FormData) {
     serviceStateEntry !== null ? { service_state: serviceState } : {};
   const hasStateWrite = serviceStateEntry !== null;
 
-  // Signup service area: the two launch cities, as checkboxes. One answer
-  // feeds both stored fields (see ./onboarding/launchCities.ts) - service_area
-  // gets the canonical comma-separated string the rest of the app already
-  // renders, and 0074's serves_orange_county attestation stays truthful
-  // because both cities are in Orange County.
+  // Service area: the two launch cities, as checkboxes. Posted by BOTH the
+  // signup form and the profile editor (LaunchCityCheckboxes, same field
+  // names), and one answer feeds three stored fields (see
+  // ./onboarding/launchCities.ts) - service_area gets the canonical
+  // comma-separated string the rest of the app already renders, 0074's
+  // serves_orange_county attestation stays truthful because both cities are in
+  // Orange County, and 0124's launch_cities carries the per-city pick the job
+  // board and apply gate actually filter on.
   //
   // Same missing-field-safe discipline as service_state above, with the hidden
   // `service_cities_present` marker doing the work `formData.get` can't:
   // unchecked checkboxes post nothing, so an empty getAll() is ambiguous on
-  // its own. The marker is what says "this form asked the question". The
-  // profile edit form posts no marker (it still uses the free-text
-  // ServiceAreaInput), so its own service_area value in `fields` stands and
-  // nothing here touches its stored attestation.
+  // its own. The marker is what says "this form asked the question". A form
+  // without it (an older client, or any lean post) leaves its own service_area
+  // value in `fields` standing and never touches the stored attestation or
+  // city pick.
   const cityMarker = formData.get("service_cities_present");
   const hasCityWrite = cityMarker !== null;
   const citySelection = selectLaunchCities(
     formData.getAll("service_cities").map(String)
   );
-  // Server-side floor under the browser's `required`: a post that asked the
-  // question but carries no city must not create a company and must not land
-  // on the waitlist panel either. Answering nothing is not the same as
-  // answering "I'm outside your area", so send them back to pick one.
-  if (hasCityWrite && citySelection.cities.length === 0) {
-    setFlash("Pick at least one city you serve.", "error");
-    redirect("/pro/onboarding");
-  }
   if (hasCityWrite) {
     fields.service_area = citySelection.serviceArea;
   }
@@ -283,7 +443,32 @@ export async function saveCompanyAction(formData: FormData) {
   const hasOcWrite = hasCityWrite || ocEntry !== null;
   const ocWrite = hasOcWrite ? { serves_orange_county: servesOrangeCounty } : {};
 
+  // The per-city half of the launch gate (migration 0124). serves_orange_county
+  // above is county-wide and stays as-is; this is the answer the pro actually
+  // gave, which open_jobs_for_me and apply_to_lead filter each job's ZIP
+  // against. Same missing-field-safe discipline as everything above: only
+  // written when the submitting form carried the city question (the
+  // `service_cities_present` marker), so a form that never asked can't wipe a
+  // stored pick. Kept out of `fields` and written via the (as any) casts below
+  // because the column lands in 0124, with its own retry there for a live DB
+  // that hasn't run it yet.
+  const cityWrite = hasCityWrite
+    ? { launch_cities: citySelection.cities }
+    : {};
+
   const existing = await getCurrentContractor();
+
+  // Server-side floor under the browser's `required`: a post that asked the
+  // city question but carries no city must not create a company, must not
+  // land on the waitlist panel, and must not blank an existing pro's stored
+  // pick (which since 0124 would empty their job board). Answering nothing is
+  // not the same as answering "I'm outside your area", so send them back to
+  // pick one - to whichever form they actually submitted, now that the profile
+  // editor asks this question too.
+  if (hasCityWrite && citySelection.cities.length === 0) {
+    setFlash("Pick at least one city you serve.", "error");
+    redirect(existing ? "/pro/profile" : "/pro/onboarding");
+  }
 
   // Server-side floor under the browser's `required`, same discipline as the
   // city check above: the name is trimmed now, so a post of nothing but spaces
@@ -357,8 +542,43 @@ export async function saveCompanyAction(formData: FormData) {
       : {};
     let { error } = await supabase
       .from("contractors")
-      .update({ ...fields, ...stateWrite, ...ocWrite, ...reviewLinkWrite } as any)
+      .update({ ...fields, ...stateWrite, ...ocWrite, ...cityWrite, ...reviewLinkWrite } as any)
       .eq("id", existing.id);
+    // launch_cities needs both the column (0124) and its own column-level
+    // UPDATE grant, since 0085 revoked the table-level privilege and re-granted
+    // an allowlist - exactly the 42501 shape 0098 had to fix for
+    // serves_orange_county. Retry without that field (loudly logged) so a live
+    // DB still on 0123 saves everything else rather than failing the whole
+    // profile save. Whether serves_orange_county rides along depends on WHY
+    // the write failed: column absent (isMissingSchemaError) is a pre-0124 DB
+    // with no city filter, so the attestation alone still gives the pro the
+    // correct pre-0124 board. A 42501 with the column present is a
+    // half-applied 0124: the city filter IS live, and serves_orange_county =
+    // true with launch_cities stuck at '{}' would look enabled while the
+    // board shows nothing - drop both and let the re-save after the full
+    // migration store them together.
+    if (
+      error &&
+      hasCityWrite &&
+      (error.code === "42501" || isMissingSchemaError(error))
+    ) {
+      const columnMissing = isMissingSchemaError(error);
+      console.error(
+        columnMissing
+          ? "contractors update: launch_cities column missing (run migration 0124); retrying without it:"
+          : "contractors update: launch_cities UPDATE grant missing (run migration 0124 fully); retrying without it and without serves_orange_county:",
+        error.message
+      );
+      ({ error } = await supabase
+        .from("contractors")
+        .update({
+          ...fields,
+          ...stateWrite,
+          ...(columnMissing ? ocWrite : {}),
+          ...reviewLinkWrite,
+        } as any)
+        .eq("id", existing.id));
+    }
     // Same graceful missing-column retry as the insert path below: if 0046
     // (or 0074, or 0110's review-link columns) hasn't run yet, save everything
     // else rather than failing the whole form.
@@ -415,7 +635,18 @@ export async function saveCompanyAction(formData: FormData) {
           fields.license_number,
           // The number just changed, so no earlier check applies to it:
           // don't let the old number's timestamp debounce this one away.
-          null
+          null,
+          null,
+          // 0125 identity check: the business name being saved right now (not
+          // the stale stored one), plus the account holder's own name for the
+          // sole-proprietor case where CSLB registered the license to the
+          // person rather than the trade name.
+          [
+            fields.name,
+            existing.name,
+            await accountFullName(user.id),
+            (user.user_metadata?.full_name as string | undefined) ?? null,
+          ]
         );
       } catch (err) {
         console.error(
@@ -530,9 +761,47 @@ export async function saveCompanyAction(formData: FormData) {
   // 0096's INSERT grant on serves_orange_county (0083's allowlist missed
   // it); the 42501 fallback below keeps signup alive on a live DB that
   // has not run 0096 yet (old dropped-answer behavior, loudly logged).
+  // cityWrite rides the creating insert for the same reason ocWrite does: the
+  // pro just answered which cities they cover, and dropping it here would leave
+  // launch_cities at 0124's '{}' default, which hides the whole job board from
+  // them just as surely as a false serves_orange_county did before 0098.
+  // Requires 0124's INSERT grant on the column (0085's allowlist can't know
+  // about a column added later); the retry below keeps signup alive on a live
+  // DB that has not run 0124 yet, loudly logged. Whether serves_orange_county
+  // survives the retry depends on why the write failed - see the comment at
+  // the retry itself.
   let { error } = await supabase
     .from("contractors")
-    .insert({ ...base, ...referral, ...stateWrite, ...ocWrite, ...reviewLinkWrite } as any);
+    .insert({ ...base, ...referral, ...stateWrite, ...ocWrite, ...cityWrite, ...reviewLinkWrite } as any);
+  if (
+    error &&
+    hasCityWrite &&
+    (error.code === "42501" || isMissingSchemaError(error))
+  ) {
+    // Which fallback is honest depends on WHY the write failed. Column absent
+    // (isMissingSchemaError) means the DB is pre-0124: no city filter exists,
+    // so keeping serves_orange_county gives the pro the correct pre-0124
+    // board. A 42501 with the column present means 0124 is half-applied: the
+    // city filter IS live, so serves_orange_county=true with launch_cities
+    // stuck at '{}' would look enabled while the board shows nothing - drop
+    // both and let the pro re-save once the migration is complete.
+    const columnMissing = isMissingSchemaError(error);
+    console.error(
+      columnMissing
+        ? "contractors insert: launch_cities column missing (run migration 0124); retrying without it:"
+        : "contractors insert: launch_cities INSERT grant missing (run migration 0124 fully); retrying without it and without serves_orange_county:",
+      error.message
+    );
+    ({ error } = await supabase
+      .from("contractors")
+      .insert({
+        ...base,
+        ...referral,
+        ...stateWrite,
+        ...(columnMissing ? ocWrite : {}),
+        ...reviewLinkWrite,
+      } as any));
+  }
   if (error && hasOcWrite && error.code === "42501") {
     console.error(
       "contractors insert: serves_orange_county INSERT grant missing (run migration 0096); retrying without it:",
@@ -591,7 +860,15 @@ export async function saveCompanyAction(formData: FormData) {
         supabase,
         newContractorId,
         fields.license_number,
-        null
+        null,
+        null,
+        // 0125 identity check, same candidates as the edit path above: the
+        // company name just entered, plus the account holder's own name.
+        [
+          fields.name,
+          await accountFullName(user.id),
+          (user.user_metadata?.full_name as string | undefined) ?? null,
+        ]
       );
     } catch (err) {
       console.error(
@@ -706,19 +983,42 @@ export async function verifyLicenseNowAction(formData: FormData) {
     // A just-changed number was never checked: the old number's timestamps
     // must not debounce this check away.
     licenseChanged ? null : contractor.license_verified_at,
-    licenseChanged ? null : (contractor as any).license_verify_detail
+    licenseChanged ? null : (contractor as any).license_verify_detail,
+    // 0125 identity check: this company's name plus the account holder's own
+    // name (CSLB registers a sole proprietor's license to the person).
+    [contractor.name, await accountFullName(contractor.user_id)]
   );
 
   if (!result) {
     setFlash("Already checked recently. Try again in a few minutes.", "info");
-  } else if (result.outcome === "active") {
+  } else if (result.failureReason === "name_mismatch") {
+    // Deliberately does NOT echo the CSLB-registered name back: whoever is
+    // sitting at this form may not be the person that name belongs to.
+    setFlash(
+      "The CSLB lists this license under a different name than your account. If this is your license, file a dispute below and we will review it.",
+      "error"
+    );
+  } else if (result.failureReason === "duplicate_license") {
+    setFlash(
+      "This license number is already verified on another Hearth account. If someone else used your license, file a dispute below and we will investigate.",
+      "error"
+    );
+  } else if (result.decision === "verified") {
     setFlash("License verified against the CSLB database.", "success");
-  } else if (result.outcome === "not_found" || result.outcome === "inactive") {
+  } else if (result.decision === "failed") {
     setFlash(
       result.statusText
         ? `CSLB says: ${result.statusText}`
         : "CSLB could not confirm this license.",
       "error"
+    );
+  } else if (result.outcome === "active") {
+    // Active, but CSLB returned no registered name to check the account
+    // against, so nothing was decided either way. Not a failure - honest
+    // "unknown" copy, and their status is untouched.
+    setFlash(
+      "CSLB didn't return a name we could check this license against. Nothing changed; try again later.",
+      "info"
     );
   } else {
     setFlash("Couldn't reach the CSLB site. Try again later.", "info");
