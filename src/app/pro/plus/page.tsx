@@ -12,6 +12,8 @@ import {
   PRO_PLAN,
   PRO_DEPOSIT_BOOST_PTS,
   COLD_START_FREE_ALERTS,
+  formatUsd,
+  yearlySavings,
 } from "@/lib/constants";
 import {
   manageProBillingAction,
@@ -325,7 +327,10 @@ export default async function ProPlusPage({
   const trialEligible = !sub;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-8">
+    // Wider than the other branches of this page: the pricing block below is
+    // three real columns (no membership, Yearly, Monthly), and max-w-2xl
+    // squeezes them to the point of wrapping every price line.
+    <div className="mx-auto max-w-3xl space-y-8">
       <div className="text-center">
         <h1 className="text-3xl font-semibold text-stone-900 dark:text-stone-100">
           Run your business, not your admin
@@ -345,10 +350,14 @@ export default async function ProPlusPage({
               ? `Try Pro free for ${PRO_PLAN.trialDays} days`
               : "Start my Pro membership"}
           </a>
+          {/* Every figure computed from PRO_PLAN, and the saving is the honest
+              monthly-x-12 delta, so this line can never quote something the
+              card isn't charged. Yearly leads because it is the plan the
+              pricing block below preselects. */}
           <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
             {trialEligible
-              ? `Then $${PRO_PLAN.monthly}/month. Auto-renews. Cancel anytime before the trial ends and you won't be charged. Or $${PRO_PLAN.yearly}/year, save $${Math.round(PRO_PLAN.monthly * 12 - PRO_PLAN.yearly)} vs monthly.`
-              : `$${PRO_PLAN.monthly}/month, auto-renews until you cancel. Or $${PRO_PLAN.yearly}/year, save $${Math.round(PRO_PLAN.monthly * 12 - PRO_PLAN.yearly)} vs monthly.`}
+              ? `Then ${formatUsd(PRO_PLAN.yearly)}/year, ${formatUsd(yearlySavings(PRO_PLAN))} less than paying monthly, or ${formatUsd(PRO_PLAN.monthly)}/month. Auto-renews. Cancel anytime before the trial ends and you won't be charged.`
+              : `${formatUsd(PRO_PLAN.yearly)}/year, ${formatUsd(yearlySavings(PRO_PLAN))} less than paying monthly, or ${formatUsd(PRO_PLAN.monthly)}/month. Auto-renews until you cancel.`}
           </p>
         </div>
       </div>

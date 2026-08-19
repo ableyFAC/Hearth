@@ -22,6 +22,23 @@ export type SubscriptionCheckoutData = {
   metadata: { intro_step_up: string };
 };
 
+// The billing cadence a checkout form asked for.
+//
+// YEARLY IS THE DEFAULT, and that is the whole point of this helper existing.
+// Both pricing cards preselect the yearly plan, so a submission whose "plan"
+// field is missing or unreadable must land on the plan the buyer was actually
+// looking at, not a different one. Only an explicit "monthly" opts out.
+//
+// Both checkout actions rebuild everything downstream from this single value -
+// the Stripe line item, the billingTerms consent record stashed in session
+// metadata, and the idempotency key - so whatever the fallback resolves to is
+// also what is quoted and what is charged. They cannot disagree.
+export type CheckoutCadence = "monthly" | "yearly";
+
+export function checkoutCadence(raw: unknown): CheckoutCadence {
+  return raw === "monthly" ? "monthly" : "yearly";
+}
+
 export function subscriptionCheckoutData(opts: {
   trialDays: number | null;
   introStepUp: boolean;

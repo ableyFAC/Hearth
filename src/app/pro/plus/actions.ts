@@ -15,7 +15,10 @@ import {
 } from "@/lib/subscription";
 import { PRO_PLAN } from "@/lib/constants";
 import { billingTermsText } from "@/lib/billingTerms";
-import { subscriptionCheckoutData } from "@/lib/checkoutSubscriptionData";
+import {
+  checkoutCadence,
+  subscriptionCheckoutData,
+} from "@/lib/checkoutSubscriptionData";
 import { setFlash } from "@/lib/flash";
 
 const siteUrl = () =>
@@ -62,8 +65,15 @@ async function proIntroCouponId(): Promise<string | null> {
 // Stripe Price if one is configured, otherwise falls back to inline
 // price_data so the flow works before Products/Prices are set up in Stripe.
 export async function startProCheckoutAction(formData: FormData) {
+  // Yearly is the default cadence (see checkoutCadence): it is what the
+  // pricing card preselects, so a form arriving without a readable "plan"
+  // field lands on the plan the pro was looking at. Every downstream quote
+  // (the Stripe line item, the consent record, the acknowledgment) derives
+  // from this one value, so they can never disagree about what is charged.
   const plan =
-    (formData.get("plan") as string) === "yearly" ? "pro_yearly" : "pro_monthly";
+    checkoutCadence(formData.get("plan")) === "monthly"
+      ? "pro_monthly"
+      : "pro_yearly";
 
   // Deliberately NOT src/lib/auth.ts's getUser(): that helper trusts
   // getSession(), which reads the user id straight off the (unverified)

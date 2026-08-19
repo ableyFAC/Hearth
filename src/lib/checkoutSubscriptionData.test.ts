@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { subscriptionCheckoutData } from "@/lib/checkoutSubscriptionData";
+import {
+  checkoutCadence,
+  subscriptionCheckoutData,
+} from "@/lib/checkoutSubscriptionData";
 import { billingTerms, billingTermsText } from "@/lib/billingTerms";
 import { PLUS_PLAN, PRO_PLAN } from "@/lib/constants";
 
@@ -49,6 +52,87 @@ describe("subscriptionCheckoutData", () => {
   it("never emits a zero or negative trial", () => {
     expect("trial_period_days" in subscriptionCheckoutData({ trialDays: 0, introStepUp: false })).toBe(false);
     expect("trial_period_days" in subscriptionCheckoutData({ trialDays: -1, introStepUp: false })).toBe(false);
+  });
+});
+
+describe("checkoutCadence", () => {
+  // Both pricing cards preselect the yearly plan, so the server's fallback has
+  // to agree with what the buyer was looking at. A form field that goes
+  // missing must not silently swap the plan out from under a submission.
+  it("defaults to yearly when the form field is missing or unreadable", () => {
+    expect(checkoutCadence(null)).toBe("yearly");
+    expect(checkoutCadence(undefined)).toBe("yearly");
+    expect(checkoutCadence("")).toBe("yearly");
+    expect(checkoutCadence("annual")).toBe("yearly");
+    expect(checkoutCadence("weekly")).toBe("yearly");
+  });
+
+  it("honors an explicit monthly, the only way to opt out", () => {
+    expect(checkoutCadence("monthly")).toBe("monthly");
+  });
+
+  it("reads what the plan toggles actually submit", () => {
+    // The hidden <input name="plan"> on both toggles carries exactly these
+    // two strings, and FormData.get returns them as strings.
+    const form = new FormData();
+    form.set("plan", "yearly");
+    expect(checkoutCadence(form.get("plan"))).toBe("yearly");
+    form.set("plan", "monthly");
+    expect(checkoutCadence(form.get("plan"))).toBe("monthly");
+    // Nothing set at all: the field never arrived.
+    expect(checkoutCadence(new FormData().get("plan"))).toBe("yearly");
+  });
+
+  it("does not treat a case-variant or padded value as monthly", () => {
+    // Better to fall back to the preselected plan than to guess at intent.
+    expect(checkoutCadence("Monthly")).toBe("yearly");
+    expect(checkoutCadence(" monthly ")).toBe("yearly");
+  });
+});
+
+describe("the default cadence flowing into a disclosure", () => {
+  // The checkout actions map checkoutCadence's result straight onto a
+  // billingTerms plan key. This pins that the DEFAULT path quotes the yearly
+  // price, so the auto-renewal disclosure can never promise a monthly charge
+  // on a checkout that bills a year.
+  const plusPlanFor = (raw: unknown) => checkoutCadence(raw);
+  const proPlanFor = (raw: unknown) =>
+    checkoutCadence(raw) === "monthly" ? "pro_monthly" : "pro_yearly";
+
+  it("quotes the yearly Plus price when nothing was submitted", () => {
+    const terms = billingTerms(plusPlanFor(null), true);
+    expect(terms.recurring).toContain(`$${PLUS_PLAN.yearly.toFixed(2)}`);
+    expect(terms.recurring).toContain("every 12 months");
+    expect(terms.recurring).not.toContain(`$${PLUS_PLAN.monthly.toFixed(2)}`);
+  });
+
+  it("quotes the yearly Pro price when nothing was submitted", () => {
+    const terms = billingTerms(proPlanFor(null), true);
+    expect(terms.product).toBe("Hearth Pro");
+    expect(terms.recurring).toContain(`$${PRO_PLAN.yearly.toFixed(2)}`);
+    expect(terms.recurring).toContain("every 12 months");
+  });
+
+  it("still quotes the monthly price when monthly was explicitly picked", () => {
+    expect(billingTerms(plusPlanFor("monthly"), true).recurring).toContain(
+      `$${PLUS_PLAN.monthly.toFixed(2)} a month`
+    );
+    expect(billingTerms(proPlanFor("monthly"), true).recurring).toContain(
+      `$${PRO_PLAN.monthly.toFixed(2)} a month`
+    );
+  });
+
+  it("keeps the trial on the default cadence, unchanged", () => {
+    // Flipping the default must not touch the trial: yearly and monthly
+    // carry the same one, and the trial copy stays exactly as honest.
+    expect(billingTerms(plusPlanFor(null), true).stepUp).toContain(
+      `Free for ${PLUS_PLAN.trialDays} days`
+    );
+    expect(billingTerms(proPlanFor(null), true).stepUp).toContain(
+      `Free for ${PRO_PLAN.trialDays} days`
+    );
+    expect(plusCheckout(true).trial_period_days).toBe(PLUS_PLAN.trialDays);
+    expect(proCheckout(true).trial_period_days).toBe(PRO_PLAN.trialDays);
   });
 });
 
