@@ -11,23 +11,14 @@ global install. Use `npx supabase ...` for anything not covered by an npm script
 ## BLOCKER: duplicate version numbers must be resolved first
 
 The CLI keys every migration by the number before the first underscore, so two
-files cannot share a prefix. Three pairs currently collide:
-
-| Version | Files |
-| --- | --- |
-| `0019` | `0019_documents_vault.sql`, `0019_security_hardening.sql` |
-| `0020` | `0020_lower_bonus_threshold.sql`, `0020_notification_prefs.sql` |
-| `0021` | `0021_private_storage.sql`, `0021_support_messages.sql` |
-
-There is also a gap: `0051` is followed by `0053`, with no `0052`. The gap is
-harmless (the CLI does not require contiguous numbering); the duplicates are not.
+files cannot share a prefix. 
 
 Renaming a file changes its version identity, so this must be settled BEFORE the
 baseline below, and the chosen numbers must match whatever gets repaired. The
 safe fix is to renumber one file of each pair into the free slots, preserving the
 order in which they were actually applied to the live database - which needs to
 be confirmed from git history, not guessed, since applying
-`0021_private_storage` before or after `0021_support_messages` may not commute.
+`0023_private_storage` before or after `0024_support_messages` may not commute.
 
 ## One-time setup (not done yet - needs two credentials)
 
