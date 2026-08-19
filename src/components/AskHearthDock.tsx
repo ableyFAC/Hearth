@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -26,6 +26,7 @@ const AskHearth = dynamic(() => import("@/components/AskHearth"), {
 // little tab that opens into the full, scrollable conversation.
 export default function AskHearthDock({
   greeting,
+  greetingUrl,
   endpoint,
   storageKeyBase,
   retentionKeyBase,
@@ -33,6 +34,14 @@ export default function AskHearthDock({
   headingSubtitle,
 }: {
   greeting?: string;
+  // Where to fetch the proactive opener from, for callers whose greeting is
+  // expensive to compute. The homeowner side passes /api/ask-greeting: its
+  // greeting costs three DB queries, and computing it during every page render
+  // meant every navigation paid for a string that only matters once someone
+  // opens this dock. Callers whose greeting is already cheap and in hand (the
+  // pro copilot builds its line from an RPC the pro dashboard runs anyway)
+  // keep passing `greeting` and skip all of this.
+  greetingUrl?: string;
   // Override to mount a different-brained assistant (e.g. the pro copilot).
   // Defaults leave the homeowner dock behaving exactly as before.
   endpoint?: string;
@@ -49,6 +58,37 @@ export default function AskHearthDock({
   const openRef = useRef(open);
   openRef.current = open;
 
+  // The lazily fetched opener. `settled` (not "is it non-empty") is the gate,
+  // because AskHearth reads `greeting` once, when it mounts, to seed its first
+  // message. Mounting it before the answer arrives would permanently show the
+  // generic fallback, so the panel holds the same "Loading…" state the dynamic
+  // import already uses until we know one way or the other. With no greetingUrl
+  // there is nothing to wait for and this starts settled.
+  const [fetchedGreeting, setFetchedGreeting] = useState<string | undefined>(
+    undefined
+  );
+  const [greetingSettled, setGreetingSettled] = useState(!greetingUrl);
+  const greetingStarted = useRef(false);
+
+  // Fire the greeting request at most once per mount. Called on open, and
+  // speculatively on hover/focus/touch of the FAB: by the time someone's
+  // pointer has travelled to the button and clicked, the answer is usually
+  // already back, so the panel opens straight into the conversation and the
+  // Loading… state is never seen. A failure is deliberately silent - the dock
+  // falls back to AskHearth's generic greeting, which is exactly what happened
+  // before whenever the server-side computation returned undefined.
+  const primeGreeting = useCallback(() => {
+    if (!greetingUrl || greetingStarted.current) return;
+    greetingStarted.current = true;
+    fetch(greetingUrl)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (typeof d?.greeting === "string") setFetchedGreeting(d.greeting);
+      })
+      .catch(() => {})
+      .finally(() => setGreetingSettled(true));
+  }, [greetingUrl]);
+
   // Open the shell when an app-wide "ask this" event fires and no mounted
   // AskHearth instance claimed it (a page's inline box, or this dock's own
   // instance while open, takes priority). Instances claim synchronously via a
@@ -61,13 +101,14 @@ export default function AskHearthDock({
       setTimeout(() => {
         if ((e as any).__hearthHandled) return;
         if (openRef.current) return; // the open dock's instance handles it
+        primeGreeting();
         setPendingQuestion(q);
         setOpen(true);
       }, 0);
     }
     window.addEventListener("hearth:ask-question", onAsk);
     return () => window.removeEventListener("hearth:ask-question", onAsk);
-  }, []);
+  }, [primeGreeting]);
 
   function close() {
     setOpen(false);
@@ -124,23 +165,39 @@ export default function AskHearthDock({
             </button>
           </div>
           <div className="min-h-0 flex-1">
-            <AskHearth
-              fill
-              greeting={greeting}
-              initialQuestion={pendingQuestion ?? undefined}
-              endpoint={endpoint}
-              storageKeyBase={storageKeyBase}
-              retentionKeyBase={retentionKeyBase}
-              headingTitle={headingTitle}
-              headingSubtitle={headingSubtitle}
-            />
+            {greetingSettled ? (
+              <AskHearth
+                fill
+                greeting={greeting ?? fetchedGreeting}
+                initialQuestion={pendingQuestion ?? undefined}
+                endpoint={endpoint}
+                storageKeyBase={storageKeyBase}
+                retentionKeyBase={retentionKeyBase}
+                headingTitle={headingTitle}
+                headingSubtitle={headingSubtitle}
+              />
+            ) : (
+              // Same placeholder the dynamic import shows, so waiting on the
+              // greeting is visually indistinguishable from waiting on the
+              // chunk. In practice the hover prefetch means this is rarely
+              // reached at all.
+              <div className="flex h-full items-center justify-center text-sm text-stone-500 dark:text-stone-400">
+                Loading…
+              </div>
+            )}
           </div>
         </div>
       ) : (
         // Compact icon-only FAB on phones; the full labeled pill from sm up.
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            primeGreeting();
+            setOpen(true);
+          }}
+          onPointerEnter={primeGreeting}
+          onTouchStart={primeGreeting}
+          onFocus={primeGreeting}
           className="flex h-12 w-12 items-center justify-center rounded-full bg-bark-600 text-lg font-semibold text-white shadow-pop hover:bg-bark-700 dark:bg-bark-500 dark:hover:bg-bark-600 sm:h-auto sm:w-auto sm:px-4 sm:py-3 sm:text-sm"
         >
           <span aria-hidden="true" className="sm:hidden">

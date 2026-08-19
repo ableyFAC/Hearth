@@ -9,6 +9,27 @@ type CookieToSet = { name: string; value: string; options: CookieOptions };
 // Public routes: "/", "/get-started", "/signin", "/reset-password", the
 // sign-up pages, "/auth/*". Everything else requires a session.
 export async function updateSession(request: NextRequest) {
+  const path = request.nextUrl.pathname;
+  const isPublic = isPublicPath(path);
+
+  // Public paths are readable with no session, so the auth check below can
+  // only ever produce a result we throw away. Answering them WITHOUT the
+  // supabase.auth.getUser() round trip is the difference between "middleware
+  // is free" and "every marketing page, every SEO guide, every webhook, and
+  // every <Link> prefetch of a public route pays a network hop to Supabase
+  // before Next even starts rendering".
+  //
+  // The cost of skipping it: getUser() is also what silently refreshes an
+  // expiring access token and writes the rotated cookie back on the response.
+  // On a public path we no longer do that, so a signed-in reader whose token
+  // expires while they sit on, say, a guide page keeps a stale cookie until
+  // their next protected navigation, where the refresh happens as it always
+  // has. The only visible effect is a session-aware public header briefly
+  // rendering its signed-out variant; nothing is granted, nothing is lost.
+  if (isPublic) {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient<Database>(
@@ -65,8 +86,30 @@ export async function updateSession(request: NextRequest) {
     return response;
   }
 
-  const path = request.nextUrl.pathname;
-  const isPublic =
+  if (!user) {
+    // Origin from requestOrigin, not nextUrl.clone(): nextUrl carries the
+    // dev server's bind address (`-H 0.0.0.0`) and strands the browser there.
+    const url = new URL("/signin", requestOrigin(request));
+    // One unified sign-in for everyone; "/" routes by role after login.
+    // The page they were headed to rides along as ?next= so signin can send
+    // them back instead of dropping them on the dashboard (GET pages only:
+    // a POST's destination would just 404 or sit empty after a redirect).
+    const next = request.nextUrl.pathname + request.nextUrl.search;
+    url.search =
+      request.method === "GET" && next.startsWith("/") && !next.startsWith("//")
+        ? `?next=${encodeURIComponent(next)}`
+        : "";
+    return NextResponse.redirect(url);
+  }
+
+  return response;
+}
+
+// Paths readable with no session. Hoisted out of updateSession so the check
+// can run BEFORE any Supabase client is built: everything in this list is
+// answered without an auth round trip.
+function isPublicPath(path: string): boolean {
+  return (
     path === "/" ||
     // The root social-preview image (src/app/opengraph-image.tsx). Link
     // scrapers (iMessage, Slack, Facebook) fetch it with no cookies and no
@@ -209,23 +252,6 @@ export async function updateSession(request: NextRequest) {
     // to /signin here would only ever offer one of the two paths. The page
     // still requires a session before it will redeem the token; this only
     // controls whether the page renders at all.
-    path.startsWith("/join/");
-
-  if (!user && !isPublic) {
-    // Origin from requestOrigin, not nextUrl.clone(): nextUrl carries the
-    // dev server's bind address (`-H 0.0.0.0`) and strands the browser there.
-    const url = new URL("/signin", requestOrigin(request));
-    // One unified sign-in for everyone; "/" routes by role after login.
-    // The page they were headed to rides along as ?next= so signin can send
-    // them back instead of dropping them on the dashboard (GET pages only:
-    // a POST's destination would just 404 or sit empty after a redirect).
-    const next = request.nextUrl.pathname + request.nextUrl.search;
-    url.search =
-      request.method === "GET" && next.startsWith("/") && !next.startsWith("//")
-        ? `?next=${encodeURIComponent(next)}`
-        : "";
-    return NextResponse.redirect(url);
-  }
-
-  return response;
+    path.startsWith("/join/")
+  );
 }

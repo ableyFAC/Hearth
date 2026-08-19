@@ -150,7 +150,11 @@ export default async function ForecastPage() {
             Add your home&apos;s systems to see a cost forecast and a recommended
             monthly set-aside amount.
           </p>
-          <Link href="/profile" className="btn-primary inline-block">
+          {/* /dashboard#systems, not /profile: Home Profile was merged into
+              the Home page. /profile still resolves here via the redirect in
+              next.config.mjs, but an in-app link should not spend a round
+              trip rediscovering that. */}
+          <Link href="/dashboard#systems" className="btn-primary inline-block">
             Add my systems
           </Link>
         </div>
@@ -184,7 +188,7 @@ export default async function ForecastPage() {
                   ? "1 of your systems has no install year, so its timing here is a rough placement."
                   : `${forecast.estimatedTimingCount} of your systems have no install year, so their timing here is a rough placement.`}{" "}
                 Add install years on your{" "}
-                <Link href="/profile" className="underline">
+                <Link href="/dashboard#systems" className="underline">
                   home profile
                 </Link>{" "}
                 for a sharper forecast.

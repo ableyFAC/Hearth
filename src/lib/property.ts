@@ -2,6 +2,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth";
+import { isMissingSchemaError } from "@/lib/dbErrors";
 import type { Property } from "@/lib/database.types";
 
 // Which home the owner is currently viewing. A user can have several; this
@@ -24,6 +25,61 @@ export type HomeSummary = Pick<
   "id" | "address_line1" | "isShared"
 >;
 
+// Every properties column some caller of getProperties()/getActiveProperty()
+// actually reads, and nothing else. Traced across the dashboard, forecast,
+// value, taxes, documents and home-report pages, the ask/tax-appeal/
+// insurance-packet/home-alerts API routes, contractors/actions.ts, Nav, and
+// this file's own sort.
+//
+// Worth being precise about the sensitive list in the HomeSummary comment
+// above, because it overstates what is droppable: mortgage_balance,
+// purchase_price, assessed_value, insurance_premium, purchase_date and
+// user_id are all genuinely read on the server (the value, taxes, documents
+// and dashboard pages, and the isShared / household-Plus lookups), so they
+// have to stay in the row. What that comment is really protecting is the RSC
+// payload, and HomeSummary still does that job. What CAN go, because nothing
+// anywhere reads it back, is the write-only assessor bookkeeping:
+//   parcel_id, ownership_owner_names, ownership_owner_type,
+//   ownership_owner_occupied  - written by record_ownership_check / onboarding
+//   ownership_verified        - self-attested MVP flag, superseded by
+//                               ownership_status and marked dead in
+//                               src/app/onboarding/actions.ts
+//   lot_size_sqft, property_type - written at onboarding, never read off a
+//                               property row (the onboarding form reads them
+//                               off the parcel lookup, not the DB row)
+// ownership_owner_names in particular is an unbounded json blob carried on
+// every home on every app page.
+const PROPERTY_COLUMNS = [
+  "id",
+  "user_id",
+  "address_line1",
+  "city",
+  "state",
+  "zip",
+  "year_built",
+  "sqft",
+  "beds",
+  "baths",
+  "purchase_date",
+  "ownership_status",
+  "ownership_checked_at",
+  // Required by this file itself: the .order() above and the created_at
+  // tiebreak in the owned-then-shared sort below.
+  "created_at",
+  // Post-0029 money/valuation columns, absent from the generated Database type
+  // and read everywhere as (property as any).x. Real columns; the types file
+  // simply has not been regenerated.
+  "purchase_price",
+  "mortgage_balance",
+  "market_value",
+  "market_value_low",
+  "market_value_high",
+  "assessed_value",
+  "assessed_year",
+  "insurance_premium",
+  "insurance_renewal_date",
+].join(", ");
+
 // Cached per request so calling it twice (e.g. layout) only queries once.
 //
 // No .eq("user_id", ...) filter here on purpose: once 0048_household_sharing
@@ -36,21 +92,41 @@ export const getProperties = cache(async (): Promise<PropertyWithShared[]> => {
   if (!user) return [];
 
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("properties")
-    .select("*")
+  // The `any` cast is unavoidable: PROPERTY_COLUMNS names real columns
+  // (migrations 0029/0032/0039/0040/0043/0066) that src/lib/database.types.ts
+  // has not been regenerated for, and the typed client rejects a select string
+  // mentioning a column it does not know about. This is the same convention
+  // the app already uses at every read site for these fields.
+  const { data, error } = await (supabase.from("properties") as any)
+    .select(PROPERTY_COLUMNS)
     .order("created_at", { ascending: true });
 
   // A failed query (network blip, Supabase outage) must NOT read as "this
   // user has no homes": that is what bounced onboarded users back to
   // /onboarding whenever wifi dropped. Throw instead, so the segment error
   // boundary renders its retry screen.
+  //
+  // One exception, new with the explicit column list above: select("*") could
+  // never fail over schema drift, but a named column that a database has not
+  // migrated yet makes Postgres reject the WHOLE query with 42703. Throwing
+  // there would turn a missing migration into "every app page is an error
+  // screen", so that one shape retries with the old wide select instead.
+  let rows = data as Property[] | null;
   if (error) {
-    throw new Error(`Could not load your homes: ${error.message}`);
+    if (!isMissingSchemaError(error)) {
+      throw new Error(`Could not load your homes: ${error.message}`);
+    }
+    const { data: wide, error: wideError } = await supabase
+      .from("properties")
+      .select("*")
+      .order("created_at", { ascending: true });
+    if (wideError) {
+      throw new Error(`Could not load your homes: ${wideError.message}`);
+    }
+    rows = wide;
   }
 
-  const rows = data;
-  const withShared = rows.map((row) => ({
+  const withShared = (rows ?? []).map((row) => ({
     ...row,
     isShared: row.user_id !== user.id,
   }));

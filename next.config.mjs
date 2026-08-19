@@ -62,6 +62,35 @@ const nextConfig = {
     // project be proxied through our image optimizer.
     remotePatterns: [{ protocol: "https", hostname: SUPABASE_HOST }],
   },
+  // Route moves, answered by the router BEFORE any React rendering happens.
+  // That is the whole point of putting them here rather than in a page.
+  // /profile used to be a one-line `redirect("/dashboard#systems")` page
+  // component, which sounds free but is not: it lives inside the (app) route
+  // group, so reaching that one line meant Next first rendered the group's
+  // layout, and that layout runs several queries (active property, the homes
+  // list, the profile row, the auth user, the Plus check) before the page
+  // function is ever called. All of it work done purely to throw the response
+  // away and redirect. Answering here costs a response header.
+  //
+  // permanent: false (a 307, not a 308): this is a product decision about
+  // where Home Profile lives, not an immutable URL move, and a 308 gets cached
+  // by browsers indefinitely, which would make it very hard to walk back.
+  //
+  // The #systems fragment survives. Next writes the destination into the
+  // Location header verbatim and browsers apply a fragment from a redirect
+  // target, so an old bookmark still lands on the systems section rather than
+  // the top of the dashboard. In-app links were repointed straight at
+  // /dashboard#systems so a click never pays even this hop; the entry is here
+  // for external links and bookmarks.
+  async redirects() {
+    return [
+      {
+        source: "/profile",
+        destination: "/dashboard#systems",
+        permanent: false,
+      },
+    ];
+  },
   // Baseline security headers on every response. HSTS forces HTTPS, the frame
   // headers stop clickjacking, nosniff stops MIME confusion, and the referrer
   // policy keeps our URLs (which can contain ids) out of third-party referers.

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { getVerifiedUser } from "@/lib/auth";
 import Logo from "@/components/Logo";
 
 // Shared shell for the public /guides pages: informational content meant to
@@ -10,19 +10,27 @@ import Logo from "@/components/Logo";
 // Session-aware header: a signed-in reader (with a personal AI experience one
 // click away) landing on "Get started free" after clicking in from search or
 // a guide link is a tonal whiplash, and dishonest besides - they already
-// started. These pages are already dynamically rendered (the root layout
-// reads cookies for auth), so checking auth.getUser() here adds no new
-// rendering cost. getUser() is error-safe for anonymous visitors: it just
-// resolves to a null user, never throws.
+// started.
+//
+// The honest accounting, since the old comment here claimed this "adds no new
+// rendering cost": it does cost something. These pages are already dynamically
+// rendered, so no static-generation opportunity is lost, but the auth check
+// itself is a real network round trip to Supabase's auth server, and it sits
+// on the blocking path in front of the guide's own content. What used to make
+// it expensive was paying for it more than once: this layout asked, then
+// GuideCta asked AGAIN further down the same render, sequentially, and the
+// middleware had already asked before either of them ran. Three round trips
+// for one question. Now the middleware skips /guides entirely (it is on the
+// public allowlist, see src/lib/supabase/middleware.ts) and this and GuideCta
+// share one request-cached answer, so a guide render pays the round trip once.
+// getVerifiedUser() is error-safe for anonymous visitors: it just resolves to
+// a null user, never throws.
 export default async function GuidesLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getVerifiedUser();
 
   return (
     <div className="min-h-screen">

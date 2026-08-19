@@ -50,9 +50,22 @@ export default async function ProChatsPage({
   if (!contractor) redirect("/pro/onboarding");
 
   const supabase = createClient();
+  // Exactly the five columns this page renders, not select("*"). A pro's inbox
+  // can be long, and every row of it used to drag along the homeowner's email
+  // and phone plus two unbounded free-text fields (issue_description,
+  // material_notes) that nothing here ever reads. That is bytes over the wire
+  // and homeowner PII pulled into a render that has no use for it. The columns:
+  //   id                - list keys, the ?lead= match, MarkChatSeen, LeadChat
+  //   homeowner_name    - the list row title and the thread header
+  //   category          - the row icon, the preview fallback, LeadChat's
+  //                       subtitle and jobTitle
+  //   property_address  - appended to LeadChat's subtitle
+  //   created_at        - the sort fallback for a thread with no messages yet
+  // contractor_id is deliberately absent: it is only a filter, applied
+  // server-side by PostgREST, and is never read off the row.
   const { data: leads } = await supabase
     .from("contractor_leads")
-    .select("*")
+    .select("id, homeowner_name, category, property_address, created_at")
     .eq("contractor_id", contractor.id)
     .order("created_at", { ascending: false });
 

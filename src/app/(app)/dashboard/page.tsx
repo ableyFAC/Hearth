@@ -789,8 +789,11 @@ export default async function HomePage({
                 Add your home&apos;s state and square footage to see what
                 heating and cooling likely cost.
               </p>
+              {/* Straight to the systems section. /profile still resolves
+                  here via the redirect in next.config.mjs, but an in-app link
+                  should not spend a round trip rediscovering that. */}
               <Link
-                href="/profile"
+                href="/dashboard#systems"
                 className="text-sm text-bark-700 hover:underline dark:text-stone-300"
               >
                 Finish your home profile →

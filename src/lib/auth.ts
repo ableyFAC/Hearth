@@ -16,6 +16,22 @@ export const getUser = cache(async () => {
   return session?.user ?? null;
 });
 
+// The user RE-VERIFIED against Supabase's auth server (a real network round
+// trip), cached for the duration of a single server request. This is the
+// getUser() above's stricter sibling: use it where the cookie's own claim is
+// not good enough, and use it INSTEAD of calling supabase.auth.getUser()
+// directly whenever more than one component in the same render needs the
+// answer. Two components each calling supabase.auth.getUser() cost two
+// sequential round trips, because the supabase client has no request cache of
+// its own; React's cache() collapses them into one.
+export const getVerifiedUser = cache(async () => {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user;
+});
+
 export interface PasswordStatus {
   // False only when we're confident the account has no password at all: an
   // account created through Google (or any other OAuth provider) starts that

@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { getActiveProperty, getProperties } from "@/lib/property";
 import { getRole } from "@/lib/contractor";
@@ -8,19 +7,6 @@ import { hasPlus } from "@/lib/subscription";
 import Nav from "@/components/Nav";
 import NewMessageNotifier from "@/components/NewMessageNotifier";
 import AskHearthDock from "@/components/AskHearthDock";
-import { getProactiveGreeting } from "@/lib/greeting";
-
-// The proactive greeting costs ~3 extra DB queries (issues, home_systems,
-// maintenance_tasks) beyond what the shell already needs, and it only feeds
-// the Ask Hearth dock's opening line - the dock itself stays closed until the
-// user clicks it. Computing it here, wrapped in Suspense, lets Next.js flush
-// the Nav + page content as soon as they're ready instead of holding first
-// byte for a value nothing above the fold needs. The dock still receives the
-// exact same greeting string once it resolves; only its arrival is deferred.
-async function AskHearthDockWithGreeting() {
-  const greeting = await getProactiveGreeting();
-  return <AskHearthDock greeting={greeting} />;
-}
 
 // Shell for all signed-in homeowner screens. Pros are bounced to their own area;
 // then we guarantee a claimed home exists.
@@ -54,13 +40,16 @@ export default async function AppLayout({
         {children}
       </main>
       {/* A personalized opener so Ask Hearth speaks first about the home's top
-          item - computed off the blocking path, see AskHearthDockWithGreeting
-          above. fallback=null: the FAB itself doesn't reference greeting (it
-          only reaches AskHearth once opened), so nothing is lost by letting it
-          mount a beat after the rest of the shell. */}
-      <Suspense fallback={null}>
-        <AskHearthDockWithGreeting />
-      </Suspense>
+          item. The layout no longer computes it: getProactiveGreeting() costs
+          three DB queries (issues, home_systems, maintenance_tasks, two of
+          which the Home page reads again for itself), and it was paying them
+          on EVERY signed-in page view to produce a string that is only ever
+          read if someone opens the dock. Suspense kept it off the critical
+          path for first byte, but the queries still ran every time.
+          The dock now fetches it from /api/ask-greeting on first open, and
+          prefetches on hover, so a page view that never touches Ask Hearth
+          costs nothing at all. */}
+      <AskHearthDock greetingUrl="/api/ask-greeting" />
       <NewMessageNotifier role="homeowner" />
     </div>
   );
