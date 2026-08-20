@@ -4,6 +4,7 @@ import "./globals.css";
 import ToastProvider from "@/components/ToastProvider";
 import FlashBridge from "@/components/FlashBridge";
 import { readFlash } from "@/lib/flash";
+import { LAUNCH_CITY_NAMES } from "@/lib/serviceArea";
 
 // Self-hosted via next/font, exposed as a CSS variable so Tailwind's
 // font-sans (see tailwind.config.ts) picks it up everywhere.
@@ -29,18 +30,21 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 // Organization JSON-LD, so search results can attribute pages to Hearth as a
 // business rather than guessing from the page title. Mirrors the Service
 // JSON-LD CityLandingPage builds per city (src/components/CityLandingPage.tsx):
-// same reasoning, root-level scope. areaServed names the two cities Hearth
-// actually serves today, matching the service-area line on the landing page
-// and /pros.
+// same reasoning, root-level scope. areaServed is built from the same
+// LAUNCH_CITY_NAMES the ZIP gates and the pro checkboxes read, so the
+// structured data can never claim a city Hearth has stopped (or not yet
+// started) serving. Only two of these cities have a landing page of their own;
+// the rest are served without one, which is fine here - this is a service-area
+// claim, not a sitemap.
 const organizationJsonLd = {
   "@context": "https://schema.org",
   "@type": "Organization",
   name: "Hearth",
   url: SITE_URL,
-  areaServed: [
-    { "@type": "City", name: "Huntington Beach, CA" },
-    { "@type": "City", name: "Fountain Valley, CA" },
-  ],
+  areaServed: LAUNCH_CITY_NAMES.map((city) => ({
+    "@type": "City",
+    name: `${city}, CA`,
+  })),
 };
 
 export const metadata: Metadata = {

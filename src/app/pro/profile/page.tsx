@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentContractor } from "@/lib/contractor";
+import {
+  getCurrentContractor,
+  countPaidLeadApplications,
+} from "@/lib/contractor";
 import { getPasswordStatus, providerLabel } from "@/lib/auth";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
 import { isCheckrConfigured } from "@/lib/checkr";
@@ -56,6 +59,14 @@ export default async function ProProfilePage() {
   // gates the whole card, not just the button inside it.
   const checkrEnabled = isCheckrConfigured();
 
+  // Earn-in progress for the Hearth-funded check. Only counted when the card
+  // can actually render, so a database without Checkr configured pays for no
+  // extra query. Null (an unreadable count) shows as 0 of 3 and offers no
+  // button, matching how the server action fails closed.
+  const paidLeads = checkrEnabled
+    ? await countPaidLeadApplications(contractor.id)
+    : null;
+
   // The auth email the pro signs in with, for the security tab's email card.
   const {
     data: { user },
@@ -74,6 +85,7 @@ export default async function ProProfilePage() {
         trialEligible={trialEligible}
         projects={projects}
         checkrEnabled={checkrEnabled}
+        paidLeads={paidLeads}
         email={user?.email ?? null}
         hasPassword={hasPassword}
         providerName={providerLabel(provider)}

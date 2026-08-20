@@ -3,7 +3,9 @@
 import "server-only";
 import { createHmac, timingSafeEqual } from "crypto";
 
-// Server-only. Opt-in background checks via Checkr (0057), paid by Hearth -
+// Server-only. Opt-in background checks via Checkr (0057), paid by Hearth
+// once the pro has earned it (BACKGROUND_CHECK_MIN_PAID_LEADS paid lead
+// applications - the gate lives in startBackgroundCheckAction) -
 // there is no payment code anywhere in this file. Dormant without
 // CHECKR_API_KEY: isCheckrConfigured() is what gates the pro-facing UI, and
 // every exported function here is safe to call even when unconfigured (they

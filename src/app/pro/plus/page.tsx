@@ -65,12 +65,13 @@ const PERKS: Array<{ icon: LucideIcon; title: string; body: string }> = [
     icon: Zap,
     title: "Instant job alerts",
     // COLD START: while COLD_START_FREE_ALERTS is on, every pro gets these
-    // alerts, so the perk says so honestly. The parenthetical drops when the
-    // flag flips back to members-only.
+    // alerts, so the perk says so honestly - and says that it is temporary,
+    // which "included right now" left the reader to guess at. The
+    // parenthetical drops when the flag flips back to members-only.
     body:
       "The moment a job posts in your trades and area, it hits your email and your phone. Be the first name the homeowner sees." +
       (COLD_START_FREE_ALERTS
-        ? " (Included for every pro right now while Hearth is new.)"
+        ? " (Free for every pro during launch - after launch, instant alerts are members-only.)"
         : ""),
   },
 ];
@@ -179,6 +180,15 @@ export default async function ProPlusPage({
 
   if (member) {
     const { cancelsAt } = await getBillingOutlook(sub);
+    // The date the membership would actually lapse if cancelled right now.
+    // Stripe ends a cancelled subscription at the end of the period already
+    // paid for, so current_period_end IS that date (and, while status is
+    // "trialing", it is the trial's last day). Null when Stripe has not
+    // reported a period end, in which case the cancel note names no date
+    // rather than inventing one.
+    const endDateLabel = sub?.current_period_end
+      ? new Date(sub.current_period_end).toLocaleDateString()
+      : null;
     return (
       <div className="mx-auto max-w-2xl space-y-6">
         <div className="text-center">
@@ -213,20 +223,45 @@ export default async function ProPlusPage({
               </form>
             </div>
           )}
+          {/* The date the membership would actually lapse. With no pending
+              cancellation yet there is no cancelsAt to read, and Stripe ends
+              the subscription at the end of the paid period, so
+              current_period_end IS that date (it is also the trial end while
+              status is "trialing" - see the note above). Null when Stripe has
+              not reported a period end, in which case the copy below falls
+              back to naming no date rather than inventing one. */}
           {sub?.stripe_subscription_id && !cancelsAt && (
             <div className="border-t border-stone-100 pt-4 dark:border-white/10">
               <form action={cancelProMembershipAction}>
                 {/* Cancelling during the trial is the case the law cares most
                     about, and "the time you've paid for" would be wrong for it:
                     nothing has been paid yet, and the point is that nothing
-                    will be. */}
+                    will be.
+
+                    Both notes now name the real end date and the real
+                    consequences instead of the vague "every perk". Every
+                    clause below was checked against migration 0112's
+                    public_pro_profile body: logo_url and about are
+                    `case when m.live`, is_before is `ph.is_before and m.live`,
+                    and rating / review_count / has_license /
+                    license_verified_at / background_checked_at carry no m.live
+                    term at all. The project LIST is not gated either (the RPC
+                    returns up to 12 for everyone), so nothing already
+                    published disappears - only the Before/After labels come
+                    off, and the cap applies to ADDING a 4th
+                    (project-actions.ts FREE_PROJECT_LIMIT). The share kit and
+                    the rating-widget embed code are member-only UI on
+                    /pro/profile (PublicPageCard), so those tools go away; a
+                    widget already embedded on the pro's own site keeps
+                    rendering, which is why this says the kit and not the
+                    widget. */}
                 <ConfirmSubmit
                   subtle
                   label="Cancel membership"
                   note={
                     sub.status === "trialing"
-                      ? "Your free trial ends and you won't be charged anything. You keep every perk until the trial's last day. Your lead access stays exactly the same. Cancel?"
-                      : "You'd keep every perk through the time you've paid for, and it just won't renew. Your lead access stays exactly the same. Cancel?"
+                      ? `Your free trial ends${endDateLabel ? ` on ${endDateLabel}` : ""} and you won't be charged anything. Until then nothing changes. After that, your logo, your about section, the share kit and the rating-widget embed code come off your profile, the Before/After labels drop from your project photos, and you can add up to 3 projects instead of unlimited. Your reviews, your rating, your license and background badges, and your lead access never change. Cancel?`
+                      : `Your membership runs through${endDateLabel ? ` ${endDateLabel}` : " the time you've paid for"} and then stops renewing. After that, your logo, your about section, the share kit and the rating-widget embed code come off your profile, the Before/After labels drop from your project photos, and you can add up to 3 projects instead of unlimited. Your published projects stay up. Your reviews, your rating, your license and background badges, and your lead access never change. Cancel?`
                   }
                   yesLabel="Yes, cancel my membership"
                 />

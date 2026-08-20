@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import InlineSpinner from "@/components/InlineSpinner";
 import { applyToJobAction } from "./actions";
-import { GHOST_PROTECTION_DAYS } from "@/lib/constants";
+import { GHOST_PROTECTION_DAYS, LEAD_TIER_FEES } from "@/lib/constants";
 import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
 
 // Submit button for the "Confirm and pay" form below. Needs its own
@@ -60,10 +60,16 @@ export default function ApplyJobButton({
   feeCents,
   canAfford,
   category,
+  introPrice = false,
   billingHref = "/pro/billing",
 }: {
   leadId: string;
   fee: string;
+  // True when the price on this card is the one-time first big-ticket intro
+  // (migration 0113), so the confirm step can say plainly that the next
+  // big-ticket lead costs the normal price. Nothing gates on it - the DB
+  // re-derives the real price under the wallet lock at charge time.
+  introPrice?: boolean;
   // The displayed fee in cents, posted to the action so it can refuse to
   // charge when the live price has climbed above what this card showed
   // (e.g. the first big-ticket intro was consumed in another tab). Optional:
@@ -240,6 +246,17 @@ export default function ApplyJobButton({
         Your fee comes back as wallet credit too, good for 60 days. Returns are
         always credit toward future leads, never cash back to your card.
       </p>
+      {/* Said at the moment of the charge, not after it: the price on this
+          card is a one-time thing, and a pro deciding whether to spend it
+          deserves to know what the next one costs. LEAD_TIER_FEES.major is
+          the same constant the board and the DB price from, so this line can
+          never quote a number the wallet would not actually charge. */}
+      {introPrice && (
+        <p className="text-xs font-medium text-hearth-700 dark:text-hearth-300">
+          This is your one-time first big-ticket price - after this apply,
+          big-ticket leads are ${LEAD_TIER_FEES.major}.
+        </p>
+      )}
       <div className="flex gap-2">
         <button
           type="button"

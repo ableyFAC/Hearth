@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getRole } from "@/lib/contractor";
 import { FOUNDER, SERVICE_CATEGORIES } from "@/lib/constants";
+import { LAUNCH_AREA_LABEL } from "@/lib/serviceArea";
 import Link from "next/link";
 import Image from "next/image";
 import Logo from "@/components/Logo";
@@ -122,7 +123,7 @@ export default async function Home({
     },
     {
       q: "Where is Hearth available?",
-      a: "We're serving Huntington Beach and Fountain Valley right now, with local pros there. Don't see your city yet? You will soon. If you're outside those two cities you can still sign up and join the waitlist, which is how we decide where Hearth goes next.",
+      a: "We're serving Huntington Beach, Fountain Valley, Seal Beach, Westminster, Midway City, Garden Grove, Santa Ana, Costa Mesa, and Newport Beach right now, with local pros there. Don't see your city yet? You will soon. If you're outside those cities you can still sign up and join the waitlist, which is how we decide where Hearth goes next.",
     },
     {
       q: "What does Plus cost?",
@@ -324,7 +325,7 @@ export default async function Home({
                 ))}
               </div>
               <p className="mt-4 text-sm text-stone-500 dark:text-stone-400">
-                Serving Huntington Beach and Fountain Valley
+                Serving {LAUNCH_AREA_LABEL}
               </p>
               <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
                 Don&apos;t see your city yet? You will soon.
@@ -472,15 +473,16 @@ export default async function Home({
             className="text-bark-500 hover:underline"
           >
             Fountain Valley
-          </Link>{" "}
-          and{" "}
+          </Link>
+          ,{" "}
           <Link
             href="/huntington-beach"
             className="text-bark-500 hover:underline"
           >
             Huntington Beach
-          </Link>{" "}
-          homeowners. Don&apos;t see your city yet? You will soon.
+          </Link>
+          , and nearby Orange County homeowners. Don&apos;t see your city yet?
+          You will soon.
         </p>
         {/* Contact form works with no session and no owner-fillable fields,
             unlike the old mailto/tel here, so it's always shown - see

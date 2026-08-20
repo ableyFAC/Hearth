@@ -5,6 +5,12 @@ export type SetupItem = {
   done: boolean;
   href: string;
   linkLabel: string;
+  // A step this pro's account cannot actually complete right now (today: the
+  // logo, which is a Pro-member cosmetic). It still shows, so the pro knows
+  // the step exists and where it leads, but it is left OUT of the progress
+  // count: an undone-forever item would otherwise pin the card open at "4 of
+  // 5" and turn a setup guide into a permanent upsell.
+  optional?: boolean;
 };
 
 // First-session guide for a new pro. Every item is derived from data the
@@ -12,8 +18,10 @@ export type SetupItem = {
 // fully stateless: it shows while any step is open and disappears on its own
 // once everything is done. Progress bar matches the homeowner dashboard's.
 export default function SetupChecklist({ items }: { items: SetupItem[] }) {
-  const done = items.filter((i) => i.done).length;
-  if (done >= items.length) return null;
+  // Progress counts only the steps the pro can actually finish.
+  const counted = items.filter((i) => !i.optional);
+  const done = counted.filter((i) => i.done).length;
+  if (done >= counted.length) return null;
 
   return (
     <section className="card space-y-3">
@@ -28,14 +36,16 @@ export default function SetupChecklist({ items }: { items: SetupItem[] }) {
           </p>
         </div>
         <p className="shrink-0 text-xs text-stone-500 dark:text-stone-400">
-          {done} of {items.length} done
+          {done} of {counted.length} done
         </p>
       </div>
 
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-stone-100 dark:bg-stone-700">
         <div
           className="h-full rounded-full bg-green-500 transition-all"
-          style={{ width: `${Math.round((done / items.length) * 100)}%` }}
+          style={{
+            width: `${counted.length ? Math.round((done / counted.length) * 100) : 100}%`,
+          }}
         />
       </div>
 

@@ -157,6 +157,7 @@ export async function POST(req: NextRequest) {
       : "") +
     "Give a genuinely detailed, useful answer, but break it up so it is easy to skim. Lead with one short sentence that answers the question directly. Then, if there is more to say, add a few short bullets or two to three sentence steps, with a line break between chunks and a small header before a list when it helps, like 'Likely cause:' or 'Next steps:'. Never write a long wall of text. Each chunk should be short enough to read in a few seconds. " +
     "Write in plain, complete sentences. Do NOT use dashes as connectors: no em dashes, and never a hyphen used as a dash. Use a comma, a colon, or a new sentence instead. Never use emoji. " +
+    "CONVERSATION CONTINUITY, non-negotiable: before answering, re-read the entire conversation above and stay consistent with what you already said in it. A short homeowner reply - 'yes', 'the second one', 'ok do that', or a tapped option button - is ALWAYS a response to YOUR immediately previous message: interpret it that way and continue from there. NEVER ask what they are replying to, and NEVER ask them to repeat information that already appears anywhere in the conversation - go find it. If new information genuinely changes an earlier recommendation of yours, say plainly what changed and why; otherwise your advice must not drift between turns. " +
     "ALWAYS reply in the language the homeowner writes in. If they write in Spanish, answer entirely in Spanish; same for any other language. Match their language even if the home details below are in English. The machine-readable blocks at the end (POSTJOB, LOGISSUE, REMINDER, OPTIONS) keep their exact English field values for category, timing, severity, and system_type, but any human-readable text inside them (summary, description, title, option labels) should be in the homeowner's language. " +
     "Always capitalize the first letter of every sentence, bullet point, and button label. " +
     "Lead with their specific home details, the relevant system, its age, and any open issues or reminders, rather than generic advice. " +
@@ -195,7 +196,7 @@ export async function POST(req: NextRequest) {
   // Count images across the whole request so we can stop attaching past the
   // cap while still forwarding each message's text.
   let imagesAttached = 0;
-  const requestBody = JSON.stringify({
+  const requestPayload = {
     systemInstruction: { parts: [{ text: system }] },
     contents: history
       ? history
@@ -230,28 +231,71 @@ export async function POST(req: NextRequest) {
             };
           })
       : [{ role: "user", parts: [{ text: question }] }],
-    generationConfig: { maxOutputTokens: 800 },
-  });
+  };
+
+  // Per-model generation config, applied when the request is built inside the
+  // model loop below:
+  //   temperature 0.4 - Gemini's default is 1.0, which made the assistant
+  //   noticeably answer the SAME follow-up differently between turns. Lower
+  //   variance keeps it consistent with what it already told the homeowner
+  //   while still reading naturally.
+  //   thinkingConfig - the 2.5 models can reason before answering;
+  //   flash-lite has it OFF by default, which showed up as the assistant
+  //   losing the thread of the conversation. A bounded budget turns it on.
+  //   The 2.0 models reject thinkingConfig outright, so it is only attached
+  //   to models that support it.
+  function generationConfigFor(model: string) {
+    return {
+      maxOutputTokens: 1024,
+      temperature: 0.4,
+      ...(model.startsWith("gemini-2.5")
+        ? { thinkingConfig: { thinkingBudget: 512 } }
+        : {}),
+    };
+  }
 
   // Per-user daily cap so a single account can't run up the paid Gemini bill.
   // Hearth Plus gets a higher ceiling. Counted in the shared ai_usage table
   // (fails open, resets at midnight); see src/lib/aiUsage.ts.
   const isPlus = await hasPlus();
-  const { overLimit } = await countAiUsage(authUser.id, isPlus);
+  const { overLimit, remaining, dailyLimit } = await countAiUsage(
+    authUser.id,
+    isPlus
+  );
+  // Quiet meter for free users only, and only near the end of the day's
+  // allowance: the client shows it when it is small enough to matter. Members
+  // are on a ceiling nobody reaches in a day, so telling them a number would
+  // be noise. Null when the counter could not be read - say nothing rather
+  // than guess.
+  const freeRemaining = isPlus ? null : remaining;
+  const freeLimit = isPlus ? null : dailyLimit;
   if (overLimit) {
     return NextResponse.json({
       answer: isPlus
         ? "You have reached today's Ask Hearth limit. It resets tomorrow."
         : "You have reached today's Ask Hearth limit. It resets tomorrow. Hearth Plus raises your daily limit if you want more room.",
+      // The message names Hearth Plus, so give the reader something to tap
+      // instead of a page to go hunt for. The chat bubble renders plain text
+      // (see src/components/Markdown.tsx - no link support on purpose), so
+      // the link travels as its own field and the client renders it.
+      ...(isPlus
+        ? {}
+        : { link: { href: "/plus", label: "See what Hearth Plus adds" } }),
+      freeRemaining,
+      freeLimit,
     });
   }
 
   // Each free-tier model has its OWN daily quota, so cycle through them: if one
-  // is rate-limited (429), fall through to the next.
+  // is rate-limited (429), fall through to the next. Strongest model FIRST:
+  // this used to lead with flash-lite (the weakest), which is where the
+  // "clueless assistant" reports came from - and because different requests
+  // could land on different models mid-conversation, answers visibly changed
+  // character between turns. flash-lite is now the fallback, not the default.
   const MODELS = [
-    "gemini-2.5-flash-lite",
     "gemini-2.5-flash",
     "gemini-flash-latest",
+    "gemini-2.5-flash-lite",
     "gemini-2.0-flash-lite",
   ];
 
@@ -270,7 +314,10 @@ export async function POST(req: NextRequest) {
             "content-type": "application/json",
             "x-goog-api-key": apiKey,
           },
-          body: requestBody,
+          body: JSON.stringify({
+            ...requestPayload,
+            generationConfig: generationConfigFor(model),
+          }),
         }
       );
       if (resp.status === 429) {
@@ -286,13 +333,13 @@ export async function POST(req: NextRequest) {
       // answer; anything else was truncated or blocked, so keep the partial
       // and try the next model.
       if (answer && (!finishReason || finishReason === "STOP")) {
-        return NextResponse.json({ answer });
+        return NextResponse.json({ answer, freeRemaining, freeLimit });
       }
       // A MAX_TOKENS finish means the model answered but ran out of output
       // budget. Retrying the other models just re-truncates the same reply and
       // bills the paid API 4x, so return the partial now instead of looping.
       if (answer && finishReason === "MAX_TOKENS") {
-        return NextResponse.json({ answer });
+        return NextResponse.json({ answer, freeRemaining, freeLimit });
       }
       if (typeof answer === "string" && answer.length > bestAnswer.length) {
         bestAnswer = answer;
@@ -305,7 +352,8 @@ export async function POST(req: NextRequest) {
 
   // Every model came back truncated, blocked, or empty. A partial answer
   // still beats an apology.
-  if (bestAnswer) return NextResponse.json({ answer: bestAnswer });
+  if (bestAnswer)
+    return NextResponse.json({ answer: bestAnswer, freeRemaining, freeLimit });
 
   return NextResponse.json({
     answer: rateLimited

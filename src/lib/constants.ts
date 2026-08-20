@@ -566,6 +566,14 @@ export const PRO_DEPOSIT_BOOST_PTS = 5;
 // apply_to_lead (supabase/migrations/0031_ghost_protection.sql).
 export const MAX_APPLICANTS_PER_JOB = 3;
 
+// Earn-in for the Hearth-funded Checkr background check. Every check costs
+// Hearth real money, so it unlocks after the pro has this many PAID lead
+// applications (lead_applications rows with refunded_at null - a refunded
+// application was never a paid lead). Mirrored in the gate inside
+// startBackgroundCheckAction and in the progress line on BackgroundCheckCard,
+// so the copy and the check can never quote different numbers.
+export const BACKGROUND_CHECK_MIN_PAID_LEADS = 3;
+
 // Ghost protection: an application the homeowner never responds to gets its
 // fee back as wallet credit after this many days (credit only, never cash).
 // Display-only mirror of the cron window in

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { hasPlus } from "@/lib/subscription";
@@ -124,6 +125,23 @@ export default async function DocumentsPage() {
       </p>
 
       <DocumentUpload propertyId={property.id} />
+
+      {/* Once the vault has real weight to it, point at what that record is
+          FOR. No loss framing: nothing has been taken away, and the home
+          report opens for free users now - the report page itself is where
+          the export gate lives and sells itself. */}
+      {!isPlus && list.length >= 5 && (
+        <div className="mt-6 rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-600 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300">
+          You&apos;ve built a real record - the{" "}
+          <Link
+            href="/home-report"
+            className="font-medium text-bark-700 hover:underline dark:text-stone-200"
+          >
+            Home report
+          </Link>{" "}
+          turns it into something you can hand a buyer or insurer.
+        </div>
+      )}
 
       <div className="mt-6 space-y-3">
         {/* If the select itself errored (e.g. a drifted DB schema), say so
@@ -312,7 +330,7 @@ export default async function DocumentsPage() {
               </p>
             </div>
 
-            <InsurancePacket isPlus={isPlus} />
+            <InsurancePacket isPlus={isPlus} daysToRenewal={daysToRenewal} />
 
             <InsuranceForm
               renewalDate={insuranceRenewal}

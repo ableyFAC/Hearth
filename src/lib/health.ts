@@ -290,6 +290,99 @@ export function isMustDo(
   return !pureAgeEstimate;
 }
 
+// ---------------------------------------------------------------------------
+// One system's plain-language status, shared by the interactive card on screen
+// (src/app/(app)/profile/SystemRow.tsx) and the printed home report
+// (src/app/(app)/home-report/page.tsx).
+//
+// Pulled out of SystemRow deliberately: the printed report is the paid
+// artifact, so it has to say the SAME thing about a system as the screen does.
+// Two copies of this branching would drift the first time either side was
+// touched, and the version a homeowner hands to a buyer is the worst possible
+// place for that drift to land. Pure and dependency-free, so it is unit
+// tested (health.test.ts) rather than only exercised through a React tree.
+export type SystemStatus = {
+  // "Must do" | "Check soon (estimated)" | "Healthy" | "Plan ahead" |
+  // "Needs maintenance" | "Add details"
+  label: string;
+  mustDo: boolean;
+  // A "due" verdict that rests ONLY on an install year estimated at
+  // onboarding: never confirmed, no owner-entered condition, no reported
+  // issue. Shown as an explicit estimate rather than a red alarm.
+  estimatedDue: boolean;
+  stage: LifeStage;
+  // Why the system carries this status, in the owner's own terms: any issue
+  // they reported, any condition they set, then the age-based assessment.
+  why: string;
+};
+
+const STAGE_LABEL: Record<string, string> = {
+  healthy: "Healthy",
+  aging: "Plan ahead",
+  due: "Needs maintenance",
+  unknown: "Add details",
+};
+
+export function systemStatus(
+  system: HomeSystem,
+  openIssue: {
+    category?: string | null;
+    description?: string | null;
+    severity?: string | null;
+  } | null = null
+): SystemStatus {
+  const health = assessSystem(system);
+  const issueSeverity = openIssue?.severity ?? null;
+  const mustDo = system.condition_rating === 1 || issueSeverity === "urgent";
+  const isPureAgeEstimate =
+    !system.confirmed_at && system.condition_rating == null && !openIssue;
+  const estimatedDue =
+    health.stage === "due" && !mustDo && isPureAgeEstimate;
+
+  const whyParts: string[] = [];
+  if (openIssue?.category) {
+    whyParts.push(
+      `You reported a ${labelFor(ISSUE_CATEGORIES, openIssue.category)} issue${
+        openIssue.description ? `: ${openIssue.description}` : ""
+      }.`
+    );
+  }
+  if (system.condition_rating === 1) {
+    whyParts.push("You marked its condition as failing.");
+  } else if (system.condition_rating === 2) {
+    whyParts.push("You marked its condition as worn.");
+  }
+  whyParts.push(health.message);
+
+  return {
+    label: mustDo
+      ? "Must do"
+      : estimatedDue
+        ? "Check soon (estimated)"
+        : (STAGE_LABEL[health.stage] ?? health.stage),
+    mustDo,
+    estimatedDue,
+    stage: health.stage,
+    why: whyParts.join(" "),
+  };
+}
+
+// Condition-adjusted life left, as the one sentence both the card and the
+// printed report show. Shares systemStatus's reason for existing: the screen
+// and the paid artifact must not word this differently.
+export function lifeLeftText(system: HomeSystem): string {
+  const eff = effectiveYearsLeft(system);
+  if (eff == null) return "Add an install year to estimate";
+  if (eff <= 0) {
+    return system.condition_rating === 1
+      ? "Failing. Replace now."
+      : "Past due. Replace now.";
+  }
+  if (eff < 1) return "Less than a year";
+  const years = Math.round(eff);
+  return `about ${years} more year${years === 1 ? "" : "s"}`;
+}
+
 // A system whose details are still the onboarding guess: never confirmed by
 // the owner (confirmed_at null, migration 0056) and no owner-entered
 // condition. Its age-based verdict rests on an estimated install year, so its

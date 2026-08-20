@@ -183,6 +183,28 @@ export default async function ProBusinessPage() {
     ? Math.max(...stats.trend.map((m) => m.applications), 1)
     : 1;
 
+  // Non-member teaser rows: the pro's REAL trades, ordered by how much they
+  // have applied in each. Only the category name and the application count
+  // cross the wire - the win rate and average fee render as placeholder
+  // glyphs, never the true number hidden under a CSS blur, because a blur is
+  // a costume and anyone can read the page source through it.
+  const teaserCategories = isPro
+    ? []
+    : (() => {
+        const byCategory = new Map<string, number>();
+        for (const a of apps) {
+          const key = a?.category;
+          if (typeof key !== "string" || !key) continue;
+          byCategory.set(key, (byCategory.get(key) ?? 0) + 1);
+        }
+        return Array.from(byCategory, ([category, applications]) => ({
+          category,
+          applications,
+        }))
+          .sort((x, y) => y.applications - x.applications)
+          .slice(0, 6);
+      })();
+
   return (
     <div className="space-y-8">
       <div>
@@ -520,52 +542,72 @@ export default async function ProBusinessPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Teaser: one real number, the rest masked. Placeholder values
-                are decorative, so they are hidden from screen readers. */}
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="card">
-                <p className="stat-label">Total applications</p>
-                <p className="stat-number mt-1 text-2xl">
-                  {appliedCount}
+            {/* Teaser. The old version masked "All-time win rate" and "Fees
+                spent" - both of which are printed in full, unmasked, in the
+                three stat cards at the top of this same page, so the lock was
+                over a door with no wall. What Insights actually adds is the
+                per-CATEGORY split, so that is what gets teased: the pro's own
+                trades by name, with the two numbers they cannot see yet. */}
+            {teaserCategories.length > 0 && (
+              <div className="card overflow-x-auto">
+                <p className="mb-2 text-sm font-medium text-stone-500 dark:text-stone-400">
+                  Which of your trades actually pays? Included with Hearth Pro.
                 </p>
-                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  All-time, credited ones included
-                </p>
-              </div>
-              <div className="card ring-1 ring-hearth-200 dark:ring-hearth-800">
-                <p className="stat-label">All-time win rate</p>
-                <p
-                  aria-hidden="true"
-                  className="stat-number mt-1 select-none text-2xl text-stone-300 blur-[3px] dark:text-stone-600"
-                >
-                  --%
-                </p>
-                <p className="mt-1 flex items-center justify-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-stone-500 dark:text-stone-400">
+                      <th className="pb-2 pr-3 font-medium">Category</th>
+                      <th className="pb-2 pr-3 text-right font-medium">Apps</th>
+                      <th className="pb-2 pr-3 text-right font-medium">
+                        Win rate
+                      </th>
+                      <th className="pb-2 text-right font-medium">Avg fee</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100 dark:divide-white/10">
+                    {teaserCategories.map((c) => (
+                      <tr key={c.category}>
+                        <td className="py-2 pr-3 font-medium text-stone-900 dark:text-stone-100">
+                          <CategoryIcon
+                            list={JOB_CATEGORIES}
+                            value={c.category}
+                            className="mr-1 inline-block h-4 w-4 align-[-3px]"
+                          />
+                          {labelFor(JOB_CATEGORIES, c.category)}
+                        </td>
+                        <td className="py-2 pr-3 text-right text-stone-600 dark:text-stone-300">
+                          {c.applications}
+                        </td>
+                        {/* Placeholder glyphs, not the real figure under a
+                            blur. Decorative, so hidden from screen readers. */}
+                        <td
+                          aria-hidden="true"
+                          className="select-none py-2 pr-3 text-right text-stone-300 blur-[3px] dark:text-stone-600"
+                        >
+                          --%
+                        </td>
+                        <td
+                          aria-hidden="true"
+                          className="select-none py-2 text-right text-stone-300 blur-[3px] dark:text-stone-600"
+                        >
+                          $--
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="mt-2 flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
                   <span aria-hidden="true" className="icon-chip">
                     <Lock className="h-5 w-5" />
                   </span>
-                  Included with Hearth Pro
+                  Win rate and average fee per category
                 </p>
               </div>
-              <div className="card ring-1 ring-hearth-200 dark:ring-hearth-800">
-                <p className="stat-label">Fees spent</p>
-                <p
-                  aria-hidden="true"
-                  className="stat-number mt-1 select-none text-2xl text-stone-300 blur-[3px] dark:text-stone-600"
-                >
-                  $-,---
-                </p>
-                <p className="mt-1 flex items-center justify-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
-                  <span aria-hidden="true" className="icon-chip">
-                    <Lock className="h-5 w-5" />
-                  </span>
-                  Included with Hearth Pro
-                </p>
-              </div>
-            </div>
+            )}
             <p className="text-sm text-stone-500 dark:text-stone-400">
-              Your win rate, return on fees, and best-performing categories
-              decide where your next application dollar goes.{" "}
+              {spentCents > 0
+                ? `You've spent ${dollars(spentCents)} on application fees - Insights shows which categories are earning it back. `
+                : "Insights shows which categories earn your application fees back, and which ones quietly drain them. "}
               <Link
                 href="/pro/plus"
                 className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"

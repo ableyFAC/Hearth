@@ -7,6 +7,7 @@ import { JOB_CATEGORIES, labelFor } from "@/lib/constants";
 import CategoryIcon from "@/components/CategoryIcon";
 import Logo from "@/components/Logo";
 import RequestQuoteForm from "./RequestQuoteForm";
+import BackLink from "./BackLink";
 import { requestProAction } from "@/app/(app)/contractors/actions";
 
 // Public, shareable business page for a pro: /p/<contractor_id> or, once
@@ -320,6 +321,10 @@ export default async function PublicProPage({
           ),
         }}
       />
+      {/* Way back to the browse results (or the public directory on a direct
+          link) - homeowners land here mid-browse and expect to return to
+          their list. */}
+      <BackLink />
       <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-white/10 dark:bg-stone-800">
         {/* Flat warm banner strip, no gradient: hearth-100 in light, a
             translucent hearth tint over the stone-800 card in dark. */}

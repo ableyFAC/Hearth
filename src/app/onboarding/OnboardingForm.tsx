@@ -5,14 +5,17 @@ import { useState } from "react";
 import { lookupParcelAction, claimPropertyAction, joinMarketWaitlistAction } from "./actions";
 import type { PublicParcelFacts } from "@/lib/parcel";
 import { PROPERTY_TYPES, FOUNDER } from "@/lib/constants";
-import { isLaunchZip } from "@/lib/serviceArea";
+import {
+  isLaunchZip,
+  LAUNCH_AREA_LABEL,
+  LAUNCH_ONLY_MESSAGE,
+} from "@/lib/serviceArea";
 import { Hammer, Bell, FileText } from "lucide-react";
 
-// Must read the same as LAUNCH_ONLY_MESSAGE in ./actions.ts - kept in sync by
-// hand since a "use server" file can only export async functions, not a
-// shared string constant, to a client component like this one.
-const LAUNCH_ONLY_MESSAGE =
-  "Hearth serves Huntington Beach and Fountain Valley right now. We added you to the waitlist and will email you the moment we expand to your area.";
+// LAUNCH_ONLY_MESSAGE used to be duplicated here by hand, because ./actions.ts
+// is a "use server" file and can only export async functions to a client
+// component like this one. It now lives in @/lib/serviceArea alongside the ZIP
+// map both sides gate on, so there is exactly one copy of the wording.
 
 // A trimmed length floor for "this is actually an address," not just "this
 // field isn't literally empty." Browsers treat a single space as satisfying
@@ -71,7 +74,7 @@ export default function OnboardingForm({
       setError("Enter a valid 5-digit ZIP code.");
       return;
     }
-    // Fast client-side feedback for the launch restriction - the two launch
+    // Fast client-side feedback for the launch restriction - the launch
     // cities only (isLaunchZip), not all of Orange County - so an out-of-area
     // ZIP never even reaches the server lookup. lookupParcelAction enforces
     // the same check server-side (before its RentCast call) - that's the
@@ -517,9 +520,9 @@ export default function OnboardingForm({
               : `We couldn't save you to the waitlist. Email us at ${FOUNDER.email} and we'll add you by hand.`}
           </p>
           <p className="text-sm text-stone-500 dark:text-stone-400">
-            There&apos;s nothing else to set up here yet since Hearth covers
-            Huntington Beach and Fountain Valley right now. Don&apos;t see
-            your city yet? You will soon.
+            There&apos;s nothing else to set up here yet since Hearth covers{" "}
+            {LAUNCH_AREA_LABEL} right now. Don&apos;t see your city yet? You
+            will soon.
           </p>
           <button
             type="button"

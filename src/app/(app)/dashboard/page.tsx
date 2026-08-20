@@ -156,6 +156,11 @@ export default async function HomePage({
   // migration 0099). freePlanCredit is true only while that credit is unused,
   // so the CTA can offer the real build once, then revert to the Plus pitch.
   let freePlanCredit = false;
+  // Same idea for the quote analyzer's one free check (users.
+  // free_quote_used_at): the tile below advertises a "1 free" chip, and that
+  // chip has to disappear once the credit is actually spent or it is an ad for
+  // something the user no longer has. Read in the same round trip.
+  let freeQuoteCredit = false;
   if (!plus) {
     // The cached, network-free getUser(): the row below is RLS-protected and
     // pinned to this id, so a live auth-server round trip buys nothing here.
@@ -163,7 +168,7 @@ export default async function HomePage({
     if (user) {
       const { data: creditRow, error: creditErr } = await supabase
         .from("users")
-        .select("free_plan_used_at")
+        .select("free_plan_used_at, free_quote_used_at")
         .eq("id", user.id)
         .maybeSingle();
       // FAIL OPEN if the column isn't live yet (migration 0099 not run): a
@@ -171,6 +176,9 @@ export default async function HomePage({
       freePlanCredit = creditErr
         ? true
         : !!creditRow && creditRow.free_plan_used_at === null;
+      freeQuoteCredit = creditErr
+        ? true
+        : !!creditRow && creditRow.free_quote_used_at === null;
     }
   }
 
@@ -438,28 +446,43 @@ export default async function HomePage({
     : null;
   const hasHomeValueData =
     homeValuePurchasePrice != null && homeValuePurchaseYear != null;
-  const homeEstimatedValue = hasHomeValueData
-    ? estimateHomeValue(
-        homeValuePurchasePrice!,
-        homeValuePurchaseYear!,
-        property.state,
-        now.getFullYear()
-      )
-    : null;
+  // Prefer the stored RentCast AVM, exactly like /value does (see that page's
+  // comment): it reflects actual comparable sales. The purchase-price
+  // compounding model is only the fallback while no AVM is on file - left as
+  // the headline it could drift absurdly far from reality (a decades-old
+  // purchase year compounds a real price into eight figures) and contradict
+  // the /value page's "Estimated value today" on the same day.
+  const homeMarketValue: number | null =
+    typeof rawProperty.market_value === "number" ? rawProperty.market_value : null;
+  const homeEstimatedValue =
+    homeMarketValue != null
+      ? homeMarketValue
+      : hasHomeValueData
+      ? estimateHomeValue(
+          homeValuePurchasePrice!,
+          homeValuePurchaseYear!,
+          property.state,
+          now.getFullYear()
+        )
+      : null;
   const homeEquity =
     homeEstimatedValue != null
       ? calculateEquity(homeEstimatedValue, homeValueMortgageBalance)
       : null;
   // Year-over-year movement: same estimate run for last year, so the tile can
-  // say how much the ballpark moved. Purely derived, no schema changes.
-  const homeValueLastYear = hasHomeValueData
-    ? estimateHomeValue(
-        homeValuePurchasePrice!,
-        homeValuePurchaseYear!,
-        property.state,
-        now.getFullYear() - 1
-      )
-    : null;
+  // say how much the ballpark moved. Only shown in fallback (model) mode - the
+  // AVM is a point-in-time number from a different source, and subtracting a
+  // modeled last-year figure from it would manufacture a delta no source ever
+  // claimed.
+  const homeValueLastYear =
+    homeMarketValue == null && hasHomeValueData
+      ? estimateHomeValue(
+          homeValuePurchasePrice!,
+          homeValuePurchaseYear!,
+          property.state,
+          now.getFullYear() - 1
+        )
+      : null;
   const homeValueDelta =
     homeEstimatedValue != null && homeValueLastYear != null
       ? homeEstimatedValue - homeValueLastYear
@@ -516,7 +539,10 @@ export default async function HomePage({
             href={`/contractors?category=${p.category}`}
             className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-600 dark:hover:text-stone-300"
           >
-            <p.icon className="mr-1 inline-block h-3.5 w-3.5 align-[-2px]" aria-hidden="true" />
+            {/* Plain text labels, matching the "Other" chip below. The little
+                pictograms were removed on purpose - REMODEL_PROJECTS still
+                carries its icon field for the other surfaces that use it
+                (see contractors/CategoryFilter.tsx). */}
             {p.label}
           </Link>
         ))}
@@ -682,7 +708,7 @@ export default async function HomePage({
                 {openJobsCount}
               </p>
               <Link
-                href="/contractors"
+                href="/contractors#your-jobs"
                 className="text-sm text-bark-700 hover:underline dark:text-stone-300"
               >
                 View job postings →
@@ -710,7 +736,7 @@ export default async function HomePage({
           className="card-link"
         >
           <p className="stat-label text-sm">Home value</p>
-          {hasHomeValueData && homeEstimatedValue != null ? (
+          {homeEstimatedValue != null ? (
             <>
               <p className="stat-number mt-1 text-2xl">
                 ${Math.round(homeEstimatedValue).toLocaleString()}
@@ -759,26 +785,20 @@ export default async function HomePage({
                   ? "to keep warm this winter"
                   : "to stay cool this summer"}
               </p>
-              {upgradeSavings &&
-                (plus ? (
-                  <Link
-                    href="/forecast"
-                    className="mt-1 block text-xs text-bark-700 hover:underline dark:text-stone-300"
-                  >
-                    Your HVAC is {upgradeSavings.hvacAge} years old. A new unit
-                    could save ~${upgradeSavings.low.toLocaleString()}-
-                    {upgradeSavings.high.toLocaleString()}/yr →
-                  </Link>
-                ) : (
-                  <Link
-                    href="/plus?reason=forecast"
-                    className="mt-1 block text-xs text-bark-700 hover:underline dark:text-stone-300"
-                  >
-                    See what a new unit would save
-                    <PlusChip className="mx-1.5" />
-                    →
-                  </Link>
-                ))}
+              {/* Same link and the same real numbers for everyone: the
+                  forecast page shows this HVAC upgrade estimate to free users
+                  too, so masking it here and pointing at a pitch page hid a
+                  number we already give away. */}
+              {upgradeSavings && (
+                <Link
+                  href="/forecast"
+                  className="mt-1 block text-xs text-bark-700 hover:underline dark:text-stone-300"
+                >
+                  Your HVAC is {upgradeSavings.hvacAge} years old. A new unit
+                  could save ~${upgradeSavings.low.toLocaleString()}-
+                  {upgradeSavings.high.toLocaleString()}/yr →
+                </Link>
+              )}
             </>
           ) : (
             <>
@@ -1078,20 +1098,26 @@ export default async function HomePage({
 
         <div className="grid gap-4 sm:grid-cols-3">
           {[
+            // All three go straight to the tool, member or not. Each page
+            // handles its own gating in context (the forecast masks the
+            // per-system detail, the quote analyzer spends the one free check
+            // then redirects, the home report opens and gates the export), so
+            // routing a free user to a pitch page first only hid the product
+            // behind an ad for the product.
             {
-              href: plus ? "/forecast" : "/plus?reason=forecast",
+              href: "/forecast",
               icon: TrendingUp,
               title: "Cost forecast",
               desc: "See what will need replacing and the amount to set aside each month.",
             },
             {
-              href: plus ? "/quote-check" : "/plus?reason=quote",
+              href: "/quote-check",
               icon: Search,
               title: "Quote analyzer",
               desc: "Snap a contractor's quote and check whether the price is fair.",
             },
             {
-              href: plus ? "/home-report" : "/plus?reason=report",
+              href: "/home-report",
               icon: ClipboardList,
               title: "Home report",
               desc: "A shareable record of your home for insurance and resale.",
@@ -1108,7 +1134,7 @@ export default async function HomePage({
               <p className="mt-1 font-medium text-stone-900 dark:text-stone-100">
                 {t.title}
                 {!plus && <PlusChip className="ml-1.5" />}
-                {!plus && t.title === "Quote analyzer" && (
+                {!plus && freeQuoteCredit && t.title === "Quote analyzer" && (
                   <span className="chip ml-1.5 bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300">
                     1 free
                   </span>

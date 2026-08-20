@@ -10,6 +10,7 @@ import {
   PRO_PLAN,
 } from "@/lib/constants";
 import { AGING_LEAD_TIERS } from "@/lib/leadPricing";
+import { LAUNCH_AREA_LABEL } from "@/lib/serviceArea";
 import Link from "next/link";
 import Image from "next/image";
 import Logo from "@/components/Logo";
@@ -193,7 +194,7 @@ export default async function ProsLanding({
               Already have an account? Sign in
             </Link>
             <p className="mt-4 text-sm text-stone-500 dark:text-stone-400">
-              Serving Huntington Beach and Fountain Valley
+              Serving {LAUNCH_AREA_LABEL}
             </p>
             <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
               Don&apos;t see your city yet? You will soon.

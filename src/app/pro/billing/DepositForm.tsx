@@ -49,12 +49,19 @@ export default function DepositForm({
   tiers,
   need,
   boostPts = 0,
+  forgoneBoostPts = 0,
 }: {
   tiers: Tier[];
   // Dollars still missing for a specific job (?need= from the leads board).
   need?: number;
   // Pro membership deposit boost (percentage points); 0 for non-members.
   boostPts?: number;
+  // Points this pro is NOT earning because they have no membership, so the
+  // form can name the exact bonus this deposit leaves behind. Zero for anyone
+  // who already holds a membership - including one still inside its free
+  // trial, whose match is only held back, not forgone (the trial-holdback
+  // caveat on /pro/billing owns that case and says so in its own words).
+  forgoneBoostPts?: number;
 }) {
   // Committed amount (string so the field can be cleared); default to the
   // smallest preset so nobody is nudged into depositing more than they meant
@@ -79,6 +86,10 @@ export default function DepositForm({
   const { bonus } = bonusFor(cents, effTiers, boostPts);
   const bonusDollars = bonus / 100;
   const totalCredit = (cents + bonus) / 100;
+  // What a membership would have added to THIS deposit, at the amount showing
+  // right now. Same floor-to-cents math apply_deposit uses, so the number is
+  // the one the wallet would really have received, not a rounded pitch.
+  const forgoneBonus = Math.floor((cents * Math.max(forgoneBoostPts, 0)) / 100);
 
   return (
     <form action={depositAction} className="card space-y-4">
@@ -154,6 +165,18 @@ export default function DepositForm({
           {bonus > 0 ? ` · $${totalCredit.toFixed(2)} total credit` : ""}.
         </p>
       </div>
+
+      {/* A real, current-amount loss: this deposit, at this size, earns
+          exactly this much less than it would with a membership. It moves
+          live with the presets, so it is never a number about some other
+          deposit. */}
+      {forgoneBonus > 0 && (
+        <p className="text-xs text-stone-500 dark:text-stone-400">
+          Depositing ${num} without Pro leaves $
+          {(forgoneBonus / 100).toFixed(2).replace(/\.00$/, "")} of bonus
+          credit on the table this deposit.
+        </p>
+      )}
 
       <label className="flex items-center gap-2 text-xs text-stone-600 dark:text-stone-300">
         <input

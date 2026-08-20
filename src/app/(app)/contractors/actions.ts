@@ -24,7 +24,10 @@ import { sendNotification } from "@/lib/notify";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import { redactContact } from "@/lib/redact";
 import { ok, err, type ActionResult } from "@/lib/actionResult";
-import { launchCityForZip } from "@/lib/serviceArea";
+import {
+  launchCityForZip,
+  OUT_OF_AREA_POST_MESSAGE,
+} from "@/lib/serviceArea";
 import { isAllowedValue } from "@/lib/formFields";
 import type { Json } from "@/lib/database.types";
 
@@ -84,17 +87,15 @@ export async function postJobAction(formData: FormData) {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
 
-  // Launch-area gate (0124). Onboarding only accepts launch-city ZIPs now,
-  // but homes claimed before that change can carry any Orange County ZIP.
-  // open_jobs_for_me and apply_to_lead both refuse jobs outside the two
-  // launch cities, so a post from such a home would succeed, notify nobody,
-  // and sit invisible forever - the homeowner deserves the honest answer at
-  // post time instead.
+  // Launch-area gate (0124, widened to nine cities by 0126). Onboarding only
+  // accepts launch-city ZIPs now, but homes claimed before that change can
+  // carry any Orange County ZIP. open_jobs_for_me and apply_to_lead both
+  // refuse jobs outside the launch cities, so a post from such a home would
+  // succeed, notify nobody, and sit invisible forever - the homeowner deserves
+  // the honest answer at post time instead. The message is the shared one in
+  // src/lib/serviceArea.ts, so the city list only has to change in one place.
   if (!launchCityForZip(property.zip ?? "")) {
-    setFlash(
-      "Hearth pros serve Huntington Beach and Fountain Valley right now, and this home is outside that area. We'll email you the moment we expand.",
-      "error"
-    );
+    setFlash(OUT_OF_AREA_POST_MESSAGE, "error");
     redirect("/contractors");
   }
   const supabase = createClient();
@@ -1148,12 +1149,10 @@ export async function requestProAction(
   if (!property) throw new Error("No active property");
 
   // Launch-area gate, same reasoning as postJobAction: a pre-launch-gate home
-  // outside Huntington Beach / Fountain Valley must not create a request a
-  // pro would then pay to unlock for a job outside the launch area.
+  // outside the launch cities must not create a request a pro would then pay
+  // to unlock for a job outside the launch area.
   if (!launchCityForZip(property.zip ?? "")) {
-    return err(
-      "Hearth pros serve Huntington Beach and Fountain Valley right now, and this home is outside that area. We'll email you the moment we expand."
-    );
+    return err(OUT_OF_AREA_POST_MESSAGE);
   }
   const supabase = createClient();
 
@@ -1397,10 +1396,7 @@ export async function postDirectPubliclyAction(formData: FormData) {
   // Launch-area gate, same reasoning as postJobAction: converting a direct
   // request into an open posting must not create a board job no pro can see.
   if (!launchCityForZip(property.zip ?? "")) {
-    setFlash(
-      "Hearth pros serve Huntington Beach and Fountain Valley right now, and this home is outside that area. We'll email you the moment we expand.",
-      "error"
-    );
+    setFlash(OUT_OF_AREA_POST_MESSAGE, "error");
     redirect("/contractors");
   }
   const supabase = createClient() as any;

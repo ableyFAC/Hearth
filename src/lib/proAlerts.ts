@@ -42,7 +42,7 @@ export type NewLeadAlertInput = {
   // check. Missing data never hides a pro (0046's rule).
   property_state?: string | null;
   // Property's ZIP, for the launch-city filter (0124). Same null-safe rule as
-  // the state above: a ZIP that is not one of the two launch cities, or a pro
+  // the state above: a ZIP that is not in one of the launch cities, or a pro
   // whose launch_cities the database hasn't got yet, never hides anyone.
   property_zip?: string | null;
   // Fan-out-cannon gate (migration 0093): when false, every pro still gets
@@ -102,7 +102,7 @@ export async function alertProsForNewLead(
     // missed that, silently swallowing the whole query (and every alert with
     // it) on a live DB without 0046 instead of falling back cleanly.
     // Which launch city this job actually sits in (0124), or null when the ZIP
-    // is neither one - null means "don't filter", exactly like an unknown
+    // is in none of them - null means "don't filter", exactly like an unknown
     // state above.
     const leadCity = launchCityForZip(lead.property_zip ?? "");
 
@@ -183,7 +183,7 @@ export async function alertProsForNewLead(
     // state filter above: a pro is excluded ONLY when the job's ZIP resolves
     // to a launch city AND the row actually carries a launch_cities array that
     // omits it. A null/missing column (pre-0124 database, or the retry path
-    // that dropped the column) or a ZIP that maps to neither city excludes
+    // that dropped the column) or a ZIP that maps to no launch city excludes
     // nobody. This is a best-effort notifier, so the failure mode has to be an
     // extra alert, never a silently missed one.
     if (leadCity) {

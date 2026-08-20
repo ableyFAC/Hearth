@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
 import {
   ownsPlus,
   getSubscription,
@@ -315,6 +316,30 @@ export default async function PlusPage({
   // returning subscriber never sees trial copy they wouldn't get.
   const trialEligible = !sub;
 
+  // Free-taste credit for the quote analyzer, read from the SAME column the
+  // tool itself claims against (users.free_quote_used_at - see
+  // src/app/api/analyze-quote/route.ts). The reason=quote banner below used to
+  // assert "you've used your free quote check" unconditionally, which was a
+  // lie to anyone who landed here from a tile or a bare link without having
+  // spent anything. Only looked up when that banner can actually render, and
+  // it fails to the GENERIC pitch on any error or missing row: never tell
+  // someone they burned a credit we cannot prove they burned.
+  let quoteCreditSpent = false;
+  if (searchParams.reason === "quote") {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const { data: creditRow } = await supabase
+        .from("users")
+        .select("free_quote_used_at")
+        .eq("id", user.id)
+        .maybeSingle();
+      quoteCreditSpent = !!creditRow?.free_quote_used_at;
+    }
+  }
+
   return (
     // Wider than the other branches of this page: the pricing block below is
     // three real columns (Free, Yearly, Monthly), and max-w-2xl squeezes them
@@ -363,8 +388,9 @@ export default async function PlusPage({
       {searchParams.reason === "quote" && (
         <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
           <p className="text-sm text-bark-700 dark:text-stone-300">
-            You&apos;ve used your free quote check. Plus reads every quote you
-            get, flags padding, and writes the negotiation message, unlimited.
+            {quoteCreditSpent
+              ? "You've used your free quote check. Plus reads every quote you get, flags padding, and writes the negotiation message, unlimited."
+              : "Hearth Plus reads every quote you get, flags anything padded, vague, or duplicated, and writes the message you send back to negotiate."}
           </p>
         </div>
       )}

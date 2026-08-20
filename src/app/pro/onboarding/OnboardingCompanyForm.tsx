@@ -10,6 +10,7 @@ import FieldIcon from "../FieldIcon";
 import PhoneInput from "@/components/PhoneInput";
 import LaunchCityCheckboxes from "./LaunchCityCheckboxes";
 import InlineSpinner from "@/components/InlineSpinner";
+import { LAUNCH_AREA_LABEL } from "@/lib/serviceArea";
 
 // Needs its own component because useFormStatus only reports pending state
 // inside a descendant of the <form> it belongs to, not the component
@@ -29,7 +30,7 @@ function SeeOpenJobsButton() {
 // of dumping them back on this blank form having lost every field they typed.
 //
 // The form itself can no longer produce this: the service-area question is now
-// two checkboxes with at least one required, so there is no "No, I'm outside
+// a checkbox per launch city with at least one required, so there is no "No, I'm outside
 // your area" answer to give. Kept because saveCompanyAction still falls back
 // here for a post that carries no service-area answer at all (not a browser),
 // and because it is the panel to reuse the moment an out-of-area path exists
@@ -47,14 +48,13 @@ function WaitlistedPanel() {
         You&apos;re on the waitlist
       </h1>
       <p className="text-sm text-stone-600 dark:text-stone-300">
-        Hearth is matching pros in Huntington Beach and Fountain Valley right
-        now. We added you to the waitlist and will reach out when Hearth opens
-        in your area.
+        Hearth is matching pros in {LAUNCH_AREA_LABEL} right now. We added you
+        to the waitlist and will reach out when Hearth opens in your area.
       </p>
       <p className="text-sm text-stone-500 dark:text-stone-400">
-        There&apos;s nothing else to set up here yet since Hearth covers
-        Huntington Beach and Fountain Valley right now. Don&apos;t see your city
-        yet? You will soon.
+        There&apos;s nothing else to set up here yet since Hearth covers{" "}
+        {LAUNCH_AREA_LABEL} right now. Don&apos;t see your city yet? You will
+        soon.
       </p>
       <form action="/auth/signout" method="post">
         <button
@@ -166,15 +166,14 @@ function OnboardingCompanyFormInner({
               <div>
                 <fieldset>
                   <legend className="label">
-                    Do you serve Huntington Beach or Fountain Valley?
+                    Which of these cities do you serve?
                   </legend>
                   <LaunchCityCheckboxes />
                 </fieldset>
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  Check every city you serve. Hearth is matching pros in
-                  Huntington Beach and Fountain Valley right now, so at least
-                  one is required. You can add more cities from your profile
-                  once we open in them.
+                  Check every city you serve. These are the cities Hearth is
+                  matching pros in right now, so at least one is required. You
+                  can add more from your profile once we open in them.
                 </p>
               </div>
 

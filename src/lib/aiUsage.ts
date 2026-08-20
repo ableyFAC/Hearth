@@ -18,12 +18,21 @@ const DAILY_LIMIT_PLUS = 250;
 // than silently grant unlimited access. It logs loudly and treats the caller
 // as over-limit. Migration 0070 MUST be applied before this code runs, or all
 // AI routes go dark.
+// `remaining` is how many of today's questions are left AFTER this one, or
+// null when the counter could not be read. It exists purely so a caller can
+// quietly show someone where they stand near the end of their allowance,
+// instead of letting the wall arrive with no warning. Nothing gates on it.
 export async function countAiUsage(
   userId: string,
   isPlus: boolean
-): Promise<{ overLimit: boolean }> {
+): Promise<{
+  overLimit: boolean;
+  remaining: number | null;
+  dailyLimit: number;
+}> {
   const dailyLimit = isPlus ? DAILY_LIMIT_PLUS : DAILY_LIMIT_FREE;
   const admin = createAdminClient();
+  let remaining: number | null = null;
 
   // Per-user daily cap (unchanged). Fails CLOSED, same as before.
   try {
@@ -32,10 +41,12 @@ export async function countAiUsage(
       p_delta: 1,
     });
     if (error) throw error;
-    if ((data as number) > dailyLimit) return { overLimit: true };
+    const used = data as number;
+    remaining = Math.max(0, dailyLimit - used);
+    if (used > dailyLimit) return { overLimit: true, remaining: 0, dailyLimit };
   } catch (err) {
     console.error("bump_ai_usage failed - failing CLOSED:", err);
-    return { overLimit: true };
+    return { overLimit: true, remaining: null, dailyLimit };
   }
 
   // Owner-wide daily SPEND BREAKER, on top of the per-user cap above. One
@@ -59,14 +70,14 @@ export async function countAiUsage(
       console.error(
         `AI global spend breaker tripped (${AI_GLOBAL_BUCKET} over ${AI_GLOBAL_DAILY_LIMIT}/day) - denying to cap runaway cost`
       );
-      return { overLimit: true };
+      return { overLimit: true, remaining, dailyLimit };
     }
   } catch (err) {
     console.error("ai-global rate_limit_hit failed - failing CLOSED:", err);
-    return { overLimit: true };
+    return { overLimit: true, remaining, dailyLimit };
   }
 
-  return { overLimit: false };
+  return { overLimit: false, remaining, dailyLimit };
 }
 
 // Add N extra usages for this user today (e.g. a route that fans out to the

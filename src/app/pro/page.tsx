@@ -349,6 +349,14 @@ export default async function ProDashboard({
   const balance = balanceCents / 100;
   const lowBalance = balanceCents < 5000;
 
+  // The logo is a Pro-member cosmetic (savePublicPageAction re-checks
+  // membership server-side), so for a non-member the checklist's "Upload your
+  // logo" step is a door that does not open. Only worth a membership lookup
+  // when the logo is actually missing; hasProPlan reads the per-request cached
+  // subscription row, so this shares one query with the later call below.
+  const logoDone = Boolean((contractor as any).logo_url);
+  const canUploadLogo = logoDone ? true : await hasProPlan();
+
   // First-session setup checklist. Every item comes from data this page
   // already loads (the contractor row, the wallet, my_applications), so it
   // costs nothing extra and hides itself once every step is done.
@@ -365,11 +373,15 @@ export default async function ProDashboard({
       href: "/pro/profile",
       linkLabel: "Add license",
     },
+    // Marked optional for non-members so the card can still reach its
+    // done-state (and disappear) without it: nagging someone forever about a
+    // step their account cannot complete is worse than not listing it.
     {
-      label: "Upload your logo",
-      done: Boolean((contractor as any).logo_url),
-      href: "/pro/profile",
-      linkLabel: "Add logo",
+      label: canUploadLogo ? "Upload your logo" : "Upload your logo (Pro)",
+      done: logoDone,
+      href: canUploadLogo ? "/pro/profile" : "/pro/plus",
+      linkLabel: canUploadLogo ? "Add logo" : "See Hearth Pro",
+      optional: !canUploadLogo,
     },
     {
       label: "Fund your wallet",
@@ -395,7 +407,9 @@ export default async function ProDashboard({
   // suggestion from members), so skip the lookup when the board has jobs. This
   // one stays sequential on purpose: it depends on the board AFTER the
   // closed-job filter above, and on the common path (jobs on the board) it
-  // never runs at all.
+  // never runs at all. When the setup checklist above already asked (a pro
+  // with no logo on file), hasProPlan reads the same request-cached
+  // subscription rows, so this costs nothing extra either.
   const isProMember = open.length === 0 ? await hasProPlan() : false;
   // Whether that same suggestion may lead with the free trial. Guarded exactly
   // like isProMember, plus the flag: while COLD_START_FREE_ALERTS is on the
@@ -929,6 +943,7 @@ export default async function ProDashboard({
                       fee={feeStr}
                       feeCents={Math.round(fee * 100)}
                       category={labelFor(JOB_CATEGORIES, j.category)}
+                      introPrice={introFee !== null}
                       canAfford={balance >= fee}
                       billingHref={`/pro/billing?need=${Math.max(
                         0,

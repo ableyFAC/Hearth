@@ -3,18 +3,23 @@
 import { useState } from "react";
 import { LAUNCH_CITIES } from "./launchCities";
 
-// The service-area question: exactly the two cities Hearth serves, checkboxes
-// because a pro can serve both. Replaces the free-text city combobox that used
+// The service-area question: exactly the cities Hearth serves, checkboxes
+// because a pro can serve several. Replaces the free-text city combobox that used
 // to live here, in signup AND in the profile editor
 // (src/app/pro/profile/PublicProfileForm.tsx), which posts the identical field
 // names to the identical action. See ./launchCities.ts for why one answer
 // writes service_area, serves_orange_county, and launch_cities.
 //
-// AT LEAST ONE REQUIRED, natively: `required` sits on BOTH boxes while zero
+// AT LEAST ONE REQUIRED, natively: `required` sits on EVERY box while zero
 // are checked, so the browser refuses the submit and points at the field;
-// checking either one drops `required` from both, so the other box is free to
+// checking any one drops `required` from all of them, so the rest are free to
 // stay unchecked. No custom validation layer, and saveCompanyAction still
 // enforces the same rule server-side for anything that isn't a browser.
+//
+// LAYOUT: nine cities in one column is a scroll of its own, so the boxes sit
+// in a two-column grid (single column only on the narrowest phones, where two
+// columns would wrap a city name). No icons, no card chrome - the same plain
+// checkbox rows as before, just packed.
 //
 // The hidden marker is what tells saveCompanyAction this form actually asked
 // the question, matching the missing-field-safe discipline the rest of that
@@ -37,7 +42,7 @@ export default function LaunchCityCheckboxes({
   const noneChecked = checked.length === 0;
 
   return (
-    <div className="space-y-2">
+    <div className="grid grid-cols-1 gap-x-4 gap-y-2 min-[380px]:grid-cols-2">
       <input type="hidden" name="service_cities_present" value="1" />
       {LAUNCH_CITIES.map((city) => (
         <label

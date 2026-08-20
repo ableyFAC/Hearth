@@ -632,7 +632,10 @@ export default async function ContractorsPage({
       {/* Renders nothing when there are no jobs yet; posting the first one
           is handled by the form above, not this section. */}
       {jobLeads.length > 0 && (
-        <section className="space-y-3">
+        /* id="your-jobs": the dashboard's "View job postings" link lands here
+           directly - without the anchor it dropped homeowners at the top of
+           the page, on the post-a-new-job form, when they asked to SEE jobs. */
+        <section id="your-jobs" className="scroll-mt-4 space-y-3">
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Your jobs</h2>
           <ul className="space-y-3">
             {jobLeads.map((l) => {
