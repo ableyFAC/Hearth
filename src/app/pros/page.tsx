@@ -61,6 +61,15 @@ export const metadata: Metadata = {
 // Marketing front door for contractors. Every claim here is a real product
 // behavior (lead fee shown up front, aging markdowns, pay-per-apply wallet),
 // so keep copy in sync with /pro and leadPricing.ts if those change.
+//
+// STAYS DYNAMIC, and not because of the root layout (that no longer reads
+// cookies - see src/app/layout.tsx). Three independent per-request reads live
+// in the body below: auth.getUser() plus getRole() to bounce a signed-in
+// contractor straight to /pro, and searchParams.ref to thread a referral code
+// into the signup link. The redirect is the important one: prerendering this
+// page would land contractors on the marketing pitch instead of their leads.
+// No revalidate export here - it would be a no-op against those reads, and
+// force-static would silently break the redirect rather than fail loudly.
 export default async function ProsLanding({
   searchParams,
 }: {

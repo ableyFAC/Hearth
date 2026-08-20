@@ -12,7 +12,6 @@ import {
   MAJOR_INTRO_FEE,
   isMajorCategory,
 } from "@/lib/constants";
-import CategoryIcon from "@/components/CategoryIcon";
 import { Check } from "lucide-react";
 import Link from "next/link";
 import OpenChatButton from "@/components/OpenChatButton";
@@ -540,9 +539,6 @@ export default async function ProDashboard({
                 <li key={d.id} className="card space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
-                      <span className="icon-chip">
-                        <CategoryIcon list={JOB_CATEGORIES} value={d.category} />
-                      </span>{" "}
                       {labelFor(JOB_CATEGORIES, d.category)}
                       {d.city ? (
                         <span className="font-normal text-stone-500 dark:text-stone-400">
@@ -794,9 +790,6 @@ export default async function ProDashboard({
                 <li key={j.id} className="card space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
-                      <span className="icon-chip">
-                        <CategoryIcon list={JOB_CATEGORIES} value={j.category} />
-                      </span>{" "}
                       {labelFor(JOB_CATEGORIES, j.category)}
                       {/* Locality: open_jobs_for_me (0074) returns the
                           property city. Pros price a lead by where it is. */}
@@ -1012,9 +1005,6 @@ export default async function ProDashboard({
               >
                 <div>
                   <span className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
-                    <span className="icon-chip">
-                      <CategoryIcon list={JOB_CATEGORIES} value={a.category} />
-                    </span>{" "}
                     {labelFor(JOB_CATEGORIES, a.category)}
                   </span>
                   {a.issue_description && (
@@ -1057,9 +1047,6 @@ export default async function ProDashboard({
                 className="card flex items-center justify-between gap-3 opacity-70"
               >
                 <span className="flex items-center gap-2 font-medium text-stone-700 dark:text-stone-300">
-                  <span className="icon-chip">
-                    <CategoryIcon list={JOB_CATEGORIES} value={a.category} />
-                  </span>{" "}
                   {labelFor(JOB_CATEGORIES, a.category)}
                 </span>
                 <span className="chip shrink-0 border border-stone-200 bg-stone-100 text-stone-500 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400">
@@ -1087,9 +1074,6 @@ function AssignedJobCard({
     <li className="card space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
-          <span className="icon-chip">
-            <CategoryIcon list={JOB_CATEGORIES} value={l.category} />
-          </span>{" "}
           {labelFor(JOB_CATEGORIES, l.category)}
         </span>
         {l.issue_severity && (

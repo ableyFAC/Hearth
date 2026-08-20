@@ -19,6 +19,20 @@ import {
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
+// STATIC. This page reads no cookies, no headers, no searchParams, and no
+// database: every number on it comes from PLUS_PLAN and the plan-math helpers,
+// which are build-time constants. Now that the root layout no longer reads the
+// flash cookie (see src/app/layout.tsx), nothing forces this route dynamic, so
+// it is prerendered once and served from the edge cache.
+//
+// The explicit revalidate is a marker, not a requirement: with no data source
+// there is nothing for a regeneration to pick up, and Next would prerender this
+// page with or without it. It is here so the page's static intent is visible in
+// the file and in `next build` output, and so a future data read gets ISR
+// instead of silently dropping the route back to per-request rendering.
+// Anything added here that reads cookies()/headers()/searchParams undoes it.
+export const revalidate = 3600;
+
 export const metadata: Metadata = {
   // The root layout's title template appends "| Hearth"; don't repeat it here.
   title: "Pricing",

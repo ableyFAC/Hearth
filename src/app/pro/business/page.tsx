@@ -16,7 +16,6 @@ import {
   GHOST_PROTECTION_DAYS,
   COLD_START_FREE_ALERTS,
 } from "@/lib/constants";
-import CategoryIcon from "@/components/CategoryIcon";
 import { Lock } from "lucide-react";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -432,11 +431,6 @@ export default async function ProBusinessPage() {
                     {stats.categories.map((c) => (
                       <tr key={c.category}>
                         <td className="py-2 pr-3 font-medium text-stone-900 dark:text-stone-100">
-                          <CategoryIcon
-                            list={JOB_CATEGORIES}
-                            value={c.category}
-                            className="mr-1 inline-block h-4 w-4 align-[-3px]"
-                          />
                           {labelFor(JOB_CATEGORIES, c.category)}
                         </td>
                         <td className="py-2 pr-3 text-right text-stone-600 dark:text-stone-300">
@@ -568,11 +562,6 @@ export default async function ProBusinessPage() {
                     {teaserCategories.map((c) => (
                       <tr key={c.category}>
                         <td className="py-2 pr-3 font-medium text-stone-900 dark:text-stone-100">
-                          <CategoryIcon
-                            list={JOB_CATEGORIES}
-                            value={c.category}
-                            className="mr-1 inline-block h-4 w-4 align-[-3px]"
-                          />
                           {labelFor(JOB_CATEGORIES, c.category)}
                         </td>
                         <td className="py-2 pr-3 text-right text-stone-600 dark:text-stone-300">
@@ -656,9 +645,6 @@ export default async function ProBusinessPage() {
                 >
                   <div>
                     <span className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
-                      <span className="icon-chip">
-                        <CategoryIcon list={JOB_CATEGORIES} value={a.category} />
-                      </span>{" "}
                       {labelFor(JOB_CATEGORIES, a.category)}
                     </span>
                     {a.issue_description && (
@@ -708,9 +694,6 @@ export default async function ProBusinessPage() {
                 className="card flex flex-wrap items-center justify-between gap-3"
               >
                 <span className="flex min-w-0 items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
-                  <span className="icon-chip">
-                    <CategoryIcon list={JOB_CATEGORIES} value={l.category} />
-                  </span>{" "}
                   {labelFor(JOB_CATEGORIES, l.category)}
                 </span>
                 <span className="flex shrink-0 items-center gap-3">

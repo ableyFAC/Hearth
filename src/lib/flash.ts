@@ -1,8 +1,24 @@
 import { cookies } from "next/headers";
 
 // Lightweight "flash" toast that survives a server action + revalidate/redirect.
-// setFlash() drops a short-lived, non-httpOnly cookie (so the client FlashBridge
-// can clear it); readFlash() is called once in the root layout each render.
+// setFlash() drops a short-lived, non-httpOnly cookie.
+//
+// WHO DOES WHAT:
+//   sets    - setFlash(), from inside a Server Action (this file).
+//   renders - src/components/FlashToast.tsx, on the CLIENT, by reading
+//             document.cookie. The cookie is non-httpOnly for exactly this.
+//   deletes - the same client component, right after queueing the toast.
+//
+// The render used to happen server-side: the root layout called readFlash()
+// every render and handed the result to FlashBridge. That single cookies() read
+// made every route in the app dynamic, so it moved to the client. The
+// setFlash/readFlash server contract is untouched - every existing setFlash()
+// call site keeps working exactly as before, including the ones that were
+// rerouted through ActionResult.
+//
+// readFlash() stays exported for any server consumer that wants to read a
+// pending flash during a render; nothing in the tree does today, and anything
+// that starts to should be aware it makes its own route dynamic.
 export const FLASH_COOKIE = "hearth_flash";
 
 export type FlashType = "success" | "error" | "info" | "warning";

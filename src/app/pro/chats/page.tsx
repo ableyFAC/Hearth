@@ -6,7 +6,6 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { labelFor, JOB_CATEGORIES } from "@/lib/constants";
 import LeadChat from "@/components/LeadChat";
-import CategoryIcon from "@/components/CategoryIcon";
 import MarkChatSeen from "@/components/MarkChatSeen";
 import {
   sendQuoteAction,
@@ -178,7 +177,7 @@ export default async function ProChatsPage({
                         </span>
                       ) : (
                         <span className="shrink-0 text-xs text-stone-500 dark:text-stone-400">
-                          <CategoryIcon list={JOB_CATEGORIES} value={l.category} className="h-4 w-4" />
+                          {labelFor(JOB_CATEGORIES, l.category)}
                         </span>
                       )}
                     </div>

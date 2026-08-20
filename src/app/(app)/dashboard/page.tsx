@@ -33,7 +33,6 @@ import ReminderItem from "./ReminderItem";
 import WalkthroughNudge from "./WalkthroughNudge";
 import HomeAlerts from "@/components/HomeAlerts";
 import WeatherStrip from "@/components/WeatherStrip";
-import CategoryIcon from "@/components/CategoryIcon";
 import {
   Home,
   TrendingUp,
@@ -540,9 +539,9 @@ export default async function HomePage({
             className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-600 dark:hover:text-stone-300"
           >
             {/* Plain text labels, matching the "Other" chip below. The little
-                pictograms were removed on purpose - REMODEL_PROJECTS still
-                carries its icon field for the other surfaces that use it
-                (see contractors/CategoryFilter.tsx). */}
+                pictograms were removed on purpose - no surface renders the
+                REMODEL_PROJECTS icon field any more, it just hasn't been
+                deleted from constants.ts yet. */}
             {p.label}
           </Link>
         ))}
@@ -580,11 +579,6 @@ export default async function HomePage({
                     key={s.id}
                     className="chip border border-bark-100 bg-white text-stone-700 dark:border-bark-700 dark:bg-stone-800 dark:text-stone-300"
                   >
-                    <CategoryIcon
-                      list={SYSTEM_TYPES}
-                      value={s.system_type}
-                      className="mr-1 inline-block h-3.5 w-3.5 align-[-2px]"
-                    />
                     {labelFor(SYSTEM_TYPES, s.system_type)}
                   </li>
                 ))}
@@ -995,11 +989,7 @@ export default async function HomePage({
                     >
                       <span className="flex min-w-0 items-center gap-2 text-sm text-stone-800 dark:text-stone-200">
                         <span>
-                          {w.system_type ? (
-                            <CategoryIcon list={SYSTEM_TYPES} value={w.system_type} className="h-4 w-4" />
-                          ) : (
-                            <FileText className="h-4 w-4" aria-hidden="true" />
-                          )}
+                          <FileText className="h-4 w-4" aria-hidden="true" />
                         </span>
                         <span className="truncate">{w.title ?? "Home document"}</span>
                       </span>

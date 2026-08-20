@@ -12,9 +12,26 @@ import Logo from "@/components/Logo";
 // a guide link is a tonal whiplash, and dishonest besides - they already
 // started.
 //
-// The honest accounting, since the old comment here claimed this "adds no new
-// rendering cost": it does cost something. These pages are already dynamically
-// rendered, so no static-generation opportunity is lost, but the auth check
+// STAYS DYNAMIC, and this is the one thing keeping the whole /guides section
+// (11 guide pages plus the index) off static generation. The root layout no
+// longer reads the flash cookie (see src/app/layout.tsx and FlashToast), so
+// this getVerifiedUser() call - and the second session read inside GuideCta at
+// the foot of every guide - is now the sole blocker. `export const revalidate`
+// on the guide pages would do nothing while this layout reads the session: a
+// layout's dynamic read opts its whole subtree out.
+//
+// Deliberately not changed. Guides are exactly where a signed-in reader lands
+// from search, and the header CTA is the thing this layout exists to get right:
+// prerendering it would ship "Get started free" to someone who already has an
+// account and swap it after hydration. The correct fix, if the static win is
+// ever wanted, is to resolve the session in the browser inside one small client
+// component shared by this header and GuideCta, so the guide BODY prerenders
+// and only the CTA is deferred. That is a bigger change than a revalidate
+// export and it belongs in its own pass.
+//
+// The honest accounting of what the check costs today: it does cost something.
+// These pages are dynamically rendered, so no static-generation opportunity is
+// lost as long as that stays true, but the auth check
 // itself is a real network round trip to Supabase's auth server, and it sits
 // on the blocking path in front of the guide's own content. What used to make
 // it expensive was paying for it more than once: this layout asked, then

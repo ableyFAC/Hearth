@@ -1,5 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendNotification } from "@/lib/notify";
+import { sendNotification, sendOutboundChannels } from "@/lib/notify";
+import {
+  buildAlertOutbound,
+  buildAlertNotificationRows,
+  type AlertRecipientRow,
+} from "@/lib/proAlertBatch";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import { launchCityForZip } from "@/lib/serviceArea";
 import { redactContact } from "@/lib/redact";
@@ -25,13 +30,27 @@ import {
 // Everything here is best-effort: any failure (missing table, migration lag,
 // no matches) is logged and swallowed. Alerting must never break or slow the
 // homeowner's posting flow.
+//
+// STILL ON THE BLOCKING PATH. The right answer is to run this after the
+// response is sent, but Next 14 server actions have no after() - unstable_after
+// arrives in Next 15 - and every alternative (a queue, a cron drain, an
+// internal fetch to a route handler) is new infrastructure for a best-effort
+// notifier. So the fix for now is to make it cheap rather than to move it:
+// the fan-out below is batched down to two queries flat. Revisit as a Next 15
+// follow-up, where wrapping the alertProsForNewLead() call site in after() is
+// a one-line change and this file needs no edits at all.
 
 // Sanity cap on the fan-out so one posting can't queue an unbounded pile of
-// notification writes inside a server action.
+// notification writes inside a server action. Unchanged.
 const MAX_ALERTS = 200;
 
-// How many sendNotification calls run at once. Chunked so a big fan-out
-// doesn't turn into 200 sequential round-trips inside the posting action.
+// How many outbound (email/SMS) sends run at once. This used to chunk
+// sendNotification calls, which meant the in-app rows were written 20 at a
+// time in 10 sequential waves - up to 200 inserts (400 queries once Resend is
+// configured and each send re-read the recipient's prefs) with the homeowner's
+// posting action blocked on all of them. The rows now go in one bulk insert
+// and this only paces the HTTP calls to the providers, which are dormant until
+// those env vars exist.
 const ALERT_BATCH_SIZE = 20;
 
 export type NewLeadAlertInput = {
@@ -244,12 +263,21 @@ export async function alertProsForNewLead(
 
     // Contact details so the email/SMS channels can fire once their providers
     // are configured. There is no prefs toggle for these alerts today (the
-    // notification_prefs keys are homeowner-facing), so recipients get them all.
+    // notification_prefs keys are homeowner-facing), so recipients get them all
+    // - but notification_prefs is selected here anyway because it carries the
+    // CAN-SPAM email_opt_out flag that sendEmail otherwise re-reads once per
+    // recipient. One .in() query for every recipient's row replaces up to
+    // MAX_ALERTS of those single-row reads.
     const { data: users } = await admin
       .from("users")
-      .select("id, email, phone, sms_consent")
+      .select("id, email, phone, sms_consent, notification_prefs")
       .in("id", targetIds);
-    const userById = new Map((users ?? []).map((u) => [u.id, u]));
+    const rowByUser = new Map<string, AlertRecipientRow>(
+      ((users ?? []) as ({ id: string } & AlertRecipientRow)[]).map((u) => [
+        u.id,
+        u,
+      ])
+    );
 
     const categoryLabel = labelFor(JOB_CATEGORIES, lead.category);
     const timingLabel = lead.timing
@@ -275,29 +303,97 @@ export async function alertProsForNewLead(
         .join(" ") || "A homeowner just posted a job that matches your services.") +
       ` ${urgencyLine}`;
 
-    for (let i = 0; i < targetIds.length; i += ALERT_BATCH_SIZE) {
-      const batch = targetIds.slice(i, i + ALERT_BATCH_SIZE);
+    // ---- BATCHED FAN-OUT ----------------------------------------------------
+    //
+    // THIS IS THE BATCHED TWIN OF sendNotification() (src/lib/notify.ts). Its
+    // per-recipient semantics must stay in lockstep with that function's:
+    // the same notifications row is written for every target, and the same
+    // opt-out rules decide the outbound channels. The ONLY thing restated here
+    // is the insert. Everything after it - the Hearth Plus gate, the CAN-SPAM
+    // email opt-out, the TCPA consent and quiet-hours checks - still runs
+    // inside notify.ts, through sendOutboundChannels, so there is one copy of
+    // those rules and not two. If you add a step to sendNotification, put it in
+    // sendOutboundChannels or it will silently skip every job-post alert.
+    //
+    // Why: this runs inside the homeowner's posting server action, which waits
+    // on it. Per-recipient it was 1 insert (plus a prefs read per recipient
+    // once Resend is configured), so a 200-pro fan-out cost 200-400 queries in
+    // 10 sequential waves. It is now 1 users read + 1 insert, flat.
+    const payload = {
+      kind: "new_lead",
+      title: `New ${categoryLabel} job just posted`,
+      body,
+      url: "/pro",
+    };
+
+    // One insert for every in-app row. Postgres applies a multi-row INSERT
+    // atomically, so this is all-or-nothing: on failure nobody has a row yet,
+    // which is why the fallback below can safely re-send one at a time. That
+    // fallback matters for the realistic failure - a single bad user_id (a pro
+    // deleted between the two queries) failing the whole statement - where
+    // per-row writes still deliver to everyone else, exactly as before.
+    const { error: insertError } = await admin
+      .from("notifications")
+      .insert(buildAlertNotificationRows(targetIds, payload));
+
+    if (insertError) {
+      console.error(
+        "pro new-lead alerts: bulk insert failed, falling back to per-recipient:",
+        insertError.message ?? insertError
+      );
+      for (let i = 0; i < targetIds.length; i += ALERT_BATCH_SIZE) {
+        const batch = targetIds.slice(i, i + ALERT_BATCH_SIZE);
+        await Promise.all(
+          batch.map(async (userId) => {
+            const contact = rowByUser.get(userId);
+            const sent = await sendNotification(admin, {
+              ...payload,
+              userId,
+              // Withholding email/phone (rather than skipping the call) is what
+              // keeps the in-app row firing even when externalChannels is
+              // false - sendNotification always writes it, and only reaches
+              // for email/SMS when it actually has contact details to use.
+              email: externalChannels ? contact?.email ?? null : null,
+              phone: externalChannels
+                ? contactPhoneByUser.get(userId) ?? contact?.phone ?? null
+                : null,
+              smsConsent: externalChannels && contact?.sms_consent === true,
+            });
+            if (sent) alerted.add(userId);
+          })
+        );
+      }
+      return alerted;
+    }
+
+    for (const userId of targetIds) alerted.add(userId);
+
+    // Email and SMS stay per-recipient (each is its own provider HTTP call),
+    // but they now run off the contact details and opt-out flags already read
+    // in the batch above instead of a query per recipient. Both channels are
+    // dormant until RESEND_API_KEY / TWILIO_* are set, so today this loop is a
+    // handful of no-op returns. Still paced in waves of ALERT_BATCH_SIZE so a
+    // configured provider isn't hit with 200 concurrent requests.
+    const outbound = buildAlertOutbound(targetIds, {
+      externalChannels,
+      rowByUser,
+      contactPhoneByUser,
+    });
+    for (let i = 0; i < outbound.length; i += ALERT_BATCH_SIZE) {
+      const wave = outbound.slice(i, i + ALERT_BATCH_SIZE);
       await Promise.all(
-        batch.map(async (userId) => {
-          const contact = userById.get(userId);
-          const sent = await sendNotification(admin, {
-            userId,
-            kind: "new_lead",
-            title: `New ${categoryLabel} job just posted`,
-            body,
-            url: "/pro",
-            // Withholding email/phone (rather than skipping the call) is what
-            // keeps the in-app row firing even when externalChannels is
-            // false - sendNotification always writes it, and only reaches
-            // for email/SMS when it actually has contact details to use.
-            email: externalChannels ? contact?.email ?? null : null,
-            phone: externalChannels
-              ? contactPhoneByUser.get(userId) ?? contact?.phone ?? null
-              : null,
-            smsConsent: externalChannels && contact?.sms_consent === true,
-          });
-          if (sent) alerted.add(userId);
-        })
+        wave.map((r) =>
+          sendOutboundChannels(
+            {
+              ...payload,
+              userId: r.userId,
+              email: r.email,
+              phone: r.phone,
+              smsConsent: r.smsConsent,
+            },
+            { emailOptOut: r.emailOptOut }
+          )
+        )
       );
     }
   } catch (err) {

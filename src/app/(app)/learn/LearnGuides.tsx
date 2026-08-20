@@ -3,7 +3,6 @@
 import { useMemo, useRef, useState } from "react";
 import LearnGuide from "./LearnGuide";
 import { requestTopicAction } from "./actions";
-import { SYSTEM_TYPES } from "@/lib/constants";
 import SubmitButton from "@/components/SubmitButton";
 
 export type GuideData = {
@@ -106,7 +105,6 @@ export default function LearnGuides({ guides }: { guides: GuideData[] }) {
               key={g.systemType}
               systemType={g.systemType}
               label={g.label}
-              icon={SYSTEM_TYPES.find((t) => t.value === g.systemType)?.icon ?? null}
               summary={g.summary}
               lifespan={g.lifespan}
               statusLabel={g.statusLabel}

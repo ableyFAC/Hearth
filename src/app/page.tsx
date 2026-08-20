@@ -1,12 +1,11 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getRole } from "@/lib/contractor";
-import { FOUNDER, SERVICE_CATEGORIES } from "@/lib/constants";
+import { FOUNDER } from "@/lib/constants";
 import { LAUNCH_AREA_LABEL } from "@/lib/serviceArea";
 import Link from "next/link";
 import Image from "next/image";
 import Logo from "@/components/Logo";
-import CategoryIcon from "@/components/CategoryIcon";
 import HeroDemoPlayerLazy from "@/components/HeroDemoPlayerLazy";
 import HeroPhotoCycler from "@/components/HeroPhotoCycler";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -37,6 +36,18 @@ function CheckPill({ label }: { label: string }) {
 
 // Root: route signed-in users into the app, everyone else to the marketing-lite
 // landing. Kept server-side so there's no flash of the wrong screen.
+//
+// STAYS DYNAMIC, on its own merits rather than the root layout's (that no
+// longer reads cookies - see src/app/layout.tsx). Two per-request reads sit
+// above the markup and both are routing decisions, not decoration:
+// searchParams.code catches a magic link that landed here instead of
+// /auth/callback and forwards it, and auth.getUser() + getRole() sends a
+// signed-in visitor to /pro or /dashboard. No per-request DATA feeds the
+// landing markup itself - every list below is a plain in-function constant -
+// so if those two redirects ever move (the code hand-off into middleware, the
+// signed-in bounce into a client-side check), this page prerenders with no
+// other work. Until then a revalidate export would be a no-op and force-static
+// would silently break both redirects.
 export default async function Home({
   searchParams,
 }: {
@@ -365,7 +376,7 @@ export default async function Home({
           into homeowner signup with the category preset in ?next= so the
           post-a-job form on /contractors lands pre-filled (it reads
           ?category=). Chips reuse the header link's neutral outline shape,
-          rounded full; icons inherit currentColor via CategoryIcon. */}
+          rounded full, and stay plain text labels - no trade pictograms. */}
       <section className="mt-12 sm:mt-16">
         <h2 className="text-center text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
           Find a pro for
@@ -377,13 +388,8 @@ export default async function Home({
                 href={`/homeowner-signup?next=${encodeURIComponent(
                   `/contractors?category=${s.value}`
                 )}`}
-                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-stone-300 bg-white px-4 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 sm:min-h-0 sm:px-3.5 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-500 dark:hover:text-stone-100"
+                className="inline-flex min-h-[44px] items-center rounded-full border border-stone-300 bg-white px-4 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 sm:min-h-0 sm:px-3.5 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-500 dark:hover:text-stone-100"
               >
-                <CategoryIcon
-                  list={SERVICE_CATEGORIES}
-                  value={s.value}
-                  className="h-4 w-4"
-                />
                 {s.label}
               </Link>
             </li>

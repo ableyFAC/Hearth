@@ -2,7 +2,6 @@ import { getActiveProperty } from "@/lib/property";
 import { createClient } from "@/lib/supabase/server";
 import { homeHealthScore, scoreBand } from "@/lib/health";
 import { labelFor, SYSTEM_TYPES } from "@/lib/constants";
-import CategoryIcon from "@/components/CategoryIcon";
 import type { HomeSystem, Issue } from "@/lib/database.types";
 import SystemCaptureCard from "./SystemCaptureCard";
 
@@ -87,7 +86,6 @@ export default async function WalkthroughPage() {
                 className="card flex flex-wrap items-center justify-between gap-2 text-sm"
               >
                 <span className="flex items-center gap-2 text-stone-800 dark:text-stone-200">
-                  <CategoryIcon list={SYSTEM_TYPES} value={s.system_type} className="h-4 w-4" />
                   <span className="font-medium">
                     {labelFor(SYSTEM_TYPES, s.system_type)}
                   </span>

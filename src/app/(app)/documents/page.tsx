@@ -5,7 +5,6 @@ import { hasPlus } from "@/lib/subscription";
 import { labelFor, SYSTEM_TYPES } from "@/lib/constants";
 import { stateName } from "@/lib/forecast";
 import DocumentUpload from "@/components/DocumentUpload";
-import CategoryIcon from "@/components/CategoryIcon";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
 import SubmitButton from "@/components/SubmitButton";
 import { FileText } from "lucide-react";
@@ -188,11 +187,7 @@ export default async function DocumentsPage() {
               className="flex gap-3 rounded-xl border border-stone-200 bg-white p-4 dark:border-white/10 dark:bg-stone-800"
             >
               <div className="icon-chip">
-                {d.system_type ? (
-                  <CategoryIcon list={SYSTEM_TYPES} value={d.system_type} />
-                ) : (
-                  <FileText className="h-5 w-5" aria-hidden="true" />
-                )}
+                <FileText className="h-5 w-5" aria-hidden="true" />
               </div>
 
               <div className="min-w-0 flex-1">

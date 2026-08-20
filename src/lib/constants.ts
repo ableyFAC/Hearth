@@ -1,74 +1,5 @@
 // Shared option lists. Keep these in sync with the CHECK comments in the schema.
 
-import type { LucideIcon } from "lucide-react";
-import {
-  Home,
-  Wind,
-  ShowerHead,
-  Zap,
-  Wrench,
-  AppWindow,
-  Building2,
-  Plug,
-  CloudRain,
-  Layers,
-  DoorOpen,
-  Trees,
-  Route,
-  Droplet,
-  Toilet,
-  Fence as FenceIcon,
-  HelpCircle,
-  Hammer,
-  Leaf,
-  SprayCan,
-  Paintbrush,
-  Search,
-  Bug,
-  HardHat,
-  ChefHat,
-  Bath,
-  MoveVertical,
-  Grid3x3,
-  Sun,
-  Thermometer,
-  Camera,
-  Boxes,
-  Blocks,
-} from "lucide-react";
-
-// One icon per category value, shared across every list below that uses the
-// same value (e.g. "roof" gets the same icon in SYSTEM_TYPES and
-// SERVICE_CATEGORIES). Keeping this in one map means a category always reads
-// the same everywhere it appears.
-const CATEGORY_ICONS: Record<string, LucideIcon> = {
-  roof: Home,
-  hvac: Wind,
-  water_heater: ShowerHead,
-  electrical_panel: Zap,
-  plumbing: Wrench,
-  windows: AppWindow,
-  foundation: Building2,
-  appliance: Plug,
-  gutters: CloudRain,
-  siding: Layers,
-  garage_door: DoorOpen,
-  deck: Trees,
-  driveway: Route,
-  sump_pump: Droplet,
-  sewer_line: Toilet,
-  fence: FenceIcon,
-  electrical: Zap,
-  structural: Building2,
-  other: HelpCircle,
-  remodeling: Hammer,
-  landscaping: Leaf,
-  cleaning: SprayCan,
-  painting: Paintbrush,
-  home_inspection: Search,
-  pest: Bug,
-  handyman: HardHat,
-};
 
 // =============================================================================
 // COLD START: launch-phase liquidity levers.
@@ -131,22 +62,22 @@ export const FOUNDER = {
 };
 
 export const SYSTEM_TYPES = [
-  { value: "roof", label: "Roof", icon: CATEGORY_ICONS.roof },
-  { value: "hvac", label: "HVAC", icon: CATEGORY_ICONS.hvac },
-  { value: "water_heater", label: "Water heater", icon: CATEGORY_ICONS.water_heater },
-  { value: "electrical_panel", label: "Electrical panel", icon: CATEGORY_ICONS.electrical_panel },
-  { value: "plumbing", label: "Plumbing", icon: CATEGORY_ICONS.plumbing },
-  { value: "windows", label: "Windows", icon: CATEGORY_ICONS.windows },
-  { value: "foundation", label: "Foundation", icon: CATEGORY_ICONS.foundation },
-  { value: "appliance", label: "Major appliance", icon: CATEGORY_ICONS.appliance },
-  { value: "gutters", label: "Gutters", icon: CATEGORY_ICONS.gutters },
-  { value: "siding", label: "Siding", icon: CATEGORY_ICONS.siding },
-  { value: "garage_door", label: "Garage door", icon: CATEGORY_ICONS.garage_door },
-  { value: "deck", label: "Deck / patio", icon: CATEGORY_ICONS.deck },
-  { value: "driveway", label: "Driveway", icon: CATEGORY_ICONS.driveway },
-  { value: "sump_pump", label: "Sump pump", icon: CATEGORY_ICONS.sump_pump },
-  { value: "sewer_line", label: "Sewer / septic", icon: CATEGORY_ICONS.sewer_line },
-  { value: "fence", label: "Fence", icon: CATEGORY_ICONS.fence },
+  { value: "roof", label: "Roof"},
+  { value: "hvac", label: "HVAC"},
+  { value: "water_heater", label: "Water heater"},
+  { value: "electrical_panel", label: "Electrical panel"},
+  { value: "plumbing", label: "Plumbing"},
+  { value: "windows", label: "Windows"},
+  { value: "foundation", label: "Foundation"},
+  { value: "appliance", label: "Major appliance"},
+  { value: "gutters", label: "Gutters"},
+  { value: "siding", label: "Siding"},
+  { value: "garage_door", label: "Garage door"},
+  { value: "deck", label: "Deck / patio"},
+  { value: "driveway", label: "Driveway"},
+  { value: "sump_pump", label: "Sump pump"},
+  { value: "sewer_line", label: "Sewer / septic"},
+  { value: "fence", label: "Fence"},
 ] as const;
 
 // Marker text the auto-seeded starter inventory used to use as a per-system
@@ -158,12 +89,12 @@ export const STARTER_SYSTEM_NOTE =
 // Home-problem categories for the issue tracker (home-health side). These are
 // things that go *wrong* with a house, not every service a pro offers.
 export const ISSUE_CATEGORIES = [
-  { value: "roof", label: "Roof", icon: CATEGORY_ICONS.roof },
-  { value: "plumbing", label: "Plumbing", icon: CATEGORY_ICONS.plumbing },
-  { value: "electrical", label: "Electrical", icon: CATEGORY_ICONS.electrical },
-  { value: "hvac", label: "HVAC", icon: CATEGORY_ICONS.hvac },
-  { value: "structural", label: "Structural", icon: CATEGORY_ICONS.structural },
-  { value: "other", label: "Other", icon: CATEGORY_ICONS.other },
+  { value: "roof", label: "Roof"},
+  { value: "plumbing", label: "Plumbing"},
+  { value: "electrical", label: "Electrical"},
+  { value: "hvac", label: "HVAC"},
+  { value: "structural", label: "Structural"},
+  { value: "other", label: "Other"},
 ] as const;
 
 // Canonical service categories a contractor advertises and a homeowner can post
@@ -172,27 +103,27 @@ export const ISSUE_CATEGORIES = [
 // sides have to draw from this same list. (Custom "Other" services are handled
 // separately as free text.)
 export const SERVICE_CATEGORIES = [
-  { value: "roof", label: "Roof", icon: CATEGORY_ICONS.roof },
-  { value: "plumbing", label: "Plumbing", icon: CATEGORY_ICONS.plumbing },
-  { value: "electrical", label: "Electrical", icon: CATEGORY_ICONS.electrical },
-  { value: "hvac", label: "HVAC", icon: CATEGORY_ICONS.hvac },
-  { value: "structural", label: "Structural", icon: CATEGORY_ICONS.structural },
-  { value: "remodeling", label: "Remodeling", icon: CATEGORY_ICONS.remodeling },
-  { value: "landscaping", label: "Landscaping", icon: CATEGORY_ICONS.landscaping },
-  { value: "cleaning", label: "Cleaning", icon: CATEGORY_ICONS.cleaning },
-  { value: "windows", label: "Windows", icon: CATEGORY_ICONS.windows },
-  { value: "painting", label: "Painting", icon: CATEGORY_ICONS.painting },
-  { value: "home_inspection", label: "Home inspection", icon: CATEGORY_ICONS.home_inspection },
-  { value: "pest", label: "Pest & termite control", icon: CATEGORY_ICONS.pest },
-  { value: "garage_door", label: "Garage door", icon: CATEGORY_ICONS.garage_door },
-  { value: "handyman", label: "Handyman", icon: CATEGORY_ICONS.handyman },
+  { value: "roof", label: "Roof"},
+  { value: "plumbing", label: "Plumbing"},
+  { value: "electrical", label: "Electrical"},
+  { value: "hvac", label: "HVAC"},
+  { value: "structural", label: "Structural"},
+  { value: "remodeling", label: "Remodeling"},
+  { value: "landscaping", label: "Landscaping"},
+  { value: "cleaning", label: "Cleaning"},
+  { value: "windows", label: "Windows"},
+  { value: "painting", label: "Painting"},
+  { value: "home_inspection", label: "Home inspection"},
+  { value: "pest", label: "Pest & termite control"},
+  { value: "garage_door", label: "Garage door"},
+  { value: "handyman", label: "Handyman"},
 ] as const;
 
 // Every value a job's category can take, for labels/icons when displaying a
 // posted job (the canonical services plus the catch-all "Other" bucket).
 export const JOB_CATEGORIES = [
   ...SERVICE_CATEGORIES,
-  { value: "other", label: "Other", icon: CATEGORY_ICONS.other },
+  { value: "other", label: "Other"},
 ] as const;
 
 // Per-category "what to shoot" lists shown next to the photo picker when a
@@ -286,28 +217,28 @@ export function photoTipsFor(category: string): string[] {
 // Popular remodel / improvement projects we surface as recommendations.
 // `category` maps each project to the contractor category used for matching.
 export const REMODEL_PROJECTS = [
-  { label: "Kitchen remodel", icon: ChefHat, category: "remodeling" },
-  { label: "Bathroom remodel", icon: Bath, category: "remodeling" },
-  { label: "Window replacement", icon: AppWindow, category: "windows" },
-  { label: "Stairs & railings", icon: MoveVertical, category: "structural" },
-  { label: "Flooring", icon: Grid3x3, category: "remodeling" },
-  { label: "Deck / patio", icon: Trees, category: "structural" },
-  { label: "Interior painting", icon: Paintbrush, category: "painting" },
-  { label: "Garage door", icon: DoorOpen, category: "garage_door" },
-  { label: "Roof replacement", icon: Home, category: "roof" },
-  { label: "Panel upgrade", icon: Zap, category: "electrical" },
-  { label: "HVAC install", icon: Wind, category: "hvac" },
-  { label: "Water heater", icon: ShowerHead, category: "plumbing" },
-  { label: "Solar panels", icon: Sun, category: "electrical" },
-  { label: "Fencing", icon: FenceIcon, category: "landscaping" },
-  { label: "Landscaping", icon: Leaf, category: "landscaping" },
-  { label: "Driveway / concrete", icon: Route, category: "structural" },
-  { label: "Siding", icon: Layers, category: "structural" },
-  { label: "Gutter installation", icon: CloudRain, category: "roof" },
-  { label: "Insulation", icon: Thermometer, category: "remodeling" },
-  { label: "Basement finishing", icon: Boxes, category: "remodeling" },
-  { label: "Smart home / security", icon: Camera, category: "electrical" },
-  { label: "Drywall repair", icon: Blocks, category: "remodeling" },
+  { label: "Kitchen remodel", category: "remodeling" },
+  { label: "Bathroom remodel", category: "remodeling" },
+  { label: "Window replacement", category: "windows" },
+  { label: "Stairs & railings", category: "structural" },
+  { label: "Flooring", category: "remodeling" },
+  { label: "Deck / patio", category: "structural" },
+  { label: "Interior painting", category: "painting" },
+  { label: "Garage door", category: "garage_door" },
+  { label: "Roof replacement", category: "roof" },
+  { label: "Panel upgrade", category: "electrical" },
+  { label: "HVAC install", category: "hvac" },
+  { label: "Water heater", category: "plumbing" },
+  { label: "Solar panels", category: "electrical" },
+  { label: "Fencing", category: "landscaping" },
+  { label: "Landscaping", category: "landscaping" },
+  { label: "Driveway / concrete", category: "structural" },
+  { label: "Siding", category: "structural" },
+  { label: "Gutter installation", category: "roof" },
+  { label: "Insulation", category: "remodeling" },
+  { label: "Basement finishing", category: "remodeling" },
+  { label: "Smart home / security", category: "electrical" },
+  { label: "Drywall repair", category: "remodeling" },
 ] as const;
 
 export const SEVERITIES = [
@@ -814,14 +745,6 @@ export function labelFor(
   // Unknown values (legacy rows, options removed from a list) must never leak
   // as raw enums like "this_month" - humanize the underscores as a fallback.
   return list.find((o) => o.value === value)?.label ?? value.replace(/_/g, " ");
-}
-
-export function iconFor(
-  list: readonly { value: string; icon?: LucideIcon }[],
-  value: string | null | undefined
-): LucideIcon | null {
-  if (!value) return null;
-  return list.find((o) => o.value === value)?.icon ?? null;
 }
 
 // Short seasonal maintenance checklist, shown on Home for the current season.

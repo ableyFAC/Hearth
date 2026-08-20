@@ -18,9 +18,23 @@ import { ClipboardList, MessageSquare, Wrench, Gift } from "lucide-react";
 // homeowners in this city."
 //
 // Session-aware header/hero CTA: same reasoning as src/app/guides/layout.tsx
-// - a signed-in visitor shouldn't be pitched "get started free" again. These
-// routes are already dynamically rendered (the root layout reads cookies for
-// auth), so checking auth.getUser() here adds no new rendering cost.
+// - a signed-in visitor shouldn't be pitched "get started free" again.
+//
+// THIS IS WHAT KEEPS /huntington-beach AND /fountain-valley DYNAMIC, and the
+// old note here ("these routes are already dynamically rendered anyway, so the
+// auth check adds no new rendering cost") is no longer true. It was true only
+// because the root layout read the flash cookie on every route; that read has
+// moved to the client (src/components/FlashToast.tsx), so the ONLY thing now
+// standing between these two city landing pages and full static generation is
+// the auth.getUser() below, plus the second session read inside <GuideCta />.
+//
+// Left dynamic on purpose. These are the pages a signed-in homeowner reaches
+// from the footer, and making them static means rendering "Get started free"
+// to someone who already started, then swapping it after hydration. That is a
+// visible regression on a real CTA, traded for one Supabase round trip on two
+// pages. If it is ever worth it, the fix is a small client component that
+// resolves the session in the browser and renders the CTA, used here and in
+// GuideCta - not force-static over the top of a server-side auth read.
 
 const VALUE = [
   {

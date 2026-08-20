@@ -6,7 +6,6 @@ import { useFormStatus } from "react-dom";
 import { JOB_CATEGORIES, labelFor } from "@/lib/constants";
 import { saveProjectAction, deleteProjectAction } from "./project-actions";
 import ProjectPhotoManager from "./ProjectPhotoManager";
-import CategoryIcon from "@/components/CategoryIcon";
 import InlineSpinner from "@/components/InlineSpinner";
 import ProUpgradeCta, {
   proCtaLabel,
@@ -135,10 +134,7 @@ export default function ProjectsCard({
                     <p className="font-medium text-stone-900 dark:text-stone-100">{p.title}</p>
                     <p className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-stone-500 dark:text-stone-400">
                       {p.category ? (
-                        <span className="inline-flex items-center gap-1">
-                          <CategoryIcon list={JOB_CATEGORIES} value={p.category} className="h-3.5 w-3.5" />
-                          {labelFor(JOB_CATEGORIES, p.category)}
-                        </span>
+                        <span>{labelFor(JOB_CATEGORIES, p.category)}</span>
                       ) : (
                         "No category"
                       )}

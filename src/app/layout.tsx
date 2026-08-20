@@ -2,9 +2,19 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import ToastProvider from "@/components/ToastProvider";
-import FlashBridge from "@/components/FlashBridge";
-import { readFlash } from "@/lib/flash";
+import FlashToast from "@/components/FlashToast";
 import { LAUNCH_CITY_NAMES } from "@/lib/serviceArea";
+
+// KEEP THIS FILE FREE OF cookies() AND headers().
+//
+// The root layout wraps every route in the app, so a single request-scoped
+// read here opts the ENTIRE build out of static generation - every public
+// marketing and SEO page included. This layout used to call readFlash(), which
+// calls cookies(), and the result was a build with zero static pages. The
+// flash toast now reads its own cookie on the client (see FlashToast below);
+// the theme is applied by the inline script in <head>, which runs in the
+// browser and touches nothing server-side; the fonts and the JSON-LD are
+// build-time constants. Anything new added here has to stay in that category.
 
 // Self-hosted via next/font, exposed as a CSS variable so Tailwind's
 // font-sans (see tailwind.config.ts) picks it up everywhere.
@@ -81,7 +91,6 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const flash = readFlash();
   return (
     // suppressHydrationWarning: the theme script adds .dark to <html> before
     // React hydrates, which is an expected server/client mismatch.
@@ -104,7 +113,7 @@ export default function RootLayout({
       <body>
         <ToastProvider>
           {children}
-          <FlashBridge flash={flash} />
+          <FlashToast />
         </ToastProvider>
       </body>
     </html>

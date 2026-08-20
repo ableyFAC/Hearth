@@ -6,7 +6,6 @@ import { Search, FileText } from "lucide-react";
 import { SYSTEM_TYPES, ISSUE_CATEGORIES, labelFor } from "@/lib/constants";
 import { saveInspectionFindingsAction } from "./actions";
 import AiNotice from "@/components/AiNotice";
-import CategoryIcon from "@/components/CategoryIcon";
 import Lightbox from "@/components/Lightbox";
 import ProgressBar, { useStagedProgress } from "@/components/ProgressBar";
 import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
@@ -378,11 +377,6 @@ export default function InspectionUpload() {
                   />
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-stone-800 dark:text-stone-200">
-                      <CategoryIcon
-                        list={SYSTEM_TYPES}
-                        value={s.system_type}
-                        className="mr-1 inline-block h-4 w-4 align-[-3px]"
-                      />
                       {labelFor(SYSTEM_TYPES, s.system_type)}
                       {s.condition_rating ? (
                         <span className="ml-2 text-xs font-normal text-stone-500 dark:text-stone-400">
@@ -431,11 +425,6 @@ export default function InspectionUpload() {
                   />
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-stone-800 dark:text-stone-200">
-                      <CategoryIcon
-                        list={ISSUE_CATEGORIES}
-                        value={iss.category}
-                        className="mr-1 inline-block h-4 w-4 align-[-3px]"
-                      />
                       {labelFor(ISSUE_CATEGORIES, iss.category)}
                       <span
                         className={`ml-2 rounded-full border px-2 py-0.5 text-xs font-normal ${

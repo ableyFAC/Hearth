@@ -127,16 +127,6 @@ function HouseMark({ className }: { className?: string }) {
   );
 }
 
-// Plumbing category glyph for the job card's icon-chip, matching the trade
-// icon set the real board renders through CategoryIcon.
-function WrenchMark() {
-  return (
-    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M14.7 6.3a4 4 0 0 0-5.2 5.2l-6 6a1.5 1.5 0 0 0 2.1 2.1l6-6a4 4 0 0 0 5.2-5.2l-2.4 2.4-2.1-.6-.6-2.1 2.4-2.4z" />
-    </svg>
-  );
-}
-
 // Small lock glyph for the masked-photo overlay on the leads board.
 function LockMark() {
   return (
@@ -2507,9 +2497,6 @@ export default function ProDemoPlayer() {
                   <div className="card mt-3 space-y-3" data-x="jobCard">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="flex items-center gap-2 font-medium text-stone-900">
-                        <span className="icon-chip">
-                          <WrenchMark />
-                        </span>{" "}
                         Plumbing <span className="font-normal text-stone-500">in Rosewood</span>
                       </span>
                       <span className="chip border border-red-200 bg-red-50 text-red-700">urgent</span>

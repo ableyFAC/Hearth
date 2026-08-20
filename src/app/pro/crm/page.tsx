@@ -7,7 +7,6 @@ import { getCurrentContractor, getRole } from "@/lib/contractor";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
 import { labelFor, JOB_CATEGORIES, PRO_PLAN } from "@/lib/constants";
 import ClientRow from "./ClientRow";
-import CategoryIcon from "@/components/CategoryIcon";
 import { addClientAction, trackLeadAction } from "./actions";
 
 // The premium CRM upgrades a Hearth Pro membership adds on top of the free
@@ -290,9 +289,6 @@ export default async function ProCrmPage({
                 >
                   <div>
                     <span className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
-                      <span className="icon-chip">
-                        <CategoryIcon list={JOB_CATEGORIES} value={l.category} />
-                      </span>{" "}
                       {suggestedName}
                     </span>
                     <p className="text-xs text-stone-500 dark:text-stone-400">

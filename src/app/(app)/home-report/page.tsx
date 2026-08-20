@@ -20,7 +20,6 @@ import {
 } from "@/lib/health";
 import type { HomeSystem } from "@/lib/database.types";
 import PrintButton from "@/components/PrintButton";
-import CategoryIcon from "@/components/CategoryIcon";
 import SystemRow from "../profile/SystemRow";
 import SystemForm from "../profile/SystemForm";
 import MaintenanceHistoryForm from "./MaintenanceHistoryForm";
@@ -151,11 +150,6 @@ function PrintSystemDetail({
   return (
     <div className="mb-5 break-inside-avoid border-b border-stone-200 pb-4 last:border-b-0">
       <h3 className="text-base font-semibold text-stone-900">
-        <CategoryIcon
-          list={SYSTEM_TYPES}
-          value={s.system_type}
-          className="mr-1 inline-block h-4 w-4 align-[-3px]"
-        />
         {labelFor(SYSTEM_TYPES, s.system_type)}
         <span className="ml-2 text-xs font-normal text-stone-500">
           {status.label}
@@ -462,11 +456,6 @@ export default async function HomeReportPage() {
                   return (
                     <tr key={s.id} className="border-b border-stone-100">
                       <td className="py-2 pr-3 text-stone-800">
-                        <CategoryIcon
-                          list={SYSTEM_TYPES}
-                          value={s.system_type}
-                          className="mr-1 inline-block h-4 w-4 align-[-3px]"
-                        />
                         {labelFor(SYSTEM_TYPES, s.system_type)}
                       </td>
                       <td className="py-2 pr-3 text-stone-600">

@@ -19,7 +19,6 @@ import {
   tipForSystem,
   materialLabel,
 } from "@/lib/constants";
-import CategoryIcon from "@/components/CategoryIcon";
 import type { HomeSystem } from "@/lib/database.types";
 import { updateSystemAction, deleteSystemAction } from "./actions";
 import PhotoUpload from "@/components/PhotoUpload";
@@ -123,11 +122,6 @@ export default function SystemRow({
             can't be nested inside another form). */}
         <div className="flex items-center justify-between gap-2">
           <p className="font-medium text-stone-900 dark:text-stone-100">
-            <CategoryIcon
-              list={SYSTEM_TYPES}
-              value={s.system_type}
-              className="mr-1 inline-block h-4 w-4 align-[-3px]"
-            />
             {labelFor(SYSTEM_TYPES, s.system_type)}
           </p>
           <form action={deleteSystemAction}>
@@ -318,11 +312,6 @@ export default function SystemRow({
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium text-stone-900 dark:text-stone-100">
-            <CategoryIcon
-              list={SYSTEM_TYPES}
-              value={s.system_type}
-              className="mr-1 inline-block h-4 w-4 align-[-3px]"
-            />
             {labelFor(SYSTEM_TYPES, s.system_type)}
           </span>
           {/* One status badge. Must-do overrides the age-based stage, so a
