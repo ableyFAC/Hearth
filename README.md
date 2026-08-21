@@ -102,14 +102,28 @@ npm install
 cp .env.local.example .env.local
 ```
 
-The minimum to sign in and use the app is `NEXT_PUBLIC_SUPABASE_URL` and
-`NEXT_PUBLIC_SUPABASE_ANON_KEY` (the `sb_publishable_...` key). Everything
-else (Stripe, Gemini, RentCast, Resend, Twilio, Checkr, `CRON_SECRET`) turns
-on a feature when set and degrades gracefully when missing. `.env.local.example`
-documents each one.
+Required to run the app at all:
 
-`SUPABASE_SERVICE_ROLE_KEY` bypasses RLS. Never share it or ship it to the
-browser; it is only read by `src/lib/supabase/admin.ts` on the server.
+- `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (the
+  `sb_publishable_...` key): auth and every data read.
+- `SUPABASE_SERVICE_ROLE_KEY`: used at render time by contractor browse, the
+  pro dashboard, parcel lookup, and most server actions. Bypasses RLS, so it is
+  only ever read on the server (`src/lib/supabase/admin.ts`). Never share it or
+  ship it to the browser.
+
+Optional, each turns on one feature and is skipped when missing:
+
+- `STRIPE_SECRET_KEY` (+ price ids, webhook secret): checkout, billing portal,
+  wallet top-ups. Pages load without it; billing actions fail with an error that
+  names the variable. A test-mode key works locally.
+- `GEMINI_API_KEY`: Ask Hearth, quote analysis, document extraction.
+- `RENTCAST_API_KEY`: county-record prefill in onboarding and home value.
+- `RESEND_API_KEY`/`RESEND_FROM`, `TWILIO_*`: email and SMS; senders no-op
+  without them.
+- `CHECKR_API_KEY`: background checks; the card hides without it.
+- `CRON_SECRET`: cron routes reject every call until it is set.
+
+`.env.local.example` documents each one.
 
 ### 3. Database
 
