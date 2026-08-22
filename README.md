@@ -1,151 +1,200 @@
-# 🏡 Hearth
+# Hearth
 
-A homeowner tool. The owner's job-to-be-done — *"keep my house in good shape,
-tell me what needs attention, store my home docs, and get me a trustworthy
-contractor when something breaks"* — is the product. The business data
-(condition, leads, intent) falls out as a byproduct of a tool people actually
-want to use.
+A homeowner maintenance tool with a home-services marketplace attached. The
+owner's job-to-be-done is the product: keep my house in good shape, tell me
+what needs attention, store my home docs, and get me a trustworthy contractor
+when something breaks. Pros pay for leads; homeowners can upgrade to Hearth
+Plus for proactive alerts and reports.
 
-> **Working name only.** "Hearth" is a placeholder — rename freely
-> (`package.json`, `src/app/layout.tsx`, `Nav.tsx`, this file).
+Launching in Orange County, CA: Huntington Beach, Fountain Valley, Seal
+Beach, Westminster, Midway City, Garden Grove, Santa Ana, Costa Mesa, and
+Newport Beach. Homeowner ZIP codes and pro service cities are gated to that
+list end to end (see `src/lib/serviceArea.ts`).
 
-## What's built (Phase 1 — the value loop + first revenue)
+For the current state of the project, decisions, and what is next, read
+`HANDOFF.md`. Go-live steps live in `docs/`.
 
-| Screen | Route | Status |
-|---|---|---|
-| 1. Onboarding & address claim | `/login` → `/onboarding` | ✅ |
-| 2. Home Profile (digital twin) | `/profile` | ✅ |
-| 3. Home Health Dashboard | `/dashboard` | ✅ |
-| 4. Report an Issue | `/issues` | ✅ |
-| 5. Find a Contractor / Get Quotes | `/contractors` | ✅ |
-| 6. Improvements / remodel log | — | ⏳ Phase 2 (schema ready) |
-| 7. Intent capture | — | ⏳ Phase 2 (schema ready) |
-| Documents vault | — | ⏳ v1.1 (schema ready) |
+## What's built
 
-The Phase 2 / v1.1 tables ship in the migrations now so foreign keys and RLS are
-coherent, but no UI is wired for them yet.
+**Homeowner side** (`src/app/(app)/`)
+
+- Onboarding and address claim with county-record prefill (RentCast)
+- Home Health dashboard, systems digital twin, maintenance plan, seasonal
+  checklist, weather alerts
+- Report an issue, request a pro directly or post a job publicly, in-app chat
+- Contractor browse, quote check (AI quote analysis), forecast, home value,
+  tax appeal, insurance check-up, inspection ingest, walkthrough
+- Documents vault, home report (printable), emergency help, guides
+- Household sharing (invite members by link)
+- Ask Hearth assistant (Gemini today; see `HANDOFF.md` for the planned swap)
+- Account: security, notifications, privacy rights, help
+- Hearth Plus subscription via Stripe (free / annual / monthly)
+
+**Pro side** (`src/app/pro/`)
+
+- Contractor signup and onboarding, CSLB license verification with identity
+  lock (one license per account, `src/lib/licenseMatch.ts`)
+- Job board filtered to the pro's launch cities, lead purchase with a prepaid
+  wallet, first-apply guarantee, refunds
+- CRM, past jobs, structured quotes and invoices, reviews, win cards, widget
+- Pro Plus, playbook, tools, weekly digest, compliance calendar
+- Background checks (Checkr) paid by Hearth after 3 paid leads
+
+**Public** (`src/app/`)
+
+- Landing, city pages, pricing, guides, public pro profiles (`/p/[id]`),
+  legal pages (terms, privacy, pro terms, DMCA, AI disclosure)
+- Sign in with email/password, Google, or Apple
+
+**Backend**
+
+- `src/app/api/` route handlers for AI, Stripe webhooks, Twilio, Checkr,
+  document extraction, and 16 cron jobs under `src/app/api/cron/` (schedules
+  in `vercel.json`, protected by `CRON_SECRET`)
+- Email via Resend, SMS via Twilio. Proactive email/SMS alerts are Plus-only,
+  enforced in `src/lib/notifyGating.ts`; billing notices are never gated.
 
 ## Stack
 
-- **Next.js 15** + **React 19** (App Router, TypeScript, Server Actions)
-  - `cookies()`, `headers()`, and a page's `params`/`searchParams` are async
-    here: server code awaits them, client pages unwrap them with React's
-    `use()`. `createClient()` from `src/lib/supabase/server.ts` is async for
-    the same reason, so every call site awaits it.
-- **Tailwind CSS**
-- **Supabase** — Postgres + Auth (email/phone OTP) + Storage (photos)
-- Row-Level Security on every table: an owner can only ever touch their own
-  home's data.
+- **Next.js 15** + **React 19** (App Router, TypeScript, Server Actions),
+  **Tailwind CSS**, `lucide-react` icons. `cookies()`, `headers()`, and a
+  page's `params`/`searchParams` are async: server code awaits them, and
+  `createClient()` from `src/lib/supabase/server.ts` is async for the same
+  reason, so every call site awaits it.
+- **Supabase**: Postgres, Auth (email + password with confirmation, Google,
+  Apple), Storage (private photo and document buckets)
+- **Stripe** subscriptions and wallet top-ups, **Resend**, **Twilio**,
+  **Checkr**, **RentCast**, **Gemini**
+- **Vitest** + Testing Library for unit tests
+- Deployed on **Vercel**
+
+Row Level Security is on for every table. A homeowner can only reach their own
+homes (and homes shared with them); pros only reach leads they hold. Money and
+trust columns are locked with column-level grants, and RPCs that touch money
+claim state atomically before any paid call.
 
 ## Project layout
 
 ```
-supabase/migrations/   0001 schema · 0002 RLS · 0003 seed · 0004 storage
-src/lib/               supabase clients, DB types, health/maintenance logic, parcel lookup
-src/app/               login, onboarding, auth routes
-src/app/(app)/         authed shell: dashboard, profile, issues, contractors
-src/components/         Nav, PhotoUpload
+supabase/migrations/   0001 .. 0126 schema, RLS, RPCs (123 files, gaps are fine)
+supabase/PASTE-ME-*    combined files that were pasted into the live SQL editor
+supabase/MIGRATIONS.md how migrations are tracked and how to baseline the CLI
+src/lib/               supabase clients, auth helpers, health/forecast/pricing
+                       logic, notify gating, service area, license matching
+src/lib/*.test.ts      unit tests (co-located)
+src/app/               public pages, signup/signin, onboarding, api routes
+src/app/(app)/         signed-in homeowner shell
+src/app/pro/           signed-in pro shell
+src/components/        shared UI (Nav, AskHearth, ChatDock, PhotoUpload, ...)
+docs/                  go-live wiring, deploy runbook, launch playbook,
+                       Apple sign-in setup, App Store checklist, pricing notes
+HANDOFF.md             current state, decisions, next steps, gotchas
 ```
 
-## Setup
+## Local setup
 
-> The toolchain (npm / git / supabase) wasn't runnable in the environment that
-> scaffolded this, so run these yourself.
-
-### 1. Install dependencies
+### 1. Install
 
 ```bash
-cd hearth
 npm install
 ```
 
-### 2. Start Supabase (local) and apply migrations
-
-Easiest path is local via the Supabase CLI (needs Docker):
-
-```bash
-supabase start          # boots Postgres, Auth, Storage, Studio
-supabase db reset       # applies all migrations in supabase/migrations + seeds
-```
-
-`supabase start` prints your local **API URL**, **anon key**, and the **Inbucket**
-mail UI URL (where magic-link emails land in dev).
-
-> Prefer a hosted project? Create one at supabase.com, then
-> `supabase link --project-ref <ref>` and `supabase db push`. Use the project's
-> URL + anon key in step 3, and paste the contents of each migration into the
-> SQL editor if you're not using the CLI.
-
-### 3. Environment
+### 2. Environment
 
 ```bash
 cp .env.local.example .env.local
-# fill NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY from `supabase start`
 ```
 
-### 4. Configure the auth email template (magic link)
+Required to run the app at all:
 
-In Supabase **Auth → Email Templates → Magic Link**, point the confirmation URL at:
+- `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (the
+  `sb_publishable_...` key): auth and every data read.
+- `SUPABASE_SERVICE_ROLE_KEY`: used at render time by contractor browse, the
+  pro dashboard, parcel lookup, and most server actions. Bypasses RLS, so it is
+  only ever read on the server (`src/lib/supabase/admin.ts`). Never share it or
+  ship it to the browser.
 
-```
-{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email
-```
+Optional, each turns on one feature and is skipped when missing:
 
-(Locally, confirmations are disabled in `config.toml` and you can also just type
-the 6-digit code shown in Inbucket.)
+- `STRIPE_SECRET_KEY` (+ price ids, webhook secret): checkout, billing portal,
+  wallet top-ups. Pages load without it; billing actions fail with an error that
+  names the variable. A test-mode key works locally.
+- `GEMINI_API_KEY`: Ask Hearth, quote analysis, document extraction.
+- `RENTCAST_API_KEY`: county-record prefill in onboarding and home value.
+- `RESEND_API_KEY`/`RESEND_FROM`, `TWILIO_*`: email and SMS; senders no-op
+  without them.
+- `CHECKR_API_KEY`: background checks; the card hides without it.
+- `CRON_SECRET`: cron routes reject every call until it is set.
 
-### 5. Run
+`.env.local.example` documents each one.
+
+### 3. Database
+
+The live project is on Supabase. Schema changes are written as numbered files
+in `supabase/migrations/` and applied to the live project by pasting the
+matching `supabase/PASTE-ME-*.sql` file into the SQL editor, then verified
+read-only afterward. `supabase/MIGRATIONS.md` describes the pending one-time
+baseline that lets `npm run db:push` take over.
+
+For a fresh local stack (needs Docker):
 
 ```bash
-npm run dev        # http://localhost:3000
-npm run typecheck  # optional: verify types
+npx supabase start
+npx supabase db reset     # applies every migration
 ```
 
-### 6. Regenerate DB types after schema changes
+### 4. Run
 
 ```bash
-npm run db:types   # supabase gen types typescript --local > src/lib/database.types.ts
+npm run dev          # http://localhost:3000
+npm run typecheck    # tsc --noEmit
+npm run test         # vitest (196 tests across 14 files as of 2026-08-20)
+npm run build
 ```
 
-## Known local limitation (Windows) - FIXED by the Next 15 upgrade
+If localhost throws webpack "reading 'call'" errors after a large batch of
+file changes, stop the server, delete `.next`, and start it again. Changes to
+`next.config.mjs` also need a restart.
 
-Historical, kept because the workaround it explains is still in the code.
+### 5. Regenerate DB types after schema changes
 
-On Next 14, `npm run build` failed during static prerender of
-`/opengraph-image` on Windows with `TypeError: Invalid URL` thrown from
-`node_modules/next/dist/compiled/@vercel/og/index.node.js`. That bundled file
-called `fileURLToPath(join(import.meta.url, ...))` to locate its default font
-at ES module load time, and Node's `path.join` on Windows mangled a
-`file://` URL into an invalid path. It ran before any application code, so it
-could not be worked around from our side (see the writeup in
-`src/lib/ogFont.ts`, which routes around the same bug for `npm run dev` by
-loading the font ourselves). Vercel builds on Linux, where the bundled path
-logic was correct, so production OG images were never affected.
+```bash
+npm run db:types     # supabase gen types typescript --local > src/lib/database.types.ts
+```
 
-Next 15 ships a newer bundled `@vercel/og` and the failure is gone: a full
-`npm run build` on Windows now reaches `Generating static pages (113/113)`
-and exits 0 with no export errors, `/opengraph-image` included. So the bar
-for "a change hasn't introduced a new problem" is now simply that
-`npm run build` succeeds. `src/lib/ogFont.ts` is left in place: it is
-harmless, and it still covers the dev-server path.
+Some newer columns are not in `database.types.ts` yet; read sites cast to
+`any` with a comment pointing at the migration that added the column.
 
-## Data → revenue, honestly
+## Signups in development
 
-- **Condition signal**: `home_systems` + `issues` (the ~80% of the value).
-- **Revenue from day one**: `contractor_leads` — created when an owner requests
-  a pro. No license/RESPA exposure.
-- **Sell-intent**: kept in a separate `intent_signals` table with a
-  `shared_consent` flag, so it's easy to govern. **Opt-in warm intros only** —
-  see [PRIVACY.md](./PRIVACY.md).
+Supabase's built-in mailer only delivers confirmation emails to addresses that
+are members of the Supabase project team, and caps at roughly two emails an
+hour. Until custom SMTP (Resend) is configured in Supabase Auth settings
+(`docs/GO-LIVE-WIRING.md`), a signup from any other address fails with
+`email_address_invalid`, which the UI shows as "That didn't go through". To let
+a tester in before then, invite their email on the Supabase org's Team tab.
 
-## Notable decisions / TODOs
+## Windows build note
 
-- **Ownership** is self-attested (`ownership_verified = true` on claim). Tighten
-  later with a postcard or utility-bill check.
-- **Parcel pre-fill** pulls real county-record facts (year built, sqft,
-  beds/baths, lot, type) via RentCast once `RENTCAST_API_KEY` is set (free
-  tier: 50 lookups/month); with no key the homeowner types facts in by hand.
-  See `src/lib/parcel.ts` (`fetchFromRentcast`).
-- **Current-year** is a static constant in `src/lib/health.ts` — bump per
-  release (the scaffolding environment disallowed `Date.now()`).
-- Lead **pricing** (`payout_amount`) and the agent-facing side are Phase 3.
+On Next 14, `npm run build` failed on Windows during static prerender of
+`/opengraph-image` (a `file://` URL bug inside the bundled `@vercel/og`).
+Next 15 ships a newer bundle and the failure is gone: a full `npm run build`
+on Windows now exits 0 with no export errors. `src/lib/ogFont.ts` is kept
+because it still covers the dev-server path.
+
+## Data and revenue, honestly
+
+- **Condition signal**: `home_systems` + `issues` are most of the value.
+- **Revenue**: pros buy leads (`contractor_leads`) with a prepaid wallet;
+  homeowners subscribe to Hearth Plus. No license or RESPA exposure.
+- **Sell-intent** lives in a separate `intent_signals` table with a
+  `shared_consent` flag. Opt-in warm intros only; see [PRIVACY.md](./PRIVACY.md).
+
+## Working agreements
+
+- Live DB changes ship as `PASTE-ME` files; the owner pastes them; the change
+  is verified read-only afterward.
+- Anything money- or security-adjacent gets an independent review before push.
+- Copy states facts the code enforces. Perk pages are cross-checked against
+  the enforcement code.
+- UI stays compact and plain: no per-trade pictograms, general icons only.

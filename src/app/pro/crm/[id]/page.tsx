@@ -4,7 +4,6 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { labelFor, JOB_CATEGORIES } from "@/lib/constants";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
-import CategoryIcon from "@/components/CategoryIcon";
 import {
   updateClientDetailsAction,
   deleteClientAction,
@@ -180,10 +179,7 @@ export default async function ClientDetailPage(
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Linked job
           </h2>
-          <p className="flex items-center gap-2 text-sm text-stone-700 dark:text-stone-300">
-            <span className="icon-chip">
-              <CategoryIcon list={JOB_CATEGORIES} value={lead.category} />
-            </span>
+          <p className="text-sm text-stone-700 dark:text-stone-300">
             {labelFor(JOB_CATEGORIES, lead.category)}
           </p>
           <Link

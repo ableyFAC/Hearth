@@ -2,8 +2,19 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import ToastProvider from "@/components/ToastProvider";
-import FlashBridge from "@/components/FlashBridge";
-import { readFlash } from "@/lib/flash";
+import FlashToast from "@/components/FlashToast";
+import { LAUNCH_CITY_NAMES } from "@/lib/serviceArea";
+
+// KEEP THIS FILE FREE OF cookies() AND headers().
+//
+// The root layout wraps every route in the app, so a single request-scoped
+// read here opts the ENTIRE build out of static generation - every public
+// marketing and SEO page included. This layout used to call readFlash(), which
+// calls cookies(), and the result was a build with zero static pages. The
+// flash toast now reads its own cookie on the client (see FlashToast below);
+// the theme is applied by the inline script in <head>, which runs in the
+// browser and touches nothing server-side; the fonts and the JSON-LD are
+// build-time constants. Anything new added here has to stay in that category.
 
 // Self-hosted via next/font, exposed as a CSS variable so Tailwind's
 // font-sans (see tailwind.config.ts) picks it up everywhere.
@@ -29,18 +40,21 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 // Organization JSON-LD, so search results can attribute pages to Hearth as a
 // business rather than guessing from the page title. Mirrors the Service
 // JSON-LD CityLandingPage builds per city (src/components/CityLandingPage.tsx):
-// same reasoning, root-level scope. areaServed names the two cities Hearth
-// actually serves today, matching the service-area line on the landing page
-// and /pros.
+// same reasoning, root-level scope. areaServed is built from the same
+// LAUNCH_CITY_NAMES the ZIP gates and the pro checkboxes read, so the
+// structured data can never claim a city Hearth has stopped (or not yet
+// started) serving. Only two of these cities have a landing page of their own;
+// the rest are served without one, which is fine here - this is a service-area
+// claim, not a sitemap.
 const organizationJsonLd = {
   "@context": "https://schema.org",
   "@type": "Organization",
   name: "Hearth",
   url: SITE_URL,
-  areaServed: [
-    { "@type": "City", name: "Huntington Beach, CA" },
-    { "@type": "City", name: "Fountain Valley, CA" },
-  ],
+  areaServed: LAUNCH_CITY_NAMES.map((city) => ({
+    "@type": "City",
+    name: `${city}, CA`,
+  })),
 };
 
 export const metadata: Metadata = {
@@ -77,7 +91,6 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const flash = await readFlash();
   return (
     // suppressHydrationWarning: the theme script adds .dark to <html> before
     // React hydrates, which is an expected server/client mismatch.
@@ -100,7 +113,7 @@ export default async function RootLayout({
       <body>
         <ToastProvider>
           {children}
-          <FlashBridge flash={flash} />
+          <FlashToast />
         </ToastProvider>
       </body>
     </html>

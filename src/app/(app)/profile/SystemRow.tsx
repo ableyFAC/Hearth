@@ -6,6 +6,8 @@ import {
   assessSystem,
   replacementInfoFor,
   effectiveYearsLeft,
+  systemStatus,
+  lifeLeftText,
 } from "@/lib/health";
 import { imgSrc } from "@/lib/storage";
 import {
@@ -17,7 +19,6 @@ import {
   tipForSystem,
   materialLabel,
 } from "@/lib/constants";
-import CategoryIcon from "@/components/CategoryIcon";
 import type { HomeSystem } from "@/lib/database.types";
 import { updateSystemAction, deleteSystemAction } from "./actions";
 import PhotoUpload from "@/components/PhotoUpload";
@@ -31,15 +32,6 @@ const STAGE_STYLE: Record<string, string> = {
   aging: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30",
   due: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-200 dark:border-red-900",
   unknown: "bg-stone-50 text-stone-500 border-stone-200 dark:bg-stone-700 dark:text-stone-400 dark:border-white/10",
-};
-
-// Plain-language label for each life stage, shown right next to the system so an
-// owner can tell at a glance whether it needs attention.
-const STAGE_LABEL: Record<string, string> = {
-  healthy: "Healthy",
-  aging: "Plan ahead",
-  due: "Needs maintenance",
-  unknown: "Add details",
 };
 
 // Stored dates are YYYY-MM-DD; show them as MM/YYYY in the simple text field.
@@ -69,18 +61,16 @@ export default function SystemRow({
   const [expanded, setExpanded] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const h = assessSystem(s);
-  // A system to deal with now: reported failing, or with an URGENT reported
-  // issue. A low/medium issue shouldn't blare red (it lines up with the Issues
-  // tab severity instead).
   const issueSeverity = openIssue?.severity ?? null;
-  const mustDo = s.condition_rating === 1 || issueSeverity === "urgent";
-  // A "due" status the owner has never weighed in on: no walkthrough
-  // confirmation, no owner-entered condition, no reported issue, so the age
-  // estimate is the ONLY thing behind it. That's a guess, not a confirmed
-  // problem, so it shouldn't read as scary-red like a real issue does.
-  const isPureAgeEstimate =
-    !s.confirmed_at && s.condition_rating == null && !openIssue;
-  const estimatedDue = h.stage === "due" && !mustDo && isPureAgeEstimate;
+  // Status, the estimate exemption, and the "why this status" sentence all
+  // come from one shared helper now (src/lib/health.ts), because the printed
+  // home report renders the same facts and the two must never word a system
+  // differently. mustDo = reported failing or an URGENT reported issue; a
+  // low/medium issue shouldn't blare red (it lines up with the Issues tab
+  // severity instead). estimatedDue = a "due" verdict the owner has never
+  // weighed in on, which is a guess, not a confirmed problem.
+  const status = systemStatus(s, openIssue);
+  const { mustDo, estimatedDue } = status;
   // Red-bordered if it needs attention: must-do, due (and not just a guess),
   // or a medium issue.
   const needsBorder =
@@ -92,38 +82,11 @@ export default function SystemRow({
   // Years left adjusted for condition: a failing/worn system needs action sooner
   // than age alone implies.
   const eff = effectiveYearsLeft(s);
-  const lifeLeftText =
-    eff == null
-      ? "Add an install year to estimate"
-      : eff <= 0
-        ? s.condition_rating === 1
-          ? "Failing. Replace now."
-          : "Past due. Replace now."
-        : eff < 1
-          ? "Less than a year"
-          : `about ${Math.round(eff)} more year${Math.round(eff) === 1 ? "" : "s"}`;
+  const lifeLeft = lifeLeftText(s);
   const lastServicedText = dateToMmYyyy(s.last_serviced) || "Not recorded";
   const conditionText = s.condition_rating
     ? `${s.condition_rating} of 5`
     : "Not set";
-
-  // Plain explanation of why this system has its current status (must do / needs
-  // maintenance / plan ahead / healthy), combining any reported issue, the
-  // owner-set condition, and the age-based assessment.
-  const whyParts: string[] = [];
-  if (openIssue) {
-    whyParts.push(
-      `You reported a ${labelFor(ISSUE_CATEGORIES, openIssue.category)} issue${
-        openIssue.description ? `: ${openIssue.description}` : ""
-      }.`
-    );
-  }
-  if (s.condition_rating === 1)
-    whyParts.push("You marked its condition as failing.");
-  else if (s.condition_rating === 2)
-    whyParts.push("You marked its condition as worn.");
-  whyParts.push(h.message);
-  const whyText = whyParts.join(" ");
 
   // Estimated replacement cost range + a monthly set-aside over the condition-
   // adjusted years until it's likely due.
@@ -159,11 +122,6 @@ export default function SystemRow({
             can't be nested inside another form). */}
         <div className="flex items-center justify-between gap-2">
           <p className="font-medium text-stone-900 dark:text-stone-100">
-            <CategoryIcon
-              list={SYSTEM_TYPES}
-              value={s.system_type}
-              className="mr-1 inline-block h-4 w-4 align-[-3px]"
-            />
             {labelFor(SYSTEM_TYPES, s.system_type)}
           </p>
           <form action={deleteSystemAction}>
@@ -354,11 +312,6 @@ export default function SystemRow({
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium text-stone-900 dark:text-stone-100">
-            <CategoryIcon
-              list={SYSTEM_TYPES}
-              value={s.system_type}
-              className="mr-1 inline-block h-4 w-4 align-[-3px]"
-            />
             {labelFor(SYSTEM_TYPES, s.system_type)}
           </span>
           {/* One status badge. Must-do overrides the age-based stage, so a
@@ -372,11 +325,7 @@ export default function SystemRow({
                   : STAGE_STYLE[h.stage]
             }`}
           >
-            {mustDo
-              ? "Must do"
-              : estimatedDue
-                ? "Check soon (estimated)"
-                : (STAGE_LABEL[h.stage] ?? h.stage)}
+            {status.label}
           </span>
         </div>
         <button
@@ -401,7 +350,7 @@ export default function SystemRow({
           >
             <div className="col-span-1 sm:col-span-2 mb-2 border-b border-stone-200 pb-3 dark:border-white/10">
               <dt className="font-medium text-stone-800 dark:text-stone-200">Why this status</dt>
-              <dd className="mt-1 text-stone-500 dark:text-stone-400">{whyText}</dd>
+              <dd className="mt-1 text-stone-500 dark:text-stone-400">{status.why}</dd>
             </div>
             <div>
               <dt className="font-medium text-stone-800 dark:text-stone-200">How old it is</dt>
@@ -415,7 +364,7 @@ export default function SystemRow({
             </div>
             <div>
               <dt className="font-medium text-stone-800 dark:text-stone-200">Life left</dt>
-              <dd className="text-stone-500 dark:text-stone-400">{lifeLeftText}</dd>
+              <dd className="text-stone-500 dark:text-stone-400">{lifeLeft}</dd>
             </div>
             <div>
               <dt className="font-medium text-stone-800 dark:text-stone-200">Last serviced</dt>

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
@@ -7,10 +8,18 @@ import {
   SYSTEM_TYPES,
   ISSUE_CATEGORIES,
   categoryForSystem,
+  materialLabel,
+  STARTER_SYSTEM_NOTE,
 } from "@/lib/constants";
-import { assessSystem } from "@/lib/health";
+import {
+  assessSystem,
+  systemStatus,
+  lifeLeftText,
+  effectiveYearsLeft,
+  replacementInfoFor,
+} from "@/lib/health";
+import type { HomeSystem } from "@/lib/database.types";
 import PrintButton from "@/components/PrintButton";
-import CategoryIcon from "@/components/CategoryIcon";
 import SystemRow from "../profile/SystemRow";
 import SystemForm from "../profile/SystemForm";
 import MaintenanceHistoryForm from "./MaintenanceHistoryForm";
@@ -63,6 +72,137 @@ const SEVERITY_LABEL: Record<string, string> = {
   urgent: "Urgent",
 };
 
+// One system's full record, for the PRINTED report only.
+//
+// The printed report is the paid artifact, so it has to be the complete
+// record, not a teaser: the slim summary table above it is an index, and this
+// is the depth a buyer, an inspector, or an insurer actually needs. It shows
+// the same facts the interactive card on screen shows (SystemRow), minus the
+// things that only make sense on a screen:
+//   - no edit / remove / "Find a pro" controls (a printed page can't act)
+//   - no photo IMAGES, only a count: the images are on Hearth, and a dozen
+//     full-bleed photos would bury the record they are supposed to support
+//   - no generic maintenance tip: that is advice about this KIND of system,
+//     not a fact about this home, and a record should only carry facts
+// Status wording, the estimate exemption, and the life-left sentence come
+// from the shared helpers in src/lib/health.ts, so this can never describe a
+// system differently than the screen does.
+function PrintSystemDetail({
+  system: s,
+  openIssue,
+  photoCount,
+}: {
+  system: HomeSystem;
+  openIssue: {
+    category: string;
+    description: string | null;
+    severity: string | null;
+  } | null;
+  photoCount: number;
+}) {
+  const health = assessSystem(s);
+  const status = systemStatus(s, openIssue);
+  const cost = replacementInfoFor(s.system_type);
+  const eff = effectiveYearsLeft(s);
+  const yearsAway = eff != null ? Math.max(0, Math.round(eff)) : null;
+  // filter_size is a migration 0042 column, absent from the generated types,
+  // so it is read through a cast like everywhere else it appears. HVAC only.
+  const filterSize =
+    s.system_type === "hvac"
+      ? ((s as any).filter_size as string | null | undefined) || null
+      : null;
+  // The onboarding placeholder note is not something the owner wrote, so it
+  // never belongs in a record handed to someone else.
+  const notes = s.notes && s.notes !== STARTER_SYSTEM_NOTE ? s.notes : null;
+
+  // Every fact worth printing, in the order a reader scans for it. Anything
+  // unknown is stated as "Not recorded" rather than dropped: a gap in the
+  // record is itself information to a buyer, and a silently missing row reads
+  // as if the question was never asked.
+  const facts: { term: string; value: string }[] = [
+    { term: "Status", value: status.label },
+    { term: "Install year", value: s.install_year ? String(s.install_year) : "Not recorded" },
+    { term: "Age", value: health.age != null ? `${health.age} years` : "Not recorded" },
+    { term: "Typical life", value: `${health.lifespan} years` },
+    { term: "Life left", value: lifeLeftText(s) },
+    {
+      term: "Condition",
+      value: s.condition_rating
+        ? `${CONDITION_LABEL[s.condition_rating] ?? s.condition_rating} (${s.condition_rating} of 5)`
+        : "Not set",
+    },
+    { term: "Last serviced", value: fmtDate(s.last_serviced) ?? "Not recorded" },
+    {
+      term: materialLabel(s.system_type),
+      value: s.material_or_model || "Not recorded",
+    },
+  ];
+  if (s.model_number) facts.push({ term: "Model number", value: s.model_number });
+  if (s.capacity) facts.push({ term: "Capacity / size", value: s.capacity });
+  if (filterSize) facts.push({ term: "Filter size", value: filterSize });
+  if (photoCount > 0) {
+    facts.push({
+      term: "Photos on file",
+      value: `${photoCount} photo${photoCount === 1 ? "" : "s"} (in Hearth)`,
+    });
+  }
+
+  return (
+    <div className="mb-5 break-inside-avoid border-b border-stone-200 pb-4 last:border-b-0">
+      <h3 className="text-base font-semibold text-stone-900">
+        {labelFor(SYSTEM_TYPES, s.system_type)}
+        <span className="ml-2 text-xs font-normal text-stone-500">
+          {status.label}
+        </span>
+      </h3>
+
+      <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+        {facts.map((f) => (
+          <div key={f.term} className="flex justify-between gap-3 border-b border-stone-100 py-0.5">
+            <dt className="text-stone-500">{f.term}</dt>
+            <dd className="text-right text-stone-800">{f.value}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <p className="mt-2 text-sm text-stone-600">
+        <span className="font-medium text-stone-800">Why this status: </span>
+        {status.why}
+      </p>
+
+      {notes && (
+        <p className="mt-1 text-sm text-stone-600">
+          <span className="font-medium text-stone-800">Notes: </span>
+          {notes}
+        </p>
+      )}
+
+      {openIssue && (
+        <p className="mt-1 text-sm text-stone-600">
+          <span className="font-medium text-stone-800">Open issue: </span>
+          {labelFor(ISSUE_CATEGORIES, openIssue.category)}
+          {openIssue.severity
+            ? ` (${SEVERITY_LABEL[openIssue.severity] ?? openIssue.severity})`
+            : ""}
+          {openIssue.description ? ` - ${openIssue.description}` : ""}
+        </p>
+      )}
+
+      {cost && (
+        // Marked as an estimate in the same breath as the number. This lands
+        // in front of buyers and insurers, so it must never be mistakable for
+        // a quote or an appraisal.
+        <p className="mt-1 text-xs text-stone-500">
+          Hearth estimate for replacement: ${cost.low.toLocaleString()} to $
+          {cost.high.toLocaleString()}
+          {yearsAway === 0 ? ", due now" : ""}. Based on this system&apos;s age
+          and condition, not a quote.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default async function HomeReportPage() {
   // hasPlus and getActiveProperty don't depend on each other - run them
   // together instead of stacking two round trips before the redirect check.
@@ -70,9 +210,13 @@ export default async function HomeReportPage() {
     hasPlus(),
     getActiveProperty(),
   ]);
-  if (!plus) redirect("/plus?reason=report");
+  // Everyone reaches the report now, built from their own real data. The gate
+  // moved to the EXPORT: non-members can read the whole thing on screen, but
+  // printing or saving it as a PDF is what Plus buys (see PrintButton below
+  // and the print-only watermark at the bottom of this file).
+  if (!propertyOrNull) redirect("/onboarding");
 
-  const property = propertyOrNull!;
+  const property = propertyOrNull;
   const supabase = await createClient();
 
   const [
@@ -223,10 +367,37 @@ export default async function HomeReportPage() {
 
   const addressLine = [property.city, property.state].filter(Boolean).join(", ");
 
+  // Basic house facts for the report header. Only what is actually on file:
+  // a missing value is left out entirely rather than printed as a guess or a
+  // placeholder, since this page is handed to people who will act on it.
+  const propertyFacts = [
+    property.sqft ? `${property.sqft.toLocaleString()} sq ft` : null,
+    property.beds ? `${property.beds} bed${property.beds === 1 ? "" : "s"}` : null,
+    property.baths ? `${property.baths} bath${property.baths === 1 ? "" : "s"}` : null,
+  ].filter(Boolean) as string[];
+
   return (
     <div className="mx-auto max-w-3xl px-6 py-8 print:max-w-none print:p-0">
-      <div className="mb-6 flex justify-end print:hidden">
-        <PrintButton />
+      {/* The export is the paid surface. Members get the real print button;
+          everyone else gets a chipped door to /plus and one honest line about
+          what they're looking at. The watermark at the bottom of this file is
+          the other half: without it, Ctrl+P walks straight past this. */}
+      <div className="mb-6 flex items-center justify-end gap-3 print:hidden">
+        {plus ? (
+          <PrintButton />
+        ) : (
+          <>
+            <p className="text-sm text-stone-500 dark:text-stone-400">
+              This report is ready - printing and sharing it is a Plus thing.
+            </p>
+            <Link href="/plus?reason=report" className="btn-primary">
+              Print or save as PDF
+              <span className="chip ml-1.5 bg-bark-100 text-bark-700 dark:bg-bark-700 dark:text-stone-300">
+                Plus
+              </span>
+            </Link>
+          </>
+        )}
       </div>
 
       {/* Header */}
@@ -241,16 +412,28 @@ export default async function HomeReportPage() {
           Built {property.year_built ?? "year unknown"} · Report generated{" "}
           {reportDate}
         </p>
+        {/* The house facts a buyer or an insurer asks for in the first
+            minute. Each one is omitted rather than guessed when it is not on
+            file - a blank is honest, an invented number is not. */}
+        {propertyFacts.length > 0 && (
+          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+            {propertyFacts.join(" · ")}
+          </p>
+        )}
       </header>
 
       {/* Systems */}
       <section className="mb-8">
         <h2 className="mb-3 text-xl font-semibold text-stone-900 dark:text-stone-100">
-          Home systems
+          Home systems{sys.length > 0 ? ` (${sys.length})` : ""}
         </h2>
 
-        {/* Printed report: a compact read-only table. Hidden on screen, since
-            the editable cards below cover that case with more detail. */}
+        {/* Printed report: a compact summary table as the INDEX, followed by
+            the full per-system record below it. The table alone used to be
+            the whole printed report, which meant the paid artifact carried
+            less than the free screen - the export is what Plus sells, so it
+            has to be the complete record. Both are print-only; the editable
+            cards further down cover the screen. */}
         {sys.length === 0 ? (
           <p className="hidden text-sm text-stone-500 print:block">
             None recorded yet.
@@ -273,11 +456,6 @@ export default async function HomeReportPage() {
                   return (
                     <tr key={s.id} className="border-b border-stone-100">
                       <td className="py-2 pr-3 text-stone-800">
-                        <CategoryIcon
-                          list={SYSTEM_TYPES}
-                          value={s.system_type}
-                          className="mr-1 inline-block h-4 w-4 align-[-3px]"
-                        />
                         {labelFor(SYSTEM_TYPES, s.system_type)}
                       </td>
                       <td className="py-2 pr-3 text-stone-600">
@@ -299,6 +477,23 @@ export default async function HomeReportPage() {
                 })}
               </tbody>
             </table>
+
+            {/* The depth the table can't hold: every system's own record,
+                one block each. break-inside-avoid keeps a system from being
+                sliced across a page break. */}
+            <div className="mt-6">
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-stone-500">
+                System details
+              </h3>
+              {sys.map((s) => (
+                <PrintSystemDetail
+                  key={s.id}
+                  system={s}
+                  openIssue={issueForSystem(s)}
+                  photoCount={(photosBySystem.get(s.id) ?? []).length}
+                />
+              ))}
+            </div>
           </div>
         )}
 
@@ -329,7 +524,7 @@ export default async function HomeReportPage() {
       {/* Documents */}
       <section className="mb-8">
         <h2 className="mb-3 text-xl font-semibold text-stone-900 dark:text-stone-100">
-          Documents on file
+          Documents on file{docs.length > 0 ? ` (${docs.length})` : ""}
         </h2>
         {docs.length === 0 ? (
           <p className="text-sm text-stone-500 dark:text-stone-400">None recorded yet.</p>
@@ -362,7 +557,7 @@ export default async function HomeReportPage() {
         </h2>
 
         <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-          Completed
+          Completed{completedTasks.length > 0 ? ` (${completedTasks.length})` : ""}
         </h3>
         {/* Every row below is a real maintenance_tasks row the owner logged or
             checked off - this section never fabricates or infers entries. */}
@@ -405,7 +600,7 @@ export default async function HomeReportPage() {
         </div>
 
         <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-          Upcoming
+          Upcoming{upcomingTasks.length > 0 ? ` (${upcomingTasks.length})` : ""}
         </h3>
         {upcomingTasks.length === 0 ? (
           <p className="text-sm text-stone-500 dark:text-stone-400">None recorded yet.</p>
@@ -467,8 +662,42 @@ export default async function HomeReportPage() {
       </section>
 
       <footer className="mt-10 border-t border-stone-200 pt-4 text-xs text-stone-500 print:border-black dark:border-stone-700 dark:text-stone-400">
-        Generated by Hearth. Share with buyers or your insurer.
+        {plus
+          ? "Generated by Hearth. Share with buyers or your insurer."
+          : "Generated by Hearth. Hearth Plus removes the preview watermark so you can hand this to a buyer or an insurer."}
       </footer>
+
+      {/* Print-only watermark for non-members. The button above is a door, not
+          a lock: Ctrl+P (or the browser menu) prints this page no matter what
+          the button does, so the export gate only exists if the printed output
+          says it is a preview. `hidden print:block` keeps it entirely off the
+          screen; `fixed` makes the browser repaint it on every printed page
+          rather than only the first. Light gray and semi-transparent on
+          purpose - the report underneath stays readable, it just isn't
+          something you would hand to an insurer. */}
+      {!plus && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-0 z-50 hidden select-none overflow-hidden print:block"
+        >
+          {Array.from({ length: 8 }).map((_, row) => (
+            <p
+              key={row}
+              className="whitespace-nowrap text-center text-4xl font-semibold uppercase tracking-widest text-stone-400/25"
+              style={{
+                position: "absolute",
+                top: `${row * 13 + 4}%`,
+                left: "-25%",
+                width: "150%",
+                transform: "rotate(-30deg)",
+              }}
+            >
+              Hearth Plus preview &nbsp; Hearth Plus preview &nbsp; Hearth Plus
+              preview
+            </p>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

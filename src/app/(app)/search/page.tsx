@@ -1,12 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
-import {
-  labelFor,
-  iconFor,
-  SYSTEM_TYPES,
-  ISSUE_CATEGORIES,
-} from "@/lib/constants";
+import { labelFor, SYSTEM_TYPES, ISSUE_CATEGORIES } from "@/lib/constants";
 import AskHearth from "@/components/AskHearth";
 import { FileText, Bell, Search, type LucideIcon } from "lucide-react";
 
@@ -90,7 +85,6 @@ export default async function SearchPage(
         label: labelFor(SYSTEM_TYPES, s.system_type),
         sub: s.material_or_model ?? undefined,
         href: "/dashboard#systems",
-        icon: iconFor(SYSTEM_TYPES, s.system_type),
       }));
 
     documents = (docRes.data ?? [])
@@ -102,7 +96,7 @@ export default async function SearchPage(
         label: d.title ?? "Home document",
         sub: [d.brand, d.model].filter(Boolean).join(" ") || undefined,
         href: "/documents",
-        icon: d.system_type ? iconFor(SYSTEM_TYPES, d.system_type) : FileText,
+        icon: FileText,
       }));
 
     issues = (issueRes.data ?? [])
@@ -111,7 +105,6 @@ export default async function SearchPage(
         label: labelFor(ISSUE_CATEGORIES, i.category),
         sub: i.description ?? undefined,
         href: "/issues",
-        icon: iconFor(ISSUE_CATEGORIES, i.category),
       }));
 
     reminders = (taskRes.data ?? [])

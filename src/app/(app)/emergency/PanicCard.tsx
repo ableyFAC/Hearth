@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import Lightbox from "@/components/Lightbox";
-import { FLOWS } from "./content";
 
 export type PrepKey = "water_shutoff" | "gas_shutoff" | "breaker_panel";
 
@@ -22,14 +21,10 @@ export type PanicFlow = {
 
 // The Server Component page can't pass `icon` (a LucideIcon, i.e. a function)
 // down as a prop, that crashes with "Functions cannot be passed directly to
-// Client Components". So this client component receives everything BUT the
-// icon, and resolves the icon itself from FLOWS (a plain, directive-free
-// module it can safely import on its own).
+// Client Components". Nothing renders the per-system-type glyph any more (the
+// card is plain text now), but the prop type stays icon-free so the server
+// page keeps handing over serializable data only.
 export type SerializablePanicFlow = Omit<PanicFlow, "icon">;
-
-const ICON_BY_KEY: Record<string, LucideIcon> = Object.fromEntries(
-  FLOWS.map((f) => [f.key, f.icon])
-);
 
 // One panic flow: a big tappable card that expands into short, numbered steps.
 // Closed by default so the page reads as a few calm choices, not a wall of text.
@@ -44,7 +39,6 @@ export default function PanicCard({
 }) {
   const [open, setOpen] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
-  const Icon = ICON_BY_KEY[flow.key] ?? null;
 
   const ctaHref =
     `/contractors?category=${encodeURIComponent(flow.category)}` +
@@ -59,9 +53,6 @@ export default function PanicCard({
         aria-expanded={open}
         className="flex w-full items-center gap-3 px-5 py-4 text-left"
       >
-        {Icon && (
-          <Icon className="h-6 w-6 shrink-0 text-bark-600 dark:text-stone-400" aria-hidden="true" />
-        )}
         <span className="flex-1">
           <span className="block font-semibold text-stone-900 dark:text-stone-100">{flow.title}</span>
           <span className="block text-sm text-stone-500 dark:text-stone-400">{flow.subtitle}</span>

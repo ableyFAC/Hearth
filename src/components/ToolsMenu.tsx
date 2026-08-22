@@ -61,19 +61,16 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
     { href: "/learn", label: "Learn" },
   ];
 
+  // Straight to the tool for everyone. Each of these pages does its own
+  // in-context gating (masked per-system detail on the forecast, one free
+  // check then a redirect on the quote analyzer, a gated export on the home
+  // report), so bouncing a free user to the pitch page first only put an ad
+  // where the product should be. The Plus chip beside each label still says
+  // what a membership adds.
   const plusTools = [
-    {
-      href: hasPlus ? "/forecast" : "/plus?reason=forecast",
-      label: "Cost forecast",
-    },
-    {
-      href: hasPlus ? "/quote-check" : "/plus?reason=quote",
-      label: "Quote analyzer",
-    },
-    {
-      href: hasPlus ? "/home-report" : "/plus?reason=report",
-      label: "Home report",
-    },
+    { href: "/forecast", label: "Cost forecast" },
+    { href: "/quote-check", label: "Quote analyzer" },
+    { href: "/home-report", label: "Home report" },
   ];
 
   return (

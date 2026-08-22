@@ -7,7 +7,6 @@ import {
   SEVERITIES,
   labelFor,
 } from "@/lib/constants";
-import CategoryIcon from "@/components/CategoryIcon";
 import { imgSrc } from "@/lib/storage";
 import { StoredPhotoGrid } from "@/components/FilePreview";
 import SubmitButton from "@/components/SubmitButton";
@@ -180,11 +179,6 @@ export default function IssueRow({
                   resolved ? "text-stone-500 line-through dark:text-stone-400" : "text-stone-900 dark:text-stone-100"
                 }`}
               >
-                <CategoryIcon
-                  list={ISSUE_CATEGORIES}
-                  value={issue.category}
-                  className="mr-1 inline-block h-4 w-4 align-[-3px]"
-                />
                 {labelFor(ISSUE_CATEGORIES, issue.category)}
               </span>
               <span

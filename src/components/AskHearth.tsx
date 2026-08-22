@@ -21,6 +21,11 @@ type Msg = {
   mime?: string;
   // When the message was sent (Date.now()); used to age messages out.
   ts?: number;
+  // An optional in-app destination the server attached to this reply (today:
+  // the /plus link on the daily-limit message). The bubble renders plain
+  // markdown with no link support, so a URL sitting in `content` would be
+  // dead text; this renders as a real tappable link underneath instead.
+  link?: { href: string; label: string };
 };
 type Job = { category: string; timing: string; summary: string };
 
@@ -399,6 +404,11 @@ export default function AskHearth({
   // null when closed. Built on demand from the base64 message data since
   // messages only ever store the raw base64, not a ready-to-use URL.
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  // Free-tier daily allowance, reported by the server on each reply (null for
+  // members, who never see a count). Deliberately not persisted: it is a
+  // read of right now, and a stale number from yesterday would be a lie.
+  const [freeLeft, setFreeLeft] = useState<number | null>(null);
+  const [freeLimit, setFreeLimit] = useState<number | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const submitRef = useRef<(t: string) => void>(() => {});
@@ -564,12 +574,22 @@ export default function AskHearth({
         }),
       });
       const data = await res.json();
+      // Quiet daily-allowance meter for free users. The server only sends
+      // these fields when the viewer is on the free tier, so a member never
+      // sees a count at all.
+      setFreeLeft(
+        typeof data.freeRemaining === "number" ? data.freeRemaining : null
+      );
+      setFreeLimit(typeof data.freeLimit === "number" ? data.freeLimit : null);
       const updated: Msg[] = [
         ...next,
         {
           role: "assistant",
           content: data.answer ?? data.error ?? "Something went wrong.",
           ts: Date.now(),
+          ...(data.link?.href && data.link?.label
+            ? { link: { href: String(data.link.href), label: String(data.link.label) } }
+            : {}),
         },
       ];
       setMessages(updated);
@@ -687,6 +707,14 @@ export default function AskHearth({
             )}
           </span>
         )}
+        {m.link && (
+          <Link
+            href={m.link.href}
+            className="mt-1 text-sm font-medium text-bark-700 hover:underline dark:text-stone-300"
+          >
+            {m.link.label} &rarr;
+          </Link>
+        )}
         <MessageActions
           job={parsed.job}
           issue={parsed.issue}
@@ -729,7 +757,7 @@ export default function AskHearth({
   // can't drift on wording or options.
   const retentionControl = (
     <p className="text-xs text-stone-500 dark:text-stone-400">
-      {retention === "never" ? "Chats are kept " : "Chats clear after "}
+      {retention === "never" ? "Chats clear: " : "Chats clear after "}
       <select
         value={retention}
         onChange={(e) => changeRetention(e.target.value as Retention)}
@@ -739,7 +767,7 @@ export default function AskHearth({
         <option value="24h">24 hours</option>
         <option value="2w">2 weeks</option>
         <option value="1m">1 month</option>
-        <option value="never">forever</option>
+        <option value="never">never</option>
       </select>
     </p>
   );
@@ -822,6 +850,14 @@ export default function AskHearth({
       {/* One shared AI label across every generated surface, carrying the
           per-surface caveat as its `detail` so this is a single line of fine
           print rather than two stacked paragraphs. */}
+      {/* Quiet allowance meter. Only near the end of the day's questions - a
+          counter shown from question one would be a nag, and one shown at
+          zero-left would arrive too late to be useful. */}
+      {freeLeft !== null && freeLimit !== null && freeLeft <= 5 && (
+        <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+          {freeLeft} of {freeLimit} free questions left today
+        </p>
+      )}
       <AiNotice detail={disclaimer} size="xxs" className="mt-1" />
       {/* In the dock (fill), this control moves to the header instead - */}
       {/* down here it sat below the whole conversation, off-screen until */}

@@ -6,7 +6,10 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentContractor } from "@/lib/contractor";
+import {
+  getCurrentContractor,
+  countPaidLeadApplications,
+} from "@/lib/contractor";
 import { sendNotification } from "@/lib/notify";
 import { setFlash } from "@/lib/flash";
 import {
@@ -14,6 +17,8 @@ import {
   JOB_CATEGORIES,
   LEAD_STATUSES,
   MAJOR_INTRO_FEE,
+  PRO_DEPOSIT_BOOST_PTS,
+  BACKGROUND_CHECK_MIN_PAID_LEADS,
   isMajorCategory,
 } from "@/lib/constants";
 import { agingLeadFee } from "@/lib/leadPricing";
@@ -406,14 +411,14 @@ export async function saveCompanyAction(formData: FormData) {
     serviceStateEntry !== null ? { service_state: serviceState } : {};
   const hasStateWrite = serviceStateEntry !== null;
 
-  // Service area: the two launch cities, as checkboxes. Posted by BOTH the
+  // Service area: the nine launch cities, as checkboxes. Posted by BOTH the
   // signup form and the profile editor (LaunchCityCheckboxes, same field
   // names), and one answer feeds three stored fields (see
   // ./onboarding/launchCities.ts) - service_area gets the canonical
   // comma-separated string the rest of the app already renders, 0074's
-  // serves_orange_county attestation stays truthful because both cities are in
-  // Orange County, and 0124's launch_cities carries the per-city pick the job
-  // board and apply gate actually filter on.
+  // serves_orange_county attestation stays truthful because every launch city
+  // is in Orange County, and 0124's launch_cities (widened to nine by 0126)
+  // carries the per-city pick the job board and apply gate actually filter on.
   //
   // Same missing-field-safe discipline as service_state above, with the hidden
   // `service_cities_present` marker doing the work `formData.get` can't:
@@ -1038,9 +1043,10 @@ export async function startBackgroundCheckAction(formData: FormData) {
   // Every check costs Hearth real money, so only the two states that
   // legitimately allow a (re)start may reach the Checkr API: 'none' (never
   // started) and 'consider' (retry after a non-clear result). 'invited',
-  // 'pending', and 'clear' all bail out: this closes the double-click /
-  // replayed-POST path that could otherwise create unlimited paid
-  // candidates. Read fresh from the DB, not from any client-supplied state.
+  // 'pending', and 'clear' all bail out here as the cheap early exit; the
+  // REAL double-click / replayed-POST lock is the atomic status claim
+  // further down, right before the Checkr call - this read alone cannot
+  // close that race. Read fresh from the DB, not client-supplied state.
   const status =
     ((contractor as any).background_check_status as string | undefined) ??
     "none";
@@ -1058,6 +1064,33 @@ export async function startBackgroundCheckAction(formData: FormData) {
   const email = contractor.contact_email;
   if (!email) {
     setFlash("Add an email address to your profile first.", "error");
+    revalidatePath("/pro/profile");
+    return;
+  }
+
+  // Earn-in gate: Hearth pays Checkr for every check, so the perk unlocks
+  // after BACKGROUND_CHECK_MIN_PAID_LEADS paid lead applications rather than
+  // at signup. Without this, an account could be created, verified on Hearth's
+  // dime, and abandoned the same afternoon.
+  //
+  // FAILS CLOSED on a count error (countPaidLeadApplications returns null):
+  // this decision spends real money with a third party, and "we could not
+  // read the ledger" is never a good enough reason to send the bill. The pro
+  // sees a try-again message and nothing is charged.
+  const paidLeads = await countPaidLeadApplications(contractor.id);
+  if (paidLeads === null) {
+    setFlash(
+      "Couldn't check your lead history just now. Try again in a moment.",
+      "error"
+    );
+    revalidatePath("/pro/profile");
+    return;
+  }
+  if (paidLeads < BACKGROUND_CHECK_MIN_PAID_LEADS) {
+    setFlash(
+      `Hearth covers your background check after ${BACKGROUND_CHECK_MIN_PAID_LEADS} paid leads - you're at ${paidLeads} of ${BACKGROUND_CHECK_MIN_PAID_LEADS}.`,
+      "info"
+    );
     revalidatePath("/pro/profile");
     return;
   }
@@ -1081,9 +1114,39 @@ export async function startBackgroundCheckAction(formData: FormData) {
   // Checkr requires a work location state. contractors.service_state (0046)
   // isn't in the generated types, so it's read off an any-cast; a pro who
   // left it blank ("all states") falls back to CA, matching Hearth's
-  // current Fountain Valley / Huntington Beach, CA launch markets.
+  // current Orange County, CA launch markets.
   const workLocationState =
     (contractor as any).service_state || "CA";
+
+  // CLAIM the status atomically BEFORE spending money. The whitelist check at
+  // the top is a plain read, so two concurrent submissions (double-click, a
+  // replayed POST) could both see 'none' and both create a billed Checkr
+  // candidate. This conditional update is the real lock, the same pattern
+  // analyze-quote uses for the free credit: only the request that flips the
+  // row from its read state to 'invited' proceeds; the loser matches zero
+  // rows and gets the ordinary already-in-progress message.
+  const admin = createAdminClient();
+  const { data: claimed, error: claimError } = await (
+    admin.from("contractors") as any
+  )
+    .update({ background_check_status: "invited" })
+    .eq("id", contractor.id)
+    .eq("background_check_status", status)
+    .select("id");
+  if (claimError || !claimed || claimed.length === 0) {
+    if (claimError) {
+      console.error(
+        "startBackgroundCheckAction: status claim failed:",
+        claimError.message
+      );
+    }
+    setFlash(
+      "Your background check is already in progress. Check your email for Checkr's invitation.",
+      "info"
+    );
+    revalidatePath("/pro/profile");
+    return;
+  }
 
   const result = await createCandidateAndInvite({
     email,
@@ -1094,6 +1157,20 @@ export async function startBackgroundCheckAction(formData: FormData) {
 
   if (!result.ok) {
     console.error("startBackgroundCheckAction failed:", result.error);
+    // Release the claim so the pro can retry: put the status back to what it
+    // was, but only if it is still the 'invited' this request just wrote (a
+    // webhook could theoretically have advanced it). Best effort - a failed
+    // revert is logged, and support can reset the column.
+    const { error: revertError } = await (admin.from("contractors") as any)
+      .update({ background_check_status: status })
+      .eq("id", contractor.id)
+      .eq("background_check_status", "invited");
+    if (revertError) {
+      console.error(
+        "startBackgroundCheckAction: claim revert failed:",
+        revertError.message
+      );
+    }
     setFlash(
       "Couldn't start your background check. Try again in a few minutes.",
       "error"
@@ -1102,17 +1179,14 @@ export async function startBackgroundCheckAction(formData: FormData) {
     return;
   }
 
-  // checkr_candidate_id/background_check_status are trust columns 0078
-  // revokes UPDATE on for `authenticated`; write via the admin client. The
-  // value comes from the Checkr candidate just created above (never client
-  // input), and the write is scoped to contractor.id: the caller's own
-  // contractor, from assertContractor() above.
-  const admin = createAdminClient();
+  // checkr_candidate_id is a trust column 0078 revokes UPDATE on for
+  // `authenticated`; write via the admin client. The value comes from the
+  // Checkr candidate just created above (never client input), and the write
+  // is scoped to contractor.id: the caller's own contractor, from
+  // assertContractor() above. The status itself was already claimed as
+  // 'invited' before the Checkr call - only the candidate id lands here.
   const { error } = await (admin.from("contractors") as any)
-    .update({
-      checkr_candidate_id: result.candidateId,
-      background_check_status: "invited",
-    })
+    .update({ checkr_candidate_id: result.candidateId })
     .eq("id", contractor.id);
   if (error) {
     console.error("startBackgroundCheckAction: save failed:", error.message);
@@ -1155,7 +1229,8 @@ export async function updateLeadStatusAction(formData: FormData) {
     .update({ status })
     .eq("id", leadId);
   if (error) throw new Error(error.message);
-  setFlash(`Lead marked ${labelFor(LEAD_STATUSES, status)}`);
+  const baseFlash = `Lead marked ${labelFor(LEAD_STATUSES, status)}`;
+  setFlash(baseFlash);
 
   // Hearth Pro perk: when a member marks a job Won, ask the homeowner for a
   // review automatically. Only on the closed transition (never for lost /
@@ -1170,6 +1245,14 @@ export async function updateLeadStatusAction(formData: FormData) {
           contractorUserId: contractor.user_id,
           businessName: contractor.name,
         });
+      } else {
+        // The moment the perk is actually withheld is the only honest moment
+        // to name it: a non-member just closed a job and, unlike a member, no
+        // review ask left the building. Reviews are what win the NEXT job, so
+        // this is a real loss, stated where it really happens.
+        setFlash(
+          `${baseFlash}. Job won - but no review request went out. Pro members get a review asked for automatically the moment they mark a job Won.`
+        );
       }
     } catch (err) {
       console.error(
@@ -1262,7 +1345,7 @@ export async function applyToJobAction(formData: FormData) {
   // data already in hand, not a second query.
   if (!(contractor as any).serves_orange_county) {
     setFlash(
-      "Hearth serves Huntington Beach and Fountain Valley right now.",
+      "Pick the cities you serve in your profile before applying to jobs.",
       "error"
     );
     revalidatePath("/pro");
@@ -1389,7 +1472,21 @@ export async function applyToJobAction(formData: FormData) {
   } else if (data === false)
     setFlash("Not enough balance. Add funds to apply.", "error");
   else {
-    setFlash("Applied. The homeowner will review your application.", "success");
+    // A successful apply is the moment a non-member has just spent real money
+    // on a lead, so it is the honest moment to name what a membership would
+    // have done to that spend. Deliberately ONLY the deposit boost: the $10
+    // monthly lead credit is held back until a trial converts (see
+    // src/app/pro/plus/page.tsx), so promising it here would overpromise to
+    // exactly the pros most likely to start a trial next. PRO_DEPOSIT_BOOST_PTS
+    // is the same constant the webhook passes to apply_deposit, so this can
+    // never quote a match the wallet does not actually pay.
+    const proMember = await hasProPlan();
+    setFlash(
+      proMember
+        ? "Applied. The homeowner will review your application."
+        : `Applied. The homeowner will review your application. Pro members earn +${PRO_DEPOSIT_BOOST_PTS}% on every deposit, so the same money buys more leads.`,
+      "success"
+    );
     // Receipt notification: what they applied to and what it cost. Rows are
     // service-role-only inserts (no client policy), so this uses the admin
     // client. Best-effort: a hiccup here must never break a paid application.

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
+import { COLD_START_FREE_POSTING } from "@/lib/constants";
 
 // The same 20-character floor postJobAction enforces on the server. Catching it
 // here first means a too-short post never submits, so the form (and any photos
@@ -62,6 +63,16 @@ export default function PostJobButton() {
       >
         {pending ? "Posting…" : "Post job"}
       </button>
+      {/* COLD START: while COLD_START_FREE_POSTING is on there is no posting
+          cap for anyone, member or not. Saying so here, once and quietly, is
+          the honest version of the moment - and it names the reason (a launch
+          window), so nobody later feels a cap appeared out of nowhere. The
+          line disappears with the flag. */}
+      {COLD_START_FREE_POSTING && (
+        <p className="text-xs text-stone-500 dark:text-stone-400">
+          Job posting is free while we launch in your area.
+        </p>
+      )}
     </div>
   );
 }

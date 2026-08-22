@@ -210,6 +210,10 @@ export default async function ProBillingPage(props: {
           tiers={(tiers as any) ?? []}
           need={need ?? undefined}
           boostPts={boostActive ? PRO_DEPOSIT_BOOST_PTS : 0}
+          // Only a NON-member is forgoing the match. A member mid-trial is
+          // having it held back, which the caveat line below explains in its
+          // own words; telling them they are losing it would be wrong.
+          forgoneBoostPts={proMember ? 0 : PRO_DEPOSIT_BOOST_PTS}
         />
         {proMember && !boostActive ? (
           // Trialing member: the form above is deliberately showing the plain

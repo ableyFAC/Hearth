@@ -47,6 +47,7 @@ export default function ProfileTabs({
   trialEligible,
   projects,
   checkrEnabled,
+  paidLeads,
   email,
   hasPassword,
   providerName,
@@ -68,6 +69,9 @@ export default function ProfileTabs({
   // set server-side (isCheckrConfigured() in page.tsx). Fully dormant
   // otherwise - BackgroundCheckCard never renders.
   checkrEnabled: boolean;
+  // Paid lead applications, for the background check's earn-in meter. Counted
+  // on the server (page.tsx); this component cannot query.
+  paidLeads: number | null;
 }) {
   const [tab, setTab] = useState<"public" | "page" | "projects" | "security">(
     "public"
@@ -106,7 +110,12 @@ export default function ProfileTabs({
       {tab === "public" ? (
         <div className="space-y-6">
           <PublicProfileForm contractor={contractor} />
-          {checkrEnabled && <BackgroundCheckCard contractor={contractor} />}
+          {checkrEnabled && (
+            <BackgroundCheckCard
+              contractor={contractor}
+              paidLeads={paidLeads}
+            />
+          )}
         </div>
       ) : tab === "page" ? (
         <PublicPageCard

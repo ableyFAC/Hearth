@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import type { LucideIcon } from "lucide-react";
 
 // An interactive maintenance-basics card: shows the owner's actual system status
 // inline, a short summary that's always visible, checkable upkeep steps
@@ -11,7 +10,6 @@ import type { LucideIcon } from "lucide-react";
 export default function LearnGuide({
   systemType,
   label,
-  icon: Icon,
   summary,
   lifespan,
   statusLabel,
@@ -22,7 +20,6 @@ export default function LearnGuide({
 }: {
   systemType: string;
   label: string;
-  icon: LucideIcon | null;
   summary: string;
   lifespan: number | string;
   statusLabel?: string;
@@ -72,10 +69,7 @@ export default function LearnGuide({
         className="flex w-full items-center justify-between gap-2 text-left font-medium text-stone-900 dark:text-stone-100"
       >
         <span className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1">
-            {Icon && <Icon className="h-4 w-4" aria-hidden="true" />}
-            {label}
-          </span>
+          <span>{label}</span>
           {statusLabel && (
             <span
               className={`rounded-full border px-2 py-0.5 text-xs ${statusStyle ?? ""}`}

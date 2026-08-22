@@ -4,9 +4,9 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { JOB_CATEGORIES, labelFor } from "@/lib/constants";
-import CategoryIcon from "@/components/CategoryIcon";
 import Logo from "@/components/Logo";
 import RequestQuoteForm from "./RequestQuoteForm";
+import BackLink from "./BackLink";
 import { requestProAction } from "@/app/(app)/contractors/actions";
 
 // Public, shareable business page for a pro: /p/<contractor_id> or, once
@@ -16,6 +16,21 @@ import { requestProAction } from "@/app/(app)/contractors/actions";
 // ordering as everywhere else, membership never touches them), the free
 // license/insurance "on file" booleans (0109, shown for every pro), and, for
 // Pro members only, logo + about. Never contact info.
+//
+// STAYS DYNAMIC, deliberately, even though this is the most SEO-valuable
+// surface in the app. The root layout's cookie read is gone (see
+// src/app/layout.tsx), so the remaining blocker is entirely in the body below:
+// auth.getUser() decides between a real direct-request form (signed-in
+// homeowner, migration 0104) and the create-an-account link. Adding
+// generateStaticParams + revalidate here would change nothing on its own - a
+// cookies()-backed read inside the page opts the render back out to
+// per-request no matter what the segment config says - and forcing it static
+// would break the signed-in "Request a quote" CTA, which is the page's whole
+// conversion path. Making this static means moving that one CTA decision into
+// a client component that resolves the session in the browser (RequestQuoteForm
+// can import requestProAction directly), leaving the profile body - the part
+// Google actually indexes - free to prerender against the RPC with
+// generateStaticParams: [] + revalidate. Worth doing; too big for this pass.
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -322,6 +337,10 @@ export default async function PublicProPage(
           ),
         }}
       />
+      {/* Way back to the browse results (or the public directory on a direct
+          link) - homeowners land here mid-browse and expect to return to
+          their list. */}
+      <BackLink />
       <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-white/10 dark:bg-stone-800">
         {/* Flat warm banner strip, no gradient: hearth-100 in light, a
             translucent hearth tint over the stone-800 card in dark. */}
@@ -485,11 +504,6 @@ export default async function PublicProPage(
                   key={c}
                   className="rounded-full border border-stone-200 bg-stone-50 px-2.5 py-0.5 text-xs font-medium text-stone-600 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300"
                 >
-                  <CategoryIcon
-                    list={JOB_CATEGORIES}
-                    value={c}
-                    className="mr-1 inline-block h-3.5 w-3.5 align-[-2px]"
-                  />
                   {labelFor(JOB_CATEGORIES, c)}
                 </span>
               ))}
@@ -576,10 +590,7 @@ export default async function PublicProPage(
                       {(p.category || p.months) && (
                         <p className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-stone-500 dark:text-stone-400">
                           {p.category && (
-                            <span className="inline-flex items-center gap-1">
-                              <CategoryIcon list={JOB_CATEGORIES} value={p.category} className="h-3.5 w-3.5" />
-                              {labelFor(JOB_CATEGORIES, p.category)}
-                            </span>
+                            <span>{labelFor(JOB_CATEGORIES, p.category)}</span>
                           )}
                           {p.category && p.months ? " · " : ""}
                           {p.months ?? ""}

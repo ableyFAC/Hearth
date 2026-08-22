@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getRole } from "@/lib/contractor";
-import { FOUNDER, SERVICE_CATEGORIES } from "@/lib/constants";
+import { FOUNDER } from "@/lib/constants";
+import { LAUNCH_AREA_LABEL } from "@/lib/serviceArea";
 import Link from "next/link";
 import Image from "next/image";
 import Logo from "@/components/Logo";
-import CategoryIcon from "@/components/CategoryIcon";
 import HeroDemoPlayerLazy from "@/components/HeroDemoPlayerLazy";
 import HeroPhotoCycler from "@/components/HeroPhotoCycler";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -36,11 +36,21 @@ function CheckPill({ label }: { label: string }) {
 
 // Root: route signed-in users into the app, everyone else to the marketing-lite
 // landing. Kept server-side so there's no flash of the wrong screen.
-export default async function Home(
-  props: {
-    searchParams: Promise<{ code?: string }>;
-  }
-) {
+//
+// STAYS DYNAMIC, on its own merits rather than the root layout's (that no
+// longer reads cookies - see src/app/layout.tsx). Two per-request reads sit
+// above the markup and both are routing decisions, not decoration:
+// searchParams.code catches a magic link that landed here instead of
+// /auth/callback and forwards it, and auth.getUser() + getRole() sends a
+// signed-in visitor to /pro or /dashboard. No per-request DATA feeds the
+// landing markup itself - every list below is a plain in-function constant -
+// so if those two redirects ever move (the code hand-off into middleware, the
+// signed-in bounce into a client-side check), this page prerenders with no
+// other work. Until then a revalidate export would be a no-op and force-static
+// would silently break both redirects.
+export default async function Home(props: {
+  searchParams: Promise<{ code?: string }>;
+}) {
   const searchParams = await props.searchParams;
   // Safety net: if a magic link lands here (e.g. Supabase fell back to the Site
   // URL instead of /auth/callback), forward the code to the handler that
@@ -123,7 +133,7 @@ export default async function Home(
     },
     {
       q: "Where is Hearth available?",
-      a: "We're serving Huntington Beach and Fountain Valley right now, with local pros there. Don't see your city yet? You will soon. If you're outside those two cities you can still sign up and join the waitlist, which is how we decide where Hearth goes next.",
+      a: "We're serving Huntington Beach, Fountain Valley, Seal Beach, Westminster, Midway City, Garden Grove, Santa Ana, Costa Mesa, and Newport Beach right now, with local pros there. Don't see your city yet? You will soon. If you're outside those cities you can still sign up and join the waitlist, which is how we decide where Hearth goes next.",
     },
     {
       q: "What does Plus cost?",
@@ -325,7 +335,7 @@ export default async function Home(
                 ))}
               </div>
               <p className="mt-4 text-sm text-stone-500 dark:text-stone-400">
-                Serving Huntington Beach and Fountain Valley
+                Serving {LAUNCH_AREA_LABEL}
               </p>
               <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
                 Don&apos;t see your city yet? You will soon.
@@ -365,7 +375,7 @@ export default async function Home(
           into homeowner signup with the category preset in ?next= so the
           post-a-job form on /contractors lands pre-filled (it reads
           ?category=). Chips reuse the header link's neutral outline shape,
-          rounded full; icons inherit currentColor via CategoryIcon. */}
+          rounded full, and stay plain text labels - no trade pictograms. */}
       <section className="mt-12 sm:mt-16">
         <h2 className="text-center text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
           Find a pro for
@@ -377,13 +387,8 @@ export default async function Home(
                 href={`/homeowner-signup?next=${encodeURIComponent(
                   `/contractors?category=${s.value}`
                 )}`}
-                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-stone-300 bg-white px-4 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 sm:min-h-0 sm:px-3.5 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-500 dark:hover:text-stone-100"
+                className="inline-flex min-h-[44px] items-center rounded-full border border-stone-300 bg-white px-4 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 sm:min-h-0 sm:px-3.5 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-500 dark:hover:text-stone-100"
               >
-                <CategoryIcon
-                  list={SERVICE_CATEGORIES}
-                  value={s.value}
-                  className="h-4 w-4"
-                />
                 {s.label}
               </Link>
             </li>
@@ -473,15 +478,16 @@ export default async function Home(
             className="text-bark-500 hover:underline"
           >
             Fountain Valley
-          </Link>{" "}
-          and{" "}
+          </Link>
+          ,{" "}
           <Link
             href="/huntington-beach"
             className="text-bark-500 hover:underline"
           >
             Huntington Beach
-          </Link>{" "}
-          homeowners. Don&apos;t see your city yet? You will soon.
+          </Link>
+          , and nearby Orange County homeowners. Don&apos;t see your city yet?
+          You will soon.
         </p>
         {/* Contact form works with no session and no owner-fillable fields,
             unlike the old mailto/tel here, so it's always shown - see

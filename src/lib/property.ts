@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth";
 import { isMissingSchemaError } from "@/lib/dbErrors";
@@ -89,7 +90,15 @@ const PROPERTY_COLUMNS = [
 // exist yet, so RLS still only returns owned rows, which is fine.
 export const getProperties = cache(async (): Promise<PropertyWithShared[]> => {
   const user = await getUser();
-  if (!user) return [];
+  // No parseable session here means SIGN IN, never "this user has no homes".
+  // Returning [] made every caller's `if (!property) redirect("/onboarding")`
+  // misroute a signed-in user with a stale/unreadable cookie to onboarding,
+  // where going back bounced them through /signin until the browser client
+  // refreshed the token - the "random onboarding page" loop. Middleware
+  // normally guarantees a session on these routes; the only way to get here
+  // without one is that stale-cookie edge, and /signin (which restores the
+  // session and returns them) is the honest answer for it.
+  if (!user) redirect("/signin");
 
   const supabase = await createClient();
   // The `any` cast is unavoidable: PROPERTY_COLUMNS names real columns

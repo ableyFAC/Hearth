@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { JOB_CATEGORIES, SERVICE_CATEGORIES, labelFor } from "@/lib/constants";
-import CategoryIcon from "@/components/CategoryIcon";
 
 // Homeowner-facing pro directory. Lists claimed, launch-market pros from the
 // browse_pros() RPC (migration 0104, trust fields added in 0111), which
@@ -86,7 +85,6 @@ export default async function BrowseProsPage(
           <FilterChip
             key={c.value}
             label={c.label}
-            iconValue={c.value}
             href={`/contractors/browse?category=${encodeURIComponent(c.value)}`}
             active={filter === c.value}
           />
@@ -131,30 +129,21 @@ function FilterChip({
   label,
   href,
   active,
-  iconValue,
 }: {
   label: string;
   href: string;
   active: boolean;
-  iconValue?: string;
 }) {
   return (
     <Link
       href={href}
       aria-current={active ? "true" : undefined}
-      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium ${
+      className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium ${
         active
           ? "border-bark-200 bg-bark-100 text-bark-700 dark:border-bark-700 dark:bg-bark-700 dark:text-stone-200"
           : "border-stone-200 bg-stone-50 text-stone-600 hover:border-bark-200 hover:text-bark-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:text-stone-200"
       }`}
     >
-      {iconValue && (
-        <CategoryIcon
-          list={JOB_CATEGORIES}
-          value={iconValue}
-          className="h-3.5 w-3.5"
-        />
-      )}
       {label}
     </Link>
   );
@@ -345,11 +334,6 @@ function ProCard({ pro }: { pro: BrowsePro }) {
                   key={c}
                   className="rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-medium text-stone-600 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300"
                 >
-                  <CategoryIcon
-                    list={JOB_CATEGORIES}
-                    value={c}
-                    className="mr-1 inline-block h-3 w-3 align-[-1px]"
-                  />
                   {labelFor(JOB_CATEGORIES, c)}
                 </span>
               ))}

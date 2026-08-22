@@ -212,7 +212,7 @@ export default function PublicProfileForm({
 
               <div>
                 <label className="label">Cities You Serve</label>
-                {/* The same two checkboxes signup uses, posting the same
+                {/* The same checkboxes signup uses, posting the same
                     `service_cities` / `service_cities_present` field names to
                     the same saveCompanyAction, so one parsing path
                     (selectLaunchCities) covers both forms. Replaces the old
@@ -228,9 +228,8 @@ export default function PublicProfileForm({
                   }
                 />
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  Hearth serves Huntington Beach and Fountain Valley right now.
-                  You only see - and only pay for - jobs in the cities you
-                  check here.
+                  These are the cities Hearth serves right now. You only see -
+                  and only pay for - jobs in the cities you check here.
                 </p>
               </div>
 

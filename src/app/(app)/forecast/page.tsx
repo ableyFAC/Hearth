@@ -15,7 +15,6 @@ import {
   seasonForMonth,
 } from "@/lib/constants";
 import AskHearthPlanButton from "./AskHearthPlanButton";
-import CategoryIcon from "@/components/CategoryIcon";
 import { Lock } from "lucide-react";
 
 function money(n: number): string {
@@ -218,9 +217,6 @@ export default async function ForecastPage() {
                     }`}
                   >
                     <div className="flex items-start gap-2">
-                      <span className="icon-chip">
-                        <CategoryIcon list={SYSTEM_TYPES} value={item.system_type} />
-                      </span>
                       <div>
                         <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
                           {labelFor(SYSTEM_TYPES, item.system_type)}
@@ -343,9 +339,6 @@ export default async function ForecastPage() {
                   className="flex items-center justify-between gap-3 py-3"
                 >
                   <div className="flex items-center gap-3">
-                    <span className="icon-chip">
-                      <CategoryIcon list={SYSTEM_TYPES} value={item.system_type} />
-                    </span>
                     <div>
                       <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
                         {labelFor(SYSTEM_TYPES, item.system_type)}
@@ -417,9 +410,6 @@ export default async function ForecastPage() {
                     className="flex items-center justify-between gap-3 py-3"
                   >
                     <div className="flex items-center gap-3">
-                      <span className="icon-chip">
-                        <CategoryIcon list={SYSTEM_TYPES} value={item.system_type} />
-                      </span>
                       <div>
                         <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
                           {labelFor(SYSTEM_TYPES, item.system_type)}
@@ -453,9 +443,6 @@ export default async function ForecastPage() {
                     className="flex items-center justify-between gap-3 py-3"
                   >
                     <div className="flex items-center gap-3">
-                      <span className="icon-chip">
-                        <CategoryIcon list={SYSTEM_TYPES} value={item.system_type} />
-                      </span>
                       <div>
                         <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
                           {labelFor(SYSTEM_TYPES, item.system_type)}

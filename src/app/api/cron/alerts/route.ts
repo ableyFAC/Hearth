@@ -243,12 +243,26 @@ async function runCron(req: NextRequest) {
     new Set(properties.map((p) => p.user_id as string))
   );
   const optedOut = new Set<string>();
+  // Contact details ride the SAME query as the prefs (no extra round trip),
+  // so weather alerts can actually go out by email/SMS once the providers
+  // are configured - which is what the /plus table sells for these kinds.
+  // sendNotification's Plus gate decides per recipient whether the outbound
+  // channels fire; sms_consent is the TCPA gate and must be the real column.
+  const contactByUser = new Map<
+    string,
+    { email: string | null; phone: string | null; smsConsent: boolean | null }
+  >();
   const { data: prefUsers } = await supabase
     .from("users")
-    .select("id, notification_prefs")
+    .select("id, notification_prefs, email, phone, sms_consent")
     .in("id", userIds);
   for (const u of prefUsers ?? []) {
     if ((u.notification_prefs as any)?.alerts === false) optedOut.add(u.id);
+    contactByUser.set(u.id, {
+      email: (u as any).email ?? null,
+      phone: (u as any).phone ?? null,
+      smsConsent: (u as any).sms_consent === true,
+    });
   }
 
   const since = new Date(Date.now() - DEDUPE_WINDOW_MS).toISOString();
@@ -278,15 +292,19 @@ async function runCron(req: NextRequest) {
 
           // Routed through sendNotification (not a raw insert) so this cron
           // gets the same email/SMS-once-configured path as every other
-          // notification source. No contact details are fetched here today,
-          // so email/SMS stay dormant for this alert either way; only the
-          // in-app row (the source of truth) fires, same as before.
+          // notification source. Contact details come from the prefs query
+          // above; the Plus gate inside sendNotification decides whether the
+          // outbound channels actually fire for this recipient.
+          const contact = contactByUser.get(property.user_id as string);
           const sent = await sendNotification(supabase, {
             userId: property.user_id as string,
             kind: alert.kind,
             title: alert.title,
             body: alert.body,
             url: "/dashboard",
+            email: contact?.email ?? null,
+            phone: contact?.phone ?? null,
+            smsConsent: contact?.smsConsent ?? null,
           });
           if (sent) created += 1;
         } catch {

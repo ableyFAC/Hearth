@@ -22,7 +22,16 @@ const PACKET_STAGES = [
 // Rendered in a copyable block because the whole point is taking it OUT of
 // Hearth and into an email or a call with an agent. Mirrors AppealLetter on
 // /taxes.
-export default function InsurancePacket({ isPlus }: { isPlus: boolean }) {
+export default function InsurancePacket({
+  isPlus,
+  daysToRenewal,
+}: {
+  isPlus: boolean;
+  // Whole days until the home's saved policy renewal date, or null when no
+  // real renewal date is on file. Only a REAL date earns the deadline framing
+  // below - an invented urgency is the exact thing that copy must not be.
+  daysToRenewal?: number | null;
+}) {
   const [loading, setLoading] = useState(false);
   const [packet, setPacket] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -30,11 +39,26 @@ export default function InsurancePacket({ isPlus }: { isPlus: boolean }) {
   const progress = useStagedProgress(PACKET_STAGES, 16000);
 
   if (!isPlus) {
+    // Loss framing ONLY when the loss is real: a policy with a known renewal
+    // date still ahead of it is a shopping window that closes on a specific
+    // day. With no date on file, or one already past, there is no deadline to
+    // name, so the card keeps its plain pitch.
+    const renewalSoon =
+      typeof daysToRenewal === "number" && daysToRenewal > 0
+        ? daysToRenewal
+        : null;
     return (
       <div className="card space-y-3">
         <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
           Want a head start on requoting?
         </h3>
+        {renewalSoon !== null && (
+          <p className="text-sm font-medium text-bark-700 dark:text-stone-300">
+            Your policy renews in {renewalSoon} day
+            {renewalSoon === 1 ? "" : "s"} - Plus builds your requote packet
+            while there&apos;s still time to shop.
+          </p>
+        )}
         <p className="text-sm text-stone-600 dark:text-stone-300">
           Hearth Plus can build a requote packet from your home&apos;s facts:
           the details agents always ask for, your recent maintenance and

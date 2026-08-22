@@ -341,8 +341,9 @@ export interface Database {
           // Launch-market gate: open_jobs_for_me / browse_pros / apply paths
           // all filter on it, and requestProAction re-checks it app-side.
           serves_orange_county: boolean | null;
-          // Migration 0124: the per-city half of the launch gate, from the two
-          // signup/profile checkboxes ("Huntington Beach", "Fountain Valley").
+          // Migration 0124: the per-city half of the launch gate, from the
+          // signup/profile checkboxes (LAUNCH_CITY_NAMES in
+          // src/lib/serviceArea.ts; widened from two cities to nine by 0126).
           // open_jobs_for_me and apply_to_lead filter the job's ZIP against it.
           // Nullable here because a database that has not run 0124 yet returns
           // no column at all (the missing-column retries treat that as "skip").

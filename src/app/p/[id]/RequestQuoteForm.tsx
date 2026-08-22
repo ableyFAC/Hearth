@@ -66,6 +66,13 @@ export default function RequestQuoteForm({
             </p>
 
             <form
+              // noValidate: without it the browser's native constraint bubble
+              // ("Please lengthen this text to 20 characters...") fires on the
+              // minLength attribute below and live-updates its character count
+              // while the homeowner types. The onSubmit check right here is
+              // the only validation surface: one friendly message, shown only
+              // when they actually try to send.
+              noValidate
               onSubmit={async (e) => {
                 e.preventDefault();
                 const fd = new FormData(e.currentTarget);

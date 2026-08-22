@@ -13,7 +13,6 @@ import {
   labelFor,
   COLD_START_FREE_POSTING,
 } from "@/lib/constants";
-import CategoryIcon from "@/components/CategoryIcon";
 import { hasPlus } from "@/lib/subscription";
 import {
   postJobAction,
@@ -562,11 +561,6 @@ export default async function ContractorsPage(
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="font-medium text-stone-900 dark:text-stone-100">
-                        <CategoryIcon
-                          list={JOB_CATEGORIES}
-                          value={l.category}
-                          className="mr-1 inline-block h-4 w-4 align-[-3px]"
-                        />
                         {labelFor(JOB_CATEGORIES, l.category)}
                         {" · "}
                         {pro?.slug || l.direct_to ? (
@@ -633,7 +627,10 @@ export default async function ContractorsPage(
       {/* Renders nothing when there are no jobs yet; posting the first one
           is handled by the form above, not this section. */}
       {jobLeads.length > 0 && (
-        <section className="space-y-3">
+        /* id="your-jobs": the dashboard's "View job postings" link lands here
+           directly - without the anchor it dropped homeowners at the top of
+           the page, on the post-a-new-job form, when they asked to SEE jobs. */
+        <section id="your-jobs" className="scroll-mt-4 space-y-3">
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Your jobs</h2>
           <ul className="space-y-3">
             {jobLeads.map((l) => {
@@ -654,11 +651,6 @@ export default async function ContractorsPage(
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <span className="font-medium text-stone-900 dark:text-stone-100">
-                        <CategoryIcon
-                          list={JOB_CATEGORIES}
-                          value={l.category}
-                          className="mr-1 inline-block h-4 w-4 align-[-3px]"
-                        />
                         {labelFor(JOB_CATEGORIES, l.category)}
                       </span>
                       {l.issue_description && (

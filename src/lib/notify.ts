@@ -6,11 +6,30 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { signUnsubscribeToken } from "@/lib/unsubscribeToken";
+import { isMissingSchemaError } from "@/lib/dbErrors";
+import {
+  isPlusGatedKind,
+  shouldSendOutboundChannels,
+} from "@/lib/notifyGating";
 
 // Single entry point for notifying a homeowner. Always writes the in-app
 // notification row (what the bell in the nav shows), then tries the email and
 // SMS channels - which stay dormant until their provider env vars exist, so
 // wiring up a provider later is just adding keys, no code changes.
+//
+// One caller does NOT come through the front door: the job-post fan-out in
+// src/lib/proAlerts.ts writes its in-app rows in a single bulk insert (one
+// query for up to MAX_ALERTS pros instead of one per pro, inside a server
+// action the homeowner is waiting on) and then calls sendOutboundChannels
+// below for the email/SMS half. That is the ONLY thing it reimplements - the
+// insert - so the Plus gate, the email opt-out, and the TCPA/quiet-hours rules
+// still live here and here only. Anything added to sendNotification after the
+// insert must go inside sendOutboundChannels, or the fan-out will not get it.
+//
+// Hearth Plus gate: for the proactive homeowner alert/reminder kinds listed in
+// src/lib/notifyGating.ts, the email and SMS channels are a paid perk. The
+// in-app row is still written for everyone; only the push is withheld. See
+// sendNotification below - the check lives there so no cron can skip it.
 //
 // To activate email: create a Resend account (resend.com) and set
 //   RESEND_API_KEY - from resend.com/api-keys
@@ -62,7 +81,156 @@ export async function sendNotification(
     return false;
   }
 
-  await Promise.all([sendEmail(input), sendSms(input)]);
+  await sendOutboundChannels(input);
+  return true;
+}
+
+// Overrides for callers that already hold the recipient data sendOutboundChannels
+// would otherwise fetch one user at a time.
+export type OutboundChannelOverrides = {
+  // The recipient's users.notification_prefs.email_opt_out. Pass it when the
+  // caller has already read that row (a batched fan-out reads every recipient
+  // in one .in() query), and sendEmail skips its own per-user lookup.
+  //   true       - opted out, no email.
+  //   false      - opted in, send without re-reading.
+  //   undefined  - unknown, sendEmail does the lookup itself, as always.
+  // `null` is treated as unknown too, so a caller that maps a missing row to
+  // null gets the safe fall-open behavior rather than an accidental send
+  // decision made on no data.
+  emailOptOut?: boolean | null;
+};
+
+// The outbound (email + SMS) half of sendNotification, split out so the
+// batched fan-out in src/lib/proAlerts.ts can write its in-app rows in one bulk
+// insert and still reach these channels through the SAME code - rather than
+// keeping a second copy of the Plus gate and the opt-out rules that drifts.
+// sendNotification's own behavior is unchanged: it calls this with no
+// overrides, which is exactly what it used to run inline.
+export async function sendOutboundChannels(
+  input: NotificationInput,
+  overrides?: OutboundChannelOverrides
+): Promise<void> {
+  // Nothing to gate and nothing to send when the caller passed no outbound
+  // contact at all - sendEmail/sendSms would both no-op. Returning here also
+  // spares the Plus lookup below from running once per recipient on crons
+  // that only write in-app rows.
+  if (!input.email && !input.phone) return;
+
+  // Hearth Plus gate on the OUTBOUND channels only (see src/lib/notifyGating.ts
+  // for the kind list and the reasoning). Enforced here, at the one door every
+  // sender goes through, rather than in each cron: a gate a caller has to
+  // remember is a gate the next cron forgets. The in-app row is already
+  // written by the time this runs and is never affected.
+  if (isPlusGatedKind(input.kind)) {
+    const status = await lookupPlusStatus(input.userId);
+    if (!shouldSendOutboundChannels(input.kind, status)) return;
+  }
+
+  await Promise.all([
+    sendEmail(input, overrides?.emailOptOut),
+    sendSms(input),
+  ]);
+}
+
+// Does this recipient have Hearth Plus benefits, as far as the service role
+// can tell? Mirrors hasPlus() from src/lib/subscription.ts, which is
+// session-bound and therefore useless to a cron: the recipient counts as a
+// member if they hold a live homeowner subscription row themselves, or if
+// they are an active household member of a home whose OWNER holds one (Plus
+// carries with the home). Uses the same admin-client pattern sendEmail
+// already uses for the opt-out lookup.
+//
+// Returns "unknown" on any read failure so the caller can fail CLOSED - see
+// shouldSendOutboundChannels for why this one gate goes the opposite way from
+// the email opt-out check below.
+async function lookupPlusStatus(
+  userId: string
+): Promise<"plus" | "free" | "unknown"> {
+  try {
+    const admin = createAdminClient();
+
+    // Homeowner side only: a contractor's pro_ plan is not Hearth Plus.
+    const { data: own, error: ownError } = await admin
+      .from("subscriptions")
+      .select("plan, status, current_period_end")
+      .eq("user_id", userId);
+    if (ownError) {
+      console.error(
+        "lookupPlusStatus: subscriptions read failed:",
+        ownError.message ?? ownError
+      );
+      return "unknown";
+    }
+    if ((own ?? []).some(isLiveHomeownerRow)) return "plus";
+
+    // Household leg: homes shared WITH this user, by an owner who pays.
+    const { data: memberships, error: memberError } = await admin
+      .from("household_members")
+      .select("property_id")
+      .eq("member_user_id", userId)
+      .eq("status", "active");
+    if (memberError) {
+      // A database that has not run migration 0051 yet has no household
+      // sharing at all, so "no memberships" is the correct answer there, not
+      // an unknown. Any other error really is unknown.
+      if (!isMissingSchemaError(memberError)) {
+        console.error(
+          "lookupPlusStatus: household_members read failed:",
+          memberError.message ?? memberError
+        );
+        return "unknown";
+      }
+      return "free";
+    }
+    const propertyIds = (memberships ?? []).map((m) => m.property_id);
+    if (propertyIds.length === 0) return "free";
+
+    const { data: homes, error: homesError } = await admin
+      .from("properties")
+      .select("user_id")
+      .in("id", propertyIds);
+    if (homesError) {
+      console.error(
+        "lookupPlusStatus: properties read failed:",
+        homesError.message ?? homesError
+      );
+      return "unknown";
+    }
+    const ownerIds = Array.from(
+      new Set((homes ?? []).map((h) => h.user_id).filter(Boolean))
+    );
+    if (ownerIds.length === 0) return "free";
+
+    const { data: ownerSubs, error: ownerSubsError } = await admin
+      .from("subscriptions")
+      .select("plan, status, current_period_end")
+      .in("user_id", ownerIds);
+    if (ownerSubsError) {
+      console.error(
+        "lookupPlusStatus: owner subscriptions read failed:",
+        ownerSubsError.message ?? ownerSubsError
+      );
+      return "unknown";
+    }
+    return (ownerSubs ?? []).some(isLiveHomeownerRow) ? "plus" : "free";
+  } catch (e) {
+    console.error("lookupPlusStatus: threw:", e);
+    return "unknown";
+  }
+}
+
+// A live homeowner-side Plus row: same predicate isLive()/ownsPlus() apply in
+// src/lib/subscription.ts, restated here against a bare row because that
+// module's version is wrapped in session-bound getters.
+function isLiveHomeownerRow(row: {
+  plan?: string | null;
+  status?: string | null;
+  current_period_end?: string | null;
+}): boolean {
+  if (typeof row.plan === "string" && row.plan.startsWith("pro_")) return false;
+  if (row.status !== "active" && row.status !== "trialing") return false;
+  if (row.current_period_end && new Date(row.current_period_end) <= new Date())
+    return false;
   return true;
 }
 
@@ -96,7 +264,10 @@ let warnedSandboxFrom = false;
 
 // Email via the Resend REST API. Plain fetch, no SDK, so there is no new
 // dependency to install. Dormant until RESEND_API_KEY is set.
-async function sendEmail(input: NotificationInput): Promise<void> {
+async function sendEmail(
+  input: NotificationInput,
+  knownOptOut?: boolean | null
+): Promise<void> {
   if (!process.env.RESEND_API_KEY || !input.email) return;
 
   if (!process.env.RESEND_FROM && !warnedSandboxFrom) {
@@ -115,16 +286,24 @@ async function sendEmail(input: NotificationInput): Promise<void> {
   // unsubscribe link in the footer is real without threading a flag through
   // every caller. A lookup hiccup falls open and still sends: the footer's
   // unsubscribe link remains the recipient's guaranteed exit either way.
-  try {
-    const admin = createAdminClient();
-    const { data: prefRow } = await admin
-      .from("users")
-      .select("notification_prefs")
-      .eq("id", input.userId)
-      .single();
-    if (prefRow?.notification_prefs?.email_opt_out === true) return;
-  } catch {
-    // Couldn't read prefs; fall open and send. See comment above.
+  //
+  // knownOptOut lets a caller that already read this recipient's row hand the
+  // answer over instead of paying for a second query (see
+  // OutboundChannelOverrides). Only an explicit true/false counts; undefined
+  // and null both mean "unknown", which runs the lookup exactly as before.
+  if (knownOptOut === true) return;
+  if (knownOptOut !== false) {
+    try {
+      const admin = createAdminClient();
+      const { data: prefRow } = await admin
+        .from("users")
+        .select("notification_prefs")
+        .eq("id", input.userId)
+        .single();
+      if (prefRow?.notification_prefs?.email_opt_out === true) return;
+    } catch {
+      // Couldn't read prefs; fall open and send. See comment above.
+    }
   }
 
   try {

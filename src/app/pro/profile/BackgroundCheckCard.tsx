@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { startBackgroundCheckAction } from "../actions";
+import { BACKGROUND_CHECK_MIN_PAID_LEADS } from "@/lib/constants";
 import type { Contractor } from "@/lib/database.types";
 
 // Opt-in Checkr background check (0057). Only ever rendered by
@@ -19,12 +20,21 @@ function formatCheckedDate(iso: string): string {
 
 export default function BackgroundCheckCard({
   contractor,
+  paidLeads,
 }: {
   contractor: Contractor;
+  // Paid lead applications this pro has, counted server-side (see
+  // countPaidLeadApplications). Hearth pays Checkr per check, so the perk is
+  // earned rather than granted at signup. Null means the count could not be
+  // read; the card treats that the same way the server action does - as not
+  // yet unlocked - so the UI never offers a button the action will refuse.
+  paidLeads: number | null;
 }) {
   const status = contractor.background_check_status ?? "none";
   const checkedAt = contractor.background_checked_at ?? null;
   const hasEmail = Boolean(contractor.contact_email);
+  const paidLeadsKnown = typeof paidLeads === "number" ? paidLeads : 0;
+  const unlocked = paidLeadsKnown >= BACKGROUND_CHECK_MIN_PAID_LEADS;
 
   return (
     <section className="card space-y-3">
@@ -32,9 +42,11 @@ export default function BackgroundCheckCard({
         <h2 className="font-semibold text-stone-900 dark:text-stone-100">Background check</h2>
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           Run by Checkr, a background check provider. Hearth covers the cost:
-          it&apos;s free for you. Consent and the check itself happen on
-          Checkr&apos;s site, after they email you an invitation. Hearth only
-          ever sees a pass / no-pass result, never the report itself.
+          it&apos;s free for you, and it unlocks after{" "}
+          {BACKGROUND_CHECK_MIN_PAID_LEADS} paid leads. Consent and the check
+          itself happen on Checkr&apos;s site, after they email you an
+          invitation. Hearth only ever sees a pass / no-pass result, never the
+          report itself.
         </p>
       </div>
 
@@ -80,6 +92,27 @@ export default function BackgroundCheckCard({
           Check your email for Checkr&apos;s invitation to complete your
           background check.
         </p>
+      ) : !unlocked ? (
+        // Quiet progress, not a locked button: the meter counts something the
+        // pro is already doing, and the number is the same one the server
+        // action enforces.
+        <div className="space-y-1.5">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-stone-100 dark:bg-stone-700">
+            <div
+              className="h-full rounded-full bg-hearth-500 transition-all"
+              style={{
+                width: `${Math.round(
+                  (paidLeadsKnown / BACKGROUND_CHECK_MIN_PAID_LEADS) * 100
+                )}%`,
+              }}
+            />
+          </div>
+          <p className="text-xs text-stone-500 dark:text-stone-400">
+            Included after {BACKGROUND_CHECK_MIN_PAID_LEADS} paid leads -
+            you&apos;re at {paidLeadsKnown} of{" "}
+            {BACKGROUND_CHECK_MIN_PAID_LEADS}.
+          </p>
+        </div>
       ) : hasEmail ? (
         <form action={startBackgroundCheckAction} className="space-y-2">
           {/* Legal name, not the business name: the check runs against a

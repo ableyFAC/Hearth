@@ -1,10 +1,10 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { hasPlus } from "@/lib/subscription";
 import { labelFor, SYSTEM_TYPES } from "@/lib/constants";
 import { stateName } from "@/lib/forecast";
 import DocumentUpload from "@/components/DocumentUpload";
-import CategoryIcon from "@/components/CategoryIcon";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
 import SubmitButton from "@/components/SubmitButton";
 import { FileText } from "lucide-react";
@@ -125,6 +125,23 @@ export default async function DocumentsPage() {
 
       <DocumentUpload propertyId={property.id} />
 
+      {/* Once the vault has real weight to it, point at what that record is
+          FOR. No loss framing: nothing has been taken away, and the home
+          report opens for free users now - the report page itself is where
+          the export gate lives and sells itself. */}
+      {!isPlus && list.length >= 5 && (
+        <div className="mt-6 rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-600 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300">
+          You&apos;ve built a real record - the{" "}
+          <Link
+            href="/home-report"
+            className="font-medium text-bark-700 hover:underline dark:text-stone-200"
+          >
+            Home report
+          </Link>{" "}
+          turns it into something you can hand a buyer or insurer.
+        </div>
+      )}
+
       <div className="mt-6 space-y-3">
         {/* If the select itself errored (e.g. a drifted DB schema), say so
             plainly instead of falling through to the empty state, which would
@@ -170,11 +187,7 @@ export default async function DocumentsPage() {
               className="flex gap-3 rounded-xl border border-stone-200 bg-white p-4 dark:border-white/10 dark:bg-stone-800"
             >
               <div className="icon-chip">
-                {d.system_type ? (
-                  <CategoryIcon list={SYSTEM_TYPES} value={d.system_type} />
-                ) : (
-                  <FileText className="h-5 w-5" aria-hidden="true" />
-                )}
+                <FileText className="h-5 w-5" aria-hidden="true" />
               </div>
 
               <div className="min-w-0 flex-1">
@@ -312,7 +325,7 @@ export default async function DocumentsPage() {
               </p>
             </div>
 
-            <InsurancePacket isPlus={isPlus} />
+            <InsurancePacket isPlus={isPlus} daysToRenewal={daysToRenewal} />
 
             <InsuranceForm
               renewalDate={insuranceRenewal}

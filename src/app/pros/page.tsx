@@ -10,6 +10,7 @@ import {
   PRO_PLAN,
 } from "@/lib/constants";
 import { AGING_LEAD_TIERS } from "@/lib/leadPricing";
+import { LAUNCH_AREA_LABEL } from "@/lib/serviceArea";
 import Link from "next/link";
 import Image from "next/image";
 import Logo from "@/components/Logo";
@@ -60,11 +61,18 @@ export const metadata: Metadata = {
 // Marketing front door for contractors. Every claim here is a real product
 // behavior (lead fee shown up front, aging markdowns, pay-per-apply wallet),
 // so keep copy in sync with /pro and leadPricing.ts if those change.
-export default async function ProsLanding(
-  props: {
-    searchParams?: Promise<{ ref?: string }>;
-  }
-) {
+//
+// STAYS DYNAMIC, and not because of the root layout (that no longer reads
+// cookies - see src/app/layout.tsx). Three independent per-request reads live
+// in the body below: auth.getUser() plus getRole() to bounce a signed-in
+// contractor straight to /pro, and searchParams.ref to thread a referral code
+// into the signup link. The redirect is the important one: prerendering this
+// page would land contractors on the marketing pitch instead of their leads.
+// No revalidate export here - it would be a no-op against those reads, and
+// force-static would silently break the redirect rather than fail loudly.
+export default async function ProsLanding(props: {
+  searchParams?: Promise<{ ref?: string }>;
+}) {
   const searchParams = await props.searchParams;
   const supabase = await createClient();
   const {
@@ -194,7 +202,7 @@ export default async function ProsLanding(
               Already have an account? Sign in
             </Link>
             <p className="mt-4 text-sm text-stone-500 dark:text-stone-400">
-              Serving Huntington Beach and Fountain Valley
+              Serving {LAUNCH_AREA_LABEL}
             </p>
             <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
               Don&apos;t see your city yet? You will soon.

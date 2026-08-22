@@ -148,3 +148,34 @@ export const getRole = cache(async (): Promise<Role | null> => {
   // Legacy fallback: a company row means they're a contractor.
   return (await isContractor()) ? "contractor" : null;
 });
+
+// How many PAID lead applications this contractor has: lead_applications rows
+// they own whose fee was not refunded (a ghost-protection refund means the
+// lead never really cost them anything, so it does not count toward an
+// earn-in). Used by the Hearth-funded background check gate, which spends real
+// money per check and therefore only opens after
+// BACKGROUND_CHECK_MIN_PAID_LEADS of them.
+//
+// Returns null when the count could NOT be read. Callers must treat null as
+// "not enough": this decides whether Hearth pays a third-party bill, so a
+// broken read has to fail closed rather than hand out a free check on the
+// strength of an outage. Cached per request so the page and the action that
+// both need it share one query.
+export const countPaidLeadApplications = cache(
+  async (contractorId: string): Promise<number | null> => {
+    const supabase = createClient();
+    const { count, error } = await supabase
+      .from("lead_applications")
+      .select("id", { count: "exact", head: true })
+      .eq("contractor_id", contractorId)
+      .is("refunded_at", null);
+    if (error) {
+      console.error(
+        "countPaidLeadApplications failed:",
+        error.message ?? error
+      );
+      return null;
+    }
+    return count ?? 0;
+  }
+);
