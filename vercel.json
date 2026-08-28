@@ -67,6 +67,10 @@
     {
       "path": "/api/cron/renewal-reminders",
       "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/support-digest",
+      "schedule": "15 16 * * *"
     }
   ]
 }
