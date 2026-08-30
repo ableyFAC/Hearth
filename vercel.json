@@ -71,6 +71,10 @@
     {
       "path": "/api/cron/support-digest",
       "schedule": "15 16 * * *"
+    },
+    {
+      "path": "/api/cron/dunning-followup",
+      "schedule": "0 16 * * *"
     }
   ]
 }
