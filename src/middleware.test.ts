@@ -32,6 +32,10 @@ describe("middleware matcher", () => {
       // public/sw.js, fetched by the browser on every service-worker update
       // check. There is nothing to guard and nothing to refresh on it.
       "/sw.js",
+      // public/warming.html, the cold-start loading screen the service worker
+      // precaches for every user. A /signin redirect here would be cached in
+      // place of the screen, so it is excluded exactly like sw.js.
+      "/warming.html",
     ]) {
       expect(matches(asset), asset).toBe(false);
     }
@@ -84,6 +88,7 @@ describe("middleware matcher", () => {
   it("does not let a lookalike path borrow an exclusion", () => {
     for (const path of [
       "/pro/sw.js",
+      "/pro/warming.html",
       "/account/robots.txt",
       "/chats/icon.svg",
       "/api/photos/1",
