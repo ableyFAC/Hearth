@@ -146,9 +146,25 @@ describe("unrouted paths fall through to the 404", () => {
     }
   });
 
+  // The PWA launch shell is public by exact match only. The shell itself must
+  // paint with no session (it is the manifest's start_url, and demanding auth
+  // would recreate the cold-start blank screen it exists to fix), but the
+  // entry is not a prefix, and the segment is on GUARDED_SEGMENTS, so a
+  // future routed page under /open/ redirects to /signin rather than
+  // rendering to a signed-out visitor. The dashboard the shell forwards to
+  // still demands a session.
+  it("keeps the PWA launch shell public, exact match only", () => {
+    expect(isPublicPath("/open")).toBe(true);
+    expect(isPublicPath("/open/anything")).toBe(false);
+    expect(isGuardedPath("/open/anything")).toBe(true);
+    expect(isPublicPath("/dashboard")).toBe(false);
+    expect(isGuardedPath("/dashboard")).toBe(true);
+  });
+
   it("keeps the public pages public", () => {
     for (const path of [
       "/",
+      "/open",
       "/signin",
       "/pros",
       "/pricing",
