@@ -5,7 +5,70 @@
 
 ---
 
-## LATEST (2026-08-30, after the overnight): open-offers wave, committed `42470da`, NOT pushed
+## LATEST (2026-08-30, late): reopen loader (warming screen), committed `7af5da6`, PUSHED
+
+### Goals
+Landen (mid-session): closing and reopening the installed app hangs on a black
+or white screen; "at least make a loader so it's not blank, with a progress bar
+or something, or tips/tricks for house".
+
+### Current state
+Built and verified, gate GREEN (tsc 0, eslint 0, vitest 246 files / 3217 passed
+exit 0, isolated build 0 on retry: the first build attempt failed ONLY on a
+transient Google Fonts fetch for Inter, unrelated). Committed `7af5da6` and
+PUSHED to main together with the open-offers wave (`42470da` + `22f0292`) on
+Landen's go-ahead. Owner update the same evening: RISK_ENFORCE and the Stripe
+env items are DONE per Landen; the 0151 SQL paste status is being checked.
+
+### Files touched
+public/sw.js (VERSION hearth-sw-2), NEW public/warming.html, src/middleware.ts
+(matcher), src/middleware.test.ts, src/lib/pushClient.ts,
+src/components/PushRegistrar.tsx (+test), NEW src/lib/swNavigationFallback.test.ts.
+
+### What changed
+- The service worker (previously push-only) now precaches /warming.html and,
+  for same-origin GET page navigations ONLY, races the network against 3.5s:
+  if the server has not answered (cold start) or the device is offline, it
+  instantly shows the warming screen INSTEAD of a blank page. Real pages and
+  data are still never cached, so the stale-dashboard risk stays impossible.
+- warming.html: fully self-contained (inline CSS/JS/SVG, zero network needs),
+  brand colors light + dark, indeterminate progress bar, 10 rotating house
+  tips, "Still connecting..." line after 3 tries, 44px Try again button. It
+  retries by PROBING with a plain fetch (which the worker never intercepts, so
+  it can outwait a cold start) and reloads only once the server answers;
+  backoff 2.5/5/10 then 15s, counter in sessionStorage expiring after 60s.
+- /auth/ and /api/ are excluded from interception (verifier catches: one-time
+  OAuth/confirm codes must never be replayed by the retry, and <a download>
+  exports route through the handler as navigations and would loop).
+- The worker now registers for EVERYONE (it was gated behind VAPID keys, which
+  production does not have yet, so it would never have installed): push
+  subscribe logic stays exactly as gated as before.
+- Matcher excludes /warming.html like sw.js (a /signin 307 would poison the
+  precache). New source tests pin the guards, the precache, the probe logic,
+  the VERSION bump, and warming.html's inline-only/no-em-dash invariants.
+
+### What failed / was caught
+- Verifier: auth-code replay (HIGH) and download hijack (HIGH), both fixed via
+  the /auth/ + /api/ exclusions; a vacuous em-dash test assertion (fixed with
+  a char-code check); blind reload could re-race the 3.5s timeout on a still
+  cold server (fixed by the probe); warming.html edits silently not shipping
+  without a VERSION bump (coupling comment + test); no direct test for
+  register-without-push (test added).
+- Known accepted: with sessionStorage blocked the backoff stays at 2.5s
+  between probes (self-throttled by the probe awaiting the server); iOS's own
+  resume snapshot can still flash before any network request happens, which no
+  web code can control.
+- Not verifiable without a device: real standalone behavior on iPhone.
+
+### Next steps
+1. DONE: committed and pushed on the in-the-moment go-ahead. After deploy,
+   fully close and reopen the installed app twice so hearth-sw-2 installs.
+2. Owner list: 0151 SQL paste status under check; VAPID env still open;
+   RISK_ENFORCE + Stripe reported done by Landen this evening.
+
+---
+
+## (2026-08-30, after the overnight): open-offers wave, committed `42470da`, NOT pushed
 
 ### Goals
 Continue from the previous handoff's open offers: (1) push notification for the
