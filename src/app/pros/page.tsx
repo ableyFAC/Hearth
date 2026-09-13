@@ -3,8 +3,9 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { hasAuthCookie } from "@/lib/authCookie";
 import { getVerifiedUser } from "@/lib/auth";
-import { isContractor } from "@/lib/contractor";
+import { getSides, isContractor } from "@/lib/contractor";
 import { isHomeownerPreview } from "@/lib/previewMode";
+import { homeownerLanding } from "@/lib/previewModeServer";
 import ProsComingSoon from "@/components/pro/ProsComingSoon";
 import {
   FOUNDER,
@@ -151,6 +152,29 @@ export default async function ProsLanding(props: {
   // never be bounced into a shell that is itself closed, and ?ref= threading
   // into a signup page that does not accept signups is meaningless.
   if (isHomeownerPreview()) {
+    // A signed-in homeowner arrives here from "Switch to your business" in
+    // preview (src/lib/sideActions.ts), so the door needs its way back: the
+    // "Go to your homeowner account" button and the logo/back links point at
+    // their homeowner side. Cookie names first, then the real check, same as
+    // below; the cookie read is guarded because this page also renders in
+    // unit tests outside a request scope, where it must behave as signed-out.
+    let previewUser = null;
+    try {
+      const signedIn = hasAuthCookie((await cookies()).getAll());
+      previewUser = signedIn ? await getVerifiedUser() : null;
+    } catch {
+      previewUser = null;
+    }
+    if (previewUser) {
+      const sides = await getSides();
+      return (
+        <ProsComingSoon
+          source="pros"
+          homeownerHref={homeownerLanding(sides)}
+          hasHome={sides.hasHome}
+        />
+      );
+    }
     return <ProsComingSoon source="pros" />;
   }
 

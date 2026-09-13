@@ -105,19 +105,17 @@ describe("setPreferredSideAction in preview", () => {
       hasPro: true,
       hasHome: true,
     });
-    const { PREVIEW_PROS_COPY } = await import("@/lib/previewMode");
-
     // A genuinely dual-sided account: it HAS the pro side, so nothing but the
-    // preview stands between it and the stamp.
+    // preview stands between it and the stamp. It is sent to the public
+    // coming-soon door (/pros, waitlist form + a way back), not toasted on
+    // the dashboard, and no flash is queued for a later page.
     await expect(setPreferredSideAction(form("contractor"))).rejects.toThrow(
-      "NEXT_REDIRECT:/dashboard"
+      "NEXT_REDIRECT:/pros"
     );
 
     expect(stamped).toEqual([]);
     expect(refresh()).toBe(0);
-    expect(flashes).toEqual([
-      { message: PREVIEW_PROS_COPY, kind: "info" },
-    ]);
+    expect(flashes).toEqual([]);
   });
 
   it("still lets the switch back to homeowner through", async () => {

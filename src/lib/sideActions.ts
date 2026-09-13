@@ -6,7 +6,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getSides } from "@/lib/contractor";
 import { setFlash } from "@/lib/flash";
 import { isProSideOpenForViewer } from "@/lib/previewModeServer";
-import { PREVIEW_PROS_COPY } from "@/lib/previewMode";
 
 // Switches which side of OakTend this account lands on, from the profile menu
 // in either nav (Nav.tsx / ProNav.tsx post to it).
@@ -42,20 +41,21 @@ export async function setPreferredSideAction(formData: FormData) {
   // homeowner side rather than being stamped onto a side it cannot open, which
   // is what would have made the trap survive the preview.
   //
-  // /dashboard, not /pro: bouncing them to the pro shell would render the
-  // coming-soon page, which reads as "the switch worked and the app is gone".
-  // The flash says the true thing on the side they are still on. An account
-  // with no home yet gets re-routed to /onboarding by the homeowner shell,
-  // which is the same self-correcting landing every other redirect here
-  // relies on.
+  // /pros, the public coming-soon door with the waitlist form (William,
+  // 2026-09-13): a homeowner who taps "Switch to your business" should be
+  // told pros are coming soon AND be able to leave their email, not just get
+  // a toast on the dashboard. In preview that page renders ProsComingSoon
+  // with a "Go to your homeowner account" button for a signed-in viewer, so
+  // it is a door with a way back, never a dead end. No flash: /pros is
+  // outside the app shell, so a queued toast would only surface later, out
+  // of context, on the next app page.
   //
   // An internal (OakTend team) account is let through, exactly as everywhere
   // else, so the team can still switch into a test company. Outside preview
   // isProSideOpenForViewer() short-circuits on the flag, so this costs a
   // string comparison and no session read.
   if (side === "contractor" && !(await isProSideOpenForViewer())) {
-    await setFlash(PREVIEW_PROS_COPY, "info");
-    redirect("/dashboard");
+    redirect("/pros");
   }
 
   // The account must actually hold the side it is asking to prefer. A forged
