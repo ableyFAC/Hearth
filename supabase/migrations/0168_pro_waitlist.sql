@@ -49,6 +49,18 @@ begin
   ) then
     raise exception 'PRECHECK: public.enforce_properties_home_cap() is missing. Apply migration 0108 before this file - Part 2 below REPLACES that function and would otherwise install it without the trigger that calls it. Nothing was changed.';
   end if;
+  -- Part 2 extends the LATEST body (0110 extra-home slots + the 0154 OakTend
+  -- rename). If live is on an older body, replacing it would be a regression
+  -- dressed as a feature, so refuse and name what to apply.
+  if not exists (
+    select 1 from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'enforce_properties_home_cap'
+      and p.prosrc like '%extra_home_slots%'
+      and p.prosrc like '%OakTend Plus%'
+  ) then
+    raise exception 'PRECHECK: public.enforce_properties_home_cap() is not on its latest body (0110 extra_home_slots + 0154_oaktend_rename_messages wording). Paste supabase/migrations/0154_oaktend_rename_messages.sql (it carries the 0110 body) before this file. Nothing was changed.';
+  end if;
 end
 $$;
 
@@ -114,11 +126,18 @@ comment on table public.pro_waitlist is
 -- =============================================================================
 -- Part 2: let a SERVICE-ROLE insert past the home cap
 -- =============================================================================
--- THE ONLY CHANGE from migration 0108 is the six-line v_role block and the
+-- THE ONLY CHANGE from the LIVE body is the six-line v_role block and the
 -- `if v_role = 'service_role' ... return new` that follows it. Everything
--- below that point - the advisory lock, the Plus predicate, the 1/5 caps, the
--- count, both exception messages - is migration 0108's body byte for byte.
--- Diff it against supabase/migrations/0108_home_cap.sql before pasting.
+-- below that point - the advisory lock, the Plus predicate, the paid
+-- extra-home slots (0110), the 1 / 5 + slots cap, the count, both exception
+-- messages with the OakTend wording (0154_oaktend_rename_messages) - is the
+-- latest body byte for byte. The trigger was created in 0108, re-created
+-- with extra_home_slots in 0110, and re-created with the brand rename in
+-- 0154_oaktend_rename_messages; THAT is the body this file extends. (A first
+-- draft of this file extended 0108's body instead, which would have silently
+-- dropped the paid extra-home slots and put "Hearth" back in an error a
+-- homeowner sees. Caught at review 2026-09-12 before it was pasted.) Diff it
+-- against supabase/migrations/0154_oaktend_rename_messages.sql before pasting.
 --
 -- WHY THIS IS SAFE. service_role is the platform's all-powerful role: it
 -- already bypasses RLS on every table in the database, and anyone holding that
@@ -163,10 +182,12 @@ as $$
 declare
   v_owned bigint;
   v_plus  boolean;
+  v_extra int;
   v_cap   int;
   v_role  text;
 begin
-  -- ---- ADDED IN 0168 (preview mode). Everything else is 0108 verbatim. ----
+  -- ---- ADDED IN 0168 (preview mode). Everything else is the live body
+  -- (0110 + 0154_oaktend_rename_messages) verbatim. ---------------------------
   begin
     v_role := nullif(current_setting('request.jwt.claims', true), '')::jsonb
                 ->> 'role';
@@ -181,12 +202,11 @@ begin
   end if;
   -- ---- end of the 0168 addition ------------------------------------------
 
-  -- Serialize concurrent inserts for THIS user (see RACE-SAFETY in 0108).
-  -- Keyed on the owner's user_id via the two-int form of
-  -- pg_advisory_xact_lock, so only same-user inserts wait on each other.
+  -- Serialize concurrent inserts for THIS user (see 0107's RACE-SAFETY note).
+  -- Keyed on the owner's user_id, so only same-user inserts wait on each other.
   perform pg_advisory_xact_lock(hashtext('hearth_home_cap'), hashtext(new.user_id::text));
 
-  -- LIVE homeowner Hearth Plus, derived exactly as src/lib/subscription.ts
+  -- LIVE homeowner OakTend Plus, derived exactly as src/lib/subscription.ts
   -- hasPlus() does and identically to 0081's plus_poster: a homeowner-side row
   -- (side = 'homeowner', or a plan that is not a pro_ plan), active or
   -- trialing, and not past a known period end.
@@ -201,8 +221,22 @@ begin
       and (s.current_period_end is null or s.current_period_end > now())
   );
 
-  -- Free accounts: 1 home. Plus: up to 5 (landlord / multi-property owner).
-  v_cap := case when v_plus then 5 else 1 end;
+  -- Paid extra-home slots, summed over the SAME live homeowner-side row(s). A
+  -- non-Plus account has no live homeowner row here, so this is 0 and its cap
+  -- stays 1. There is at most one homeowner row per user, but sum() keeps this
+  -- correct regardless.
+  select coalesce(sum(s.extra_home_slots), 0) into v_extra
+  from public.subscriptions s
+  where s.user_id = new.user_id
+    and (s.side = 'homeowner'
+         or s.plan is null
+         or s.plan not like 'pro\_%' escape '\')
+    and s.status in ('active', 'trialing')
+    and (s.current_period_end is null or s.current_period_end > now());
+
+  -- Free accounts: 1 home. Plus: 5 (landlord / multi-property owner) plus any
+  -- paid extra-home slots.
+  v_cap := (case when v_plus then 5 else 1 end) + coalesce(v_extra, 0);
 
   -- Count only OWNED rows - homes shared with this user (0048) belong to a
   -- different user_id and are excluded automatically.
@@ -212,10 +246,10 @@ begin
 
   if v_owned >= v_cap then
     if v_plus then
-      raise exception 'Home limit reached: Hearth Plus covers up to 5 homes.'
+      raise exception 'Home limit reached: your OakTend Plus plan covers % homes. Add more from the Plus page.', v_cap
         using errcode = 'check_violation';
     else
-      raise exception 'Home limit reached: free accounts can track 1 home. Upgrade to Hearth Plus for up to 5.'
+      raise exception 'Home limit reached: free accounts can track 1 home. Upgrade to OakTend Plus for up to 5.'
         using errcode = 'check_violation';
     end if;
   end if;
