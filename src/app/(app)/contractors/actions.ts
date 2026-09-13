@@ -28,6 +28,11 @@ import { alertProsForNewLead } from "@/lib/proAlerts";
 import { sendNotification } from "@/lib/notify";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import { isBlockedBetween } from "@/lib/blocks";
+import {
+  isInternalUser,
+  isInternalContractor,
+  internalUserIdsAmong,
+} from "@/lib/internalAccounts";
 import { redactContact } from "@/lib/redact";
 import { ok, err, type ActionResult } from "@/lib/actionResult";
 import {
@@ -831,6 +836,16 @@ export async function postJobAction(formData: FormData) {
       .contains("categories", [category])
       .limit(50);
     const categoryLabel = labelFor(JOB_CATEGORIES, category);
+    // 0165 internal accounts: same pairing rule alertProsForNewLead and
+    // open_jobs_for_me() both apply - an internal (team test) homeowner's job
+    // never nudges a real pro, and a real homeowner's job never nudges a test
+    // pro. One batched lookup for the whole match list; an empty set (a
+    // pre-0165 database, or any read failure) keeps everyone, which is the
+    // pre-0165 behaviour.
+    const posterIsInternal = await isInternalUser(user.id);
+    const internalMatches = await internalUserIdsAmong(
+      (matches ?? []).map((m) => m.user_id).filter((id): id is string => Boolean(id))
+    );
     // Collect rows and send a single batched insert instead of awaiting one
     // insert per matched pro sequentially: up to 50 round-trips in series was
     // adding latency to the post and amplifying it per-post.
@@ -843,6 +858,8 @@ export async function postJobAction(formData: FormData) {
         alertedPros.has(match.user_id)
       )
         return [];
+      // 0165: internal sees internal, real sees only real.
+      if (internalMatches.has(match.user_id) !== posterIsInternal) return [];
       return [
         {
           user_id: match.user_id,
@@ -1559,6 +1576,28 @@ export async function requestProAction(
   if (!pro.serves_orange_county) {
     return err("That pro isn't taking OakTend jobs in your area yet.");
   }
+  // 0165 internal accounts: internal sees internal, real sees only real. Like
+  // the block check above, a direct request is created by application code
+  // rather than by open_jobs_for_me or apply_to_lead, so this is the one path
+  // the database-level pairing gates cannot cover on the WAY IN and it has to
+  // be re-stated here. A real homeowner cannot normally even see an internal
+  // pro (browse_pros and public_pro_profile both filter as of 0165), but
+  // /p/<id> is a shareable link and contractor_id arrives in the form body, so
+  // the id can be guessed or kept from before the flag was set. The reverse -
+  // an internal homeowner picking a REAL pro - is the case that actually
+  // matters day to day: it would put a test request in front of a real
+  // business. unlock_direct_request refuses the pairing again on the way out,
+  // so a row that predates this check still cannot take anyone's money.
+  //
+  // Same deliberately vague message as the block check, for the same reason:
+  // it must not be usable to probe which accounts are internal.
+  const [homeownerIsInternal, proIsInternal] = await Promise.all([
+    isInternalUser(user.id),
+    isInternalContractor(pro.id),
+  ]);
+  if (homeownerIsInternal !== proIsInternal) {
+    return err("That pro isn't available for direct requests right now.");
+  }
   const serves =
     !pro.categories ||
     pro.categories.length === 0 ||
@@ -1832,6 +1871,14 @@ export async function postDirectPubliclyAction(formData: FormData) {
       .contains("categories", [category])
       .limit(50);
     const categoryLabel = labelFor(JOB_CATEGORIES, category);
+    // 0165 internal accounts: same pairing rule as postJobAction's nudge and
+    // as open_jobs_for_me(). See the longer note at that call site.
+    const posterIsInternal = await isInternalUser(user.id);
+    const internalMatches = await internalUserIdsAmong(
+      (matches ?? [])
+        .map((m: { user_id: string | null }) => m.user_id)
+        .filter((id: string | null): id is string => Boolean(id))
+    );
     const rows = (matches ?? []).flatMap((match: { user_id: string | null }) => {
       // SEC-1: never nudge the poster about their own job (dual-side
       // account, same reasoning as alertProsForNewLead's posterUserId).
@@ -1841,6 +1888,8 @@ export async function postDirectPubliclyAction(formData: FormData) {
         alertedPros.has(match.user_id)
       )
         return [];
+      // 0165: internal sees internal, real sees only real.
+      if (internalMatches.has(match.user_id) !== posterIsInternal) return [];
       return [
         {
           user_id: match.user_id,

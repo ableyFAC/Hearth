@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isMissingSchemaError } from "@/lib/dbErrors";
 
 // Sitemap for crawlers: the public landing pages, the two city landing pages
 // (src/app/fountain-valley, src/app/huntington-beach), the Privacy/Terms/DMCA
@@ -154,16 +155,35 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     //   serves_orange_county  - the launch-market gate. A pro outside it is
     //                           unreachable through the product, so listing
     //                           them in the sitemap is a crawlable dead end.
+    //   is_internal = false    - the team's own test pros (0165). Google must
+    //                           never be handed /p/<id> for one: an anonymous
+    //                           crawler is not internal, so public_pro_profile
+    //                           returns null for it and the page 404s. Listing
+    //                           it would be advertising a guaranteed 404.
     //
-    // Without these, the service-role read here bypassed both (RLS does not
-    // apply to the admin client) and published rows the homeowner-facing
+    // Without these, the service-role read here bypassed all three (RLS does
+    // not apply to the admin client) and published rows the homeowner-facing
     // browse list hides.
-    const { data, error } = await (admin.from("contractors") as any)
+    let { data, error } = await (admin.from("contractors") as any)
       .select("id, slug")
       .not("user_id", "is", null)
       .eq("serves_orange_county", true)
+      .eq("is_internal", false)
       .order("created_at", { ascending: true })
       .limit(5000);
+    // 0165 has not been pasted to this database yet: is_internal does not
+    // exist, so Postgres rejects the WHOLE query rather than ignoring the
+    // filter. Retry without it - nobody is internal on such a database, so
+    // dropping the filter is exactly the pre-0165 result, and a sitemap with
+    // no pro pages in it would be a real SEO regression to accept silently.
+    if (error && isMissingSchemaError(error)) {
+      ({ data, error } = await (admin.from("contractors") as any)
+        .select("id, slug")
+        .not("user_id", "is", null)
+        .eq("serves_orange_county", true)
+        .order("created_at", { ascending: true })
+        .limit(5000));
+    }
     if (!error && Array.isArray(data)) {
       for (const row of data as { id: string; slug: string | null }[]) {
         entries.push({

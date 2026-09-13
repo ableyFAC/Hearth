@@ -119,6 +119,15 @@ vi.mock("@/lib/proAlerts", () => ({
 vi.mock("@/lib/notify", () => ({ sendNotification: vi.fn() }));
 vi.mock("@/lib/subscription", () => ({ hasPlus: vi.fn(async () => false) }));
 vi.mock("@/lib/blocks", () => ({ isBlockedBetween: vi.fn(async () => false) }));
+// 0165 internal accounts. Mocked for the same reason @/lib/blocks is: the real
+// module is "server-only", which has no Node resolution under vitest. The
+// defaults say "nobody is internal", which is the state every test in this
+// file assumes and the state a database without migration 0165 is in.
+vi.mock("@/lib/internalAccounts", () => ({
+  isInternalUser: vi.fn(async () => false),
+  isInternalContractor: vi.fn(async () => false),
+  internalUserIdsAmong: vi.fn(async () => new Set<string>()),
+}));
 
 import { postJobAction } from "./actions";
 import { POST_JOB_ERRORS } from "./postJobErrors";
