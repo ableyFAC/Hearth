@@ -17,7 +17,14 @@
 
 export const CAMPAIGN_CODE_RE = /^[a-z0-9-]{2,32}$/;
 
-export type CampaignChannel = "tiktok" | "instagram" | "other";
+// "partner" is a person or business who sends OakTend traffic under an
+// arrangement of their own (see PARTNER_CODES below), as opposed to a post
+// OakTend published itself. It is a LABEL on the event only: nothing in the
+// /go route, the attribution cookie, or the signup-time write branches on
+// channel, so a partner code travels exactly the same path a calendar code
+// does. Keep it that way - the moment a channel changes behaviour, the
+// "one allowlist, one path" property this file exists to guarantee is gone.
+export type CampaignChannel = "tiktok" | "instagram" | "partner" | "other";
 
 export interface CampaignLink {
   /** Path on this site the code redirects to. Always starts with "/". */
@@ -56,10 +63,37 @@ function buildCalendarCodes(): Record<string, CampaignLink> {
   return map;
 }
 
+// Partner referral codes: a named person or business who sends OakTend
+// traffic, one hand-written entry each. Deliberately a literal object and
+// NOT anything generated, parsed from an env var, or read from the database -
+// the whole point of this module is that the set of strings that can reach
+// app_events.props.code (and now public.users.campaign_code, migration 0166)
+// is fixed at build time and reviewable in a diff.
+//
+// curtis: Curtis Do, the first partner referral (Landen addendum 5, I1).
+// Destination is /homeowner-signup rather than "/" because the deal is about
+// homeowner sign-ups specifically, and dropping the visitor straight on the
+// sign-up form is one fewer tap between a partner's referral and an account.
+// That page is public: src/lib/supabase/middleware.ts isPublicPath matches
+// `path.startsWith("/homeowner-signup")`, the middleware matcher does not
+// exclude it, and the page itself is a client component with no session
+// guard - so a signed-out visitor lands on the form, not a /signin bounce.
+//
+// TO ADD ANOTHER PARTNER: add one line here and one row to the table in
+// docs/REFERRALS.md. Nothing else - the /go route, the 30-day cookie, the
+// campaign_signup event and the users.campaign_code write are all generic.
+const PARTNER_CODES: Record<string, CampaignLink> = {
+  curtis: {
+    destination: "/homeowner-signup",
+    channel: "partner",
+    label: "Curtis Do referral",
+  },
+};
+
 // code -> destination/channel/label. Only codes in this object are ever
 // logged with their real value; see the module comment above.
 export const CAMPAIGN_CODES: Readonly<Record<string, CampaignLink>> =
-  Object.freeze(buildCalendarCodes());
+  Object.freeze({ ...buildCalendarCodes(), ...PARTNER_CODES });
 
 // Fixed, enum-safe placeholder logged in place of a well-formed code that
 // is not in CAMPAIGN_CODES. Never derived from caller input.

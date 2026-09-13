@@ -34,7 +34,7 @@ describe("CAMPAIGN_CODE_RE / isWellFormedCampaignCode", () => {
 });
 
 describe("CAMPAIGN_CODES (the calendar allowlist)", () => {
-  it("has exactly the 28 codes the calendar uses: ig-d01..d14 and tt-d01..d14", () => {
+  it("has exactly the 28 calendar codes (ig-d01..d14, tt-d01..d14) plus the partner codes", () => {
     const keys = Object.keys(CAMPAIGN_CODES).sort();
     const expected: string[] = [];
     for (const prefix of ["ig", "tt"]) {
@@ -42,8 +42,12 @@ describe("CAMPAIGN_CODES (the calendar allowlist)", () => {
         expected.push(`${prefix}-d${String(day).padStart(2, "0")}`);
       }
     }
+    // Partner referral codes, one line per partner (Landen addendum 5, I1).
+    // Listed explicitly rather than derived so adding a partner is a visible
+    // two-line diff here as well as in the module.
+    expected.push("curtis");
     expect(keys).toEqual(expected.sort());
-    expect(keys).toHaveLength(28);
+    expect(keys).toHaveLength(29);
   });
 
   it("every code is well-formed by the route's own gate", () => {
@@ -67,6 +71,35 @@ describe("CAMPAIGN_CODES (the calendar allowlist)", () => {
         expect(CAMPAIGN_CODES[code].destination).toBe("/");
       }
     }
+  });
+});
+
+describe("partner referral codes", () => {
+  it("curtis is on the allowlist, on the partner channel, pointed at the public signup page", () => {
+    const link = lookupCampaign("curtis");
+    expect(link).not.toBeNull();
+    // /homeowner-signup is public (isPublicPath in
+    // src/lib/supabase/middleware.ts matches it by prefix), so a signed-out
+    // visitor following /go/curtis lands on the form rather than /signin.
+    expect(link?.destination).toBe("/homeowner-signup");
+    expect(link?.channel).toBe("partner");
+    expect(link?.label).toBe("Curtis Do referral");
+  });
+
+  it("every partner destination is a same-site absolute path", () => {
+    // The /go route builds `new URL(destination, origin)`. A value starting
+    // with a scheme or "//" would resolve off-site, turning a campaign link
+    // into an open redirect, so no entry in the map may ever look like one.
+    for (const [code, link] of Object.entries(CAMPAIGN_CODES)) {
+      expect(link.destination.startsWith("/"), code).toBe(true);
+      expect(link.destination.startsWith("//"), code).toBe(false);
+    }
+  });
+
+  it("partner codes are well-formed, so the route's shape gate lets them through", () => {
+    // CAMPAIGN_CODE_RE is what decides 404 vs. lookup. A partner code that
+    // failed it would 404 before the allowlist was ever consulted.
+    expect(isWellFormedCampaignCode("curtis")).toBe(true);
   });
 });
 

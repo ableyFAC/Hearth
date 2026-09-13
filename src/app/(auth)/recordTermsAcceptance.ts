@@ -7,6 +7,7 @@ import { recordRequestSignals, recordEmailSignals } from "@/lib/risk/signals";
 import { clientIpFromHeaders } from "@/lib/clientIp";
 import { trackServerEvent } from "@/lib/trackServer";
 import { CAMPAIGN_COOKIE, lookupCampaign } from "@/lib/campaigns";
+import { isMissingSchemaError } from "@/lib/dbErrors";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -205,13 +206,15 @@ export async function recordTermsAcceptance(
   // flows call at the moment an account is actually created (see the big
   // comment at the top of this file), so it is also the right place to close
   // the loop on a /go/ link: if the visitor still carries the first-party
-  // cookie the redirect set, log which code brought them here. Gated to the
-  // two INITIAL-signup docs, not "pro_terms_onboarding" (the later wizard
-  // acknowledgment), so this fires once per new account, the same moment
-  // signup_homeowner / signup_pro already do - and only past the idempotency
-  // guard above, so a second call for the same signup (confirmation-email
-  // flow hitting both this function's early call and /auth/callback) never
-  // double-logs.
+  // cookie the redirect set, log which code brought them here AND stamp it
+  // permanently on the account row (migration 0166 - see the second block
+  // below, which is what a partner revenue share is actually paid from).
+  // Gated to the two INITIAL-signup docs, not "pro_terms_onboarding" (the
+  // later wizard acknowledgment), so this fires once per new account, the
+  // same moment signup_homeowner / signup_pro already do - and only past the
+  // idempotency guard above, so a second call for the same signup
+  // (confirmation-email flow hitting both this function's early call and
+  // /auth/callback) never double-logs.
   //
   // Re-validated against the allowlist here, even though the cookie is only
   // ever minted by the /go/ route with an already-checked code: httpOnly
@@ -225,6 +228,63 @@ export async function recordTermsAcceptance(
       const code = jar.get(CAMPAIGN_COOKIE)?.value ?? null;
       if (code && lookupCampaign(code)) {
         await trackServerEvent(verifiedUserId, "campaign_signup", { code });
+
+        // Permanent attribution on the account itself (migration 0166), on
+        // top of the analytics event above. The event answers "how many
+        // signups did this code bring"; this column answers "which account
+        // came from which partner", which is what a revenue-share
+        // arrangement needs months later, after app_events has been pruned
+        // and long after the 30-day cookie expired.
+        //
+        // NAME: campaign_code, NOT referral_code. public.users already has
+        // BOTH `referral_code` (0102 - this user's OWN invite slug, UNIQUE)
+        // and `referred_by` (0102 - the user who invited them). Neither is
+        // this. A marketing/partner campaign is a third, unrelated thing, so
+        // it gets a third, unambiguous name.
+        //
+        // FIRST CODE WINS, never overwritten. The `.is("campaign_code",
+        // null)` filter is the whole guarantee and it lives in the database,
+        // not in a read-then-write here: two entry points call this function
+        // for the same signup (the signup page and /auth/callback), so a
+        // check-then-set would race. An account that already carries a code
+        // is simply not matched by the UPDATE, which makes a re-entry a
+        // no-op rather than a rewrite. Same shape as the `referred_by`
+        // write in src/app/onboarding/actions.ts.
+        //
+        // Attribution, not personal data: the column is a fixed allowlist
+        // string (see lookupCampaign above - only a known code ever reaches
+        // it), it identifies a marketing source rather than the person, and
+        // it disappears with the account anyway - public.users.id cascades
+        // from auth.users, so eraseUserData/deleteUser take the whole row.
+        // eraseUserData does not scrub `referred_by` either, for the same
+        // reason, so this needs no change there.
+        const { error: campaignWriteError } = await (admin.from("users") as any)
+          .update({
+            campaign_code: code,
+            campaign_recorded_at: new Date().toISOString(),
+          })
+          .eq("id", verifiedUserId)
+          .is("campaign_code", null);
+
+        // Missing-schema tolerant: 0166 has to be pasted into the live
+        // database by hand, and until it is, these two columns do not exist.
+        // That must degrade to "attribution not recorded yet", never to a
+        // failed signup - the campaign_signup event above still lands, so
+        // nothing is lost that cannot be backfilled from app_events.
+        if (campaignWriteError) {
+          if (isMissingSchemaError(campaignWriteError)) {
+            console.warn(
+              "recordTermsAcceptance: users.campaign_code missing, skipping " +
+                "permanent attribution (paste migration 0166)"
+            );
+          } else {
+            console.error("recordTermsAcceptance: campaign_code write failed", {
+              userId: verifiedUserId,
+              doc,
+              campaignWriteError,
+            });
+          }
+        }
       }
     } catch (campaignErr) {
       console.error("recordTermsAcceptance: campaign_signup failed", {
