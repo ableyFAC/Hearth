@@ -48,6 +48,32 @@ import {
   COLD_START_FREE_ALERTS,
   PRO_LEADS_HREF,
 } from "@/lib/constants";
+import type { ConnectStatus } from "@/lib/connectStatus";
+
+// The Payouts row's pill, per Connect state. "unavailable" (the live database
+// has not run migration 0164 yet, or the read failed) is the one state with no
+// pill at all: a pro should not be told anything about a setting the app
+// cannot currently see. Everything else gets one short, plain word.
+const PAYOUT_PILL: Record<ConnectStatus, { label: string; tone: string } | null> =
+  {
+    unavailable: null,
+    not_started: {
+      label: "Not set up",
+      tone: "bg-stone-100 text-stone-700 dark:bg-white/10 dark:text-stone-300",
+    },
+    in_progress: {
+      label: "Finish setup",
+      tone: "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200",
+    },
+    restricted: {
+      label: "Needs attention",
+      tone: "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200",
+    },
+    ready: {
+      label: "On",
+      tone: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200",
+    },
+  };
 
 function dollars(cents: number | string | null) {
   const v = Number(cents ?? 0);
@@ -101,6 +127,7 @@ export default function BusinessView({
   cashCents,
   bonusCents,
   account,
+  payoutsStatus,
   stats,
   trendMax,
   teaserCategories,
@@ -122,6 +149,12 @@ export default function BusinessView({
   cashCents: number;
   bonusCents: number;
   account: AccountPanelProps;
+  /**
+   * Stripe Connect state, computed on the server (readConnectRow). One word:
+   * the account id and the requirement list never cross into this client
+   * component's payload.
+   */
+  payoutsStatus: ConnectStatus;
   /** Pro members only; null renders the teaser instead. */
   stats: ProStats | null;
   trendMax: number;
@@ -257,6 +290,34 @@ export default function BusinessView({
           the server and spread in here as plain data. The license/insurance
           compliance calendar used to share this panel; it moved to the
           Credentials tab of /pro/profile, where the license number lives. */}
+      {/* Payouts: where a job's money actually lands (Stripe Connect, added
+          2026-09-12). One compact row next to the Account panel rather than a
+          card of its own - the pro's attention belongs on leads, and the real
+          screen is /pro/payouts. The pro Home nudge is the loud entry point;
+          this is the one that is always here once the nudge has gone. */}
+      <Link
+        href="/pro/payouts"
+        className="card flex items-center justify-between gap-3 hover:shadow-lift"
+      >
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
+            Payouts
+          </p>
+          <p className="text-xs text-stone-500 dark:text-stone-400">
+            Where the money from a job lands.
+          </p>
+        </div>
+        {PAYOUT_PILL[payoutsStatus] && (
+          <span
+            className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
+              PAYOUT_PILL[payoutsStatus]!.tone
+            }`}
+          >
+            {PAYOUT_PILL[payoutsStatus]!.label}
+          </span>
+        )}
+      </Link>
+
       <AccountPanel {...account} />
 
       {/* Insights: the Pro membership's deeper analytics, computed entirely

@@ -21,6 +21,7 @@ import { hasCurrentInsurance } from "@/lib/insuranceGate";
 import { countAwaitingReply } from "@/lib/proHomeServer";
 import { buildProStats } from "@/lib/proStats";
 import { readFeedbackState } from "@/lib/proFeedbackServer";
+import { readConnectRow } from "@/lib/stripeConnect";
 // The body is one client component. That is a streaming fix, not a behaviour
 // change: DBG3's SetupChecklist fix took this page from eight nested stream
 // holes to one, but the page's own Flight row still deferred the entire
@@ -197,6 +198,15 @@ export default async function ProHome() {
   const feedback = await readFeedbackState(contractor.id);
   const established = await isEstablishedPro(contractor.id);
 
+  // Stripe Connect state, for the payouts nudge below the tiles. One extra
+  // admin read of seven columns on this pro's own row; readConnectRow() never
+  // throws and answers "unavailable" both when the live database has not run
+  // migration 0164 yet and when the read fails, which is the state that hides
+  // the card entirely. Only the WORD crosses to HomeView - never the account
+  // id or the requirement list, which would otherwise ride into the browser's
+  // RSC payload for a client component.
+  const { status: payoutsStatus } = await readConnectRow(contractor.id);
+
   // The membership nudge is for a pro with a real business who is not paying
   // us, and never for a member. The trial label needs the Pro-side
   // subscription row, which survives a cancellation, so a returning member is
@@ -258,6 +268,7 @@ export default async function ProHome() {
       feedbackSent={feedback.sent}
       showNudge={showNudge}
       nudgeTrialEligible={nudgeTrialEligible}
+      payoutsStatus={payoutsStatus}
       latestRows={latestRows.map((r: any) => ({
         id: r.id as string,
         title: r.title as string,

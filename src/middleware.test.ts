@@ -218,6 +218,10 @@ describe("unrouted paths fall through to the 404", () => {
       "/p/some-pro",
       "/guides/water-heater",
       "/api/stripe/webhook",
+      // The Connect endpoint is a separate route with a separate signing
+      // secret, and needs a separate middleware entry: the line above is a
+      // /api/stripe/webhook PREFIX, which this path does not match.
+      "/api/stripe/connect-webhook",
     ]) {
       expect(isPublicPath(path), path).toBe(true);
     }

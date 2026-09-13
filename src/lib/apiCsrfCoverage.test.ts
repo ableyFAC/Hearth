@@ -17,6 +17,8 @@ const API_ROOT = path.join(process.cwd(), "src", "app", "api");
 // stronger than an Origin header.
 const EXEMPT: Record<string, string> = {
   "stripe/webhook": "Stripe signature (constructEvent), called by Stripe",
+  "stripe/connect-webhook":
+    "Stripe signature (constructEvent) against STRIPE_CONNECT_WEBHOOK_SECRET, called by Stripe on its Connect endpoint",
   "checkr/webhook": "X-Checkr-Signature, called by Checkr",
   "iap/webhook":
     "RevenueCat Authorization bearer token (REVENUECAT_WEBHOOK_SECRET), called by RevenueCat",

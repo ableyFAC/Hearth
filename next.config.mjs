@@ -77,10 +77,29 @@ const TURNSTILE_HOST = "https://challenges.cloudflare.com";
 // is listed in script-src and connect-src rather than left to fail silently
 // the day this policy graduates from Report-Only to enforcing.
 const VERCEL_ANALYTICS_HOST = "https://va.vercel-scripts.com";
+// Stripe Connect embedded onboarding (2026-09-12, /pro/payouts). The note in
+// script-src above - "there is no third-party script tag anywhere: Stripe
+// checkout is a server-side redirect, not stripe.js" - stopped being true with
+// this feature. src/app/pro/payouts/PayoutsSetup.tsx dynamically imports
+// @stripe/connect-js, which loads connect.js from connect-js.stripe.com; that
+// script in turn pulls js.stripe.com and renders Stripe's account-onboarding
+// UI inside a cross-origin iframe (so both hosts are needed in frame-src as
+// well, since default-src 'self' does not cover iframes), and the iframe's
+// own code talks to api.stripe.com (connect-src).
+//
+// While the policy is Report-Only this is invisible either way. The day it
+// graduates to enforcing, without these entries a pro can never connect
+// Stripe, can never be paid through OakTend, and the page shows a component
+// that silently never appears - the hosted fallback button is underneath it,
+// but they would have no idea why. No img-src entry: Stripe's component
+// renders its own images inside its iframe, which is governed by Stripe's
+// CSP, not ours.
+const STRIPE_JS_HOSTS = "https://connect-js.stripe.com https://js.stripe.com";
+const STRIPE_API_HOST = "https://api.stripe.com";
 const SCRIPT_SRC =
   process.env.NODE_ENV === "production"
-    ? `script-src 'self' 'unsafe-inline' ${TURNSTILE_HOST} ${VERCEL_ANALYTICS_HOST}`
-    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${TURNSTILE_HOST} ${VERCEL_ANALYTICS_HOST}`;
+    ? `script-src 'self' 'unsafe-inline' ${TURNSTILE_HOST} ${VERCEL_ANALYTICS_HOST} ${STRIPE_JS_HOSTS}`
+    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${TURNSTILE_HOST} ${VERCEL_ANALYTICS_HOST} ${STRIPE_JS_HOSTS}`;
 
 const CSP_DIRECTIVES = [
   "default-src 'self'",
@@ -88,10 +107,10 @@ const CSP_DIRECTIVES = [
   "style-src 'self' 'unsafe-inline'",
   `img-src 'self' data: blob: https://${SUPABASE_HOST}`,
   "media-src 'self'",
-  `connect-src 'self' https://${SUPABASE_HOST} wss://${SUPABASE_HOST} ${TURNSTILE_HOST} ${VERCEL_ANALYTICS_HOST}`,
+  `connect-src 'self' https://${SUPABASE_HOST} wss://${SUPABASE_HOST} ${TURNSTILE_HOST} ${VERCEL_ANALYTICS_HOST} ${STRIPE_API_HOST}`,
   "font-src 'self'",
   "object-src 'self' blob:",
-  `frame-src 'self' ${TURNSTILE_HOST}`,
+  `frame-src 'self' ${TURNSTILE_HOST} ${STRIPE_JS_HOSTS}`,
 ];
 
 /** @type {import('next').NextConfig} */

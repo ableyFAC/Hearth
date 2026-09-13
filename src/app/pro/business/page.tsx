@@ -7,6 +7,7 @@ import { hasProPlan, getProSubscription } from "@/lib/subscription";
 import { variantForUser } from "@/lib/paywallExperiment";
 import { buildProStats } from "@/lib/proStats";
 import { computeResponseTimeMinutes } from "@/lib/responseTime";
+import { readConnectRow } from "@/lib/stripeConnect";
 // The body is one client component. That is a streaming fix, not a behaviour
 // change: this page is long, so as server markup its Flight row ran past
 // React Flight's 3200-byte defer budget and chopped the "Jobs won" section
@@ -148,6 +149,13 @@ export default async function ProBusinessPage() {
   const cash = Number((wallet as any)?.cash_balance_cents ?? 0);
   const bonus = Number((wallet as any)?.bonus_balance_cents ?? 0);
 
+  // Stripe Connect state for the Payouts row below. One extra admin read of
+  // seven columns on this pro's own row; readConnectRow() never throws and
+  // answers "unavailable" both when the live database has not run migration
+  // 0164 yet and when the read fails - which renders the row with no pill at
+  // all rather than claiming anything about a setting the app cannot see.
+  const { status: payoutsStatus } = await readConnectRow(contractor.id);
+
   // Total spent = every debit on the wallet (apply fees, lead charges). Same
   // math as the leads board's "Your results" card. Bounded so one wallet with
   // a huge ledger can't make this page fetch unbounded rows; 1000 transactions
@@ -229,6 +237,10 @@ export default async function ProBusinessPage() {
           ((contractor as any).slug as string | null | undefined) ||
           contractor.id.slice(0, 8),
       }}
+      // One word only: the connected-account id and Stripe's requirement list
+      // stay on the server. BusinessView is a client component, so everything
+      // handed to it is serialized into the browser's RSC payload.
+      payoutsStatus={payoutsStatus}
       stats={stats}
       trendMax={trendMax}
       teaserCategories={teaserCategories}

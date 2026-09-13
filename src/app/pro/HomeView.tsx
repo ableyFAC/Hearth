@@ -48,6 +48,10 @@ import { FEEDBACK_CARD_TITLE, FEEDBACK_PENDING_NOTE } from "@/lib/proFeedback";
 import SetupChecklist, { type SetupItem } from "@/components/pro/SetupChecklist";
 import ProChip from "@/components/pro/ProChip";
 import ProNudge from "@/components/pro/ProNudge";
+import PayoutsNudge, {
+  shouldShowPayoutsNudge,
+} from "@/components/pro/PayoutsNudge";
+import type { ConnectStatus } from "@/lib/connectStatus";
 import LiveUnreadBadge from "@/components/LiveUnreadBadge";
 import LeadsRealtime from "./LeadsRealtime";
 import ChatDrawer from "@/components/ChatDrawer";
@@ -89,6 +93,7 @@ export default function HomeView({
   feedbackSent,
   showNudge,
   nudgeTrialEligible,
+  payoutsStatus,
   latestRows,
   setupItems,
 }: {
@@ -118,6 +123,13 @@ export default function HomeView({
   feedbackSent: boolean;
   showNudge: boolean;
   nudgeTrialEligible: boolean;
+  /**
+   * Stripe Connect state for this pro, computed on the server by
+   * readConnectRow(). One word, never the account id or the requirement list -
+   * this component is serialized into the browser's RSC payload.
+   * "unavailable" (the columns could not be read) hides the card entirely.
+   */
+  payoutsStatus: ConnectStatus;
   latestRows: LatestRow[];
   setupItems: SetupItem[];
 }) {
@@ -438,6 +450,17 @@ export default function HomeView({
             </>
           )}
         </section>
+
+        {/* ---- Payouts nudge: above the membership nudge, on purpose ----
+            Getting paid comes before being sold to. This card renders nothing
+            at all for a connected pro (status "ready") or when the Connect
+            columns could not be read ("unavailable"), so it costs an
+            already-set-up pro no space. No dismiss button: see PayoutsNudge. */}
+        {shouldShowPayoutsNudge(payoutsStatus) && (
+          <div className="sm:col-span-2">
+            <PayoutsNudge status={payoutsStatus} />
+          </div>
+        )}
 
         {/* ---- Membership nudge: established non-members only ---- */}
         {showNudge && (

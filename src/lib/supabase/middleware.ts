@@ -494,6 +494,15 @@ export function isPublicPath(path: string): boolean {
     // must never be redirected: Stripe doesn't follow redirects and would treat
     // the 307 as a failed delivery, so deposits would never be credited.
     path.startsWith("/api/stripe/webhook") ||
+    // Stripe CONNECT webhook (2026-09-12): a SECOND Stripe endpoint, for
+    // events about connected accounts (account.updated,
+    // account.application.deauthorized), with its own signing secret
+    // (STRIPE_CONNECT_WEBHOOK_SECRET). It needs its own line because the
+    // entry above is a /api/stripe/webhook prefix, which this path does not
+    // match. Same reasoning otherwise: it authenticates via its signature,
+    // not a user session, and Stripe would read a 307 as a failed delivery -
+    // so a pro's payout status would silently stop tracking Stripe's.
+    path.startsWith("/api/stripe/connect-webhook") ||
     // Checkr webhook (0057): same reasoning as Stripe above - authenticates
     // via X-Checkr-Signature, not a user session, and a 307 here would read
     // as a failed delivery, so background check results would never land.
