@@ -24,6 +24,13 @@ the combined tree: tsc 0, vitest at the pre-existing CRLF baseline (11 files /
 **One paste for all of it:** `supabase/PASTE-ME-ALL-PENDING-2026-09-12-preview-wave.sql`
 (0164 -> 0168 in order, each section keeps its own prechecks, idempotent).
 The five per-migration PASTE-ME files are the same SQL, kept for reference.
+**PASTED LIVE 2026-09-12 (William): success.** Getting there surfaced that the
+2026-09-08 PART1 bundle (0154-0161) had never been pasted; William ran it, the
+duplicate-homes fix (0162), then `migrations/0155_pro_cover_banner.sql` (the
+repo has two 0155s and the bundle carried the other one), then the wave. So
+live is now through 0168 with BOTH 0154s and BOTH 0155s applied.
+`supabase/DIAGNOSE-live-migrations-2026-09-12.sql` is the read-only check that
+maps this; re-run it any time "is X live?" comes up.
 
 **Landen / William to-do after the paste:** flag the team's accounts internal
 (INTERNAL-ACCOUNTS.md one-liner); set `NEXT_PUBLIC_PREVIEW_MODE=homeowner` in
