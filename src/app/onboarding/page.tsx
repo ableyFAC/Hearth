@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProperties } from "@/lib/property";
 import { getCurrentContractor } from "@/lib/contractor";
 import { ownsPlus } from "@/lib/subscription";
+import { isProSideOpenForViewer } from "@/lib/previewModeServer";
 import { safeNextPath } from "@/lib/safeNext";
 import OnboardingForm from "./OnboardingForm";
 
@@ -52,12 +53,33 @@ export default async function OnboardingPage(
   //
   // ?add=home is that explicit intent, and it comes from the one link that
   // offers it - "Add your home" in the pro profile menu (ProNav.tsx).
+  //
+  // PREVIEW MODE: that bounce stands down for a viewer the pro side is closed
+  // to, and this is the other half of the trap previewAwareLanding() closes.
+  // A pro with no home who follows "Use OakTend as a homeowner" off the
+  // coming-soon page arrives HERE, and a /pro bounce would hand them straight
+  // back to the page they just left - the same refresh-looking loop, one route
+  // further along. With the pro side shut there is no "back to their leads" to
+  // send them to, so the wandered-in case does not exist: this page is the
+  // only side of the product they can use, and it is the first-home setup on
+  // the account they are already signed in to. A contractors row has never
+  // barred it (see above), so nothing here grants them anything new.
+  //
+  // Checked LAST so it is only evaluated on the request that would otherwise
+  // be bounced, and isProSideOpenForViewer() short-circuits to `true` on the
+  // flag, so outside preview this is one string comparison and the redirect is
+  // byte-identical to what it was.
   const [contractor, homes] = await Promise.all([
     getCurrentContractor(),
     getProperties(),
   ]);
   const hasPro = contractor !== null;
-  if (hasPro && homes.length === 0 && searchParams?.add !== "home") {
+  if (
+    hasPro &&
+    homes.length === 0 &&
+    searchParams?.add !== "home" &&
+    (await isProSideOpenForViewer())
+  ) {
     redirect("/pro");
   }
 

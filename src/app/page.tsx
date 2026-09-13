@@ -3,11 +3,12 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { hasAuthCookie } from "@/lib/authCookie";
 import { getVerifiedUser } from "@/lib/auth";
-import { getSides, landingFor } from "@/lib/contractor";
+import { getSides } from "@/lib/contractor";
 import { FOUNDER, PLUS_PLAN } from "@/lib/constants";
 import { LAUNCH_AREA_LABEL } from "@/lib/serviceArea";
 import { LEGAL_LINKS } from "@/lib/legal";
 import { isHomeownerPreview } from "@/lib/previewMode";
+import { previewAwareLanding } from "@/lib/previewModeServer";
 import Link from "next/link";
 import Image from "next/image";
 import Logo from "@/components/Logo";
@@ -163,7 +164,14 @@ export default async function Home(props: {
     // Their preferred side when they actually have it, otherwise whichever
     // side they do have. An account can hold both, so this is never a guess
     // off the role stamp alone.
-    redirect(landingFor(await getSides()));
+    //
+    // previewAwareLanding, not landingFor: this page is where every way off
+    // the closed pro side lands ("Back to OakTend" on ProsComingSoon), so an
+    // answer of "/pro" for a viewer the pro side is shut to would bounce them
+    // straight back onto the page they were trying to leave - and an account
+    // that also owns a home would never reach it. Outside preview this IS
+    // landingFor, byte for byte. See src/lib/previewModeServer.ts.
+    redirect(await previewAwareLanding(await getSides()));
   }
 
   const VALUE = [

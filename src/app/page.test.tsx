@@ -46,6 +46,15 @@ vi.mock("@/lib/contractor", () => ({
   landingFor: () => "/dashboard",
 }));
 
+// The signed-in redirect goes through the preview-aware wrapper now (it must
+// never answer "/pro" to a viewer the pro side is closed to). Mocked rather
+// than let through because the real module carries "server-only"; this suite
+// renders the SIGNED-OUT page (hasAuthCookie is false above), so the value is
+// never read - the mock only keeps the import resolvable.
+vi.mock("@/lib/previewModeServer", () => ({
+  previewAwareLanding: vi.fn(async () => "/dashboard"),
+}));
+
 // Stubbed, but with a marker so the section wrapper around the demo player is
 // still findable below.
 vi.mock("@/components/HeroDemoPlayerLazy", () => ({

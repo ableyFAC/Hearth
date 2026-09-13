@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSides } from "@/lib/contractor";
 import { setFlash } from "@/lib/flash";
+import { isProSideOpenForViewer } from "@/lib/previewModeServer";
+import { PREVIEW_PROS_COPY } from "@/lib/previewMode";
 
 // Switches which side of OakTend this account lands on, from the profile menu
 // in either nav (Nav.tsx / ProNav.tsx post to it).
@@ -32,6 +34,29 @@ export async function setPreferredSideAction(formData: FormData) {
     redirect("/dashboard");
   }
   const side = submitted;
+
+  // PREVIEW MODE (src/lib/previewMode.ts): "Switch to your pro account" is a
+  // pro-side door like any other, and it closes with them. Refused BEFORE the
+  // sides lookup and long before the metadata write, so the stored preference
+  // is untouched: a dual-sided account that taps it keeps landing on the
+  // homeowner side rather than being stamped onto a side it cannot open, which
+  // is what would have made the trap survive the preview.
+  //
+  // /dashboard, not /pro: bouncing them to the pro shell would render the
+  // coming-soon page, which reads as "the switch worked and the app is gone".
+  // The flash says the true thing on the side they are still on. An account
+  // with no home yet gets re-routed to /onboarding by the homeowner shell,
+  // which is the same self-correcting landing every other redirect here
+  // relies on.
+  //
+  // An internal (OakTend team) account is let through, exactly as everywhere
+  // else, so the team can still switch into a test company. Outside preview
+  // isProSideOpenForViewer() short-circuits on the flag, so this costs a
+  // string comparison and no session read.
+  if (side === "contractor" && !(await isProSideOpenForViewer())) {
+    await setFlash(PREVIEW_PROS_COPY, "info");
+    redirect("/dashboard");
+  }
 
   // The account must actually hold the side it is asking to prefer. A forged
   // post from a homeowner asking for "contractor" gets no stamp at all - it is

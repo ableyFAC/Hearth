@@ -11,6 +11,7 @@ import { redirect } from "next/navigation";
 import { getVerifiedUser } from "@/lib/auth";
 import { isInternalUser } from "@/lib/internalAccounts";
 import { setFlash } from "@/lib/flash";
+import { landingFor, type Sides } from "@/lib/contractor";
 import {
   isHomeownerPreview,
   PREVIEW_MEMBERSHIP_COPY,
@@ -67,6 +68,47 @@ export async function assertProSideOpen(): Promise<void> {
   if (await isProSideOpenForViewer()) return;
   await setFlash(PREVIEW_PROS_COPY, "info");
   redirect("/pro");
+}
+
+// The homeowner side of an account whose pro side is shut. Pure, and the ONE
+// definition of that pair of destinations, so the coming-soon page's button
+// (src/components/pro/ProsComingSoon.tsx, wired by pro/layout.tsx and
+// pro/onboarding/page.tsx) can never point somewhere previewAwareLanding below
+// would not have sent the same account.
+//
+// /onboarding for an account with no home is the homeowner FIRST-HOME setup on
+// the same auth user - not a second account and not a role switch. A
+// contractors row does not bar that page (see its own comment); what used to
+// bounce a pro off it was the wandered-in guard, which now stands down while
+// the pro side is closed.
+export function homeownerLanding(sides: Pick<Sides, "hasHome">): string {
+  return sides.hasHome ? "/dashboard" : "/onboarding";
+}
+
+// Where to drop a signed-in account that asked for nothing in particular -
+// landingFor(), except that it may not answer "/pro" to someone the pro side
+// is closed to.
+//
+// THE TRAP THIS EXISTS TO CLOSE. A real (non-internal) contractor signing in
+// during the preview gets ProsComingSoon in place of their shell, and every
+// way off that page pointed at "/", which is the root page, which sends a
+// signed-in user to landingFor(sides), which answers "/pro" for an account
+// that prefers the contractor side. "Back to OakTend" therefore looked like a
+// page refresh, and an account that ALSO owns a home had no route to it at
+// all. Same loop on /signin with no ?next=.
+//
+// Costs nothing when the flag is off: isProSideOpenForViewer() short-circuits
+// to `true` on the string comparison before it reads a session, so this is
+// landingFor() plus one function call on a normal deploy - which is what keeps
+// C4 (flag off = byte-identical behaviour) true for every landing that uses
+// it.
+//
+// landingFor() stays pure and untouched in src/lib/roleRouting.ts. The preview
+// is a property of the DEPLOY and the VIEWER, not of the account's sides, so
+// it does not belong in a function whose whole job is to map sides to a path.
+export async function previewAwareLanding(sides: Sides): Promise<string> {
+  if (await isProSideOpenForViewer()) return landingFor(sides);
+  return homeownerLanding(sides);
 }
 
 // Money guard. "Is this deploy refusing to move money right now?" - and if it

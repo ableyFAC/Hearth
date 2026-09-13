@@ -4,7 +4,7 @@ import { getCurrentContractor, getSides } from "@/lib/contractor";
 import { getUser } from "@/lib/auth";
 import { getUserProfile } from "@/lib/user";
 import { chooseRoleAction } from "@/app/welcome/role/actions";
-import { isProSideOpenForViewer } from "@/lib/previewModeServer";
+import { homeownerLanding, isProSideOpenForViewer } from "@/lib/previewModeServer";
 import ProsComingSoon from "@/components/pro/ProsComingSoon";
 import OnboardingCompanyForm from "./OnboardingCompanyForm";
 
@@ -29,8 +29,23 @@ export default async function ProOnboardingPage(
   // costs a constant `true` outside preview: no session read, no query.
   // The matching WRITE-side guard is in saveCompanyAction, since this form
   // posts to a "use server" action reachable without rendering any page.
+  //
+  // getSides() here rather than from the Promise.all below, because that one
+  // is on the far side of this return. It is React-cached per request, so the
+  // open path still pays for it exactly once. The homeowner door matters most
+  // on THIS door of all of them: a signed-in account that picked "contractor"
+  // on /welcome/role and got sent here has no pro side yet and no home either,
+  // and without the button its only options were the waitlist and sign-out.
   if (!(await isProSideOpenForViewer())) {
-    return <ProsComingSoon showSignOut source="pro-onboarding" />;
+    const blockedSides = await getSides();
+    return (
+      <ProsComingSoon
+        showSignOut
+        source="pro-onboarding"
+        homeownerHref={homeownerLanding(blockedSides)}
+        hasHome={blockedSides.hasHome}
+      />
+    );
   }
 
   // Already set up? Go straight to the leads inbox.

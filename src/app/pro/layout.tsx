@@ -9,7 +9,7 @@ import NewMessageNotifier from "@/components/NewMessageNotifier";
 import AppGuideMount from "@/components/AppGuideMount";
 import ProTrialNudge from "@/components/pro/ProTrialNudge";
 import ProsComingSoon from "@/components/pro/ProsComingSoon";
-import { isProSideOpenForViewer } from "@/lib/previewModeServer";
+import { homeownerLanding, isProSideOpenForViewer } from "@/lib/previewModeServer";
 import { variantForUser } from "@/lib/paywallExperiment";
 
 // Pro shell. Auth is enforced by middleware; company-setup is enforced per-page
@@ -72,8 +72,23 @@ export default async function ProLayout({
   // out rather than letting one in; see its own comment for why that is the
   // right direction here and the wrong one for isInternalUser()'s other
   // callers.
+  //
+  // homeownerHref/hasHome: the sides lookup above already says whether this
+  // account owns a home, and without handing that to the page a pro who ALSO
+  // has a homeowner side had no route to it - every link on the coming-soon
+  // page pointed at "/", which sends a contractor-preferring account right
+  // back to /pro. homeownerLanding() is the same pair of destinations
+  // previewAwareLanding() hands the root page, so the button can never
+  // disagree with where "/" would have sent them.
   if (!(await isProSideOpenForViewer())) {
-    return <ProsComingSoon showSignOut source="pro-shell" />;
+    return (
+      <ProsComingSoon
+        showSignOut
+        source="pro-shell"
+        homeownerHref={homeownerLanding(sides)}
+        hasHome={sides.hasHome}
+      />
+    );
   }
 
   // No company yet → the user is still onboarding. Show a bare top bar with no

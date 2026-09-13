@@ -83,6 +83,27 @@ function joinedText(node: Node): string {
   return textIn(node).join(" ").replace(/\s+/g, " ");
 }
 
+// Every element in the tree that carries an href, as [href, its own text].
+// Enough to assert where each link on the coming-soon page points without a
+// DOM: a Link is just an element whose props hold the destination.
+function linksIn(node: Node): Array<{ href: string; text: string }> {
+  const out: Array<{ href: string; text: string }> = [];
+  const walk = (n: Node) => {
+    if (!n || typeof n !== "object") return;
+    if (Array.isArray(n)) {
+      for (const kid of n) walk(kid);
+      return;
+    }
+    const el = n as Partial<ReactElement> & { props?: Record<string, unknown> };
+    if (typeof el.props?.href === "string") {
+      out.push({ href: el.props.href, text: joinedText(n) });
+    }
+    for (const kid of children(n)) walk(kid);
+  };
+  walk(node);
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // A1 + A2: every contractor door renders ProsComingSoon
 // ---------------------------------------------------------------------------
@@ -93,6 +114,12 @@ describe("the closed contractor doors (A1, A2)", () => {
       isProSideOpenForViewer: async () => opts.internal ?? false,
       assertProSideOpen: async () => {},
       previewBlocksMoney: async () => false,
+      // The pure half: the shell and /pro/onboarding call it to tell the
+      // coming-soon page where this account's homeowner side is. Its own
+      // behaviour is pinned in previewModeServer.test.ts.
+      homeownerLanding: (s: { hasHome: boolean }) =>
+        s.hasHome ? "/dashboard" : "/onboarding",
+      previewAwareLanding: async () => "/dashboard",
     }));
     vi.doMock("@/lib/contractor", () => ({
       getCurrentContractor: async () => ({
@@ -177,6 +204,127 @@ describe("the closed contractor doors (A1, A2)", () => {
     expect(text).toContain("Pros are coming soon");
     expect(text).toContain("OakTend for Pros opens after our homeowner preview.");
     expect(typesIn(tree)).toContain(ProWaitlistForm);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The way off the closed pro side, for an account that has another one
+//
+// The trap: every link on this page pointed at "/", the root page sends a
+// signed-in user to landingFor(sides), and that answers "/pro" for an account
+// that prefers the contractor side - so "Back to OakTend" looked like a
+// refresh and a pro who ALSO owns a home could not reach it.
+// ---------------------------------------------------------------------------
+describe("the coming-soon page's homeowner door", () => {
+  async function load() {
+    vi.resetModules();
+    return (await import("@/components/pro/ProsComingSoon")).default;
+  }
+
+  it("offers a signed-in account with a home the way back to it", async () => {
+    const ProsComingSoon = await load();
+    const tree = ProsComingSoon({
+      showSignOut: true,
+      source: "pro-shell",
+      homeownerHref: "/dashboard",
+      hasHome: true,
+    });
+
+    const links = linksIn(tree);
+    const button = links.find((l) =>
+      l.text.includes("Go to your homeowner account")
+    );
+    expect(button?.href).toBe("/dashboard");
+
+    // The two links that used to be the trap now point at the same place.
+    expect(links.find((l) => l.text.includes("Back to OakTend"))?.href).toBe(
+      "/dashboard"
+    );
+    expect(links.every((l) => l.href !== "/")).toBe(true);
+
+    // An account that already has a home is going BACK to something, so the
+    // reassurance line for the other case must not appear.
+    expect(joinedText(tree)).not.toContain("Your pro profile stays saved");
+  });
+
+  it("offers a signed-in account with no home the first-home setup", async () => {
+    const ProsComingSoon = await load();
+    const tree = ProsComingSoon({
+      showSignOut: true,
+      source: "pro-onboarding",
+      homeownerHref: "/onboarding",
+      hasHome: false,
+    });
+
+    const links = linksIn(tree);
+    expect(
+      links.find((l) => l.text.includes("Use OakTend as a homeowner"))?.href
+    ).toBe("/onboarding");
+    expect(links.find((l) => l.text.includes("Back to OakTend"))?.href).toBe(
+      "/onboarding"
+    );
+    expect(joinedText(tree)).toContain(
+      "Your pro profile stays saved for when Pros open."
+    );
+  });
+
+  it("shows neither button to a signed-out visitor, and keeps the public doors on /", async () => {
+    const ProsComingSoon = await load();
+    const tree = ProsComingSoon({ source: "pros" });
+
+    const text = joinedText(tree);
+    expect(text).not.toContain("Go to your homeowner account");
+    expect(text).not.toContain("Use OakTend as a homeowner");
+
+    // /pros and /contractor-signup are reached signed-out, and for that
+    // visitor "OakTend" and "Back to OakTend" are still the marketing root.
+    const links = linksIn(tree);
+    expect(links.length).toBeGreaterThan(0);
+    expect(links.every((l) => l.href === "/")).toBe(true);
+  });
+
+  // The shell is the caller that holds the sides, and the props it passes are
+  // the whole fix: a blocked pro who owns a home gets /dashboard, one who does
+  // not gets /onboarding.
+  it("the pro shell hands the page that door", async () => {
+    vi.stubEnv("NEXT_PUBLIC_PREVIEW_MODE", "homeowner");
+
+    for (const hasHome of [true, false]) {
+      vi.resetModules();
+      vi.doMock("@/lib/previewModeServer", () => ({
+        isProSideOpenForViewer: async () => false,
+        homeownerLanding: (s: { hasHome: boolean }) =>
+          s.hasHome ? "/dashboard" : "/onboarding",
+      }));
+      vi.doMock("@/lib/contractor", () => ({
+        getCurrentContractor: async () => ({ id: "c1", user_id: "u1" }),
+        getSides: async () => ({
+          hasPro: true,
+          hasHome,
+          preferred: "contractor",
+          checked: true,
+        }),
+        isEstablishedPro: async () => true,
+      }));
+      vi.doMock("@/lib/subscription", () => ({
+        hasProPlan: async () => false,
+        getProSubscription: async () => null,
+      }));
+      vi.doMock("@/lib/freeAiTasteServer", () => ({
+        proDraftsLeft: async () => 0,
+      }));
+      vi.doMock("@/lib/user", () => ({ getUserProfile: async () => null }));
+
+      const ProLayout = (await import("@/app/pro/layout")).default;
+      const tree = (await ProLayout({ children: "THE PRO APP" })) as {
+        props?: { homeownerHref?: string | null; hasHome?: boolean };
+      };
+
+      expect(tree.props?.hasHome, String(hasHome)).toBe(hasHome);
+      expect(tree.props?.homeownerHref, String(hasHome)).toBe(
+        hasHome ? "/dashboard" : "/onboarding"
+      );
+    }
   });
 });
 
