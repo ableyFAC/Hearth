@@ -14,34 +14,117 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => currentAdmin,
 }));
 
-// Every row the code under test tried to write, in order.
+// Every parcel_cache row the code under test tried to write, in order.
 let writes: { cache_key: string; source: string }[] = [];
-// What the cache read should hand back (null = a miss, which is every test
-// here: these are about what happens on the way OUT).
+// What the parcel_cache read should hand back (null = a miss, which is most
+// tests here: those are about what happens on the way OUT).
 let cachedRow: { facts: unknown; source: string; fetched_at: string } | null =
   null;
+
+// The SECOND cache (migration 0167): the call log that sits under
+// parcel_cache at the network boundary and remembers 429s and outages too, so
+// a spent quota or a bad afternoon costs one call instead of one per page
+// load. Tracked separately from `writes` because these are different rows in a
+// different table and the assertions above must not see them.
+type CacheRow = { status: string; payload: unknown; fetched_at: string };
+// Keyed exactly the way the table is - (address_key, kind) - and written to by
+// the fake's own upsert, so a test can assert that two differently-typed
+// spellings of one address genuinely land on one row instead of being told so.
+let rentcastRows = new Map<string, CacheRow>();
+let rentcastWrites: { address_key: string; kind: string; status: string }[] = [];
+// A PostgREST-shaped error for the rentcast_cache table only, so the
+// missing-schema path (a live DB that has not run 0167) can be exercised.
+let rentcastError: { code?: string; message?: string } | null = null;
+// app_events rows, i.e. the F4 usage counter.
+let events: { event: string; props: Record<string, unknown> | null }[] = [];
 let currentAdmin: unknown = null;
 
 function fakeAdmin() {
   return {
-    from() {
+    from(table: string) {
       return {
         select() {
-          return {
-            eq() {
-              return {
-                maybeSingle: async () => ({ data: cachedRow, error: null }),
-              };
-            },
+          // One chainable object: .eq() can be called once (parcel_cache) or
+          // twice (rentcast_cache is keyed on address_key AND kind), and the
+          // filters are kept so the lookup is by key rather than by "whatever
+          // the test happened to set".
+          const filters: Record<string, string> = {};
+          const chain: Record<string, unknown> = {};
+          chain.eq = (column: string, value: string) => {
+            filters[column] = value;
+            return chain;
           };
+          chain.limit = async () => ({ data: [], error: null });
+          chain.maybeSingle = async () => {
+            if (table === "rentcast_cache") {
+              if (rentcastError) return { data: null, error: rentcastError };
+              const row = rentcastRows.get(
+                cacheRowKey(filters.address_key, filters.kind)
+              );
+              return { data: row ?? null, error: null };
+            }
+            if (table === "users") return { data: null, error: null };
+            return { data: cachedRow, error: null };
+          };
+          return chain;
         },
-        async upsert(row: { cache_key: string; source: string }) {
+        async upsert(row: Record<string, string>) {
+          if (table === "rentcast_cache") {
+            rentcastWrites.push({
+              address_key: row.address_key,
+              kind: row.kind,
+              status: row.status,
+            });
+            if (!rentcastError) {
+              rentcastRows.set(cacheRowKey(row.address_key, row.kind), {
+                status: row.status,
+                payload: (row as unknown as { payload: unknown }).payload,
+                fetched_at: row.fetched_at,
+              });
+            }
+            return { error: rentcastError };
+          }
           writes.push({ cache_key: row.cache_key, source: row.source });
+          return { error: null };
+        },
+        async insert(row: {
+          event: string;
+          props: Record<string, unknown> | null;
+        }) {
+          events.push({ event: row.event, props: row.props });
           return { error: null };
         },
       };
     },
   };
+}
+
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+
+function cacheRowKey(addressKey: string, kind: string): string {
+  return `${addressKey}||${kind}`;
+}
+
+function agoIso(ms: number): string {
+  return new Date(Date.now() - ms).toISOString();
+}
+
+// Put a row in the call cache under the SAME key the code under test will look
+// it up by - computed with the real normalizer, never hand-written, so a test
+// cannot accidentally pass by seeding a key nothing reads.
+function seedRentcastCache(
+  street: string,
+  zip: string,
+  kind: "property" | "avm",
+  row: { status: string; payload?: unknown; ageMs: number },
+  unit?: string | null
+) {
+  rentcastRows.set(cacheRowKey(rentcastAddressKey(street, zip, unit), kind), {
+    status: row.status,
+    payload: row.payload ?? null,
+    fetched_at: agoIso(row.ageMs),
+  });
 }
 
 // A minimal RentCast property record: enough of an address echo that the
@@ -64,12 +147,18 @@ function jsonResponse(status: number, body: unknown) {
   } as unknown as Response;
 }
 
+import { rentcastAddressKey } from "./rentcastCache";
+
 let lookupParcel: typeof import("./parcel").lookupParcel;
 let lookupMarketValue: typeof import("./parcel").lookupMarketValue;
 
 beforeEach(async () => {
   writes = [];
   cachedRow = null;
+  rentcastRows = new Map();
+  rentcastWrites = [];
+  rentcastError = null;
+  events = [];
   currentAdmin = fakeAdmin();
   process.env.RENTCAST_API_KEY = "test-key";
   ({ lookupParcel, lookupMarketValue } = await import("./parcel"));
@@ -204,44 +293,44 @@ describe("lookupParcel source semantics", () => {
     expect(writes).toEqual([]);
   });
 
-  // The other half of the 2026-08-28 measurement: two of eight live calls
-  // never opened a socket at all, rejecting in ~270ms with an ETIMEDOUT
-  // AggregateError, and both succeeded immediately on a second attempt. No
-  // timeout value helps a connection that is refused in a quarter second - a
-  // retry does.
-  it("retries once when the connection fails, and uses the second answer", async () => {
+  // REVERSED ON 2026-09-12 (Landen addendum 4, F1), and deliberately.
+  //
+  // The 2026-08-28 measurement that justified a retry was real: two of eight
+  // live calls never opened a socket, rejecting in ~270ms, and both succeeded
+  // immediately on a second attempt. What it did not price in is that the free
+  // tier is fifty calls a MONTH and the paid tier is waiting on a card. A
+  // retry doubles the worst case of every failure mode - a 5xx storm most of
+  // all - against a budget one bad afternoon can exhaust for everybody. The
+  // call it rescued costs one homeowner some typing; the month it can burn
+  // costs all of them the feature.
+  it("does not retry a connection failure - one attempt, then manual entry", async () => {
     let calls = 0;
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
         calls++;
-        if (calls === 1) throw new TypeError("fetch failed");
-        return jsonResponse(200, [RECORD]);
+        throw new TypeError("fetch failed");
       })
     );
     const facts = await lookupParcel("17361 Ash St", "92708");
-    expect(calls).toBe(2);
-    expect(facts.source).toBe("rentcast");
-    expect(facts.year_built).toBe(1968);
+    expect(calls).toBe(1);
+    expect(facts.source).toBe("unavailable");
   });
 
-  it("retries once on an abort, and uses the second answer", async () => {
+  it("does not retry an abort either", async () => {
     let calls = 0;
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
         calls++;
-        if (calls === 1) {
-          const err = new Error("The operation was aborted.");
-          err.name = "AbortError";
-          throw err;
-        }
-        return jsonResponse(200, [RECORD]);
+        const err = new Error("The operation was aborted.");
+        err.name = "AbortError";
+        throw err;
       })
     );
     const facts = await lookupParcel("17361 Ash St", "92708");
-    expect(calls).toBe(2);
-    expect(facts.source).toBe("rentcast");
+    expect(calls).toBe(1);
+    expect(facts.source).toBe("unavailable");
   });
 
   // A status is an answer. Retrying one spends a second billed call to be told
@@ -265,7 +354,7 @@ describe("lookupParcel source semantics", () => {
     expect(calls).toBe(1);
   });
 
-  it("gives up after two failed attempts rather than looping", async () => {
+  it("gives up after ONE failed attempt rather than looping", async () => {
     let calls = 0;
     vi.stubGlobal(
       "fetch",
@@ -275,9 +364,13 @@ describe("lookupParcel source semantics", () => {
       })
     );
     const facts = await lookupParcel("17361 Ash St", "92708");
-    expect(calls).toBe(2);
+    expect(calls).toBe(1);
     expect(facts.source).toBe("unavailable");
+    // parcel_cache still refuses to remember a non-answer as facts...
     expect(writes).toEqual([]);
+    // ...while the call log remembers that we asked and could not be told, so
+    // the next hundred page loads do not each buy the same silence.
+    expect(rentcastWrites.map((w) => w.status)).toEqual(["error"]);
   });
 
   it('an unparseable body is "unavailable" and is not cached', async () => {
@@ -772,21 +865,38 @@ describe("parcel.ts caching", () => {
     expect(miss2).toBeLessThan(notOk2);
   });
 
-  it("bounds the retry so two attempts cannot stack two full timeouts", () => {
-    const attempt = Number(
-      parcel.match(/RENTCAST_ATTEMPT_TIMEOUT_MS = ([\d_]+)/)?.[1].replace(/_/g, "")
+  // One timeout, one attempt (F1). The retry loop and its second budget are
+  // gone, so the only thing left to pin is that the single ceiling is real,
+  // generous against a measured 0.5-2.3s answer, and short enough that a
+  // homeowner is not left watching a spinner.
+  it("bounds the one attempt with a single timeout and no retry loop", () => {
+    const timeout = Number(
+      parcel.match(/RENTCAST_TIMEOUT_MS = ([\d_]+)/)?.[1].replace(/_/g, "")
     );
-    const total = Number(
-      parcel.match(/RENTCAST_TOTAL_BUDGET_MS = ([\d_]+)/)?.[1].replace(/_/g, "")
-    );
-    expect(attempt).toBeGreaterThan(0);
-    // A real answer measured at 0.5-2.3s, so the per-attempt budget is
-    // generous without being a page-long wait.
-    expect(attempt).toBeLessThanOrEqual(12_000);
-    // The whole point of a shared deadline: the ceiling is well under two
-    // attempts' worth, and claimPropertyAction can make two of these calls.
-    expect(total).toBeGreaterThan(attempt);
-    expect(total).toBeLessThan(attempt * 2);
+    expect(timeout).toBeGreaterThanOrEqual(3_000);
+    expect(timeout).toBeLessThanOrEqual(12_000);
+    // The signal is the timeout: no hand-rolled AbortController/attempt
+    // bookkeeping to drift out of step with it.
+    expect(parcel).toContain("AbortSignal.timeout(RENTCAST_TIMEOUT_MS)");
+    // The retry loop is gone, not merely bounded to one pass.
+    expect(parcel).not.toContain("attempt <= 2");
+    expect(parcel).not.toContain("RENTCAST_MIN_RETRY_MS");
+  });
+
+  // The read-through that actually defends the 50-a-month ceiling (F2/F5):
+  // every outbound call is funnelled through one function, so there is no
+  // second path around the cache.
+  it("routes every outbound call through the one cached request helper", () => {
+    // Exactly one fetch( call site in the whole module.
+    const fetchCalls = parcel.match(/await fetch\(/g) ?? [];
+    expect(fetchCalls.length).toBe(1);
+    // ...and it is inside rentcastRequest, after the cache read.
+    const request = parcel.indexOf("async function rentcastRequest");
+    const cacheRead = parcel.indexOf("readRentcastCache(", request);
+    const theFetch = parcel.indexOf("await fetch(", request);
+    expect(request).toBeGreaterThan(-1);
+    expect(cacheRead).toBeGreaterThan(request);
+    expect(theFetch).toBeGreaterThan(cacheRead);
   });
 });
 
@@ -814,11 +924,376 @@ describe("lookupParcelAction caps the street field before any outbound call", ()
     // The RentCast call (lookupParcel) and the geocoder fallback
     // (verifyAddressExists) are the two calls this action can make; neither
     // may read the uncapped `street` directly.
-    expect(lookup).toContain("await lookupParcel(\n      cappedStreet,");
+    //
+    // Matched with a whitespace-tolerant regex rather than an exact "(\n      "
+    // literal: this checkout has CRLF line endings, so a pinned "\n" plus a
+    // fixed indent failed on the line break and on any reformat of the call,
+    // neither of which is the thing being guarded. What matters is that the
+    // FIRST argument is cappedStreet.
+    expect(lookup).toMatch(/await lookupParcel\(\s*cappedStreet,/);
     expect(lookup).toContain(
       "await verifyAddressExists(cappedStreet, zip.trim());"
     );
-    expect(lookup).not.toContain("lookupParcel(\n      street.trim(),");
+    expect(lookup).not.toMatch(/lookupParcel\(\s*street\.trim\(\),/);
     expect(lookup).not.toContain("verifyAddressExists(street.trim(),");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Landen addendum 4 (2026-09-12): the free tier is FIFTY calls a month and the
+// paid tier is waiting on the business card, so every one of these is really
+// the same test - "did this cost a call it did not have to?".
+// ---------------------------------------------------------------------------
+describe("F1: every failure is a typed miss, and costs exactly one call", () => {
+  let rentcastRequest: typeof import("./parcel").rentcastRequest;
+  const ctx = {
+    kind: "property" as const,
+    addressKey: '["17361 ash st","92708",null]',
+    userId: null,
+  };
+
+  beforeEach(async () => {
+    ({ rentcastRequest } = await import("./parcel"));
+  });
+
+  it("a 429 is a quota miss, with exactly one fetch", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(429, { error: "quota" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const out = await rentcastRequest("https://example.test", "k", "test", ctx);
+    expect(out).toEqual({ ok: false, reason: "quota", status: 429 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("a 404 is a not_found miss, not an outage", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(404, { error: "no" })));
+    const out = await rentcastRequest("https://example.test", "k", "test", ctx);
+    expect(out).toEqual({ ok: false, reason: "not_found" });
+  });
+
+  it("a 5xx and a network failure are both error misses", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(500, {})));
+    expect(
+      await rentcastRequest("https://example.test", "k", "test", ctx)
+    ).toMatchObject({ ok: false, reason: "error" });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("fetch failed");
+      })
+    );
+    expect(
+      await rentcastRequest("https://example.test", "k", "test", ctx)
+    ).toEqual({ ok: false, reason: "error" });
+  });
+
+  // A ceiling does not always arrive as a 429: a plan limit can come back as a
+  // 403 with an explanatory body. Filed as "quota" so it gets the quota TTL
+  // rather than being retried as if something had merely broken.
+  it("reads a quota-shaped body on a non-429 as quota", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 403,
+        headers: new Headers(),
+        text: async () => '{"message":"You have exceeded your plan limit"}',
+        json: async () => ({}),
+      }))
+    );
+    const out = await rentcastRequest("https://example.test", "k", "test", ctx);
+    expect(out).toMatchObject({ ok: false, reason: "quota" });
+  });
+
+  it("never throws at its caller", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("boom");
+      })
+    );
+    await expect(
+      rentcastRequest("https://example.test", "k", "test", ctx)
+    ).resolves.toMatchObject({ ok: false });
+  });
+});
+
+describe("F2/F5: the call cache is read before anything goes out", () => {
+  it("serves a cached property record without fetching", async () => {
+    // Written years ago as far as the clock is concerned: a parcel's year
+    // built and lot size do not change, so an "ok" property row never expires.
+    seedRentcastCache("17361 Ash St", "92708", "property", {
+      status: "ok",
+      payload: [RECORD],
+      ageMs: 900 * DAY_MS,
+    });
+    const fetchMock = vi.fn(async () => jsonResponse(200, [RECORD]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const facts = await lookupParcel("17361 Ash St", "92708");
+    expect(facts.source).toBe("rentcast");
+    expect(facts.year_built).toBe(1968);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("serves a cached quota miss for an hour, then asks again", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(200, [RECORD]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    // 59 minutes into a spent quota: do not go back and ask.
+    seedRentcastCache("17361 Ash St", "92708", "property", {
+      status: "quota",
+      ageMs: 59 * 60_000,
+    });
+    const stillOut = await lookupParcel("17361 Ash St", "92708");
+    expect(stillOut.source).toBe("unavailable");
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // Past the hour, the ceiling may well have moved: ask once.
+    seedRentcastCache("17361 Ash St", "92708", "property", {
+      status: "quota",
+      ageMs: 2 * HOUR_MS,
+    });
+    const retried = await lookupParcel("17361 Ash St", "92708");
+    expect(retried.source).toBe("rentcast");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-fetches an AVM older than 30 days, and serves a younger one", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(200, { price: 910_000 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    // An estimate IS a moving number, so unlike a parcel record it goes stale.
+    seedRentcastCache("17361 Ash St", "92708", "avm", {
+      status: "ok",
+      payload: { price: 800_000 },
+      ageMs: 31 * DAY_MS,
+    });
+    const refreshed = await lookupMarketValue("17361 Ash St", "92708");
+    expect(refreshed.market_value).toBe(910_000);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    seedRentcastCache("17361 Ash St", "92708", "avm", {
+      status: "ok",
+      payload: { price: 800_000 },
+      ageMs: 3 * DAY_MS,
+    });
+    const served = await lookupMarketValue("17361 Ash St", "92708");
+    expect(served.market_value).toBe(800_000);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  // The property record is filed against the STREET (RentCast returns the same
+  // building record whichever unit rides along), but an AVM is a price for one
+  // dwelling - so unit 4B must never be served unit 2A's estimate.
+  it("keys the AVM per unit and the property record per street", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(200, { price: 500_000 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    seedRentcastCache(
+      "500 Beach Blvd",
+      "92648",
+      "avm",
+      { status: "ok", payload: { price: 640_000 }, ageMs: DAY_MS },
+      "4B"
+    );
+    // Unit 4B is cached; unit 2A is a different dwelling and a different row.
+    expect((await lookupMarketValue("500 Beach Blvd", "92648", "4B")).market_value).toBe(
+      640_000
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect((await lookupMarketValue("500 Beach Blvd", "92648", "2A")).market_value).toBe(
+      500_000
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  // A live DB that has not run 0167 yet must behave exactly as it did before
+  // this change: call RentCast, show the homeowner their facts, degrade
+  // silently. The cache is an optimisation, never a dependency.
+  it("falls through to the fetch when the table is missing", async () => {
+    rentcastError = { code: "42P01", message: "relation does not exist" };
+    const fetchMock = vi.fn(async () => jsonResponse(200, [RECORD]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const facts = await lookupParcel("17361 Ash St", "92708");
+    expect(facts.source).toBe("rentcast");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  // The household case the cap was written for: a second member of the same
+  // home re-runs onboarding. They type the address their own way, so the row
+  // is only shared if the KEY canonicalizes both spellings to one string.
+  it("a household member re-running onboarding hits the same cached row", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(200, [RECORD]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    // The first person types it out in full. Nothing is seeded: this call is
+    // what WRITES the row, through the fake's own upsert.
+    await lookupParcel("1770 South Harbor Boulevard", "92708");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(rentcastWrites).toHaveLength(1);
+
+    // The second types the USPS-abbreviated form, in a different case, with a
+    // stray double space and a ZIP+4. Same home, same row, no second call -
+    // and the row is the one the first call actually left behind, not one this
+    // test planted. parcel_cache is keyed on the raw lowercase line, so it
+    // misses here on purpose: this is about the call cache underneath it.
+    const second = await lookupParcel("1770  s harbor blvd", "92708-1234");
+    expect(second.source).toBe("rentcast");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("F4: the usage counter", () => {
+  it("records one rentcast_call per REAL call, with the endpoint", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(200, [RECORD])));
+    await lookupParcel("17361 Ash St", "92708");
+    const calls = events.filter((e) => e.event === "rentcast_call");
+    expect(calls.length).toBe(1);
+    expect(calls[0].props).toMatchObject({ endpoint: "property", status: 200 });
+  });
+
+  it("records nothing for a cache hit, because a cache hit is not a call", async () => {
+    seedRentcastCache("17361 Ash St", "92708", "property", {
+      status: "ok",
+      payload: [RECORD],
+      ageMs: DAY_MS,
+    });
+    const fetchMock = vi.fn(async () => jsonResponse(200, [RECORD]));
+    vi.stubGlobal("fetch", fetchMock);
+    await lookupParcel("17361 Ash St", "92708");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(events.filter((e) => e.event === "rentcast_call")).toEqual([]);
+  });
+
+  it("marks a network failure as such rather than inventing a status", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("fetch failed");
+      })
+    );
+    await lookupMarketValue("17361 Ash St", "92708");
+    const calls = events.filter((e) => e.event === "rentcast_call");
+    expect(calls.length).toBe(1);
+    expect(calls[0].props).toMatchObject({ endpoint: "avm", status: "network" });
+  });
+
+  // The header names are READ off the response, never guessed: RentCast's
+  // docs do not pin them down and this has not been run against a live 429.
+  it("logs whatever ratelimit headers the response actually carries", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        headers: new Headers({
+          "X-RateLimit-Remaining": "37",
+          "X-RateLimit-Reset": "1757721600",
+          "Content-Type": "application/json",
+        }),
+        json: async () => [RECORD],
+        text: async () => "",
+      }))
+    );
+    await lookupParcel("17361 Ash St", "92708");
+    const props = events.find((e) => e.event === "rentcast_call")?.props;
+    expect(props).toMatchObject({
+      ratelimit_remaining: "37",
+      ratelimit_reset: "1757721600",
+    });
+    // Content-Type is not a rate-limit header and must not be dragged along.
+    expect(
+      Object.keys(
+        (props as { ratelimit_headers?: Record<string, string> })
+          ?.ratelimit_headers ?? {}
+      )
+    ).toEqual(["x-ratelimit-remaining", "x-ratelimit-reset"]);
+  });
+});
+
+describe("F3: the lookups that are skipped entirely", () => {
+  const onboarding = src("../app/onboarding/actions.ts");
+  const lookup = onboarding.slice(
+    onboarding.indexOf("export async function lookupParcelAction"),
+    onboarding.indexOf("export async function claimPropertyAction")
+  );
+
+  it("checks for an already-claimed address before calling RentCast", () => {
+    const reuse = lookup.indexOf("parcelFactsFromExistingProperty(");
+    const call = lookup.indexOf("await lookupParcel(");
+    expect(reuse).toBeGreaterThan(-1);
+    expect(call).toBeGreaterThan(reuse);
+  });
+
+  // Read through src/lib/internalAccounts.ts (migration 0165), not a second
+  // copy of the same users.is_internal query: one reader, so "internal" can
+  // never mean one thing on the pro side and another here.
+  it("checks the internal flag before calling RentCast", () => {
+    const internal = lookup.indexOf("isInternalUser(");
+    const call = lookup.indexOf("await lookupParcel(");
+    expect(internal).toBeGreaterThan(-1);
+    expect(call).toBeGreaterThan(internal);
+    expect(onboarding).toContain('from "@/lib/internalAccounts"');
+  });
+
+  // An internal account gets the manual-entry note, NOT a refusal - so the
+  // geocoder's "no_match" verdict, which is the only thing that can turn this
+  // action into an error, must not run for them.
+  it("never turns a skipped internal lookup into a refusal", () => {
+    expect(lookup).toContain(
+      'if (publicFacts.source !== "rentcast" && !internalAccount) {'
+    );
+  });
+
+  // Copying a stranger's purchase price or assessment onto a new draft would
+  // be handing one household another's numbers. Only the building's public
+  // shape travels.
+  it("copies building facts off an existing row, never money or owner", () => {
+    const parcel = src("./parcel.ts");
+    const reuse = parcel.slice(
+      parcel.indexOf("export async function parcelFactsFromExistingProperty"),
+      parcel.indexOf("function numOrNull")
+    );
+    expect(reuse).toContain("year_built:");
+    expect(reuse).toContain("sqft:");
+    expect(reuse).toContain("beds:");
+    expect(reuse).toContain("lot_size_sqft:");
+    for (const forbidden of [
+      "purchase_price:",
+      "purchase_date:",
+      "assessed_value:",
+      "assessed_year:",
+      "hoa_fee:",
+      "property_tax_history:",
+      "owner_names:",
+      "owner_type:",
+    ]) {
+      expect(reuse).not.toContain(forbidden);
+    }
+  });
+});
+
+describe("F2: the manual refresh's 24-hour floor", () => {
+  const valueActions = src("../app/(app)/value/actions.ts");
+  const refresh = valueActions.slice(
+    valueActions.indexOf("export async function refreshMarketValueAction")
+  );
+
+  it("checks the cached call's age before spending anything", () => {
+    const age = refresh.indexOf("cachedMarketValueAgeMs(");
+    const budget = refresh.indexOf("avmBudgetAllows(");
+    const call = refresh.indexOf("lookupMarketValue(");
+    expect(age).toBeGreaterThan(-1);
+    // Before the rate-limit budget as well as before the call: a press that
+    // costs nothing must not eat the allowance a real refresh needs.
+    expect(budget).toBeGreaterThan(age);
+    expect(call).toBeGreaterThan(age);
+  });
+
+  it("returns the stored value with a plain 'Updated ...' line", () => {
+    expect(refresh).toContain("RENTCAST_REFRESH_MIN_AGE_MS");
+    expect(refresh).toContain("`Updated ${relativeAge(cachedAge)}`");
   });
 });

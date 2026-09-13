@@ -16,6 +16,11 @@ import SubmitButton from "@/components/SubmitButton";
 export default function RefreshValue({ isPlus }: { isPlus: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  // What the server said about this press, when it has something more precise
+  // than "done" to say. Today that is the 24-hour floor (F2): under a day old,
+  // the action serves the estimate already on file and returns
+  // "Updated <when>" rather than reporting a refresh that did not happen.
+  const [note, setNote] = useState<string | null>(null);
 
   if (!isPlus) {
     return (
@@ -34,10 +39,12 @@ export default function RefreshValue({ isPlus }: { isPlus: boolean }) {
         const result = await refreshMarketValueAction();
         if (!result.ok) {
           setDone(false);
+          setNote(null);
           setError(result.error);
           return;
         }
         setError(null);
+        setNote(result.data?.note ?? null);
         setDone(true);
       }}
       className="space-y-2"
@@ -56,7 +63,7 @@ export default function RefreshValue({ isPlus }: { isPlus: boolean }) {
       )}
       {done && !error && (
         <p className="text-xs text-stone-500 dark:text-stone-400">
-          Estimate updated.
+          {note ?? "Estimate updated."}
         </p>
       )}
     </form>

@@ -7,7 +7,23 @@ import { getActiveProperty } from "@/lib/property";
 import { hasPlus } from "@/lib/subscription";
 import { setFlash } from "@/lib/flash";
 import { ok, err, type ActionResult } from "@/lib/actionResult";
-import { lookupMarketValue } from "@/lib/parcel";
+import { cachedMarketValueAgeMs, lookupMarketValue } from "@/lib/parcel";
+import { RENTCAST_REFRESH_MIN_AGE_MS } from "@/lib/rentcastCache";
+
+// "Updated 3 hours ago" for the refresh button (F2). Coarse on purpose: this
+// labels a cached estimate, and a minute-accurate age would imply a precision
+// the number does not have. Its own tiny helper rather than a date library -
+// the app ships no relative-time formatter today and this is the only caller.
+function relativeAge(ms: number): string {
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 2) return "just now";
+  if (minutes < 60) return `${minutes} minutes ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours === 1) return "an hour ago";
+  if (hours < 24) return `${hours} hours ago`;
+  const days = Math.floor(hours / 24);
+  return days === 1 ? "yesterday" : `${days} days ago`;
+}
 
 // Saves (or updates) what the owner paid, the year they bought, and what they
 // still owe. purchase_price and mortgage_balance are new columns from
@@ -185,7 +201,7 @@ export async function fetchAndSaveMarketValueAction(): Promise<{
 
     // The unit rides along (migration 0127): an AVM run on the bare street
     // values the building, not this condo.
-    const facts = await lookupMarketValue(street, zip, property.unit);
+    const facts = await lookupMarketValue(street, zip, property.unit, user.id);
     if (facts.market_value == null) return { ok: false };
 
     const supabase = await createClient();
@@ -229,7 +245,17 @@ export async function fetchAndSaveMarketValueAction(): Promise<{
 // keeps a real hit in parcel_cache for 30 days, so refreshing twice in a week
 // re-reads the cached number and bills nothing. The estimate can genuinely
 // move about once a month, which is what the copy promises.
-export async function refreshMarketValueAction(): Promise<ActionResult> {
+//
+// F2 adds a 24-HOUR FLOOR in front of all of that, and says so out loud. The
+// caches below would already have absorbed a same-day second press silently,
+// which is cheap but dishonest: the button showed "Estimate updated." over a
+// number that had not moved. Under 24 hours this now returns the stored value
+// with "Updated <when>" instead, so a homeowner pressing it twice in an
+// afternoon is told plainly that there is nothing newer to fetch rather than
+// being shown a refresh that did not happen. `data.note` carries that line.
+export async function refreshMarketValueAction(): Promise<
+  ActionResult<{ note?: string }>
+> {
   const property = await getActiveProperty();
   // Ownership comes from getActiveProperty, which re-validates through RLS on
   // every read: no property id is ever accepted from the browser here.
@@ -268,12 +294,26 @@ export async function refreshMarketValueAction(): Promise<ActionResult> {
     return err("Only the home's owner can change this.");
   }
 
+  // F2: THE 24-HOUR FLOOR, checked before anything is spent - neither a
+  // RentCast call nor a slot of the per-user budget an honest refresh needs.
+  //
+  // Reads the CALL cache (rentcast_cache, migration 0167), not the facts cache
+  // and not properties: the question is "when did we last actually ask
+  // RentCast about this address?", and only the call log knows that. A null
+  // age means there is no settled call on record - a first refresh, a database
+  // without 0167, an address never fetched - and that falls through to the
+  // normal path, which is the pre-existing behaviour.
+  const cachedAge = await cachedMarketValueAgeMs(street, zip, property.unit);
+  if (cachedAge != null && cachedAge < RENTCAST_REFRESH_MIN_AGE_MS) {
+    return ok({ note: `Updated ${relativeAge(cachedAge)}` });
+  }
+
   if (!(await avmBudgetAllows(user.id))) {
     return err("You've refreshed a few times just now. Try again in a bit.");
   }
 
   try {
-    const facts = await lookupMarketValue(street, zip, property.unit);
+    const facts = await lookupMarketValue(street, zip, property.unit, user.id);
     if (facts.market_value == null) {
       // Keep the number that is already on file rather than blanking it: no
       // fresh reading is not the same as the home being worth nothing.

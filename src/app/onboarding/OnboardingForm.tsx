@@ -1183,34 +1183,35 @@ export default function OnboardingForm({
                 </p>
               </div>
 
-              {/* The records source was unreachable (bad key, quota, outage,
-                  timeout). Say so plainly instead of silently showing an empty
-                  form: nothing is wrong with their address, they just have to
-                  type the details themselves this time. */}
-              {facts.source === "unavailable" && (
-                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
-                  We couldn&apos;t reach the county records right now. You can
-                  fill in the details yourself.
-                </p>
-              )}
+              {/* THE MISS NOTE (Landen addendum 4, F1). ONE line, rendered
+                  ONCE, for every way a lookup can fail to fill this form in:
+                  the records source was unreachable (bad key, exhausted free
+                  tier, outage, timeout - source "unavailable"), it answered and
+                  holds no record (source "none"), or no lookup was made at all
+                  because the account is internal (also "none", see
+                  lookupParcelAction in ./actions.ts).
 
-              {/* The records source answered and has no record for this
-                  address. A DIFFERENT thing from the outage above, and the
-                  copy has to say so: "couldn't reach" blames an outage that
-                  did not happen, and "couldn't find" reads as though the
-                  address were wrong, when the address is fine and RentCast's
-                  coverage of the launch metro is simply patchy (four plausible
-                  Orange County addresses came back empty in one measured
-                  night). This used to be a refusal; it is a manual-entry note
-                  now, because a gap in one vendor's data is not grounds to
-                  turn a homeowner away. "yet" is doing real work: the same
-                  address may well be in the data next month, and the lazy
-                  ownership re-check on first job post is left free to find
-                  that out. */}
-              {facts.source === "none" && (
+                  It used to be two notes, one per source, on the reasoning that
+                  "we couldn't reach the county records" and "we don't have
+                  county records for this address yet" are genuinely different
+                  facts and the copy should not blame an outage that did not
+                  happen. That reasoning still holds and this line respects it -
+                  it blames NEITHER. It says only what is true in all three
+                  cases and what the homeowner can act on: the boxes below are
+                  empty and they should fill them in. A homeowner cannot do
+                  anything differently on an outage than on a coverage gap, so
+                  splitting the copy bought them a distinction they could not
+                  use, and a single line is one less thing between them and the
+                  form.
+
+                  The fields themselves are untouched by this: year built,
+                  square feet, beds and lot below take defaultValue={facts.X ??
+                  ""}, so a miss leaves every one of them blank and editable
+                  rather than pre-filled with a guess. */}
+              {facts.source !== "rentcast" && (
                 <p className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-700 dark:border-stone-700 dark:bg-stone-800/60 dark:text-stone-300">
-                  We don&apos;t have county records for this address yet. Add
-                  what you know and we&apos;ll take it from there.
+                  We couldn&apos;t auto-fill this address, please enter the
+                  basics.
                 </p>
               )}
 

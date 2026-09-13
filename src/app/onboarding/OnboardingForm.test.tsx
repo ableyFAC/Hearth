@@ -900,3 +900,90 @@ describe("OnboardingForm double-submit guard", () => {
     await waitFor(() => expect(claimPropertyAction).toHaveBeenCalledTimes(2));
   });
 });
+
+// ---------------------------------------------------------------------------
+// Landen addendum 4, F1: the auto-fill miss.
+//
+// RentCast's free tier is fifty calls a month, so a miss is not an edge case
+// here - it is an outcome the product has to be pleasant about. Three routes
+// reach it and they must all look the same to a homeowner: the source was
+// unreachable (bad key, spent quota, outage, timeout), the source answered and
+// holds no record, or no lookup was made at all because the account is
+// internal. In every one of them the boxes come up blank and editable and ONE
+// line explains why.
+// ---------------------------------------------------------------------------
+describe("the auto-fill miss note", () => {
+  const MISS_NOTE =
+    "We couldn't auto-fill this address, please enter the basics.";
+
+  async function toReadyStepWith(source: "none" | "unavailable") {
+    lookupParcelAction.mockResolvedValue({
+      ok: true,
+      facts: {
+        ...FACTS,
+        // Exactly what a miss returns: the typed street back, and nothing
+        // else claimed to be known.
+        year_built: null,
+        sqft: null,
+        beds: null,
+        baths: null,
+        lot_size_sqft: null,
+        city: null,
+        state: null,
+        county: null,
+        property_type: null,
+        parcel_id: null,
+        source,
+      },
+    });
+    render(<OnboardingForm />);
+    fireEvent.change(screen.getByLabelText("Street address"), {
+      target: { value: "9871 kings canyon drive" },
+    });
+    fireEvent.change(screen.getByLabelText("ZIP code"), {
+      target: { value: "92646" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Your full name")).toBeInTheDocument()
+    );
+  }
+
+  it.each(["none", "unavailable"] as const)(
+    "renders the note exactly once on a %s result",
+    async (source) => {
+      await toReadyStepWith(source);
+      // getAllByText, not getByText: the COUNT is the assertion. Two notes
+      // used to render here, one per source, and a homeowner does not need to
+      // be told twice that a form is empty.
+      expect(screen.getAllByText(MISS_NOTE)).toHaveLength(1);
+    }
+  );
+
+  // Queried by input name rather than by label text: these four labels are
+  // plain <label className="label"> with no htmlFor and no wrapped input, so
+  // getByLabelText cannot reach them. Worth knowing (it is a real a11y gap on
+  // the confirm step) but not this change's to fix - the name attribute is
+  // also exactly what claimPropertyAction reads them back out of.
+  it.each(["year_built", "sqft", "beds", "lot_size_sqft"])(
+    "leaves %s blank and editable on a miss",
+    async (name) => {
+      await toReadyStepWith("none");
+      const field = document.querySelector(
+        `input[name="${name}"]`
+      ) as HTMLInputElement | null;
+      expect(field).not.toBeNull();
+      expect(field!.value).toBe("");
+      expect(field!).not.toBeDisabled();
+      expect(field!).not.toHaveAttribute("readonly");
+      // And it really is editable, not merely un-disabled.
+      fireEvent.change(field!, { target: { value: "1975" } });
+      expect(field!.value).toBe("1975");
+    }
+  );
+
+  it("shows no note at all when the records source did answer", async () => {
+    await toReadyStep();
+    expect(screen.queryByText(MISS_NOTE)).not.toBeInTheDocument();
+  });
+});
