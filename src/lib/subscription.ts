@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getUser } from "@/lib/auth";
 import { getActiveProperty } from "@/lib/property";
 import { stripe } from "@/lib/stripe";
+import { isHomeownerPreview } from "@/lib/previewMode";
 import type { Subscription } from "@/lib/database.types";
 
 // One user can hold TWO subscriptions rows at once (migration 0036): the
@@ -196,6 +197,20 @@ function isLive(
 // inserting user's own row) key off it. A household member of a Plus home
 // does NOT count here - for feature gating use hasPlus() below.
 export async function ownsPlus(): Promise<boolean> {
+  // PREVIEW MODE (guardrail B1). Every homeowner has Plus during the preview,
+  // because nothing can be bought and the whole homeowner product is free
+  // until the lawyer review is done. ownsPlus() is the BILLING truth, so
+  // answering yes here is also what lifts the owned-home cap -
+  // claimPropertyAction reads ownsPlus, not hasPlus.
+  //
+  // WHAT THIS DOES NOT DO: it writes nothing. getSubscription() is untouched,
+  // no subscriptions row is created or changed, and the moment the flag is off
+  // every helper here answers off the real rows again. That is the whole point
+  // of a switch rather than a data migration. The billing UI is hidden
+  // separately (B2), so nobody is shown "Manage billing" for a membership that
+  // does not exist.
+  if (isHomeownerPreview()) return true;
+
   const sub = await getSubscription();
   if (!sub) return false;
   return isLive(sub);
@@ -256,6 +271,14 @@ const activeHomeOwnerHasPlus = cache(async (): Promise<boolean> => {
 export type PlusTier = "free" | "trialing" | "paid";
 
 export async function getPlusTier(): Promise<PlusTier> {
+  // PREVIEW MODE (B1): "paid", not "trialing". The two resolve to the same AI
+  // ceilings today (see ASK_DAILY_TRIAL in src/lib/aiUsage.ts), but the tier is
+  // also what the COPY reads, and "trialing" would put a countdown and an
+  // upgrade pitch in front of somebody whose preview is not a trial and does
+  // not end in a charge. "paid" is the honest answer: nothing is owed, and
+  // nothing is about to be.
+  if (isHomeownerPreview()) return "paid";
+
   const sub = await getSubscription();
   if (sub && isLive(sub)) {
     // isLive only passes "active" or "trialing", so anything that is not the
@@ -274,6 +297,13 @@ export async function getPlusTier(): Promise<PlusTier> {
 // plans only: getSubscription never returns the Pro-side row, so a
 // contractor's pro_ plan never counts as Plus.
 export async function hasPlus(): Promise<boolean> {
+  // PREVIEW MODE (B1): everything is free during the preview, so every
+  // homeowner has Plus BENEFITS too. Written explicitly rather than left to
+  // fall out of ownsPlus() above, so this reads correctly on its own and so
+  // the household lookup underneath is skipped rather than run for an answer
+  // that cannot change.
+  if (isHomeownerPreview()) return true;
+
   if (await ownsPlus()) return true;
   return activeHomeOwnerHasPlus();
 }
@@ -288,6 +318,21 @@ export async function hasPlus(): Promise<boolean> {
 // same convention the other not-yet-typed columns use. Returns 0 when there is
 // no live Plus row.
 export async function getExtraHomeSlots(): Promise<number> {
+  // PREVIEW MODE (B1). LEFT ALONE ON PURPOSE, and this comment is the record
+  // of why - the spec listed it, and the honest reading of "give a preview
+  // homeowner the Plus maximum, 5 homes" is to change nothing here.
+  //
+  // This function does NOT return a home allowance. It returns the PAID
+  // extra-home slots bought on top of Plus, and claimPropertyAction adds them:
+  // `cap = plus ? PLUS_INCLUDED_HOMES + extraSlots : 1`. With ownsPlus() true
+  // in preview and no slots bought (nothing can be bought), that cap is
+  // already exactly PLUS_INCLUDED_HOMES = 5, which is the number the spec asks
+  // for and the number the 0108 trigger hard-codes. Returning 5 here would
+  // make it 10 and promise a sixth home the database refuses.
+  //
+  // Not forced to 0 either: a real subscriber who already owns slots keeps
+  // them, and preview must not take capacity away from somebody who paid for
+  // it before the flag went on.
   const sub = await getSubscription();
   if (!sub || !isLive(sub)) return 0;
   const slots = Number((sub as any).extra_home_slots) || 0;

@@ -43,6 +43,7 @@ import {
   isNativeClientRequest,
   NATIVE_STRIPE_BLOCKED_MESSAGE,
 } from "@/lib/nativeClientHeader";
+import { previewBlocksMoney } from "@/lib/previewModeServer";
 
 const siteUrl = () =>
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -88,6 +89,17 @@ function baseSubItem(sub: Stripe.Subscription): Stripe.SubscriptionItem {
 // otherwise falls back to inline price_data so the flow works before
 // Products/Prices are set up in Stripe.
 export async function startPlusCheckoutAction(formData: FormData) {
+  // PREVIEW MODE (guardrail A4). Nothing in this app may be paid for while the
+  // lawyer review is open, so every money action in this file refuses here -
+  // FIRST statement, before the session read, before the consent check, before
+  // any property on the stripe client is touched. The structural backstop in
+  // src/lib/stripe.ts would throw on that first touch, but a throw reaches the
+  // person as Next's generic error screen; this branch is what gives them a
+  // sentence they can read. previewBlocksMoney() queues the coming-soon flash
+  // and answers false instantly when the flag is off, so a normal deploy pays
+  // one string comparison and behaves identically.
+  if (await previewBlocksMoney()) redirect("/plus");
+
   // Monthly is the fallback cadence (see checkoutCadence): it is what the
   // pricing card preselects, so a form arriving without a readable "plan"
   // field lands on the plan the buyer was looking at. Every cadence now
@@ -614,6 +626,10 @@ export async function startPlusCheckoutAction(formData: FormData) {
 // is the source of truth for extra_home_slots; the optimistic DB write here
 // just makes the new count visible before the webhook lands.
 export async function setExtraHomesAction(formData: FormData) {
+  // PREVIEW MODE (A4): extra home slots are a paid add-on. See
+  // startPlusCheckoutAction for why this is the first statement.
+  if (await previewBlocksMoney()) redirect("/plus");
+
   const user = await getUser();
   if (!user) redirect("/signin");
 
@@ -758,6 +774,9 @@ export async function setExtraHomesAction(formData: FormData) {
 // trialApplies); this is about an existing subscription changing cadence
 // mid-trial, which /plus asks them to confirm in exactly those words first.
 export async function upgradeToYearlyAction() {
+  // PREVIEW MODE (A4): a cadence upgrade takes an immediate prorated charge.
+  if (await previewBlocksMoney()) redirect("/plus");
+
   const user = await getUser();
   if (!user) redirect("/signin");
 
@@ -857,6 +876,10 @@ export async function upgradeToYearlyAction() {
 // (no trial, no proration), then the schedule releases and the subscription
 // renews monthly on its own. Same pattern regardless of the starting cadence.
 export async function downgradeToMonthlyAction() {
+  // PREVIEW MODE (A4): schedules a future Stripe phase, so it is a billing
+  // change even though nothing is charged today.
+  if (await previewBlocksMoney()) redirect("/plus");
+
   const user = await getUser();
   if (!user) redirect("/signin");
 
@@ -1026,6 +1049,9 @@ export async function downgradeToMonthlyAction() {
 // the confirmation names the plan actually being kept - it used to say "yearly"
 // to a weekly subscriber.
 export async function keepYearlyAction() {
+  // PREVIEW MODE (A4): releases a Stripe subscription schedule.
+  if (await previewBlocksMoney()) redirect("/plus");
+
   const user = await getUser();
   if (!user) redirect("/signin");
 
@@ -1079,6 +1105,13 @@ export async function keepYearlyAction() {
 // renew. If a switch to monthly was scheduled, that schedule is released
 // first, since a canceled plan has no next phase to switch into.
 export async function cancelMembershipAction() {
+  // PREVIEW MODE (A4). Listed in the spec alongside the others, and gated for
+  // the same structural reason: it calls stripe.subscriptions.update, which
+  // throws in preview. Nobody can HAVE a membership to cancel in preview
+  // anyway - checkout is closed - so in practice this branch only catches a
+  // replayed or hand-crafted POST.
+  if (await previewBlocksMoney()) redirect("/plus");
+
   const user = await getUser();
   if (!user) redirect("/signin");
 
@@ -1126,6 +1159,9 @@ export async function cancelMembershipAction() {
 
 // Undo a pending cancellation: the membership keeps renewing as before.
 export async function resumeMembershipAction() {
+  // PREVIEW MODE (A4): resuming makes the membership bill again.
+  if (await previewBlocksMoney()) redirect("/plus");
+
   const user = await getUser();
   if (!user) redirect("/signin");
 
@@ -1153,6 +1189,11 @@ export async function resumeMembershipAction() {
 
 // Send the user to Stripe's billing portal to manage or cancel their plan.
 export async function manageBillingAction() {
+  // PREVIEW MODE (A4): creates a Stripe billing-portal session. B2 hides the
+  // "Manage billing" control in preview, so reaching this action at all means
+  // a stale page or a crafted POST.
+  if (await previewBlocksMoney()) redirect("/plus");
+
   const sub = await getSubscription();
   // No Stripe customer means either "never subscribed" or "subscribed through
   // the App Store / Play Store" (a RevenueCat-sourced row leaves both Stripe

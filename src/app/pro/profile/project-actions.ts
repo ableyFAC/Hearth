@@ -7,6 +7,7 @@ import { getCurrentContractor } from "@/lib/contractor";
 import { hasProPlan } from "@/lib/subscription";
 import { setFlash } from "@/lib/flash";
 import { JOB_CATEGORIES } from "@/lib/constants";
+import { assertProSideOpen } from "@/lib/previewModeServer";
 
 // Server actions for the pro's project portfolio (migration 0045). Projects
 // appear on the public page (/p/<id>) through the public_pro_profile RPC;
@@ -54,6 +55,11 @@ function isOwnedStoragePath(raw: string, pathPrefix: string): boolean {
 // Photos are saved as the full current set: the form submits every photo it
 // shows (kept + newly uploaded), so the rows are replaced wholesale.
 export async function saveProjectAction(formData: FormData) {
+  // PREVIEW MODE (guardrail A2): a pro-side write, reachable as a public POST
+  // even with the shell closed. Internal accounts pass; constant `true`
+  // outside preview. See src/lib/previewModeServer.ts.
+  await assertProSideOpen();
+
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");
 
@@ -178,6 +184,9 @@ export async function saveProjectAction(formData: FormData) {
 // best-effort: a leftover file in the public bucket is harmless, so a failed
 // cleanup never blocks the delete.
 export async function deleteProjectAction(formData: FormData) {
+  // PREVIEW MODE (A2). See saveProjectAction.
+  await assertProSideOpen();
+
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");
 

@@ -7,6 +7,7 @@ import type { Database } from "@/lib/database.types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { signUnsubscribeToken } from "@/lib/unsubscribeToken";
 import { isMissingSchemaError } from "@/lib/dbErrors";
+import { isHomeownerPreview } from "@/lib/previewMode";
 import {
   isPlusGatedKind,
   isTransactionalKind,
@@ -296,6 +297,24 @@ export async function sendOutboundChannels(
 async function lookupPlusStatus(
   userId: string
 ): Promise<"plus" | "free" | "unknown"> {
+  // PREVIEW MODE (guardrail B5). Everyone has Plus during the preview
+  // (src/lib/subscription.ts hasPlus), and this is the cron-side mirror of
+  // that same question - so it has to give the same answer, or the Plus-only
+  // proactive alerts a homeowner was just told are included would quietly not
+  // send to the people using the preview.
+  //
+  // THIS BYPASSES NOTHING THAT MATTERS. It answers one question - "does this
+  // recipient have Plus benefits" - and nothing else. Every other gate still
+  // runs on the way out: the kill switch and the marketing budget above,
+  // isPlusGatedKind and shouldSendOutboundChannels' kind list
+  // (src/lib/notifyGating.ts, deliberately untouched), the CAN-SPAM email
+  // opt-out, SMS consent, quiet hours and the per-recipient caps. Somebody who
+  // opted out still gets nothing.
+  //
+  // Placed before the read, so preview also saves two admin queries per
+  // notification.
+  if (isHomeownerPreview()) return "plus";
+
   try {
     const admin = createAdminClient();
 

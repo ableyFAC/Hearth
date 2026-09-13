@@ -8,6 +8,8 @@ import ProNav from "@/components/ProNav";
 import NewMessageNotifier from "@/components/NewMessageNotifier";
 import AppGuideMount from "@/components/AppGuideMount";
 import ProTrialNudge from "@/components/pro/ProTrialNudge";
+import ProsComingSoon from "@/components/pro/ProsComingSoon";
+import { isProSideOpenForViewer } from "@/lib/previewModeServer";
 import { variantForUser } from "@/lib/paywallExperiment";
 
 // Pro shell. Auth is enforced by middleware; company-setup is enforced per-page
@@ -46,6 +48,33 @@ export default async function ProLayout({
     getSides(),
     getUserProfile().catch(() => null),
   ]);
+
+  // PREVIEW MODE (src/lib/previewMode.ts): the contractor side is CLOSED until
+  // the lawyer review lands, so this shell - and with it every /pro route,
+  // including /pro/onboarding, which is why the check sits ABOVE the
+  // no-company branch rather than inside the one below - is replaced by the
+  // shared coming-soon page for everyone except an OakTend internal account.
+  //
+  // ONE RENDER, NOT TWO. Returning here instead of inside either branch is
+  // what stops a blocked viewer getting the bare shell's header stacked on top
+  // of ProsComingSoon's own. It also means the shell's membership, trial and
+  // back-office reads below never run for them.
+  //
+  // showSignOut, always: a real contractor who signs in during the preview
+  // lands here, and without that form their own account is a room with no
+  // door. It is the same escape hatch the no-company branch below has, for the
+  // same reason.
+  //
+  // isProSideOpenForViewer() short-circuits to `true` on the flag before it
+  // reads anything, so outside preview this line costs a string comparison and
+  // the shell is byte-identical to what it was. Inside preview it FAILS
+  // CLOSED - a database blip answers "not internal", which keeps a real pro
+  // out rather than letting one in; see its own comment for why that is the
+  // right direction here and the wrong one for isInternalUser()'s other
+  // callers.
+  if (!(await isProSideOpenForViewer())) {
+    return <ProsComingSoon showSignOut source="pro-shell" />;
+  }
 
   // No company yet → the user is still onboarding. Show a bare top bar with no
   // app links, so they can't navigate into pages that assume a set-up company
@@ -115,6 +144,13 @@ export default async function ProLayout({
   // now moved here since ProTrialNudge is mounted once, in the shell, rather
   // than once per page). The row survives a cancellation, so a pro who
   // churned and came back is never offered a trial they will not get.
+  //
+  // PREVIEW MODE is deliberately NOT folded into this line. Two source pins
+  // (src/app/pro/layout.test.ts, (app)/plus/paywallVariantWiring.test.ts)
+  // assert this exact eligibility rule, and they exist because it has to stay
+  // the same rule the billing page used. The takeover stands itself down in
+  // preview instead - see the isHomeownerPreview() branch inside
+  // src/components/pro/ProTrialNudge.tsx.
   const trialEligible = !member && !proSub;
 
   // The paywall experiment's arm for this account (src/lib/paywallExperiment.ts).

@@ -13,6 +13,10 @@ import { variantForUser } from "@/lib/paywallExperiment";
 import { trialDecision, TRIAL_DECISION_TTL_MS } from "@/lib/risk/decision";
 import { TRIAL_PLAN_SWITCH_MESSAGE } from "@/lib/billingTerms";
 import {
+  isHomeownerPreview,
+  PREVIEW_MEMBERSHIP_COPY,
+} from "@/lib/previewMode";
+import {
   manageBillingAction,
   upgradeToYearlyAction,
   downgradeToMonthlyAction,
@@ -118,6 +122,51 @@ export default async function PlusPage(
   }
 ) {
   const searchParams = await props.searchParams;
+
+  // PREVIEW MODE (guardrail B2). No pitch, no cadence toggle, no trial offer,
+  // no "Manage billing" - there is nothing to buy and nothing to manage, so
+  // this page says so and then shows what is included, which during the
+  // preview is everything.
+  //
+  // FIRST, BEFORE ANY READ, and that is structural rather than tidiness:
+  // ownsPlus() answers true in preview (B1), which would send this page into
+  // the member branch below - and that branch calls getBillingOutlook(), which
+  // calls Stripe, which throws in preview (src/lib/stripe.ts). That is a 500
+  // on a page every homeowner can reach from the profile menu. Returning up
+  // here is what stops it, and it also skips the subscription, properties and
+  // slot reads that this branch does not use.
+  //
+  // The shell and the help footer are kept on purpose (B2: "keep page shells
+  // and legal footers"), so the page still reads as part of the app rather
+  // than a dead end.
+  if (isHomeownerPreview()) {
+    return (
+      <div className="mx-auto max-w-md space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
+            OakTend Plus
+          </h1>
+          <p className="mt-2 text-stone-600 dark:text-stone-300">
+            {PREVIEW_MEMBERSHIP_COPY}
+          </p>
+        </div>
+
+        <PlusPerks />
+
+        <p className="text-center text-xs max-sm:text-sm text-stone-500 dark:text-stone-400">
+          Questions?{" "}
+          <Link
+            href="/account/help"
+            className="hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
+          >
+            Visit help
+          </Link>
+          .
+        </p>
+      </div>
+    );
+  }
+
   // ownsPlus, not hasPlus: this page manages the viewer's OWN billing. A
   // household member covered by the owner's Plus must still see the buy flow
   // here (their benefits come from the owner's plan, not a row of their own).

@@ -20,6 +20,24 @@ import { cappedField, FIELD_MAX } from "@/lib/formFields";
 import { licenseDigits } from "@/lib/licenseMatch";
 import { isAcceptablePublicText, ABOUT_REJECTED } from "@/lib/publicText";
 import { callAppleRevoke } from "@/lib/appleRevoke";
+import { assertProSideOpen } from "@/lib/previewModeServer";
+
+// PREVIEW MODE, and WHICH ACTIONS IN THIS FILE ARE GATED (guardrail A2).
+//
+// The five that write a CONTRACTOR'S BUSINESS - saveLicenseInsuranceAction,
+// saveLogoAction, saveBannerAction, savePublicPageAction, licenseDisputeAction
+// - carry assertProSideOpen(), because they are the pro product and the pro
+// product is closed until the lawyer review lands.
+//
+// The four ACCOUNT-LEVEL ones deliberately do NOT: updatePasswordAction,
+// updateEmailAction, signOutOthersAction and deleteAccountAction. They happen
+// to live under /pro/profile, but they are the same account operations every
+// homeowner has, and three of them are the ones somebody reaches for when
+// something has gone wrong - a leaked password, a stolen session, a decision
+// to leave. Blocking account DELETION in particular would be a privacy
+// regression (it is the CCPA erasure path, src/lib/privacy.ts), not a preview
+// feature. Preview mode closes a product; it does not take away somebody's
+// control of their own account.
 
 // Password re-verification is a brute-force surface: updatePasswordAction,
 // updateEmailAction, and deleteAccountAction each take a current password and
@@ -285,6 +303,10 @@ function isOwnedStoragePath(raw: string, pathPrefix: string): boolean {
 // meant that saving a carrier wiped the very date the big-job insurance gate
 // reads. Validation for the fields that ARE present is unchanged.
 export async function saveLicenseInsuranceAction(formData: FormData) {
+  // PREVIEW MODE (A2): writes a contractor's credentials. See the note at the
+  // top of this file for which actions here are gated and which are not.
+  await assertProSideOpen();
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -379,6 +401,9 @@ export async function saveLicenseInsuranceAction(formData: FormData) {
 // revalidates instead of redirecting: a redirect would throw away whatever the
 // pro had half-typed in the neighbouring company form on that same tab.
 export async function saveLogoAction(formData: FormData) {
+  // PREVIEW MODE (A2): writes a contractor's public branding.
+  await assertProSideOpen();
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -426,6 +451,9 @@ export async function saveLogoAction(formData: FormData) {
 // Basic Info tab, so it revalidates instead of redirecting: a redirect would
 // throw away whatever the pro had half-typed in the neighbouring company form.
 export async function saveBannerAction(formData: FormData) {
+  // PREVIEW MODE (A2): writes a contractor's public branding.
+  await assertProSideOpen();
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -468,6 +496,10 @@ export async function saveBannerAction(formData: FormData) {
 // handled by saveLogoAction above). Everything is validated here, membership is
 // re-checked server-side, and a failed write degrades to a soft flash.
 export async function savePublicPageAction(formData: FormData) {
+  // PREVIEW MODE (A2): writes the contractor's public page, which A3 hides in
+  // preview anyway (/p/[id] is notFound() for a non-internal pro).
+  await assertProSideOpen();
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -731,6 +763,9 @@ export async function deleteAccountAction(formData: FormData) {
 const MAX_DISPUTE_MESSAGE = 2000;
 
 export async function licenseDisputeAction(formData: FormData) {
+  // PREVIEW MODE (A2): a contractor-credentials write.
+  await assertProSideOpen();
+
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/signin");
 

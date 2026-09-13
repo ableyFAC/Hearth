@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
+import { isHomeownerPreview } from "@/lib/previewMode";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PRO_DEPOSIT_BOOST_PTS, MAX_DEPOSIT_CENTS } from "@/lib/constants";
 import { isMissingSchemaError } from "@/lib/dbErrors";
@@ -1424,6 +1425,32 @@ export async function POST(req: NextRequest) {
     event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
   } catch {
     return new NextResponse("Bad signature", { status: 400 });
+  }
+
+  // PREVIEW MODE (src/lib/previewMode.ts): acknowledge and do nothing.
+  //
+  // Placed AFTER signature verification on purpose, so a forged request is
+  // still rejected with 400 in preview exactly as it is normally - the one
+  // Stripe namespace that stays reachable in preview is `webhooks`, precisely
+  // so this check keeps working (src/lib/stripe.ts).
+  //
+  // WHY 200 AND NOT PROCESSING. Every handler below reaches for a different
+  // Stripe namespace (subscriptions, invoices, paymentIntents), and all of
+  // those throw in preview by design. An uncaught throw here is a Next 500,
+  // and a 500 makes Stripe redeliver the same event for days - so "let it
+  // throw" is not a neutral choice, it is a retry storm. Acting on the event
+  // is not an option either: preview mode's whole promise is that no
+  // membership row moves and nothing is charged.
+  //
+  // NOTHING IS LOST. Stripe keeps every event in its own dashboard whatever we
+  // answer, so an event that arrives during the preview can be replayed by
+  // hand from there once the flag is off. Logged rather than dropped silently
+  // so there is something to search for if that ever needs doing.
+  if (isHomeownerPreview()) {
+    console.warn(
+      `Stripe webhook ignored in preview mode (NEXT_PUBLIC_PREVIEW_MODE=homeowner): ${event.type} ${event.id}. Replay it from the Stripe dashboard if it matters after the flag is off.`
+    );
+    return NextResponse.json({ received: true, preview: true });
   }
 
   if (event.type === "checkout.session.completed") {

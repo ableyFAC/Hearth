@@ -5,6 +5,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentContractor } from "@/lib/contractor";
 import { setFlash } from "@/lib/flash";
+import {
+  assertProSideOpen,
+  isProSideOpenForViewer,
+} from "@/lib/previewModeServer";
+import { PREVIEW_PROS_COPY } from "@/lib/previewMode";
 
 // Delete only counterpart to /api/pro-past-jobs: a past job row is extract
 // once (migration 0050 grants no update on the table), so fixing a bad read
@@ -13,6 +18,11 @@ import { setFlash } from "@/lib/flash";
 // this is called from inside the client heavy ProToolsClient, which keeps
 // its own tab and draft state, so a redirect would reset that unnecessarily.
 export async function deletePastJobAction(formData: FormData) {
+  // PREVIEW MODE (guardrail A2): a pro-side write, reachable as a public POST
+  // even with the shell closed. Internal accounts pass; constant `true`
+  // outside preview. See src/lib/previewModeServer.ts.
+  await assertProSideOpen();
+
   const contractor = await getCurrentContractor();
   if (!contractor) return;
 
@@ -50,6 +60,14 @@ export async function deletePastJobAction(formData: FormData) {
 export async function sendDraftToLeadAction(
   formData: FormData
 ): Promise<{ ok: boolean; error?: string; homeownerName?: string }> {
+  // PREVIEW MODE (A2). The boolean form of the guard, not assertProSideOpen():
+  // ProToolsClient calls this directly and reads the returned object, so a
+  // redirect() thrown out of here would surface as an unexplained failure
+  // instead of the sentence below.
+  if (!(await isProSideOpenForViewer())) {
+    return { ok: false, error: PREVIEW_PROS_COPY };
+  }
+
   const contractor = await getCurrentContractor();
   if (!contractor) {
     return { ok: false, error: "Please sign in and try again." };
@@ -143,6 +161,9 @@ const MAX_STORED_TEXT = 6000; // matches the largest draft the assemble() step i
 // Silent and best effort: this is background learning, not a user facing
 // action, so it never surfaces an error to the pro.
 export async function recordToolEditAction(formData: FormData) {
+  // PREVIEW MODE (A2). See deletePastJobAction.
+  await assertProSideOpen();
+
   const contractor = await getCurrentContractor();
   if (!contractor) return;
 

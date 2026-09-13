@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import LegalDocument from "@/components/LegalDocument";
+import { isHomeownerPreview } from "@/lib/previewMode";
 
 // Public top-level page, same pattern as src/app/terms/page.tsx: see
 // src/lib/supabase/middleware.ts for the allowlist entry and
@@ -20,5 +21,20 @@ export const metadata: Metadata = {
 };
 
 export default function BillingPage() {
-  return <LegalDocument slug="billing" />;
+  // PREVIEW MODE (guardrail B3). The policy below is accurate and stays
+  // exactly as written - the markdown is untouched - but it describes prices,
+  // trials and renewals, and during the preview none of those are happening.
+  // One sentence at the top says so, so a reader (or a lawyer) is not left to
+  // work that out from a document that reads as if the product is selling.
+  // This is the ONLY legal page that gets a notice; the rest are untouched.
+  return (
+    <LegalDocument
+      slug="billing"
+      notice={
+        isHomeownerPreview()
+          ? "During the preview period nothing is charged."
+          : undefined
+      }
+    />
+  );
 }

@@ -7,6 +7,103 @@
 
 ## LATEST (2026-09-12): payment model decision + Credentials tab
 
+### WAVE SUMMARY (2026-09-12 evening, William + Fable): five builds, one paste
+
+Built to Landen's 2026-09-12 request docs (main doc + addenda 2-5). Gate on
+the combined tree: tsc 0, vitest at the pre-existing CRLF baseline (11 files /
+19 tests, zero new), isolated prod build 0. Uncommitted at time of writing.
+
+| # | What | Migration | Docs |
+|---|------|-----------|------|
+| 1 | Stripe Connect plumbing (Express account, /pro/payouts, Connect webhook) | 0164 | GO-LIVE-WIRING 4b |
+| 2 | Internal / test accounts flag, "internal sees internal, real sees real" | 0165 | docs/INTERNAL-ACCOUNTS.md |
+| 3 | Curtis Do partner code + permanent `users.campaign_code` + 2 views | 0166 | docs/REFERRALS.md |
+| 4 | RentCast cap: single attempt, address cache, usage view | 0167 | docs/RENTCAST.md |
+| 5 | Homeowner preview mode (flag) + pro waitlist + home-cap clause | 0168 | GO-LIVE-WIRING 12 |
+
+**One paste for all of it:** `supabase/PASTE-ME-ALL-PENDING-2026-09-12-preview-wave.sql`
+(0164 -> 0168 in order, each section keeps its own prechecks, idempotent).
+The five per-migration PASTE-ME files are the same SQL, kept for reference.
+
+**Landen / William to-do after the paste:** flag the team's accounts internal
+(INTERNAL-ACCOUNTS.md one-liner); set `NEXT_PUBLIC_PREVIEW_MODE=homeowner` in
+Vercel + redeploy; Stripe dashboard: enable Connect (Express, US) + branding +
+the Connected-accounts webhook -> `STRIPE_CONNECT_WEBHOOK_SECRET` (can wait
+for the lawyer-review hold; preview mode disables all Stripe calls anyway);
+tell Landen `/go/curtis` records attribution once deployed + 0166 pasted;
+App Store / Play listing copy is outside the repo (addendum 4 H).
+
+**Still open from the request docs:** merge the rename branch when Landen
+uploads it (0163 paste rides with it); run the E5 account-cleanup SQL if not
+done; delete the old gethearth entry from Supabase auth redirects; Stripe
+products/prices/webhook in the OakTend account (prepare only, no live keys);
+D3 insurance-gate admin switch (not urgent); ghost-protection removal is now
+migration 0169+ (map below). Review-first notes: 0165 guards sit before every
+wallet read; 0168's home-cap clause is a service_role early return only used by
+claimPropertyAction in preview; 0154 re-granted browse_pros to anon (pre-
+existing, deserves its own small migration).
+
+### Preview mode (homeowner-only launch) built 2026-09-12, UNCOMMITTED
+
+One env var: `NEXT_PUBLIC_PREVIEW_MODE=homeowner` turns it on, unset/anything
+else is normal. `NEXT_PUBLIC_` is inlined at build, so flipping it = change the
+Vercel variable + **redeploy the same commit**. No code change either way.
+
+- **Switch:** `src/lib/previewMode.ts` (pure, client-safe) +
+  `src/lib/previewModeServer.ts` (`isProSideOpenForViewer`, `assertProSideOpen`,
+  `previewBlocksMoney`).
+- **Contractor side closed:** `src/components/pro/ProsComingSoon.tsx` +
+  `ProWaitlistForm.tsx` + `src/app/pros/actions.ts`, rendered by `/pros`,
+  `/contractor-signup`, `/pro/onboarding`, the `/pro` shell and the pro role
+  choice. Every pro server action and `/api/pro-*` POST refuses; internal
+  accounts pass.
+- **Homeowner unlocked, nothing chargeable:** `src/lib/subscription.ts` says
+  Plus for everyone (no rows written); every checkout / portal / deposit /
+  payouts action flashes coming-soon; `src/lib/stripe.ts` throws on every Stripe
+  namespace except `webhooks`.
+- **Paste:** `supabase/PASTE-ME-0168-pro-waitlist-2026-09-12.sql` -
+  `pro_waitlist` (service-role only) + one `service_role` early-return clause on
+  `enforce_properties_home_cap()` (0108) so a preview homeowner gets their 5
+  homes. Independent of 0164-0167; paste in any order.
+- **Landen must:** (1) paste 0168; (2) paste **0165** first if the team needs to
+  test the pro side - until it is applied nobody is internal and preview locks
+  the team out too; (3) flag the team's accounts internal
+  (`docs/INTERNAL-ACCOUNTS.md`); (4) set `NEXT_PUBLIC_PREVIEW_MODE=homeowner` in
+  Vercel and redeploy; (5) update the App Store / Play Store listing copy by
+  hand - it lives outside this repo.
+- Full detail: `docs/GO-LIVE-WIRING.md` section 12.
+
+### Step 1 (Connect plumbing) built 2026-09-12, UNCOMMITTED
+
+Build-order item 1 below is done in the working tree. Not committed, not pushed,
+live DB untouched. Nothing is gated on any of it yet.
+
+- **Migration:** `supabase/migrations/0164_stripe_connect_accounts.sql`. Seven
+  `stripe_*` columns on `contractors` + `contractors_stripe_account_id_uidx`.
+  Grants NOTHING to authenticated/anon (0069 + 0085 already revoked the
+  table-level privileges, so a new column is private by default; both PRECHECKs
+  refuse to run if that has changed). Paste file:
+  `supabase/PASTE-ME-0164-stripe-connect-2026-09-12.sql`.
+- **New code:** `src/lib/connectStatus.ts` (pure) + `src/lib/stripeConnect.ts`
+  (server-only); `src/app/api/stripe/connect-webhook/route.ts`;
+  `src/app/pro/payouts/{page,PayoutsSetup,actions,loading}.tsx`;
+  `src/components/pro/PayoutsNudge.tsx`. Touched: pro `actions.ts` (silent
+  account create at wizard completion, via `after()`), pro `page.tsx` +
+  `HomeView.tsx`, `business/page.tsx` + `BusinessView.tsx`, `next.config.mjs`
+  (CSP for connect.js), middleware public-path list, `.env.local.example`.
+  New deps: `@stripe/connect-js`, `@stripe/react-connect-js` (pinned exact).
+- **William's two dashboard TODOs** (docs/GO-LIVE-WIRING.md section 4b):
+  1. Paste 0164, then enable Connect (Express, US) and set platform branding
+     (name OakTend, icon, `#8a6a3c`) - Express onboarding is Stripe's screen
+     with our name on it.
+  2. Create a SECOND webhook endpoint on the "Connected accounts" tab ->
+     `/api/stripe/connect-webhook`, events `account.updated` and
+     `account.application.deauthorized`, and put its signing secret in Vercel as
+     `STRIPE_CONNECT_WEBHOOK_SECRET` (the route fails closed without it).
+- **What step 2 consumes:** `canSendInvoices(row)` and `readConnectRow(id)` from
+  `src/lib/stripeConnect.ts`. Firm rule already encoded: only status `"ready"`
+  (charges AND payouts enabled) may send an invoice.
+
 Session with William (Claude Fable). Read this before touching anything
 money-related; it supersedes the credit-system assumptions in every older
 section below.
@@ -38,7 +135,7 @@ section below.
 - Diagram of the contractor flow (artifact):
   https://claude.ai/code/artifact/7cdd31c1-2803-4faa-8120-3a4107f007cb
 
-### Build order (nothing built yet)
+### Build order (step 1 built 2026-09-12, see "Step 1" above; 2-4 not started)
 1. Stripe Connect plumbing: Express account creation, onboarding link /
    embedded component, account.updated webhook, payouts status on Business.
 2. Invoice flow: pro composes (line items, total, optional deposit; CSLB caps

@@ -8,6 +8,7 @@ import NativeBootstrap from "@/components/native/NativeBootstrap";
 import ZoomLock from "@/components/ZoomLock";
 import { Analytics } from "@vercel/analytics/next";
 import { LAUNCH_CITY_NAMES } from "@/lib/serviceArea";
+import { isHomeownerPreview } from "@/lib/previewMode";
 
 // KEEP THIS FILE FREE OF cookies() AND headers().
 //
@@ -80,8 +81,15 @@ export const metadata: Metadata = {
     default: "OakTend: Your home, looked after",
     template: "%s | OakTend",
   },
-  description:
-    "Keep your house in good shape, know what needs attention, store your home docs, and reach a trustworthy pro when something breaks.",
+  // PREVIEW MODE (addendum 4 H). This is the site-wide default description -
+  // what a search result or link preview shows for any page without its own -
+  // and its last clause promises reaching a pro. There is no pro network
+  // during the preview, so that half is replaced by the approved framing.
+  // Everything before it is true either way and is unchanged. A build-time
+  // constant like everything else in this file; no request-scoped read.
+  description: isHomeownerPreview()
+    ? "Keep your house in good shape, know what needs attention, and store your home docs. Home maintenance, free during our preview."
+    : "Keep your house in good shape, know what needs attention, store your home docs, and reach a trustworthy pro when something breaks.",
   openGraph: {
     siteName: "OakTend",
     type: "website",

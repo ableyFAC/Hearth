@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { clientIpFromHeaders } from "@/lib/clientIp";
+import { isHomeownerPreview } from "@/lib/previewMode";
+import { isInternalContractor } from "@/lib/internalAccounts";
 
 export const runtime = "nodejs";
 
@@ -154,6 +156,24 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
   } | null;
 
   if (!profile) {
+    return htmlResponse(
+      shell("Not found", `<p class="m">This OakTend widget link is invalid.</p>`),
+      404
+    );
+  }
+
+  // PREVIEW MODE (guardrail A3). This widget is the SAME public exposure of a
+  // pro as /p/<id> - name, star rating, review count - just rendered for
+  // somebody else's website, so it closes with that page and for the same
+  // reason: while the contractor side is shut there is no public pro network
+  // to show. Identical 404 to an unknown id, so nothing here says whether the
+  // contractor exists. An OakTend internal test pro's widget still renders.
+  //
+  // Placed after the profile read rather than before, so the answer is keyed
+  // on a contractors row that actually exists, and behind the
+  // isHomeownerPreview() short-circuit so a normal deploy adds no lookup to
+  // this CDN-cached route at all.
+  if (isHomeownerPreview() && !(await isInternalContractor(id))) {
     return htmlResponse(
       shell("Not found", `<p class="m">This OakTend widget link is invalid.</p>`),
       404

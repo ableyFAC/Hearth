@@ -8,6 +8,8 @@ import {
   type AlertRecipientRow,
 } from "@/lib/proAlertBatch";
 import { isMissingSchemaError } from "@/lib/dbErrors";
+import { isInternalUser } from "@/lib/internalAccounts";
+import { isHomeownerPreview } from "@/lib/previewMode";
 import { launchCityForZip } from "@/lib/serviceArea";
 import { redactContact } from "@/lib/redact";
 import {
@@ -140,12 +142,17 @@ export async function alertProsForNewLead(
       contact_phone?: string | null;
       service_state?: string | null;
       launch_cities?: string[] | null;
+      // 0165: absent until that migration is applied, which the retry path
+      // below and the null-safe filter further down both already handle.
+      is_internal?: boolean | null;
     };
     let contractors: ContractorRow[] = [];
     {
       let query = (admin as any)
         .from("contractors")
-        .select("user_id, contact_phone, service_state, launch_cities")
+        .select(
+          "user_id, contact_phone, service_state, launch_cities, is_internal"
+        )
         .not("user_id", "is", null)
         .or(`categories.is.null,categories.cs.{${lead.category}}`);
       // Server-side version of the COLD_START state filter below (the
@@ -162,11 +169,13 @@ export async function alertProsForNewLead(
       const res = await query.limit(1000);
       if (res.error) {
         if (!isMissingSchemaError(res.error)) throw res.error;
-        // Retry without service_state OR launch_cities: either column may not
-        // exist yet (pre-0046 / pre-0124 database), so neither selecting them
-        // nor filtering on them is safe here. Every pro's state and city pick
-        // is then treated as unknown, which the null-safe rules below already
-        // include rather than exclude.
+        // Retry without service_state, launch_cities OR is_internal: any of
+        // them may not exist yet (pre-0046 / pre-0124 / pre-0165 database), so
+        // neither selecting them nor filtering on them is safe here. Every
+        // pro's state, city pick and internal flag is then treated as unknown,
+        // which the null-safe rules below already include rather than exclude
+        // (and on a pre-0165 database nobody is internal anyway, so the
+        // internal filter has nothing to do).
         const retry = await admin
           .from("contractors")
           .select("user_id, contact_phone")
@@ -221,6 +230,51 @@ export async function alertProsForNewLead(
         if (!Array.isArray(cities)) return true;
         return cities.includes(leadCity);
       });
+    }
+
+    // 0165 internal accounts: the alert list pairs like with like, exactly as
+    // open_jobs_for_me() now does in SQL. An internal (team test) homeowner's
+    // job must never text or email a real pro, and a real homeowner's job must
+    // never reach a test pro - a pro who cannot see the job on their board and
+    // cannot apply to it must not be pinged about it either.
+    //
+    // STRICT here, where the state and city filters above are permissive, and
+    // deliberately so: those two guard against an over-narrow alert (the
+    // failure mode is a missed notification), whereas this one guards against
+    // a test job reaching a real person (the failure mode is a real pro
+    // chasing a job that does not exist). Both sides read through
+    // coalesce-to-false, so on a pre-0165 database - or on the retry path
+    // above that drops the column - every row reads as NOT internal, the
+    // poster reads as NOT internal too (isInternalUser answers false on a
+    // missing column), and this filter keeps everyone. That is exactly the
+    // pre-0165 behaviour.
+    const posterIsInternal = await isInternalUser(lead.posterUserId ?? null);
+    contractors = contractors.filter(
+      (c) => Boolean(c.is_internal) === posterIsInternal
+    );
+
+    // PREVIEW MODE (guardrail A3). This is the one place a homeowner action
+    // reaches OUT to a contractor - a real email and a real SMS to a real
+    // phone - and it is not covered by the closed pro shell, because nobody
+    // has to be signed in for it to fire. While the contractor side is shut, a
+    // real pro must not be pinged about a job they cannot see, cannot apply
+    // to, and cannot even sign in to look at: that is cold outbound marketing
+    // for a product we have told a lawyer is not open.
+    //
+    // ON TOP OF the internal/internal pairing above, not instead of it. That
+    // filter keeps like with like; this additionally drops every non-internal
+    // recipient, so the only alerts that leave the building in preview go to
+    // OakTend's own test pros - and only for an internal poster's job, since
+    // the line above still applies. The LEAD itself is untouched: a real
+    // homeowner's job saves exactly as it does today and still appears on
+    // whatever board can see it. Only the outbound ping stops.
+    //
+    // Deliberately here and not in notifyGating.ts or sendNotification(): this
+    // is a recipient-selection rule for one fan-out, not a new channel-level
+    // gate, and every consent, opt-out and budget check downstream still runs
+    // on whoever survives it.
+    if (isHomeownerPreview()) {
+      contractors = contractors.filter((c) => Boolean(c.is_internal));
     }
 
     // SEC-1: never alert the poster about their own job, even if a

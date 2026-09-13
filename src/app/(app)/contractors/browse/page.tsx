@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { SERVICE_CATEGORIES } from "@/lib/constants";
+import { isProSideOpenForViewer } from "@/lib/previewModeServer";
 import BrowseProsBoard from "./BrowseProsBoard";
 import {
   MIN_RATING_OPTIONS,
@@ -41,6 +42,21 @@ export default async function BrowseProsPage(
   const searchParams = await props.searchParams;
   const supabase = await createClient();
 
+  // PREVIEW MODE (guardrail A3). The contractor side is closed, so there is no
+  // pro network to browse and this page must SAY SO rather than show an empty
+  // board that reads like "no pros near you". No fake pros, no seeded
+  // profiles, no ratings - the honest sentence is the whole feature.
+  //
+  // An OakTend internal viewer keeps the real board: browse_pros itself
+  // carries the internal predicate as of migration 0165 (internal sees
+  // internal, real sees only real), so what they get is the internal test
+  // pros and nothing else. That filter is the sibling change's, and this does
+  // not touch it.
+  //
+  // `true` outside preview, with no session read and no query, so a normal
+  // deploy is unchanged.
+  const proNetworkOpen = await isProSideOpenForViewer();
+
   // Independent reads: the property gate and the pros list share nothing, so
   // they go out together instead of one after the other.
   const [property, rpcResult] = await Promise.all([
@@ -48,11 +64,43 @@ export default async function BrowseProsPage(
     // browse_pros is SECURITY DEFINER and safe for any authenticated user.
     // No category filter here any more - BrowseProsBoard filters client-side
     // so a filter tap costs no network round trip.
-    (supabase.rpc as any)("browse_pros", { p_category: null }),
+    //
+    // Skipped entirely when the network is closed for this viewer: the list is
+    // not rendered, so fetching it would be a round trip for nothing.
+    proNetworkOpen
+      ? (supabase.rpc as any)("browse_pros", { p_category: null })
+      : Promise.resolve({ data: [], error: null }),
   ]);
   // Same guard the rest of (app) uses: no active property means the owner
-  // hasn't onboarded a home yet.
+  // hasn't onboarded a home yet. Checked before the preview branch below so a
+  // homeowner with no home still lands on onboarding, exactly as they do now.
   if (!property) redirect("/onboarding");
+
+  if (!proNetworkOpen) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
+            Browse pros
+          </h1>
+        </div>
+        <div className="card">
+          <p className="text-stone-700 dark:text-stone-200">
+            Our verified pro network launches soon. Post your job and we&rsquo;ll
+            match you when it opens.
+          </p>
+          <p className="mt-4">
+            <Link
+              href="/contractors"
+              className="btn-primary inline-flex max-sm:min-h-11"
+            >
+              Post a job
+            </Link>
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const { data, error } = rpcResult as { data: BrowsePro[] | null; error: unknown };
   let allPros = (error ? [] : (data ?? [])) as BrowsePro[];

@@ -10,6 +10,10 @@ import {
   getBillingOutlook,
 } from "@/lib/subscription";
 import { PRO_DEPOSIT_BOOST_PTS, PRO_LEAD_DISCOUNT_PCT } from "@/lib/constants";
+import {
+  isHomeownerPreview,
+  PREVIEW_MEMBERSHIP_COPY,
+} from "@/lib/previewMode";
 import { FREE_PRO_DRAFTS } from "@/lib/freeAiTaste";
 import {
   manageProBillingAction,
@@ -26,6 +30,7 @@ import {
   PlusMember,
   PlusPastDue,
   PlusPitch,
+  PlusPreview,
 } from "./PlusScreens";
 
 // The ?reason= banners. Mirrors the homeowner /plus page: a plain statement of
@@ -56,6 +61,21 @@ export default async function ProPlusPage(
   }
 ) {
   const searchParams = await props.searchParams;
+
+  // PREVIEW MODE (guardrail B2). Only an OakTend internal account can reach
+  // any /pro page right now (the shell closes the rest), but an internal pro
+  // must not be pitched a membership nobody can buy - and the member branch
+  // below calls getBillingOutlook(), which calls Stripe, which throws in
+  // preview (src/lib/stripe.ts). One sentence instead, before any read, so
+  // there is no checkout, no billing portal and no 500.
+  //
+  // Rendered through PlusPreview rather than inline markup, like every other
+  // branch of this page - see that component's comment in PlusScreens.tsx for
+  // the streaming reason this file carries no JSX of its own.
+  if (isHomeownerPreview()) {
+    return <PlusPreview copy={PREVIEW_MEMBERSHIP_COPY} />;
+  }
+
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");
 

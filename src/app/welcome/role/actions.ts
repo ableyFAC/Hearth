@@ -7,6 +7,8 @@ import { getSides, landingFor } from "@/lib/contractor";
 import { setFlash } from "@/lib/flash";
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
 import { safeNextPath } from "@/lib/safeNext";
+import { isProSideOpenForViewer } from "@/lib/previewModeServer";
+import { PREVIEW_PROS_COPY } from "@/lib/previewMode";
 
 // Commits the role choice made on /welcome/role, for anyone who has not built
 // a side yet: the brand-new OAuth user who arrived with no stamp at all (see
@@ -74,6 +76,22 @@ export async function chooseRoleAction(formData: FormData) {
     redirect("/welcome/role");
   }
   const role = submitted;
+
+  // PREVIEW MODE: choosing "contractor" is how an OAuth user with no stamp
+  // gets a role=contractor account and lands in /pro/onboarding, so it is a
+  // pro-side door like any other and it closes with them. Refused AFTER the
+  // role is parsed and BEFORE the metadata stamp, so nothing is written: the
+  // account keeps whatever side it had (usually none) and can pick homeowner
+  // instead. A flash and a bounce back to the picker, not a throw, for the
+  // same reason the failed-stamp branch below uses one - Next masks a thrown
+  // Error in production and the person would never read the message.
+  //
+  // An internal (OakTend team) account is let through, exactly as everywhere
+  // else, so the team can still build a test company.
+  if (role === "contractor" && !(await isProSideOpenForViewer())) {
+    await setFlash(PREVIEW_PROS_COPY, "info");
+    redirect("/welcome/role");
+  }
 
   // A form field is still attacker-influenced input, so re-validate the
   // carried destination with the same guard used everywhere else ?next= is

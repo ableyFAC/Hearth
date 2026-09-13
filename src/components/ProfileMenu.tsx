@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import Link from "next/link";
 import ThemeToggle from "@/components/ThemeToggle";
+import { isHomeownerPreview } from "@/lib/previewMode";
 
 type MenuLink = {
   href: string;
@@ -315,9 +316,18 @@ export default function ProfileMenu({
                     : "bg-bark-50 text-bark-700 hover:bg-bark-100 dark:bg-bark-700/40 dark:text-stone-300 dark:hover:bg-bark-700/60"
                 }`}
               >
-                {upgrade.active
-                  ? `${upgrade.tierName} ✓`
-                  : `Upgrade to ${upgrade.tierName}`}
+                {/* PREVIEW MODE (guardrail B2): neither label is true during
+                    the preview. "Upgrade to X" offers something nobody can
+                    buy, and "X ✓" would claim a paid membership this account
+                    does not have - hasPlus() answers true in preview (B1), so
+                    `active` arrives true for every homeowner, which is exactly
+                    the misreading to avoid. The row itself stays, because it
+                    is the way to /plus, which explains what is going on. */}
+                {isHomeownerPreview()
+                  ? `${upgrade.tierName}: coming soon`
+                  : upgrade.active
+                    ? `${upgrade.tierName} ✓`
+                    : `Upgrade to ${upgrade.tierName}`}
               </Link>
             )}
             <div>

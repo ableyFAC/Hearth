@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// The action file now imports src/lib/previewModeServer.ts (the homeowner
+// preview's pro-side guard), which carries "server-only" - a package with no
+// Node resolution outside the Next build. Stubbed the same way every other
+// server-module test in this repo does it.
+vi.mock("server-only", () => ({}));
+
 // The bug-report action, with the database mocked out. C7 (2026-09-07): the
 // action no longer grants any credit itself - every report is stored
 // pending review, and money moves only through verify_pro_feedback (0157),

@@ -3,6 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { PLUS_PLAN, formatUsd } from "@/lib/constants";
+import {
+  isHomeownerPreview,
+  PREVIEW_MEMBERSHIP_COPY,
+} from "@/lib/previewMode";
 import { purchasePlus, restorePurchases, IapUnavailableError } from "@/lib/iap";
 import BillingLegalLine from "@/components/BillingLegalLine";
 import InlineSpinner from "@/components/InlineSpinner";
@@ -34,6 +38,29 @@ export default function NativePlusCheckout() {
   const [restoring, setRestoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [restored, setRestored] = useState<boolean | null>(null);
+
+  // PREVIEW MODE (guardrail A4). An in-app purchase is still a purchase, and
+  // it is the one payment path the server cannot refuse on the way out: the
+  // App Store / Play Billing sheet opens on the DEVICE, takes the money there,
+  // and OakTend only hears about it afterwards through the RevenueCat webhook.
+  // No server-side gate can undo that, so the button must not exist - hence
+  // this return, and no purchase() or restore() call anywhere on this path.
+  //
+  // AFTER the useState calls, not before them: an early return above a hook is
+  // a Rules-of-Hooks violation even when the condition is a build-time
+  // constant. The four states are simply never used on this branch.
+  //
+  // The Apple disclosure block below (title, price, per-unit price,
+  // auto-renewal terms, Terms/Privacy links) is required AT OR NEAR THE POINT
+  // OF PURCHASE. With no point of purchase there is nothing to disclose, and
+  // quoting a price for something nobody can buy would be worse than silence.
+  if (isHomeownerPreview()) {
+    return (
+      <p className="text-sm text-stone-600 dark:text-stone-300">
+        {PREVIEW_MEMBERSHIP_COPY}
+      </p>
+    );
+  }
 
   async function onPurchase() {
     tap();

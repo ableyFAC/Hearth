@@ -4,6 +4,8 @@ import { cookies } from "next/headers";
 import { hasAuthCookie } from "@/lib/authCookie";
 import { getVerifiedUser } from "@/lib/auth";
 import { isContractor } from "@/lib/contractor";
+import { isHomeownerPreview } from "@/lib/previewMode";
+import ProsComingSoon from "@/components/pro/ProsComingSoon";
 import {
   FOUNDER,
   LEAD_TIER_FEES,
@@ -64,9 +66,21 @@ const SITE_URL =
 // Title/description held once so metadata.title, openGraph, and twitter
 // can't drift from each other; the OG image at ./opengraph-image.tsx keeps
 // its own literal copy of the title (see that file's comment for why).
-const TITLE = "OakTend for Pros: real local leads, honest pricing";
-const DESCRIPTION =
-  "Browse local jobs free and pay only when you apply, with the price on every card. No subscription required, no ghost leads, and free license-verified badges for California pros.";
+//
+// PREVIEW MODE (src/lib/previewMode.ts) swaps both strings. The non-preview
+// pair below is byte-identical to what it always was; the preview pair makes
+// none of the claims the lawyer review is about - lead pricing, ghost leads,
+// verified badges - because this description is what shows in a search result
+// and in a link preview while the pro side is closed, and a closed door must
+// not advertise. Evaluated at module scope, which is correct for a
+// NEXT_PUBLIC_ variable: it is inlined at build time and flipping it already
+// requires a redeploy.
+const TITLE = isHomeownerPreview()
+  ? "OakTend for Pros: coming soon"
+  : "OakTend for Pros: real local leads, honest pricing";
+const DESCRIPTION = isHomeownerPreview()
+  ? "OakTend for Pros opens after our homeowner preview. Leave your email and we'll tell you first."
+  : "Browse local jobs free and pay only when you apply, with the price on every card. No subscription required, no ghost leads, and free license-verified badges for California pros.";
 const CANONICAL = `${SITE_URL}/pros`;
 
 export const metadata: Metadata = {
@@ -130,6 +144,16 @@ export const metadata: Metadata = {
 export default async function ProsLanding(props: {
   searchParams?: Promise<{ ref?: string }>;
 }) {
+  // PREVIEW MODE: the contractor side is closed, so this marketing page is
+  // replaced outright by the shared coming-soon door. FIRST statement in the
+  // function on purpose - before the session read, before the redirect to
+  // /pro, before searchParams. A contractor who lands here in preview must
+  // never be bounced into a shell that is itself closed, and ?ref= threading
+  // into a signup page that does not accept signups is meaningless.
+  if (isHomeownerPreview()) {
+    return <ProsComingSoon source="pros" />;
+  }
+
   const searchParams = await props.searchParams;
   // Cookie names first (hasAuthCookie, src/lib/authCookie.ts): a request with
   // no Supabase auth cookie has no session to find, so it skips the client and

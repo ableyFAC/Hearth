@@ -335,6 +335,27 @@ export function PlusPastDue({
   );
 }
 
+// PREVIEW MODE (guardrail B2): what /pro/plus renders while the homeowner
+// preview is on. Nothing to buy, nothing to manage, one sentence.
+//
+// A component in THIS file rather than markup in page.tsx, deliberately.
+// proPlusPhone.test.ts pins that every branch of the server page returns one
+// element and carries no page markup of its own, and that pin is not
+// housekeeping - it is the streaming fix this whole file exists for (see the
+// header comment above: inline server markup pushed the page's Flight row past
+// React's 3200-byte defer budget and chopped the tail of the page into rows of
+// its own). A preview branch is still a branch.
+export function PlusPreview({ copy }: { copy: string }) {
+  return (
+    <div className="mx-auto max-w-md space-y-4">
+      <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
+        OakTend Pro
+      </h1>
+      <p className="text-stone-600 dark:text-stone-300">{copy}</p>
+    </div>
+  );
+}
+
 // The pitch, for everyone who is not a member.
 export function PlusPitch({
   reasonCopy,

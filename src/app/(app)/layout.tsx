@@ -13,6 +13,7 @@ import { getUserProfile } from "@/lib/user";
 import { getUser } from "@/lib/auth";
 import { hasPlus } from "@/lib/subscription";
 import Nav from "@/components/Nav";
+import PreviewNotice from "@/components/PreviewNotice";
 import NewMessageNotifier from "@/components/NewMessageNotifier";
 import ReviewPrompt from "@/components/ReviewPrompt";
 import AppGuideMount from "@/components/AppGuideMount";
@@ -93,6 +94,15 @@ export default async function AppLayout({
         hasPlus={plus}
         hasPro={contractor !== null}
       />
+      {/* PREVIEW MODE (guardrail C2): one dismissible line under the nav
+          telling a signed-in homeowner that everything is free right now and
+          that memberships and pros are on the way. Renders null when the flag
+          is off, and null again once dismissed, so a normal deploy is
+          unchanged and nothing here costs a query. Mounted unconditionally for
+          the same reason AppGuideMount below is: the component decides for
+          itself. Homeowner shell only - the pro side is a closed door with its
+          own page and gets no banner. */}
+      <PreviewNotice />
       {/* Extra bottom padding below lg keeps content clear of the fixed bottom
           tab bar. It was sm:pb-8; the tab bar now runs to lg (Nav.tsx: the top
           strip collided with the wordmark between 640 and 1023px), so the

@@ -37,6 +37,8 @@ import {
   ndjsonBody,
 } from "@/lib/askStream";
 import { wrapUntrusted } from "@/lib/promptSafe";
+import { isProSideOpenForViewer } from "@/lib/previewModeServer";
+import { PREVIEW_PROS_COPY } from "@/lib/previewMode";
 import {
   LEAD_TIER_FEES,
   MAJOR_INTRO_FEE,
@@ -117,6 +119,17 @@ export async function POST(req: NextRequest) {
   } = await authClient.auth.getUser();
   if (!authUser) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // PREVIEW MODE (guardrail A2): the contractor side is closed until the
+  // lawyer review lands, and an API route is reachable with a plain fetch even
+  // though the shell that renders this chat is not. Placed AFTER the 401 so a
+  // signed-out request still reads as unauthenticated, and before the model is
+  // touched - every call here spends real Anthropic money. An OakTend internal
+  // account passes. Outside preview this is a constant `true` with no session
+  // read and no query, so the route is unchanged.
+  if (!(await isProSideOpenForViewer())) {
+    return NextResponse.json({ error: PREVIEW_PROS_COPY }, { status: 403 });
   }
 
   if (!hasClaudeKey()) {

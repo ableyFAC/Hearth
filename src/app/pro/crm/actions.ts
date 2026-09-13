@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { setFlash } from "@/lib/flash";
+import { assertProSideOpen } from "@/lib/previewModeServer";
 
 const STAGES = ["lead", "quoted", "won", "lost"] as const;
 type Stage = (typeof STAGES)[number];
@@ -74,6 +75,12 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // the new row, the new counter, and the flash message - see FlashToast's own
 // comment for why a revalidate-only render is exactly what it is listening for.
 export async function addClientAction(formData: FormData) {
+  // PREVIEW MODE (guardrail A2): the contractor side is closed, and a "use
+  // server" action is a public POST endpoint the closed shell does not cover.
+  // Internal accounts pass. Constant `true` outside preview. See
+  // src/lib/previewModeServer.ts.
+  await assertProSideOpen();
+
   const contractor = await assertContractor();
 
   const name = String(formData.get("client_name") ?? "").trim();
@@ -176,6 +183,9 @@ export async function addClientAction(formData: FormData) {
 // is always submitted from /pro/crm too, so every exit is a revalidate, never a
 // redirect back to the page it is already on.
 export async function trackLeadAction(formData: FormData) {
+  // PREVIEW MODE (A2). See addClientAction.
+  await assertProSideOpen();
+
   const contractor = await assertContractor();
   const leadId = String(formData.get("lead_id") ?? "");
   if (!leadId) {
@@ -243,6 +253,9 @@ export async function trackLeadAction(formData: FormData) {
 // Every field is validated server side; on any failure the pro is sent back
 // to the same detail page (not the list) so nothing typed is lost from view.
 export async function updateClientDetailsAction(formData: FormData) {
+  // PREVIEW MODE (A2). See addClientAction.
+  await assertProSideOpen();
+
   const contractor = await assertContractor();
   const id = String(formData.get("id") ?? "");
   if (!id) redirect("/pro/crm");
@@ -349,6 +362,9 @@ export async function updateClientDetailsAction(formData: FormData) {
 }
 
 export async function deleteClientAction(formData: FormData) {
+  // PREVIEW MODE (A2). See addClientAction.
+  await assertProSideOpen();
+
   const contractor = await assertContractor();
   const id = String(formData.get("id") ?? "");
   if (!id) redirect("/pro/crm");
@@ -393,6 +409,9 @@ export async function deleteClientAction(formData: FormData) {
 // "this client isn't real / isn't yours" branches actually leave the page,
 // because there is nowhere on it left to show.
 export async function addNoteAction(formData: FormData) {
+  // PREVIEW MODE (A2). See addClientAction.
+  await assertProSideOpen();
+
   const contractor = await assertContractor();
   const clientId = String(formData.get("client_id") ?? "");
   if (!clientId) redirect("/pro/crm");
@@ -433,6 +452,9 @@ export async function addNoteAction(formData: FormData) {
 }
 
 export async function deleteNoteAction(formData: FormData) {
+  // PREVIEW MODE (A2). See addClientAction.
+  await assertProSideOpen();
+
   const contractor = await assertContractor();
   const clientId = String(formData.get("client_id") ?? "");
   const noteId = String(formData.get("note_id") ?? "");

@@ -3,6 +3,7 @@
 import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -38,6 +39,9 @@ import { lookupCslbLicense, type CslbLookupResult } from "@/lib/cslb";
 import { licenseDigits, licenseNameMatches } from "@/lib/licenseMatch";
 import { createCandidateAndInvite } from "@/lib/checkr";
 import { isMissingSchemaError } from "@/lib/dbErrors";
+import { ensureConnectAccount } from "@/lib/stripeConnect";
+import { isHomeownerPreview } from "@/lib/previewMode";
+import { assertProSideOpen } from "@/lib/previewModeServer";
 import { findActiveJobConflicts } from "@/lib/activeJobConflicts";
 import { validateYelpUrl, validateGoogleReviewsUrl } from "@/lib/reviewLinks";
 import {
@@ -479,6 +483,17 @@ async function saveProSmsConsent(
 }
 
 export async function saveCompanyAction(formData: FormData) {
+  // PREVIEW MODE (guardrail A2). The contractor side is closed until the
+  // lawyer review lands, and a "use server" action is a public POST endpoint:
+  // the shell that renders ProsComingSoon instead of the app
+  // (src/app/pro/layout.tsx) blocks the PAGE, not the endpoint behind it. So
+  // every pro-side action that writes anything starts here.
+  //
+  // An OakTend internal account (users.is_internal, migration 0165) passes, so
+  // the team can build a test company and walk the whole flow. Outside preview
+  // this is a constant `true` with no session read and no query.
+  await assertProSideOpen();
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -1405,6 +1420,58 @@ export async function saveCompanyAction(formData: FormData) {
   // wait on to be counted.
   await trackServerEvent(user.id, "signup_pro");
 
+  // ---- Stripe Connect: create the account now, ask for it later ------------
+  //
+  // The 2026-09-12 payment model (handoff.md LATEST) takes 5% of each invoice
+  // as an application_fee on a DIRECT CHARGE against the contractor's own
+  // Stripe Connect (Express) account, so every pro needs one before they can
+  // send anything. Onboarding stays THREE STEPS: the account is created
+  // silently here, and the pro is asked to finish it ("Add where you get
+  // paid") later, from the nudge on pro Home or the Payouts row on
+  // /pro/business.
+  //
+  // Three rules this call must never break, in order of importance:
+  //   1. It must never throw. The company row already landed; a Stripe outage
+  //      (or a dev machine with no STRIPE_SECRET_KEY, where @/lib/stripe's
+  //      lazy proxy throws on first use) must not turn a finished signup into
+  //      an error banner. ensureConnectAccount already returns {error} rather
+  //      than throwing for every case it anticipates; the catch is for the
+  //      ones it does not.
+  //   2. It must never delay the redirect. after() runs it once the response
+  //      is on its way, so the wizard finishes at exactly the speed it did
+  //      before. Same import the leads page already uses (src/app/pro/leads).
+  //   3. It must never change the flash or the redirect below.
+  //
+  // NOT in the 23505 double-submit branch above: that branch reaches here with
+  // `error` still set, and newContractorId is NOT the row that actually landed
+  // (the other request's row is), so it would create an account keyed to a
+  // contractor id that does not exist. That pro gets their account on their
+  // first visit to /pro/payouts instead. Not on the UPDATE (edit profile)
+  // branch either - that pro already has one.
+  //
+  // AND NOT IN PREVIEW MODE (guardrail A4). This is the one Stripe call in the
+  // app that nobody asks for - it happens silently when a wizard finishes - so
+  // it is also the easiest one to forget. Creating a Connect Express account
+  // registers a real business with Stripe; doing that while we are telling a
+  // lawyer the contractor side is closed is exactly wrong, and unlike a
+  // checkout it is not undone by flipping the flag back. The catch above would
+  // have swallowed the stripe.ts throw into a log line and nobody would have
+  // noticed, which is why this is an explicit skip rather than a reliance on
+  // the backstop. Only internal accounts can reach saveCompanyAction in
+  // preview at all (assertProSideOpen at the top of this action), and they get
+  // their Connect account the moment the flag is off, on their first visit to
+  // /pro/payouts - the same path a 23505 double-submit already takes.
+  if (!error && !isHomeownerPreview()) {
+    const connectContractorId = newContractorId;
+    after(async () => {
+      try {
+        await ensureConnectAccount(connectContractorId);
+      } catch (err) {
+        console.error("connect account create failed:", err);
+      }
+    });
+  }
+
   // A supplied license number is only "on file", not checked: queue it as
   // 'pending' (0037) so nothing downstream can claim a verification that
   // never ran. license_verified_status is one of the trust columns 0078
@@ -1565,6 +1632,9 @@ async function assertContractor() {
 // number once it is merely SET: a typo must stay correctable until a check has
 // actually confirmed the license.
 export async function saveLicenseNumberAction(formData: FormData) {
+  // PREVIEW MODE (A2): pro-side write. See saveCompanyAction.
+  await assertProSideOpen();
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -1684,6 +1754,10 @@ export async function saveLicenseNumberAction(formData: FormData) {
 // rule apply here too; the debounce is skipped when the number changed, since
 // the previous check proved a different license.
 export async function verifyLicenseNowAction(formData: FormData) {
+  // PREVIEW MODE (A2): pro-side write, and an outbound CSLB lookup. See
+  // saveCompanyAction.
+  await assertProSideOpen();
+
   const contractor = await assertContractor();
 
   const stored = contractor.license_number ?? null;
@@ -1817,6 +1891,10 @@ export async function verifyLicenseNowAction(formData: FormData) {
 // events back to this contractor. Checkr does the rest by email - OakTend
 // never collects the candidate's sensitive info itself.
 export async function startBackgroundCheckAction(formData: FormData) {
+  // PREVIEW MODE (A2): pro-side write, and every Checkr invite costs OakTend
+  // real money. See saveCompanyAction.
+  await assertProSideOpen();
+
   const contractor = await assertContractor();
 
   // Every check costs OakTend real money, so only the two states that
@@ -1985,6 +2063,9 @@ export async function startBackgroundCheckAction(formData: FormData) {
 }
 
 export async function updateLeadStatusAction(formData: FormData) {
+  // PREVIEW MODE (A2): pro-side write. See saveCompanyAction.
+  await assertProSideOpen();
+
   const leadId = formData.get("id") as string;
   const status = formData.get("status") as string;
   // Only accept a known status value; never write arbitrary client input.
@@ -2130,6 +2211,17 @@ async function staleDisplayedFeeError(
 // wallet (cash first, then bonus) and records the application. Returns false if
 // the wallet balance is short.
 export async function applyToJobAction(formData: FormData) {
+  // PREVIEW MODE (A2): spends wallet credit through apply_to_lead.
+  //
+  // DELIBERATELY assertProSideOpen(), NOT previewBlocksMoney(): an internal
+  // pro passes and the charge goes through exactly as it does today. Wallet
+  // credit is not a card charge - it is balance the team grants itself by hand
+  // - and leaving this working is what lets somebody walk a job end to end
+  // (post -> apply -> chat -> close) against the real code while the public
+  // side is shut. A real pro never reaches it: they are stopped here, and at
+  // the shell, and at every other door.
+  await assertProSideOpen();
+
   const contractor = await assertContractor();
   const leadId = String(formData.get("id"));
   const message = (formData.get("message") as string) || "";
@@ -2454,6 +2546,10 @@ export async function applyToJobAction(formData: FormData) {
 // that changed between render and submit). Any other non-unlockable state
 // raises, and an already-unlocked lead returns true (idempotent).
 export async function unlockDirectRequestAction(formData: FormData) {
+  // PREVIEW MODE (A2): spends wallet credit through unlock_direct_request.
+  // Same decision as applyToJobAction - internal pros keep it, see there.
+  await assertProSideOpen();
+
   const contractor = await assertContractor();
   const leadId = String(formData.get("id"));
 
@@ -2627,6 +2723,9 @@ export async function unlockDirectRequestAction(formData: FormData) {
 // request (contractor_id is null), so the owner lookup goes through the admin
 // client, resolved before the decline so the row is still readable.
 export async function declineDirectRequestAction(formData: FormData) {
+  // PREVIEW MODE (A2): pro-side write. See saveCompanyAction.
+  await assertProSideOpen();
+
   const contractor = await assertContractor();
   const leadId = String(formData.get("id"));
 

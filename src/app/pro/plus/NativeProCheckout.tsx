@@ -3,6 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { PRO_PLAN, formatUsd } from "@/lib/constants";
+import {
+  isHomeownerPreview,
+  PREVIEW_MEMBERSHIP_COPY,
+} from "@/lib/previewMode";
 import { purchasePro, restorePurchases, IapUnavailableError } from "@/lib/iap";
 import BillingLegalLine from "@/components/BillingLegalLine";
 import InlineSpinner from "@/components/InlineSpinner";
@@ -19,6 +23,20 @@ export default function NativeProCheckout() {
   const [restoring, setRestoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [restored, setRestored] = useState<boolean | null>(null);
+
+  // PREVIEW MODE (guardrail A4). Pro-side twin of the same branch in
+  // NativePlusCheckout.tsx - see there for the full reasoning: a store
+  // purchase happens on the DEVICE and no server-side gate can refuse it after
+  // the fact, so the button must not exist at all, and the Apple disclosure
+  // block goes with it because there is no point of purchase left to disclose
+  // at. After the useState calls, for the Rules-of-Hooks reason noted there.
+  if (isHomeownerPreview()) {
+    return (
+      <p className="text-sm text-stone-600 dark:text-stone-300">
+        {PREVIEW_MEMBERSHIP_COPY}
+      </p>
+    );
+  }
 
   async function onPurchase() {
     // Pro-side twin of NativePlusCheckout's haptics: the same tap on intent,

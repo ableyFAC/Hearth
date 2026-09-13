@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// The action file now imports src/lib/previewModeServer.ts (the homeowner
+// preview's pro-side guard), which carries "server-only" - a package with no
+// Node resolution outside the Next build. Stubbed the same way every other
+// server-module test in this repo does it.
+vi.mock("server-only", () => ({}));
+
 // saveCompanyAction's two contractors writes (insert on first-time setup,
 // update on a profile save) used to end in a bare `if (error) throw new
 // Error(error.message)`. That crashed straight past every other setFlash()/
@@ -118,8 +124,25 @@ vi.mock("@/app/(auth)/recordTermsAcceptance", () => ({
 // internal try/catch would just swallow that throw silently either way,
 // leaving no way to assert signup_pro / onboarding_done actually fired.
 vi.mock("@/lib/trackServer", () => ({ trackServerEvent: vi.fn() }));
+// Stripe Connect (2026-09-12): saveCompanyAction's CREATE branch schedules a
+// silent Express-account create. Mocked out for the same reason every other
+// dependency here is - the real module imports "server-only" - and asserted
+// on below (it must fire exactly once on a clean create, and never on the
+// double-submit or edit branches).
+vi.mock("@/lib/stripeConnect", () => ({
+  ensureConnectAccount: vi.fn(async () => ({ accountId: "acct_test" })),
+}));
+// after() is how that create stays off the wizard's critical path. Outside a
+// real request there is no work store to schedule into, so it runs the
+// callback inline here, which is what lets the assertions see it at all.
+vi.mock("next/server", () => ({
+  after: vi.fn((fn: () => unknown) => {
+    void Promise.resolve(fn()).catch(() => {});
+  }),
+}));
 
 import { saveCompanyAction, verifyLicenseNowAction } from "./actions";
+import { ensureConnectAccount } from "@/lib/stripeConnect";
 import { setFlash } from "@/lib/flash";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -153,6 +176,7 @@ beforeEach(() => {
   vi.mocked(createAdminClient).mockClear();
   vi.mocked(trackServerEvent).mockClear();
   vi.mocked(sendNotification).mockClear();
+  vi.mocked(ensureConnectAccount).mockClear();
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -653,6 +677,84 @@ describe("saveCompanyAction: funnel analytics (signup_pro / onboarding_done)", (
         sessionUser.id,
         "onboarding_done"
       );
+    } finally {
+      sessionUser.user_metadata = {};
+    }
+  });
+});
+
+// Stripe Connect, step 1 (2026-09-12). The Express account is created SILENTLY
+// when the wizard completes, so the pro is never asked for bank details as a
+// fourth onboarding step - they are asked later, from a nudge. What matters
+// here is which branches fire it and that it can never break a signup.
+describe("saveCompanyAction: silent Stripe Connect account creation", () => {
+  const inLaunchArea = {
+    contact_phone: "7145550100",
+    service_state: "CA",
+    service_cities_present: "1",
+    service_cities: ["Irvine"],
+    pro_terms_ack: "on",
+  };
+
+  it("fires once on a clean first-time create", async () => {
+    sessionUser.user_metadata.role = "contractor";
+    try {
+      await expect(
+        saveCompanyAction(fd({ name: "Ivy Plumbing", ...inLaunchArea }))
+      ).rejects.toThrow(/REDIRECT/);
+
+      expect(ensureConnectAccount).toHaveBeenCalledTimes(1);
+      // Keyed on the id THIS action generated, never on anything from the
+      // form: the whole money path downstream hangs off this id.
+      expect(ensureConnectAccount).toHaveBeenCalledWith(expect.any(String));
+    } finally {
+      sessionUser.user_metadata = {};
+    }
+  });
+
+  it("does NOT fire on the double-submit (23505) branch", async () => {
+    // That branch reaches the same code with `error` still set, and the id it
+    // holds is NOT the row that landed - the other request's row is. Creating
+    // an account against an id with no contractor row would strand it.
+    insertError = {
+      code: "23505",
+      message:
+        'duplicate key value violates unique constraint "contractors_unique_user"',
+    };
+    sessionUser.user_metadata.role = "contractor";
+    try {
+      await expect(
+        saveCompanyAction(fd({ name: "Ivy Plumbing", ...inLaunchArea }))
+      ).rejects.toThrow(/REDIRECT/);
+      expect(ensureConnectAccount).not.toHaveBeenCalled();
+    } finally {
+      sessionUser.user_metadata = {};
+    }
+  });
+
+  it("does NOT fire on a profile edit", async () => {
+    existingContractor = {
+      id: "contractor-1",
+      user_id: "user-1",
+      name: "Ivy Plumbing",
+    };
+    await saveCompanyAction(fd({ name: "Ivy Plumbing Co", ...inLaunchArea }));
+    expect(ensureConnectAccount).not.toHaveBeenCalled();
+  });
+
+  it("never breaks the signup when Stripe is down", async () => {
+    // The company row already landed. A Stripe outage (or a dev machine with
+    // no STRIPE_SECRET_KEY) must cost the pro nothing at all - not the
+    // redirect, not the flash, not the account.
+    vi.mocked(ensureConnectAccount).mockRejectedValueOnce(
+      new Error("stripe is down")
+    );
+    sessionUser.user_metadata.role = "contractor";
+    try {
+      await expect(
+        saveCompanyAction(fd({ name: "Ivy Plumbing", ...inLaunchArea }))
+      ).rejects.toThrow(/REDIRECT/);
+      expect(setFlash).toHaveBeenCalledWith("You're all set. Leads will appear here.");
     } finally {
       sessionUser.user_metadata = {};
     }

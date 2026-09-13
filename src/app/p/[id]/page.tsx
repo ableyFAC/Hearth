@@ -5,6 +5,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { JOB_CATEGORIES, labelFor } from "@/lib/constants";
 import { isAcceptableCustomCategory } from "@/lib/customCategory";
+import { isHomeownerPreview } from "@/lib/previewMode";
+import { isInternalContractor } from "@/lib/internalAccounts";
 import Logo from "@/components/Logo";
 import RequestQuoteForm from "./RequestQuoteForm";
 import BackLink from "./BackLink";
@@ -154,10 +156,33 @@ const loadProfile = cache(
     // A missing function (migration 0033 not applied yet) must degrade to a
     // soft "not ready" page, never a crash.
     if (error) return { profile: null, unavailable: true };
-    return {
-      profile: (data as PublicProfile | null) ?? null,
-      unavailable: false,
-    };
+    const profile = (data as PublicProfile | null) ?? null;
+
+    // PREVIEW MODE (guardrail A3). While the contractor side is closed there is
+    // no public pro network, so a real pro's page must not be reachable - not
+    // by link, not by a search engine, not by guessing a UUID. A non-internal
+    // contractor answers `null` here, which both callers already handle:
+    // generateMetadata falls back to the bare "OakTend" title and the page body
+    // calls notFound(). A real 404, not the soft "not ready" card: during the
+    // preview the page genuinely is not there.
+    //
+    // isInternalContractor(), not isInternalUser(): this is keyed on a
+    // contractors row and that is the id in hand. The OakTend team's own test
+    // pros stay reachable, so the request-a-quote flow can be walked end to
+    // end.
+    //
+    // Inside the cache()d loader on purpose, so the metadata pass and the
+    // render get the identical answer from one lookup.
+    //
+    // The isHomeownerPreview() short-circuit is what keeps this free outside
+    // preview: no admin client, no query, no behaviour change at all.
+    if (profile && isHomeownerPreview()) {
+      if (!(await isInternalContractor(profile.id))) {
+        return { profile: null, unavailable: false };
+      }
+    }
+
+    return { profile, unavailable: false };
   }
 );
 

@@ -38,6 +38,7 @@ import {
   isNativeClientRequest,
   NATIVE_STRIPE_BLOCKED_MESSAGE,
 } from "@/lib/nativeClientHeader";
+import { previewBlocksMoney } from "@/lib/previewModeServer";
 
 const siteUrl = () =>
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -95,6 +96,16 @@ async function proIntroCouponId(): Promise<string | null> {
 // Stripe Price if one is configured, otherwise falls back to inline
 // price_data so the flow works before Products/Prices are set up in Stripe.
 export async function startProCheckoutAction(formData: FormData) {
+  // PREVIEW MODE (guardrail A4). Nothing may be paid for while the lawyer
+  // review is open. FIRST statement, before the session read and before any
+  // property on the stripe client is touched - src/lib/stripe.ts throws on
+  // that first touch, and this branch is what turns the throw into a sentence.
+  //
+  // NOT the same gate as assertProSideOpen(): this one blocks an INTERNAL
+  // account too. A4 is about the product charging nobody, and an OakTend card
+  // is still a real charge. The team tests checkout with the flag off.
+  if (await previewBlocksMoney()) redirect("/pro/plus");
+
   // Yearly is the default cadence (see checkoutCadence): it is what the
   // pricing card preselects, so a form arriving without a readable "plan"
   // field lands on the plan the pro was looking at. Every downstream quote
@@ -805,6 +816,9 @@ async function setProRenewal(opts: {
 // Pro perk through the time they already paid for, and it simply doesn't
 // renew. Lead access is unaffected either way.
 export async function cancelProMembershipAction() {
+  // PREVIEW MODE (A4): setProRenewal calls stripe.subscriptions.update.
+  if (await previewBlocksMoney()) redirect("/pro/plus");
+
   await setProRenewal({
     cancelAtPeriodEnd: true,
     missingFlash: "No active membership to cancel.",
@@ -814,6 +828,9 @@ export async function cancelProMembershipAction() {
 
 // Undo a pending cancellation: the membership keeps renewing as before.
 export async function resumeProMembershipAction() {
+  // PREVIEW MODE (A4): resuming makes the membership bill again.
+  if (await previewBlocksMoney()) redirect("/pro/plus");
+
   await setProRenewal({
     cancelAtPeriodEnd: false,
     missingFlash: "No membership to resume.",
@@ -825,6 +842,9 @@ export async function resumeProMembershipAction() {
 // The portal is customer-scoped, so fall back to the homeowner-side row's
 // customer id when no Pro-side row exists yet (same Stripe customer).
 export async function manageProBillingAction() {
+  // PREVIEW MODE (A4): creates a Stripe billing-portal session.
+  if (await previewBlocksMoney()) redirect("/pro/plus");
+
   const sub = (await getProSubscription()) ?? (await getSubscription());
   // Pro-side twin of the same branch in src/app/(app)/plus/actions.ts's
   // manageBillingAction: a membership bought through the App Store / Play

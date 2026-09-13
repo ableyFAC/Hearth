@@ -1,5 +1,9 @@
 import Link from "next/link";
 import { PRO_PLAN } from "@/lib/constants";
+import {
+  isHomeownerPreview,
+  PREVIEW_MEMBERSHIP_COPY,
+} from "@/lib/previewMode";
 
 // One place for every "join OakTend Pro" call to action, so the same promise is
 // made everywhere and no surface can drift out of sync with checkout.
@@ -42,6 +46,18 @@ export default function ProUpgradeCta({
   className?: string;
   sublineClassName?: string;
 }) {
+  // PREVIEW MODE (guardrail B2): hide the upgrade control itself, not just its
+  // label. A button is an invitation to act, and there is nothing to act on -
+  // /pro/plus renders one sentence during the preview. The sentence takes its
+  // place here so a card built around this CTA does not end up empty.
+  //
+  // Only an internal account can see any of this (the pro shell closes the
+  // rest), but an internal pro must not be sold to either: A4 blocks the
+  // checkout behind it for everybody.
+  if (isHomeownerPreview()) {
+    return <p className={sublineClassName}>{PREVIEW_MEMBERSHIP_COPY}</p>;
+  }
+
   return (
     <>
       <Link href="/pro/plus" className={className}>

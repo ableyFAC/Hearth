@@ -88,6 +88,50 @@ before any Products exist in the dashboard.
 4. Verify: run one live-mode Plus checkout with a real card, confirm the webhook shows 200 in
    Stripe's dashboard and the subscription row appears in the DB, then refund yourself.
 
+## 4b. Stripe Connect (payouts)
+
+Separate from section 4 above, and additive to it: section 4 is how homeowners and pros pay
+OakTend for memberships. This is how CONTRACTORS get paid by homeowners, and how OakTend
+takes its 5% of an invoice (the payment model decided 2026-09-12, handoff.md LATEST).
+
+The intended charge model, so the dashboard settings below make sense: **Express** accounts,
+**direct charges** on the contractor's connected account, with an `application_fee` of 5%.
+Stripe then bills the ~2.9% + 30c processing fee to the contractor natively, which is exactly
+what the decision calls for, and OakTend's 5% arrives clean. Step 1 (shipped) only creates
+and verifies the accounts; step 2 (the invoice flow) is what will actually charge.
+
+1. **Paste migration 0164 first.** `supabase/PASTE-ME-0164-stripe-connect-2026-09-12.sql`,
+   whole file, once, in the Supabase SQL editor. Until it is applied NOTHING below is visible
+   in the app: every read degrades to "Payouts aren't switched on yet" by design, and the
+   webhook has nowhere to write. Nothing breaks; it just does not appear.
+2. **Enable Connect** in the Stripe dashboard (Connect -> Get started). Platform profile:
+   United States, "platform or marketplace", Express accounts.
+3. **Set the platform branding** (Connect -> Settings -> Branding): business name **OakTend**,
+   the icon, and the brand color `#8a6a3c` (oak-600, the filled-button color in
+   `tailwind.config.ts`). This is not decoration - Express onboarding is Stripe's screen with
+   OakTend's name on it, and an unbranded one reads to a contractor like a phishing page. The
+   embedded component is passed the same color from
+   `src/app/pro/payouts/PayoutsSetup.tsx` (`BRAND_PRIMARY`), so change both together.
+4. **Create a SECOND webhook endpoint**, this one on the "Listen to events on **Connected
+   accounts**" tab (the endpoint in section 4 listens to OakTend's own account and will never
+   receive these):
+   - URL: `https://<your-domain>/api/stripe/connect-webhook`
+   - Events: `account.updated`, `account.application.deauthorized`
+   - Copy ITS signing secret (a different `whsec_...` from section 4's) into Vercel as
+     `STRIPE_CONNECT_WEBHOOK_SECRET`.
+   The route fails CLOSED without that variable - 500 on every delivery, so Stripe keeps them
+   queued and redelivers once it is set, rather than accepting forged events against an empty
+   secret.
+5. `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (already set for section 4) is what the embedded
+   onboarding component needs in the browser. Without it the page silently falls back to the
+   hosted Stripe link, which still works - so a missing key is a downgrade, not an outage.
+6. Verify, end to end: sign up a test pro, finish the 3-step wizard (an Express account is
+   created silently at that moment - look for it in Connect -> Accounts), open /pro/payouts,
+   complete onboarding with Stripe's test details, and confirm the Connect endpoint shows 200
+   and the contractors row's `stripe_charges_enabled` / `stripe_payouts_enabled` flip to true.
+   The "Refresh status" button on that page is the manual fallback if the webhook is not wired
+   yet.
+
 ## 5. Background checks (Checkr)
 
 1. Set `CHECKR_API_KEY` and `CHECKR_PACKAGE` in Vercel. The Checkr webhook route already
@@ -291,7 +335,101 @@ back 404/410.
 lever exists for the moment a cron is looping, and a looping cron buzzing every phone we have
 is exactly the blast radius it is there to contain.
 
+## 11. RentCast (property records) — see `docs/RENTCAST.md`
+
+`RENTCAST_API_KEY` is the only setting, and the account is on the **free tier: 50
+calls per month**. That ceiling, not latency, is what shapes the whole
+integration — caching, the no-retry policy, and the lookups that are skipped
+entirely are all documented in `docs/RENTCAST.md`.
+
+To see what the month has cost so far (service-role only, Supabase SQL editor):
+
+```sql
+select * from public.rentcast_usage_monthly order by month desc;
+```
+
+Deliberately **not** on `/api/health`: that endpoint is public and rate-limited,
+and business counts do not belong on it.
+
+## 12. Preview mode (homeowner-only launch)
+
+**One environment variable, one redeploy, no code change.**
+
+```
+NEXT_PUBLIC_PREVIEW_MODE=homeowner   # preview ON
+NEXT_PUBLIC_PREVIEW_MODE=            # (or unset, or anything else) normal
+```
+
+`NEXT_PUBLIC_` variables are **inlined at build time**, so changing this in
+Vercel does nothing until you **redeploy**. Redeploying the *same commit* is
+enough — Vercel's "Redeploy" button on the current production deployment picks
+up the new value. There is no code change and no database change on the way in
+or on the way out.
+
+The switch itself is `isHomeownerPreview()` in `src/lib/previewMode.ts` (pure,
+client-safe, reads the variable at call time); the session-aware half is
+`src/lib/previewModeServer.ts`. Everything below is behind that one function, so
+with the flag off the app is byte-identical to a build without any of this.
+
+### What flips ON
+
+| Area | With preview on |
+| --- | --- |
+| Contractor side | `/pros`, `/contractor-signup`, `/pro/onboarding`, the whole `/pro` shell and the pro role choice on `/welcome/role` all render **one** page: `src/components/pro/ProsComingSoon.tsx`, with an email-capture form. Every pro-side server action and `/api/pro-*` route refuses. |
+| Homeowner plan | Everyone has Plus: `hasPlus()`, `ownsPlus()` → true, `getPlusTier()` → `"paid"`, so every gated tool and the 5-home allowance are on. **No subscription rows are written.** |
+| Money | Nothing is chargeable. Every checkout / billing-portal / deposit / payouts action returns a coming-soon flash, the two native IAP screens render copy instead of a purchase button, and `src/lib/stripe.ts` **throws** on any Stripe namespace except `webhooks`. The Stripe webhook verifies the signature and then acknowledges without acting (replay from the Stripe dashboard afterwards if an event mattered). |
+| Pro-facing homeowner surfaces | Browse-pros shows one card instead of a list; `/p/<id>` and the embeddable widget 404 for a non-internal pro; the new-lead email/SMS fan-out (`src/lib/proAlerts.ts`) skips every non-internal recipient. Posting a job still saves the lead unchanged. |
+| Marketing copy | Landing hero line, four FAQ answers, the landing JSON-LD offer block, the root metadata description, and `/pros` + `/pricing` + `/contractor-signup` titles/descriptions swap to the approved framing ("Home maintenance, free during our preview"). |
+| Banner | `src/components/PreviewNotice.tsx` under the homeowner nav, dismissible (localStorage `oaktend_preview_notice_dismissed`). Pro side gets no banner. |
+
+### The paste
+
+`supabase/PASTE-ME-0168-pro-waitlist-2026-09-12.sql` (migration
+`0168_pro_waitlist.sql`). Two parts, both no-ops until the variable is set:
+
+1. `public.pro_waitlist` — the emails the coming-soon page collects. RLS on,
+   **no policies**, `anon`/`authenticated` revoked: service role only, because
+   it is a list of contractors' email addresses.
+2. One clause added to `enforce_properties_home_cap()` (0108): a **service_role**
+   insert returns early instead of being counted. Preview gives homeowners the
+   5-home Plus allowance, but that trigger reads the `subscriptions` table and a
+   preview homeowner has no row there, so it would refuse their second home.
+   `claimPropertyAction` routes its insert through the admin client *only* in
+   preview; the app-side cap check is unchanged and still enforces 5.
+
+Read the waitlist (Supabase SQL editor):
+
+```sql
+select email, trade, city, source, created_at
+  from public.pro_waitlist order by created_at desc;
+```
+
+### The internal-flag dependency
+
+"Internal" means `users.is_internal` — **migration 0165**, read through
+`src/lib/internalAccounts.ts`. Internal accounts are the only ones that can use
+the contractor side while preview is on (they still cannot spend money: the A4
+money gate applies to everybody).
+
+**Until 0165 is pasted, `isInternalUser()` answers `false` for everyone**, which
+means preview locks the OakTend team out of `/pro` along with the public. That
+is deliberate — this gate fails closed, so a database hiccup keeps real pros out
+rather than letting them in — but it means **0165 must be applied before the team
+can test the pro side**. Flag an account internal with the service-role
+one-liner documented in `docs/INTERNAL-ACCOUNTS.md`.
+
+### Turning it off
+
+Clear (or change) the variable in Vercel and redeploy. Nothing else. The
+`pro_waitlist` table and the 0168 trigger clause can stay — neither does
+anything once no caller uses the admin client for the properties insert.
+
 ## Not covered here
 
 Legal blockers (DMCA agent registration, TODO(legal) placeholders) are tracked separately
 and are being handled with a lawyer. They remain launch-blocking.
+
+App-store metadata (the App Store / Play Store listing title, subtitle,
+description and screenshots) lives **outside this repo**, so preview mode cannot
+touch it. If the apps are live while the preview is on, those listings need the
+same copy pass by hand.

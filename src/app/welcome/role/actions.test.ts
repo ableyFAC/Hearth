@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// The action file now imports src/lib/previewModeServer.ts (the homeowner
+// preview's pro-side guard, which refuses a "contractor" choice while the
+// contractor side is closed), and that module carries "server-only" - a
+// package with no Node resolution outside the Next build. Stubbed the same way
+// every other server-module test in this repo does it.
+vi.mock("server-only", () => ({}));
+
 // chooseRoleAction's established-account guard.
 //
 // The guard is a ROW check: an account that owns a contractors row or a home

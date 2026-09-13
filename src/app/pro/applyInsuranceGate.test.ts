@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// The action file now imports src/lib/previewModeServer.ts (the homeowner
+// preview's pro-side guard), which carries "server-only" - a package with no
+// Node resolution outside the Next build. Stubbed the same way every other
+// server-module test in this repo does it.
+vi.mock("server-only", () => ({}));
+
 // Big-job insurance gate (migration 0153), action level: applying to (or
 // unlocking) a major-tier lead without current insurance on file is refused
 // with the specific friendly message BEFORE the charge RPC is ever called,
@@ -102,6 +108,13 @@ vi.mock("@/app/(auth)/recordTermsAcceptance", () => ({
   recordTermsAcceptance: vi.fn(),
 }));
 vi.mock("@/lib/trackServer", () => ({ trackServerEvent: vi.fn() }));
+// Stripe Connect (2026-09-12): actions.ts now reaches the Express-account
+// helper, which imports "server-only". Nothing in this file's flows touches
+// it; mocked for the same reason every other dependency above is.
+vi.mock("@/lib/stripeConnect", () => ({
+  ensureConnectAccount: vi.fn(async () => ({ accountId: "acct_test" })),
+}));
+vi.mock("next/server", () => ({ after: vi.fn() }));
 
 import { applyToJobAction, unlockDirectRequestAction } from "./actions";
 import { setFlash } from "@/lib/flash";

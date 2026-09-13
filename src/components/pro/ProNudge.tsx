@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { proCtaLabel } from "@/components/pro/ProUpgradeCta";
+import { isHomeownerPreview } from "@/lib/previewMode";
 
 // The membership nudge on the pro Home tab. Small, honest, and dismissable.
 //
@@ -68,6 +69,15 @@ export default function ProNudge({
     }
     setShow(!dismissedToday(stored));
   }, [userId]);
+
+  // PREVIEW MODE (guardrail B2): there is no membership to nudge anybody
+  // towards. Null rather than swapped copy - this is an upsell card, and the
+  // honest version of an upsell for something nobody can buy is no card at
+  // all. /pro/plus still explains it for anyone who goes looking.
+  //
+  // After the hooks, not before: an early return above useState/useEffect is a
+  // Rules-of-Hooks violation even when the condition is a build-time constant.
+  if (isHomeownerPreview()) return null;
 
   if (!show) return null;
 

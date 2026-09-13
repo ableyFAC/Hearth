@@ -34,7 +34,19 @@ function readLegalMarkdown(slug: LegalSlug): string {
   return fs.readFileSync(path.join(CONTENT_DIR, `${slug}.md`), "utf8");
 }
 
-export default function LegalDocument({ slug }: { slug: LegalSlug }) {
+export default function LegalDocument({
+  slug,
+  // Optional one-line notice rendered directly under the document title, above
+  // the table of contents and the body. Added for the homeowner preview
+  // (guardrail B3), where /billing has to say "nothing is charged" on the page
+  // itself rather than leave a reader to infer it from a policy that describes
+  // charges. Omitted everywhere else, so every other legal page renders exactly
+  // as before, and the markdown under src/content/legal is untouched.
+  notice,
+}: {
+  slug: LegalSlug;
+  notice?: React.ReactNode;
+}) {
   const filled = fillLegalTokens(readLegalMarkdown(slug));
   const doc = parseLegalDocument(filled);
   const showToc = doc.headings.length > 8;
@@ -58,6 +70,12 @@ export default function LegalDocument({ slug }: { slug: LegalSlug }) {
       {doc.lastUpdated && (
         <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
           Last updated {doc.lastUpdated}.
+        </p>
+      )}
+
+      {notice && (
+        <p className="mt-4 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-700 dark:border-white/10 dark:bg-white/5 dark:text-stone-200">
+          {notice}
         </p>
       )}
 

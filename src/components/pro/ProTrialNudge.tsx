@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useFormStatus } from "react-dom";
 import { X } from "lucide-react";
 import { startProCheckoutAction } from "@/app/pro/plus/actions";
+import { isHomeownerPreview } from "@/lib/previewMode";
 import AutoRenewalTerms from "@/components/AutoRenewalTerms";
 import AutoRenewalConsentCheckbox from "@/components/AutoRenewalConsentCheckbox";
 import BillingLegalLine from "@/components/BillingLegalLine";
@@ -226,6 +227,19 @@ export default function ProTrialNudge({
   // failing toward not tracking rather than tracking a nudge nobody can see.
   useEffect(() => {
     mountedRef.current = true;
+    // PREVIEW MODE (guardrail B2): never arm the takeover. It is a full-screen
+    // pitch for a 3-day free trial that ends in a charge, and during the
+    // preview there is no checkout behind it - A4 refuses
+    // startProCheckoutAction for internal accounts too, and only internal
+    // accounts can reach this shell at all.
+    //
+    // Gated HERE rather than by forcing `eligible` false in
+    // src/app/pro/layout.tsx: two source pins (that file's own test and
+    // (app)/plus/paywallVariantWiring.test.ts) assert the layout's eligibility
+    // line verbatim, because it has to stay the same rule the billing page
+    // used. Inside the effect, so the timer never starts and `open` can never
+    // become true - the render below is gated on `open`.
+    if (isHomeownerPreview()) return;
     if (!eligible || !userId) return;
     if (typeof window === "undefined" || typeof document === "undefined") return;
 

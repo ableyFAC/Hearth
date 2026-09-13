@@ -12,9 +12,13 @@ import {
 } from "@/lib/property";
 import {
   lookupParcel,
+  manualEntryFacts,
+  parcelFactsFromExistingProperty,
   type ParcelFacts,
   type PublicParcelFacts,
 } from "@/lib/parcel";
+import { isInternalUser } from "@/lib/internalAccounts";
+import { isHomeownerPreview } from "@/lib/previewMode";
 import {
   deriveOwnershipStatus,
   shouldRecordOwnershipCheck,
@@ -298,6 +302,32 @@ export async function lookupParcelAction(
     };
   }
 
+  // F3: TWO WAYS TO ANSWER THIS WITHOUT SPENDING A CALL.
+  //
+  // RentCast's free tier is 50 lookups a MONTH, so the cheapest call is the one
+  // that never goes out. Both checks below run after the limiters above (a
+  // flood still gets throttled either way) and before anything outbound.
+  //
+  // 1. SOMEONE ALREADY CLAIMED THIS ADDRESS. The county's answer for it is
+  //    already on a properties row here, so the building facts get copied off
+  //    it instead of re-bought. Only the building's public shape travels -
+  //    never the other household's purchase price, assessment or owner of
+  //    record (see parcelFactsFromExistingProperty in src/lib/parcel.ts). The
+  //    household member who joins an existing home and re-runs onboarding is
+  //    the case this was written for, and it costs nothing.
+  // 2. AN INTERNAL ACCOUNT. Staff, demo and test accounts do not get to spend
+  //    real homeowners' monthly budget. They are NOT refused - they fall
+  //    straight to manual entry with the same "enter the basics" note anyone
+  //    else sees on a miss, so an internal walk-through still exercises the
+  //    whole flow, just without the outbound call.
+  const reusedFacts = await parcelFactsFromExistingProperty(
+    cappedStreet,
+    zip.trim()
+  );
+  // Only asked when there is nothing to reuse: a hit above is already free, so
+  // there is no sense spending a second query to learn who is asking.
+  const internalAccount = reusedFacts ? false : await isInternalUser(user.id);
+
   // Strip the county assessor's owner-of-record before returning to the
   // client. owner_names/owner_type/owner_occupied are the values
   // claimPropertyAction later matches the typed name against to verify
@@ -308,14 +338,23 @@ export async function lookupParcelAction(
   // fireplace flags for the starter-seed expansion, src/lib/starterSystems.ts)
   // joins this strip list for the same reason: claimPropertyAction reads it
   // off its own server-side lookup below, never off this response.
+  const lookedUpFacts =
+    reusedFacts ??
+    (internalAccount
+      ? manualEntryFacts(cappedStreet, zip.trim())
+      : await lookupParcel(
+          cappedStreet,
+          zip.trim(),
+          // Capped here as well as on the claim: a server action takes
+          // whatever it is handed, and this value reaches an outbound
+          // request URL.
+          (unit ?? "").trim().slice(0, MAX_UNIT) || null,
+          // Usage-counter attribution only (F4); it changes nothing about
+          // the lookup itself.
+          user.id
+        ));
   const { owner_names, owner_type, owner_occupied, home_features, ...publicFacts } =
-    await lookupParcel(
-      cappedStreet,
-      zip.trim(),
-      // Capped here as well as on the claim: a server action takes whatever
-      // it is handed, and this value reaches an outbound request URL.
-      (unit ?? "").trim().slice(0, MAX_UNIT) || null
-    );
+    lookedUpFacts;
 
   // IS THIS A REAL ADDRESS?
   //
@@ -345,7 +384,14 @@ export async function lookupParcelAction(
   // a timeout, a non-ok status, or an empty answer, and only "no_match"
   // refuses. Conflating "we couldn't check" with "this does not exist" is the
   // 2026-08-24 outage, and it is not getting repeated with a new vendor.
-  if (publicFacts.source !== "rentcast") {
+  //
+  // NOT RUN FOR AN INTERNAL ACCOUNT (F3). Nothing was looked up for them, so
+  // there is no records silence to second-guess - and the requirement is that
+  // an internal account lands on the manual-entry note, not on a refusal. A
+  // geocoder verdict here could turn a deliberately skipped lookup into
+  // "we couldn't find that address", which is precisely the error it must not
+  // become.
+  if (publicFacts.source !== "rentcast" && !internalAccount) {
     const verdict = await verifyAddressExists(cappedStreet, zip.trim());
     if (verdict === "no_match") {
       return { ok: false, error: ADDRESS_NOT_FOUND_MESSAGE, notFound: true };
@@ -541,7 +587,7 @@ export async function claimPropertyAction(
   let relookupFacts: ParcelFacts | null = null;
   if (addressEdited && !lookupBlocked) {
     try {
-      relookupFacts = await lookupParcel(addressLine1, claimZip);
+      relookupFacts = await lookupParcel(addressLine1, claimZip, null, user.id);
     } catch (lookupError) {
       // Never fatal. The home is still theirs to claim; it just arrives
       // without the county's numbers on it.
@@ -588,7 +634,7 @@ export async function claimPropertyAction(
   let claimFacts: ParcelFacts | null = relookupFacts;
   if (hasRecordsSource() && !addressEdited && !lookupBlocked) {
     try {
-      claimFacts = await lookupParcel(addressLine1, claimZip);
+      claimFacts = await lookupParcel(addressLine1, claimZip, null, user.id);
     } catch (error) {
       console.error("Claim-time address verification lookup failed:", error);
       claimFacts = null;
@@ -1020,7 +1066,39 @@ export async function claimPropertyAction(
   // pattern as saveHomeValueAction (value/actions.ts) and
   // saveTaxAssessmentAction (taxes/actions.ts) for their own not-yet-typed
   // columns, rather than widening the generated types by hand.
-  let { data: created, error } = await (supabase.from("properties") as any)
+  // WHICH CLIENT WRITES THE ROW: the session client, exactly as before -
+  // EXCEPT in homeowner preview mode (src/lib/previewMode.ts), where it is the
+  // admin (service_role) client.
+  //
+  // WHY. Preview gives every homeowner Plus, including the 5-home allowance
+  // (ownsPlus() above returns true), but the DB backstop
+  // enforce_properties_home_cap (migration 0108) derives Plus from the
+  // subscriptions table directly - and a preview homeowner has no row there.
+  // It would refuse their SECOND home with "free accounts can track 1 home",
+  // and no amount of app-side generosity can talk it out of that. Migration
+  // 0168 adds ONE clause to that function: a service_role insert returns early
+  // instead of being counted. This is the other half - the only caller that
+  // ever takes the new path, and only while the flag is on.
+  //
+  // WHY THIS IS NOT A HOLE. The cap is still enforced, by the action rather
+  // than by the trigger: the `ownedHomes.length >= cap` check at the top of
+  // this function is untouched and still refuses a 6th home with the same
+  // message. The row written is the same server-built row, and its user_id
+  // comes from supabase.auth.getUser() - re-verified against Supabase's auth
+  // server, never read off the request body - so service_role cannot be
+  // steered into filing a home under somebody else. What the admin client
+  // skips is RLS ("properties owner insert", which only checks
+  // user_id = auth.uid() and would pass anyway) and the cap trigger. The
+  // ownership-lock trigger (0093) and the global address-unique index (0162)
+  // do not depend on the role and still apply.
+  //
+  // OUTSIDE PREVIEW THIS IS LITERALLY THE OLD CODE: propertyWriter IS
+  // supabase, so the three inserts below are the writes they always were.
+  const propertyWriter: any = isHomeownerPreview()
+    ? createAdminClient()
+    : supabase;
+
+  let { data: created, error } = await (propertyWriter.from("properties") as any)
     .insert({ ...extendedRow, ...unitWrite })
     .select("id")
     .single();
@@ -1042,7 +1120,7 @@ export async function claimPropertyAction(
       "properties insert: `unit` column missing (run migration 0127); retrying without it:",
       error.message
     );
-    ({ data: created, error } = await (supabase.from("properties") as any)
+    ({ data: created, error } = await (propertyWriter.from("properties") as any)
       .insert(extendedRow)
       .select("id")
       .single());
@@ -1063,7 +1141,7 @@ export async function claimPropertyAction(
     // confirmSystemAction (walkthrough/actions.ts). Cast to any for the same
     // reason as the extendedRow insert above: purchase_price/assessed_value/
     // assessed_year (0029/0039) aren't in database.types.ts either.
-    ({ data: created, error } = await (supabase.from("properties") as any)
+    ({ data: created, error } = await (propertyWriter.from("properties") as any)
       .insert(baseRow)
       .select("id")
       .single());

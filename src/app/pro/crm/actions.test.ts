@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// The action file now imports src/lib/previewModeServer.ts (the homeowner
+// preview's pro-side guard), which carries "server-only" - a package with no
+// Node resolution outside the Next build. Stubbed the same way every other
+// server-module test in this repo does it.
+vi.mock("server-only", () => ({}));
+
 // Tester report: "Add a client" showed "Adding..." but the list and the
 // "Your clients (0)" counter never updated until a manual reload. The cause
 // was the same-path App Router footgun already fixed on /pro/profile's save

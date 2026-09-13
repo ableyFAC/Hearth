@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/notify";
 import { getCurrentContractor } from "@/lib/contractor";
 import { dollarsToCents, formatUSDCents } from "@/lib/quotes";
+import { assertProSideOpen } from "@/lib/previewModeServer";
 import type { QuoteLineItem, InvoiceLineItem } from "@/lib/database.types";
 
 const MAX_LINE_ITEMS = 20;
@@ -37,6 +38,12 @@ async function sendBudgetExhausted(contractorId: string): Promise<boolean> {
 // $X total") in the same messages table everything else already reads, so
 // unread badges, notifiers, and the applicant-nudge cron need no changes.
 export async function sendQuoteAction(formData: FormData) {
+  // PREVIEW MODE (guardrail A2): the contractor side is closed, and a "use
+  // server" action is a public POST endpoint that the closed shell does not
+  // cover. Internal accounts pass. Constant `true` outside preview. See
+  // src/lib/previewModeServer.ts.
+  await assertProSideOpen();
+
   const contractor = await getCurrentContractor();
   if (!contractor) return;
 
@@ -165,6 +172,9 @@ export async function sendQuoteAction(formData: FormData) {
 // and the sent -> withdrawn only transition; the .eq() chain here is a
 // friendly no-op guard, not the only line of defense.
 export async function withdrawQuoteAction(formData: FormData) {
+  // PREVIEW MODE (A2). See sendQuoteAction.
+  await assertProSideOpen();
+
   const contractor = await getCurrentContractor();
   if (!contractor) return;
 
@@ -190,6 +200,9 @@ export async function withdrawQuoteAction(formData: FormData) {
 // reached. Same shape as sendQuoteAction: inserts the invoices row plus a
 // plain companion message, so unread badges/notifiers need no changes.
 export async function createInvoiceAction(formData: FormData) {
+  // PREVIEW MODE (A2). See sendQuoteAction.
+  await assertProSideOpen();
+
   const contractor = await getCurrentContractor();
   if (!contractor) return;
 
@@ -307,6 +320,9 @@ export async function createInvoiceAction(formData: FormData) {
 // ownership and the sent -> void only transition; the .eq() chain here is a
 // friendly no-op guard, not the only line of defense.
 export async function voidInvoiceAction(formData: FormData) {
+  // PREVIEW MODE (A2). See sendQuoteAction.
+  await assertProSideOpen();
+
   const contractor = await getCurrentContractor();
   if (!contractor) return;
 

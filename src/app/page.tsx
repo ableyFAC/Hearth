@@ -7,6 +7,7 @@ import { getSides, landingFor } from "@/lib/contractor";
 import { FOUNDER, PLUS_PLAN } from "@/lib/constants";
 import { LAUNCH_AREA_LABEL } from "@/lib/serviceArea";
 import { LEGAL_LINKS } from "@/lib/legal";
+import { isHomeownerPreview } from "@/lib/previewMode";
 import Link from "next/link";
 import Image from "next/image";
 import Logo from "@/components/Logo";
@@ -45,20 +46,34 @@ const landingJsonLd = [
     applicationCategory: "LifestyleApplication",
     operatingSystem: "iOS, Android, Web",
     publisher: { "@id": `${SITE_URL}#organization` },
-    offers: [
-      {
-        "@type": "Offer",
-        name: "OakTend (first home)",
-        price: "0",
-        priceCurrency: "USD",
-      },
-      {
-        "@type": "Offer",
-        name: "OakTend Plus (yearly)",
-        price: String(PLUS_PLAN.yearly),
-        priceCurrency: "USD",
-      },
-    ],
+    // PREVIEW MODE (addendum 4 H): the paid offer is dropped. This block is
+    // what a search engine reads as "here is the price of this product", and
+    // publishing a price for a subscription nobody can start would be a claim
+    // sitting in the one place a person never sees to correct it. The free
+    // offer stays, because during the preview it is the only true one.
+    offers: isHomeownerPreview()
+      ? [
+          {
+            "@type": "Offer",
+            name: "OakTend (preview)",
+            price: "0",
+            priceCurrency: "USD",
+          },
+        ]
+      : [
+          {
+            "@type": "Offer",
+            name: "OakTend (first home)",
+            price: "0",
+            priceCurrency: "USD",
+          },
+          {
+            "@type": "Offer",
+            name: "OakTend Plus (yearly)",
+            price: String(PLUS_PLAN.yearly),
+            priceCurrency: "USD",
+          },
+        ],
   },
 ];
 
@@ -180,9 +195,18 @@ export default async function Home(props: {
   // present, is the richer JSX version rendered on the page (for the one
   // answer that links out to the privacy policy).
   const FAQ_ITEMS: { q: string; a: string; node?: React.ReactNode }[] = [
+    // PREVIEW MODE (addendum 4 H). Four of these answers make claims the
+    // preview has suspended - how OakTend makes money, what a pro is verified
+    // for, what Plus costs, and what canceling Plus does - so each carries a
+    // preview version. Everything else in this list (data, contact privacy,
+    // service area, county records) is true either way and is byte-identical.
+    // FAQ_ITEMS also backs the FAQPage JSON-LD below, so a swapped answer is
+    // swapped in the structured data too, by construction.
     {
       q: "Is it really free?",
-      a: "Yes. Your first home is free, no card needed. OakTend makes money two ways: an optional Plus plan, and a fee pros pay when they apply to a job.",
+      a: isHomeownerPreview()
+        ? "Yes. Home maintenance, free during our preview. Nothing in the app can be paid for right now, and no card is needed. We'll publish pricing before anything is ever charged."
+        : "Yes. Your first home is free, no card needed. OakTend makes money two ways: an optional Plus plan, and a fee pros pay when they apply to a job.",
     },
     {
       q: "What do you do with my data?",
@@ -206,7 +230,9 @@ export default async function Home(props: {
     },
     {
       q: "Who are the pros?",
-      a: "Local pros who set up their own OakTend profiles. If a pro has a California license number, we check it live with the state's contractor license board (the CSLB) and show the result. Some trades, like handyman work or cleaning, don't require a license, so not every pro will have that badge. Pros can also complete an optional background check, which shows on their profile if they do. You always see exactly what's been verified and what hasn't.",
+      a: isHomeownerPreview()
+        ? "Our pro network isn't open yet. During the preview you can post a job and keep it in your home's records, and we'll match you when the pro side launches."
+        : "Local pros who set up their own OakTend profiles. If a pro has a California license number, we check it live with the state's contractor license board (the CSLB) and show the result. Some trades, like handyman work or cleaning, don't require a license, so not every pro will have that badge. Pros can also complete an optional background check, which shows on their profile if they do. You always see exactly what's been verified and what hasn't.",
     },
     {
       q: "Will I get flooded with calls once I post a job?",
@@ -222,8 +248,13 @@ export default async function Home(props: {
       // loud. They come with every cadence now (trialApplies in
       // src/lib/billingTerms.ts), so the answer states the one rule instead of
       // three exceptions.
-      a: "OakTend itself stays free for your first home. OakTend Plus is optional: $1.99/wk, $4.99/mo, or $39.99/yr (about $3.33/mo), whichever you pick. Your first 3 days are free on any of them, once per account. After the free days we charge your card automatically at the price of the plan you picked unless you cancel, and you can cancel anytime.",
-      node: (
+      a: isHomeownerPreview()
+        ? "Nothing, for now. Memberships are coming soon and everything is free during our preview, so there is no plan to buy and no card to add. We'll publish pricing before anything is ever charged."
+        : "OakTend itself stays free for your first home. OakTend Plus is optional: $1.99/wk, $4.99/mo, or $39.99/yr (about $3.33/mo), whichever you pick. Your first 3 days are free on any of them, once per account. After the free days we charge your card automatically at the price of the plan you picked unless you cancel, and you can cancel anytime.",
+      // The rich version links to /pricing and quotes the three cadences, so
+      // in preview it is dropped entirely and the plain `a` above renders
+      // instead - /pricing itself says the same thing during the preview.
+      node: isHomeownerPreview() ? undefined : (
         <>
           OakTend itself stays free for your first home. OakTend Plus is
           optional: $1.99/wk, $4.99/mo, or $39.99/yr (about $3.33/mo),
@@ -247,7 +278,9 @@ export default async function Home(props: {
     },
     {
       q: "What happens if I cancel or delete my account?",
-      a: "Canceling OakTend Plus just stops the subscription: you keep your account and home data, and lose the Plus tools. Deleting your account is separate and permanent: it removes your data from OakTend. One thing to know: if you already shared details with a pro through a job or message, they may keep their own copy in their own business records.",
+      a: isHomeownerPreview()
+        ? "There's no subscription to cancel during the preview. Deleting your account is permanent: it removes your data from OakTend. One thing to know: if you already shared details with a pro through a job or message, they may keep their own copy in their own business records."
+        : "Canceling OakTend Plus just stops the subscription: you keep your account and home data, and lose the Plus tools. Deleting your account is separate and permanent: it removes your data from OakTend. One thing to know: if you already shared details with a pro through a job or message, they may keep their own copy in their own business records.",
     },
   ];
 
@@ -421,9 +454,25 @@ export default async function Home(props: {
                 Know what your home needs before it costs you
               </h1>
               <p className="mt-5 max-w-xl text-lg leading-relaxed text-stone-600 dark:text-stone-400">
-                OakTend checks on your home for you and warns you before things
-                break. When you need a pro, post the job once and the quotes
-                come to you.
+                {/* PREVIEW MODE (addendum 4 H). The first sentence is true
+                    either way and is unchanged. The second one promises pro
+                    matching - "post the job once and the quotes come to you" -
+                    and during the preview there is no pro network to match
+                    against, so it is replaced by the approved framing rather
+                    than left to be read as a live promise. The headline above
+                    makes no pro claim and is untouched. */}
+                {isHomeownerPreview() ? (
+                  <>
+                    OakTend checks on your home for you and warns you before
+                    things break. Home maintenance, free during our preview.
+                  </>
+                ) : (
+                  <>
+                    OakTend checks on your home for you and warns you before
+                    things break. When you need a pro, post the job once and the
+                    quotes come to you.
+                  </>
+                )}
               </p>
               {/* Straight to homeowner signup: this page is homeowner-targeted
                   and pros have two dedicated doors (header link + pro band), so

@@ -11,6 +11,8 @@ import {
   type FeedbackOutcome,
 } from "@/lib/proFeedback";
 import { insertProFeedback, proFeedbackRateLimitOk } from "@/lib/proFeedbackServer";
+import { isProSideOpenForViewer } from "@/lib/previewModeServer";
+import { PREVIEW_PROS_COPY } from "@/lib/previewMode";
 
 // "Report a bug", the pro side only.
 //
@@ -34,6 +36,13 @@ export async function submitProFeedbackAction(input: {
   message: string;
   contactOk: boolean;
 }): Promise<ActionResult<{ outcome: FeedbackOutcome }>> {
+  // PREVIEW MODE (guardrail A2): pro-side write, reachable as a public POST
+  // even though the shell that renders the form is closed. The boolean form of
+  // the guard rather than assertProSideOpen(), because this action returns an
+  // ActionResult to a client component and a redirect() thrown out of it would
+  // reach the form as an unexplained error.
+  if (!(await isProSideOpenForViewer())) return err(PREVIEW_PROS_COPY);
+
   const contractor = await getCurrentContractor();
   // Pro side only, and a company row is what makes someone a pro.
   if (!contractor) return err("Only a business account can send this.");

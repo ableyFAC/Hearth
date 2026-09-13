@@ -2,6 +2,10 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import BillingLegalLine from "@/components/BillingLegalLine";
 import {
+  isHomeownerPreview,
+  PREVIEW_MEMBERSHIP_COPY,
+} from "@/lib/previewMode";
+import {
   PLUS_PLAN,
   COLD_START_FREE_POSTING,
   FREE_ASK_PER_DAY,
@@ -39,9 +43,15 @@ export const revalidate = 3600;
 // Title/description held once so metadata.title, openGraph, and twitter
 // can't drift from each other; the OG image at ./opengraph-image.tsx keeps
 // its own literal copy of the title (see that file's comment for why).
-const TITLE = "Pricing";
-const DESCRIPTION =
-  "OakTend pricing, in plain terms. Your first home is free with no card. OakTend Plus is optional, with an honest auto-renewing subscription you can cancel anytime.";
+//
+// PREVIEW MODE swaps both, for the same reason /pros does: this description is
+// what a search result and a link preview show, and during the preview there
+// is no subscription to describe. The non-preview pair is byte-identical to
+// what it always was.
+const TITLE = isHomeownerPreview() ? "Pricing: free during our preview" : "Pricing";
+const DESCRIPTION = isHomeownerPreview()
+  ? "Everything in OakTend is free during our homeowner preview. Memberships are coming soon."
+  : "OakTend pricing, in plain terms. Your first home is free with no card. OakTend Plus is optional, with an honest auto-renewing subscription you can cancel anytime.";
 const CANONICAL = `${SITE_URL}/pricing`;
 
 export const metadata: Metadata = {
@@ -115,6 +125,43 @@ const PLUS_FEATURES = [
 ];
 
 export default function PricingPage() {
+  // PREVIEW MODE (guardrail B2). Every number below comes from PLUS_PLAN and
+  // describes a subscription nobody can start right now, so quoting any of it
+  // during the preview would be a price list for a product that is not on
+  // sale. One honest page instead: the shell, the heading, and the same
+  // sentence every other membership surface shows.
+  //
+  // BillingLegalLine is deliberately NOT rendered here: it is the auto-renewal
+  // disclosure (Cal. Bus. & Prof. Code 17602), and there is no renewal and no
+  // charge to disclose. The legal PAGES are untouched - this is the one place
+  // that would have been describing terms nobody is agreeing to.
+  if (isHomeownerPreview()) {
+    return (
+      <main className="mx-auto max-w-3xl px-6 pb-16 pt-10">
+        <p className="text-base">
+          <Link
+            href="/"
+            className="text-stone-500 hover:text-bark-700 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-base dark:text-stone-400 dark:hover:text-stone-300"
+          >
+            ← OakTend
+          </Link>
+        </p>
+
+        <h1 className="mt-4 text-3xl font-semibold text-stone-900 sm:text-4xl dark:text-stone-100">
+          Free during our preview
+        </h1>
+        <p className="mt-3 text-base leading-relaxed text-stone-600 dark:text-stone-300">
+          {PREVIEW_MEMBERSHIP_COPY}
+        </p>
+        <p className="mt-3 text-base leading-relaxed text-stone-600 dark:text-stone-300">
+          Track your home, plan your maintenance, and use every tool in the app
+          at no cost. We&rsquo;ll publish pricing before anything is ever
+          charged.
+        </p>
+      </main>
+    );
+  }
+
   return (
     // Wider than the other public prose pages: the plan block below is three
     // real columns, and max-w-3xl squeezes them to the point of wrapping every

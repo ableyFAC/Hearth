@@ -11,6 +11,8 @@ import {
 import { readBodyBounded } from "@/lib/boundedBody";
 import { checkUpload, extensionFor } from "@/lib/uploadGuard";
 import { generateJson, hasClaudeKey } from "@/lib/claude";
+import { isProSideOpenForViewer } from "@/lib/previewModeServer";
+import { PREVIEW_PROS_COPY } from "@/lib/previewMode";
 
 export const runtime = "nodejs";
 
@@ -191,6 +193,15 @@ export async function POST(req: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // PREVIEW MODE (guardrail A2): the contractor side is closed, and an API
+  // route is reachable with a plain fetch even though the page that calls it
+  // is not. After the 401 so a signed-out request still reads as
+  // unauthenticated, and before the model is touched (this route spends real
+  // Anthropic money). Internal accounts pass; constant `true` outside preview.
+  if (!(await isProSideOpenForViewer())) {
+    return NextResponse.json({ error: PREVIEW_PROS_COPY }, { status: 403 });
   }
 
   const contractor = await getCurrentContractor();
