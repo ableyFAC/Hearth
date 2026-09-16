@@ -5,7 +5,31 @@
 
 ---
 
-## LATEST (2026-09-12): payment model decision + Credentials tab
+## LATEST (2026-09-15): quality-of-life wave from Landen's 2026-09-10 doc
+
+Landen appended six bullets to the bottom of the Google Doc
+`2026-09-10_Requests` on 2026-09-15. No migration in this wave; nothing to
+paste. Gate on the combined tree: tsc 0, vitest at the CRLF baseline (11 files
+/ 19 tests; two extra timing flakes under full-suite load pass in isolation),
+isolated prod build 0. Uncommitted at time of writing.
+
+| # | Landen's bullet | Outcome |
+|---|-----------------|---------|
+| 1 | Apple devices pay through the App Store, not Stripe | ALREADY BUILT (NativePlusCheckout / NativeProCheckout via RevenueCat; Stripe actions refuse native). Landen's RevenueCat setup is the remaining step (APP-STORE-SUBMISSION.md). |
+| 2 | "Add for users to allow cookies" | `src/components/CookieNotice.tsx`, mounted once in the root layout. INFORMATIONAL and dismissible (localStorage), not a consent gate: cookies.md / privacy.md say no banner is legally required. cookies.md summary gained one sentence. |
+| 3 | Track button clicks and page time | `page_view` / `page_time` / `ui_click` into the existing `app_events` pipeline: `src/lib/usageTracking.ts` (route pattern + side + explicit `data-track` ids only), `src/components/UsageTracker.tsx` (root layout). `/api/track` throttle raised 60 -> 240 per 5 min per IP. Queries + a 180-day prune one-liner in docs/ANALYTICS.md; privacy.md example parenthetical widened. |
+| 4 | Contractors send an invoice through chat | ALREADY EXISTS (`createInvoiceAction` + `InvoiceCard` in LeadChat, in-app / in-person signing). "Pay in app" is the Stripe Connect invoice flow, still behind Landen's hold. |
+| 5 | Landing page: "you don't pay until you get hired" | PREVIEW-ONLY on the desktop pro band (`src/app/page.tsx`) and the phone landing's contractor door caption. Non-preview text kept verbatim because /pros still advertises pay-per-apply; make it unconditional at the credit teardown. NOT added to ProsComingSoon (its "no pitch, no prices, this is what a lawyer reads" rule). |
+| 6 | Search bar pushing tool items so they overlap | NOT DONE. An overlay version (fixed w-9 slot, absolute input floating over the pills) was built, tested by William, and rejected as sloppy; reverted. Root cause stands: the header's right group is shrink-0 and the left half is already at its truncation floor at 1024-1280px, so the 190px expansion has nowhere to go. Next candidates: a command-palette modal (header never changes width) or a "search mode" that swaps the pill strip for the input in place. |
+
+Two route normalizers now exist (`webVitals.ts` collapses any segment with a
+digit; `usageTracking.ts` keys on uuid / numeric / >24 chars). Deliberate, so
+`/guides/roof-repair-2026` stays readable in usage data; unifying them would
+change `web_vitals`' historical `path` grouping.
+
+---
+
+## 2026-09-12: payment model decision + Credentials tab
 
 ### WAVE SUMMARY (2026-09-12 evening, William + Fable): five builds, one paste
 
