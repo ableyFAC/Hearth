@@ -91,3 +91,79 @@ describe("GlobalSearch suggestions", () => {
     );
   });
 });
+
+// The controlled mode both headers use: HeaderSearchRow owns `open` (it has to
+// hide the rest of the toolbar in the same beat) and this box only reports.
+describe("GlobalSearch takeover mode", () => {
+  it("is a single icon button until the row opens it", () => {
+    const onOpenChange = vi.fn();
+    render(<GlobalSearch mode="takeover" open={false} onOpenChange={onOpenChange} />);
+
+    expect(screen.queryByRole("searchbox")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    expect(onOpenChange).toHaveBeenCalledWith(true);
+  });
+
+  it("opens to a full-width input with a full-width panel under it", async () => {
+    const { container } = render(
+      <GlobalSearch mode="takeover" open onOpenChange={vi.fn()} />
+    );
+
+    const input = screen.getByRole("searchbox", { name: "Search" });
+    // w-full, not the inline pill's w-24/focus:w-48: the row is its to fill.
+    expect(input.className).toContain("w-full");
+    expect(input.className).not.toContain("w-24");
+
+    fireEvent.change(input, { target: { value: "post a job" } });
+    await screen.findByText("Post a job");
+    const panel = container.querySelector("div.rounded-xl");
+    expect(panel).not.toBeNull();
+    // Hangs off the bottom of the input at the full width of the taken-over
+    // row, instead of the inline mode's w-72 pinned to a narrow pill's right.
+    expect(panel!.className).toContain("left-0");
+    expect(panel!.className).toContain("right-0");
+    expect(panel!.className).toContain("top-full");
+    expect(panel!.className).not.toContain("w-72");
+  });
+
+  it("holds the suggestions back until the box has finished expanding", async () => {
+    const { rerender } = render(
+      <GlobalSearch
+        mode="takeover"
+        open
+        suggestionsReady={false}
+        onOpenChange={vi.fn()}
+      />
+    );
+    // Focused and typable while the box slides - just no panel yet.
+    fireEvent.focus(screen.getByRole("searchbox", { name: "Search" }));
+    expect(screen.queryByText("Try searching")).toBeNull();
+
+    rerender(
+      <GlobalSearch mode="takeover" open suggestionsReady onOpenChange={vi.fn()} />
+    );
+    expect(await screen.findByText("Try searching")).toBeInTheDocument();
+  });
+
+  it("reports a close on escape", async () => {
+    const onOpenChange = vi.fn();
+    render(<GlobalSearch mode="takeover" open onOpenChange={onOpenChange} />);
+    const input = screen.getByRole("searchbox", { name: "Search" });
+
+    fireEvent.change(input, { target: { value: "post a job" } });
+    await screen.findByText("Post a job");
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("reports a close when a destination is picked", async () => {
+    const onOpenChange = vi.fn();
+    render(<GlobalSearch mode="takeover" open onOpenChange={onOpenChange} />);
+    const input = screen.getByRole("searchbox", { name: "Search" });
+
+    fireEvent.change(input, { target: { value: "post a job" } });
+    fireEvent.click(await screen.findByText("Post a job"));
+    expect(push).toHaveBeenCalledWith("/contractors");
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});

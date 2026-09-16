@@ -6,7 +6,7 @@ import ProfileMenu from "@/components/ProfileMenu";
 import SidePill from "@/components/SidePill";
 import ToolsMenu from "@/components/ToolsMenu";
 import AddToHomeScreenNudge from "@/components/AddToHomeScreenNudge";
-import GlobalSearch from "@/components/GlobalSearch";
+import HeaderSearchRow from "@/components/HeaderSearchRow";
 import TourButton from "@/components/TourButton";
 import NotificationBell from "@/components/NotificationBell";
 import UnreadProvider from "@/components/UnreadProvider";
@@ -95,8 +95,18 @@ export default function Nav({
           phone read as a second toolbar. Now the brand + home switcher sit on
           the left and shrink (min-w-0 + truncation) while search, the bell,
           and the profile menu stay pinned top-right like a native app. */}
-      <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6 sm:py-3">
-        <div className="flex min-w-0 items-center gap-2">
+      {/* The row itself is a client component ONLY because of the search
+          takeover: opening the box hides the controls it expands over, so one
+          owner has to sit above both. Nav stays a server component (it hands
+          setPreferredSideAction to ProfileMenu); every control below is still
+          rendered here and passed down as a slot. `leading` is the segment the
+          open box takes over (nav pills + tools); `brand` and `trailing` are
+          never touched. The row's own classes - including why the right group
+          is shrink-0 while the left truncates - live in HeaderSearchRow.tsx. */}
+      <HeaderSearchRow
+        side="homeowner"
+        brand={
+          <>
           <Link
             href="/dashboard"
             className="-m-2 flex shrink-0 items-center gap-2 p-2 text-lg font-semibold text-stone-900 sm:m-0 sm:p-0 dark:text-stone-100"
@@ -135,102 +145,99 @@ export default function Nav({
             }))}
             activeId={activeId}
           />
-        </div>
-        {/* shrink-0 is safe ONLY because the left group above can actually
-            shrink (HomeSwitcher is min-w-0 + truncate at every width now). It
-            was not: with the switcher pinned to min-width:auto from sm up,
-            the left group held its full content width, this group refused to
-            give any back, and between roughly 1024 and 1680px the address ran
-            underneath the nav pills - "OakTend · 3831 [Home]ve[Browse Pros]".
-            If either half is ever made unshrinkable again, that returns. */}
-        <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
-          {/* Primary destinations. Desktop (lg and up) keeps this exact top
-              strip, unchanged. Below lg it is hidden and the same links render
-              as the fixed bottom tab bar further down. It was `sm:block`: at
-              640-1023px the strip and the brand/address block both wanted the
-              full row and the pills ended up drawn on top of the wordmark. */}
-          <div className="relative hidden min-w-0 lg:block">
-            <nav className="-mx-1 flex items-center gap-1 overflow-x-auto px-1">
-              <NavLinks links={LINKS} />
-            </nav>
-          </div>
-          {/* Home-page destinations + Plus tools. Lives outside the
-              overflow-x-auto nav strip so its dropdown isn't clipped. */}
-          <ToolsMenu hasPlus={hasPlus} />
-          <div className="hidden sm:block">
-            <GlobalSearch expandable />
-          </div>
-          {/* Mobile-only entry to /search; the inline GlobalSearch box is
-              hidden below sm and the page had no other way in. */}
-          <Link
-            href="/search"
-            aria-label="Search"
-            className="flex h-11 w-11 items-center justify-center rounded-full text-stone-500 hover:bg-bark-50 hover:text-bark-700 sm:hidden dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+          </>
+        }
+        leading={
+          <>
+            {/* Primary destinations. Desktop (lg and up) keeps this exact top
+                strip, unchanged. Below lg it is hidden and the same links render
+                as the fixed bottom tab bar further down. It was `sm:block`: at
+                640-1023px the strip and the brand/address block both wanted the
+                full row and the pills ended up drawn on top of the wordmark. */}
+            <div className="relative hidden min-w-0 lg:block">
+              <nav className="-mx-1 flex items-center gap-1 overflow-x-auto px-1">
+                <NavLinks links={LINKS} />
+              </nav>
+            </div>
+            {/* Home-page destinations + Plus tools. Lives outside the
+                overflow-x-auto nav strip so its dropdown isn't clipped. */}
+            <ToolsMenu hasPlus={hasPlus} />
+          </>
+        }
+        trailing={
+          <>
+            {/* Mobile-only entry to /search; the inline GlobalSearch box is
+                hidden below sm and the page had no other way in. */}
+            <Link
+              href="/search"
+              aria-label="Search"
+              className="flex h-11 w-11 items-center justify-center rounded-full text-stone-500 hover:bg-bark-50 hover:text-bark-700 sm:hidden dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300"
             >
-              <circle cx="11" cy="11" r="7" />
-              <path d="M21 21l-4.3-4.3" />
-            </svg>
-          </Link>
-          {/* Replays the first-run spotlight tour on demand; it otherwise only
-              auto-opens once per account. See TourButton.tsx. */}
-          <TourButton side="homeowner" />
-          <NotificationBell />
-          {/* Account-only menu (profile, household, notifications, help, log
-              out; account security is reached via Edit profile's tabs).
-              Navigation destinations live in ToolsMenu - including Emergency,
-              which used to be duplicated here too. */}
-          <ProfileMenu
-            name={name}
-            avatarUrl={avatarUrl}
-            upgrade={{
-              href: "/plus",
-              active: hasPlus,
-              tierName: "OakTend Plus",
-              accent: "bark",
-            }}
-            themeToggle
-            // 7rem, not the shared 12rem default: this header row is capped at
-            // max-w-5xl, so it has the same 976px to spend at 1024px wide and
-            // at 1920px wide. A long name at 12rem took 80 of those pixels off
-            // the home address on the left, which had already truncated away
-            // to its bare caret. ProNav has fewer controls in the same row and
-            // keeps the wider default.
-            nameMaxWidthClass="max-w-[7rem]"
-            links={[
-              { href: "/account", label: "Edit profile" },
-              { href: "/issues", label: "Report a problem" },
-              { href: "/account/household", label: "Household" },
-              { href: "/account/notifications", label: "Notifications" },
-              { href: "/account/privacy", label: "Your privacy rights" },
-              { href: "/account/help", label: "Help" },
-              // The other side of the account. Switching goes through the
-              // action so it also records where they land next time; setting
-              // one up is a plain link, since there is nothing to record yet.
-              hasPro
-                ? {
-                    href: "/pro",
-                    label: "Switch to your business",
-                    action: setPreferredSideAction,
-                    side: "contractor" as const,
-                  }
-                : {
-                    href: "/pro/onboarding",
-                    label: "Set up your business",
-                  },
-            ]}
-          />
-        </div>
-      </div>
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="M21 21l-4.3-4.3" />
+              </svg>
+            </Link>
+            {/* Replays the first-run spotlight tour on demand; it otherwise only
+                auto-opens once per account. See TourButton.tsx. */}
+            <TourButton side="homeowner" />
+            <NotificationBell />
+            {/* Account-only menu (profile, household, notifications, help, log
+                out; account security is reached via Edit profile's tabs).
+                Navigation destinations live in ToolsMenu - including Emergency,
+                which used to be duplicated here too. */}
+            <ProfileMenu
+              name={name}
+              avatarUrl={avatarUrl}
+              upgrade={{
+                href: "/plus",
+                active: hasPlus,
+                tierName: "OakTend Plus",
+                accent: "bark",
+              }}
+              themeToggle
+              // 7rem, not the shared 12rem default: this header row is capped at
+              // max-w-5xl, so it has the same 976px to spend at 1024px wide and
+              // at 1920px wide. A long name at 12rem took 80 of those pixels off
+              // the home address on the left, which had already truncated away
+              // to its bare caret. ProNav has fewer controls in the same row and
+              // keeps the wider default.
+              nameMaxWidthClass="max-w-[7rem]"
+              links={[
+                { href: "/account", label: "Edit profile" },
+                { href: "/issues", label: "Report a problem" },
+                { href: "/account/household", label: "Household" },
+                { href: "/account/notifications", label: "Notifications" },
+                { href: "/account/privacy", label: "Your privacy rights" },
+                { href: "/account/help", label: "Help" },
+                // The other side of the account. Switching goes through the
+                // action so it also records where they land next time; setting
+                // one up is a plain link, since there is nothing to record yet.
+                hasPro
+                  ? {
+                      href: "/pro",
+                      label: "Switch to your business",
+                      action: setPreferredSideAction,
+                      side: "contractor" as const,
+                    }
+                  : {
+                      href: "/pro/onboarding",
+                      label: "Set up your business",
+                    },
+              ]}
+            />
+          </>
+        }
+      />
       {/* Phone twin of the desktop SidePill above. Its own quiet line under the
           wordmark rather than risking a wrap on the tight phone header. Matches
           the pro header's mobile pill positioning exactly: pl-12 starts it under

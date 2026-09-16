@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Logo from "@/components/Logo";
-import GlobalSearch from "@/components/GlobalSearch";
+import HeaderSearchRow from "@/components/HeaderSearchRow";
 import TourButton from "@/components/TourButton";
 import NavLinks from "@/components/NavLinks";
 import ProfileMenu from "@/components/ProfileMenu";
@@ -109,8 +109,18 @@ export default function ProNav({
     <header className="sticky top-0 z-30 border-b border-stone-200 bg-oaktend-50 dark:border-white/10 dark:bg-stone-900">
       {/* One row at every width, mirroring the homeowner Nav: brand left,
           bell + profile pinned top-right, nothing stacks on a phone. */}
-      <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6 sm:py-3">
-        <div className="flex min-w-0 items-center gap-2">
+      {/* The row itself is a client component ONLY because of the search
+          takeover: opening the box hides the controls it expands over, so one
+          owner has to sit above both. ProNav stays a server component (it hands
+          setPreferredSideAction to ProfileMenu); every control below is still
+          rendered here and passed down as a slot. `leading` is the segment the
+          open box takes over (the nav pills); `brand` and `trailing` are never
+          touched. See HeaderSearchRow.tsx for the row's own classes.
+          side="pro" gives the box the same smart search as the homeowner
+          header, switched to the pro registry and FAQ half. */}
+      <HeaderSearchRow
+        side="pro"
+        brand={
           <Link
             href="/pro"
             className="flex shrink-0 items-center gap-2 whitespace-nowrap text-lg font-semibold text-stone-900 dark:text-stone-100"
@@ -149,99 +159,100 @@ export default function ProNav({
               )}
             </span>
           </Link>
-        </div>
-        <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
-          {/* Primary destinations. Desktop (lg and up) keeps this exact top
-              strip, unchanged. Below lg it is hidden and the same links render
-              as the fixed bottom tab bar further down. It was `sm:flex`: at
-              640-1023px five pills plus the wordmark did not fit one row and
-              the strip was painted over the brand. */}
-          <nav className="-mx-1 hidden items-center gap-1 overflow-x-auto px-1 lg:flex">
-            <NavLinks links={LINKS} accent="oaktend" />
-          </nav>
-          {/* Back office is NOT a header button anymore: it duplicated the
-              "Back office" entry already in the profile menu below, and its
-              label + icon were crowding the row (the nav pills were overlapping
-              at desktop widths). The menu entry now carries the same gated
-              backOfficeHref so the member/non-member routing is preserved. */}
-          {/* Same smart search as the homeowner header, switched to the pro
-              registry and FAQ half. Inline box from sm up, mirroring Nav.tsx. */}
-          <div className="hidden sm:block">
-            <GlobalSearch side="pro" expandable />
-          </div>
-          {/* Phone-only entry to /pro/search; the inline box above is hidden
-              below sm and the page would have no other way in. Mirrors the
-              homeowner Nav's phone search icon, with this shell's accent. */}
-          <Link
-            href="/pro/search"
-            aria-label="Search"
-            className="flex h-11 w-11 items-center justify-center rounded-full text-stone-500 hover:bg-oaktend-50 hover:text-oaktend-700 sm:hidden dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+        }
+        leading={
+          <>
+            {/* Primary destinations. Desktop (lg and up) keeps this exact top
+                strip, unchanged. Below lg it is hidden and the same links render
+                as the fixed bottom tab bar further down. It was `sm:flex`: at
+                640-1023px five pills plus the wordmark did not fit one row and
+                the strip was painted over the brand. */}
+            <nav className="-mx-1 hidden items-center gap-1 overflow-x-auto px-1 lg:flex">
+              <NavLinks links={LINKS} accent="oaktend" />
+            </nav>
+            {/* Back office is NOT a header button anymore: it duplicated the
+                "Back office" entry already in the profile menu below, and its
+                label + icon were crowding the row (the nav pills were overlapping
+                at desktop widths). The menu entry now carries the same gated
+                backOfficeHref so the member/non-member routing is preserved. */}
+          </>
+        }
+        trailing={
+          <>
+            {/* Phone-only entry to /pro/search; the inline box is hidden below
+                sm and the page would have no other way in. Mirrors the
+                homeowner Nav's phone search icon, with this shell's accent. */}
+            <Link
+              href="/pro/search"
+              aria-label="Search"
+              className="flex h-11 w-11 items-center justify-center rounded-full text-stone-500 hover:bg-oaktend-50 hover:text-oaktend-700 sm:hidden dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300"
             >
-              <circle cx="11" cy="11" r="7" />
-              <path d="M21 21l-4.3-4.3" />
-            </svg>
-          </Link>
-          {/* Replays the first-run spotlight tour on demand; it otherwise only
-              auto-opens once per account. See TourButton.tsx. */}
-          <TourButton side="pro" />
-          <NotificationBell />
-          <ProfileMenu
-            name={company}
-            avatarUrl={avatarUrl}
-            upgrade={{
-              href: "/pro/plus",
-              active: isMember,
-              tierName: "OakTend Pro",
-              accent: "oaktend",
-            }}
-            themeToggle
-            links={[
-              // No "Ask OakTend" entry here on purpose: the copilot lives in
-              // one place, the pinned row at the top of /pro/chats. A second
-              // door in the profile menu is what made it feel bigger than the
-              // rest of the app.
-              //
-              // Company profile is the pro's storefront: top-level. "Edit
-              // business" says what you DO here.
-              { href: "/pro/profile", label: "Edit business profile" },
-              { href: "/pro/playbook", label: "Playbook" },
-              { href: backOfficeHref, label: "Back office" },
-              // Membership is now the highlighted upsell row pinned at the top
-              // of this menu (the `upgrade` prop above), the pro twin of the
-              // homeowner Plus row - so no duplicate plain "Membership" link
-              // here pointing at the same /pro/plus.
-              { href: "/pro/billing", label: "Billing" },
-              { href: "/pro/privacy", label: "Your privacy rights" },
-              { href: "/pro/help", label: "Help" },
-              // The other side of the account, mirroring Nav.tsx: a switch
-              // records where they land next time; adding a home is a plain
-              // link into onboarding, told explicitly that this is an addition
-              // so it doesn't read as a wrong turn and send them back here.
-              hasHome
-                ? {
-                    href: "/dashboard",
-                    label: "Switch to your home",
-                    action: setPreferredSideAction,
-                    side: "homeowner" as const,
-                  }
-                : {
-                    href: "/onboarding?add=home",
-                    label: "Add your home",
-                  },
-            ]}
-          />
-        </div>
-      </div>
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="M21 21l-4.3-4.3" />
+              </svg>
+            </Link>
+            {/* Replays the first-run spotlight tour on demand; it otherwise only
+                auto-opens once per account. See TourButton.tsx. */}
+            <TourButton side="pro" />
+            <NotificationBell />
+            <ProfileMenu
+              name={company}
+              avatarUrl={avatarUrl}
+              upgrade={{
+                href: "/pro/plus",
+                active: isMember,
+                tierName: "OakTend Pro",
+                accent: "oaktend",
+              }}
+              themeToggle
+              links={[
+                // No "Ask OakTend" entry here on purpose: the copilot lives in
+                // one place, the pinned row at the top of /pro/chats. A second
+                // door in the profile menu is what made it feel bigger than the
+                // rest of the app.
+                //
+                // Company profile is the pro's storefront: top-level. "Edit
+                // business" says what you DO here.
+                { href: "/pro/profile", label: "Edit business profile" },
+                { href: "/pro/playbook", label: "Playbook" },
+                { href: backOfficeHref, label: "Back office" },
+                // Membership is now the highlighted upsell row pinned at the top
+                // of this menu (the `upgrade` prop above), the pro twin of the
+                // homeowner Plus row - so no duplicate plain "Membership" link
+                // here pointing at the same /pro/plus.
+                { href: "/pro/billing", label: "Billing" },
+                { href: "/pro/privacy", label: "Your privacy rights" },
+                { href: "/pro/help", label: "Help" },
+                // The other side of the account, mirroring Nav.tsx: a switch
+                // records where they land next time; adding a home is a plain
+                // link into onboarding, told explicitly that this is an addition
+                // so it doesn't read as a wrong turn and send them back here.
+                hasHome
+                  ? {
+                      href: "/dashboard",
+                      label: "Switch to your home",
+                      action: setPreferredSideAction,
+                      side: "homeowner" as const,
+                    }
+                  : {
+                      href: "/onboarding?add=home",
+                      label: "Add your home",
+                    },
+              ]}
+            />
+          </>
+        }
+      />
       {/* Phone twin of the desktop side pill: its own quiet line under the
           wordmark rather than risking a wrap on the tight phone header. pl-12
           starts it under the "H" of "OakTend" (past the h-6 logo + gap). On the

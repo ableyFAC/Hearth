@@ -20,13 +20,18 @@ import type { FaqEntry } from "@/lib/faqIndex";
 // homeowner, which also queries their own systems/documents/issues on the
 // server; /pro/search for pros), so enter-without-picking keeps working.
 //
-// EXPANDABLE MODE (expandable prop, used by BOTH shells): instead of an
-// always-open pill, the box starts as a single circular search-icon button and
-// expands into the full input on click, collapsing back to the icon when it's
-// dismissed with an empty query. This keeps the header tight (the pro row in
-// particular) while preserving every search behavior below. The prop defaults
-// to false, in which case the box renders exactly as the original always-open
-// pill.
+// TAKEOVER MODE (mode="takeover", used by BOTH shells from sm up): the box
+// starts as a single circular search-icon button and, once opened, takes over
+// the whole toolbar row - every other control hides and the input stretches
+// across the header, because nothing else in the toolbar is used while
+// searching. The founder's requirement is literally "hide everything but the
+// wordmark while searching", so the open state cannot live in here: the thing
+// that has to hide (the controls) is a SIBLING of this box, and both navs are
+// server components that can't hold state. So the state lives one level up in
+// HeaderSearchRow ("use client"), which owns the row and hands it back through
+// `open` / `onOpenChange` - this component is fully controlled in takeover
+// mode. mode defaults to "inline", in which case the box renders exactly as
+// the original always-open pill and ignores open/onOpenChange.
 const EXAMPLES: Record<SearchSide, string[]> = {
   homeowner: [
     "Water heater",
@@ -55,16 +60,33 @@ const DEBOUNCE_MS = 180;
 
 export default function GlobalSearch({
   side = "homeowner",
-  expandable = false,
+  mode = "inline",
+  open = false,
+  onOpenChange,
+  suggestionsReady = true,
 }: {
   // Which registry/FAQ half this box searches, and which shell's accent color
   // and search page it uses.
   side?: SearchSide;
-  // Start as a search-icon button that expands into the full input on click,
-  // instead of an always-open pill. Both shells pass this; default false keeps
-  // the original always-open behavior for any other caller.
-  expandable?: boolean;
+  // "takeover": collapsed search-icon button until `open`, then the full-width
+  // input that HeaderSearchRow expands across the toolbar. "inline" (default)
+  // is the original always-open pill, for any caller outside the two headers.
+  mode?: "inline" | "takeover";
+  // Takeover mode only, and REQUIRED there: this component keeps no open state
+  // of its own, because the row has to hide its other controls in the same
+  // beat. Ignored in inline mode.
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  // Takeover mode: false while the box is still sliding open, so the
+  // suggestions drop AFTER the box has finished expanding rather than racing
+  // it. HeaderSearchRow flips it on the max-width transition. Defaults to true,
+  // which is every other caller and the inline pill: panel as soon as focused.
+  suggestionsReady?: boolean;
 }) {
+  // Fully controlled when true: `open` decides icon-vs-input, and every close
+  // path below (Escape, navigating, an empty submit, an empty blur) reports up
+  // with onOpenChange(false) instead of keeping state of its own.
+  const takeover = mode === "takeover";
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [q, setQ] = useState("");
@@ -80,9 +102,6 @@ export default function GlobalSearch({
   const [activeIndex, setActiveIndex] = useState(-1);
   // Which FAQ question is expanded inline, if any.
   const [openFaq, setOpenFaq] = useState<string | null>(null);
-  // Expandable mode only: whether the icon has been clicked open into the full
-  // input. Ignored when !expandable (the input is always shown then).
-  const [expanded, setExpanded] = useState(false);
   const wasFocused = useRef(false);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -97,11 +116,12 @@ export default function GlobalSearch({
     wasFocused.current = focused;
   }, [focused]);
 
-  // Expandable mode: the moment the icon opens the input, land the cursor in
-  // it so clicking the magnifier starts typing without a second tap.
+  // Takeover mode: the moment the row opens the input, land the cursor in it so
+  // clicking the magnifier starts typing without a second tap. `open` defaults
+  // to false, so inline mode never runs this.
   useEffect(() => {
-    if (expanded) inputRef.current?.focus();
-  }, [expanded]);
+    if (open) inputRef.current?.focus();
+  }, [open]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q), DEBOUNCE_MS);
@@ -125,7 +145,10 @@ export default function GlobalSearch({
     return [...dests, ...faqs];
   }, [debouncedQ, side]);
 
-  const shouldRender = focused || closing;
+  // The panel waits for the box to finish expanding in takeover mode: the
+  // input takes focus immediately (nothing typed in the meantime is lost), but
+  // the suggestions drop under a box that has stopped moving.
+  const shouldRender = (focused || closing) && suggestionsReady;
   const trimmed = q.trim();
   // Only claim "no matches" once the debounce has caught up with what is in
   // the box, so the empty state never flashes mid-word.
@@ -154,16 +177,16 @@ export default function GlobalSearch({
   function close() {
     setFocused(false);
     inputRef.current?.blur();
-    // Escape (and other close paths) collapse back to the icon in expandable
-    // mode; harmless no-op otherwise.
-    if (expandable) setExpanded(false);
+    // Escape (and other close paths) hand the toolbar back in takeover mode;
+    // harmless no-op otherwise.
+    if (takeover) onOpenChange?.(false);
   }
 
   function navigate(href: string) {
     setFocused(false);
-    // Picking a result / submitting changes the page anyway, so let the box
-    // fall back to its icon in expandable mode.
-    if (expandable) setExpanded(false);
+    // Picking a result / submitting changes the page anyway, so give the
+    // toolbar its controls back in takeover mode.
+    if (takeover) onOpenChange?.(false);
     // Wrap in a transition so the left icon can flip to a spinner the instant
     // they pick, rather than the box sitting dead until the RSC payload lands.
     startTransition(() => router.push(href));
@@ -174,7 +197,7 @@ export default function GlobalSearch({
     if (s) navigate(`${searchHref}?q=${encodeURIComponent(s)}`);
     else {
       setFocused(false);
-      if (expandable) setExpanded(false);
+      if (takeover) onOpenChange?.(false);
     }
   }
 
@@ -218,7 +241,10 @@ export default function GlobalSearch({
 
   return (
     <div
-      className="relative"
+      // w-full only once the takeover is open: the input fills the row, and
+      // the suggestion panel (absolute left-0 right-0 below) measures itself
+      // against this box.
+      className={takeover && open ? "relative w-full" : "relative"}
       onFocus={() => {
         if (blurTimer.current) clearTimeout(blurTimer.current);
         setFocused(true);
@@ -226,22 +252,22 @@ export default function GlobalSearch({
       onBlur={() => {
         blurTimer.current = setTimeout(() => {
           setFocused(false);
-          // Expandable mode: collapse back to the icon on blur ONLY when the
-          // box is empty. If they typed something, keep the input open (don't
-          // throw away their query); the dropdown still closes via setFocused
-          // above either way.
-          if (expandable && q.trim() === "") setExpanded(false);
+          // Takeover mode: give the toolbar back on blur ONLY when the box is
+          // empty. If they typed something, keep the input open (don't throw
+          // away their query); the dropdown still closes via setFocused above
+          // either way.
+          if (takeover && q.trim() === "") onOpenChange?.(false);
         }, 120);
       }}
     >
-      {expandable && !expanded ? (
+      {takeover && !open ? (
         // Collapsed: a single circular search-icon button, sized/styled to
         // match the sibling header icon buttons (bell / back office). Clicking
         // it opens the input; the focus effect above then lands the cursor.
         <button
           type="button"
           aria-label="Search"
-          onClick={() => setExpanded(true)}
+          onClick={() => onOpenChange?.(true)}
           className={`flex h-9 w-9 items-center justify-center rounded-full text-stone-500 ${iconHover} dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300`}
         >
           <svg
@@ -305,18 +331,26 @@ export default function GlobalSearch({
           // it below sm), so a sm:text-sm here would make it 14px in the only
           // sizes it is visible - including iPad-portrait touch - and iOS
           // Safari zooms the page on focus of any input under 16px. Same
-          // reasoning as `.input` in globals.css. In expandable mode the box is
-          // only ever shown once opened, so it skips the w-24-at-rest / focus:w-48
-          // dance and just renders at its full width.
+          // reasoning as `.input` in globals.css. In takeover mode the input is
+          // only ever shown once opened, and the row is its to fill, so it
+          // skips the w-24-at-rest / focus:w-48 dance and takes the whole width
+          // its wrapper animates out to (see HeaderSearchRow).
           className={`${
-            expandable ? "w-56" : "w-24 focus:w-48 max-lg:focus:w-24"
+            takeover ? "w-full" : "w-24 focus:w-48 max-lg:focus:w-24"
           } rounded-full border border-stone-200 bg-white py-1.5 pl-8 pr-3 text-base text-stone-700 transition-all placeholder:text-stone-500 focus:outline-none dark:border-white/10 dark:bg-stone-900 dark:text-stone-200 ${focusBorder}`}
         />
       </form>
 
       {shouldRender && (
         <div
-          className={`absolute right-0 z-30 mt-1 w-72 rounded-xl border border-stone-200 bg-white p-2 shadow-menu dark:border-white/10 dark:bg-stone-700 ${
+          // Takeover: the panel is as wide as the taken-over row and hangs off
+          // the bottom of the input (top-full), instead of the inline mode's
+          // fixed w-72 hanging off the right edge of a narrow pill.
+          className={`${
+            takeover
+              ? "absolute left-0 right-0 top-full z-30 mt-1"
+              : "absolute right-0 z-30 mt-1 w-72"
+          } rounded-xl border border-stone-200 bg-white p-2 shadow-menu dark:border-white/10 dark:bg-stone-700 ${
             focused ? "motion-safe:animate-fade-scale" : "motion-safe:animate-fade-scale-out"
           }`}
         >
