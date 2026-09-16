@@ -12,6 +12,7 @@ export default function SubmitButton({
   pendingLabel,
   className = "btn-primary flex-1",
   disabled = false,
+  dataTrack,
 }: {
   children: React.ReactNode;
   pendingLabel?: string;
@@ -20,6 +21,13 @@ export default function SubmitButton({
   // with the in-flight pending state. Defaults to false, so existing callers
   // are unaffected.
   disabled?: boolean;
+  // Optional usage-analytics id, rendered as data-track on the button
+  // (src/lib/usageTracking.ts, src/components/UsageTracker.tsx). Passed
+  // through rather than wrapped in a tagged <div> so the counted element is
+  // the button itself and a click on surrounding padding is not counted.
+  // Omitted by every existing caller, so nothing is tracked by default - only
+  // the buttons somebody deliberately named.
+  dataTrack?: string;
 }) {
   const { pending } = useFormStatus();
   // Synchronous double-submit guard. `pending` is state: it lands a render
@@ -62,6 +70,7 @@ export default function SubmitButton({
       type="submit"
       disabled={pending || disabled}
       className={className}
+      data-track={dataTrack}
       onClick={handleClick}
     >
       {pending ? pendingLabel ?? "Saving…" : children}

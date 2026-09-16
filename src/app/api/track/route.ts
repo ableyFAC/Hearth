@@ -48,6 +48,13 @@ const CLIENT_ALLOWED_EVENTS = new Set([
   // soft/hard paywall-experiment arm (src/components/pro/ProTrialNudge.tsx,
   // src/lib/paywallExperiment.ts). Props are one enum value, nothing else.
   "pro_takeover_seen", // pro/ProTrialNudge.tsx
+  // Usage analytics, all three from src/components/UsageTracker.tsx (mounted
+  // once in the root layout). props are a route PATTERN, a side enum, a
+  // data-track id, and a duration in ms - never a URL, a label, or free text
+  // (src/lib/usageTracking.ts builds them; the sanitizer below enforces it).
+  "page_view", // UsageTracker.tsx, on every route change
+  "page_time", // UsageTracker.tsx, on hide / pagehide / route change
+  "ui_click", // UsageTracker.tsx, per control carrying a data-track id
 ]);
 
 // Sink for src/lib/analytics.ts's track(). Inserts into app_events with the
@@ -63,12 +70,25 @@ export async function POST(req: NextRequest) {
     // rate_limit_hit RPC (migration 0068). Fails open on an RPC hiccup - only
     // an explicit `allowed === false` skips the insert - and returns 200
     // either way: analytics must never error the caller's beacon.
+    //
+    // 240 per five minutes, raised from 60 when UsageTracker landed
+    // (page_view + page_time + ui_click). The old ceiling was set for a
+    // session that beaconed only at milestones; a busy session now sends two
+    // beacons per screen plus one per tagged tap, so one person moving fast
+    // reaches ~80-100 in a window on their own - and the bucket is keyed on
+    // IP, which on a phone is a carrier-NAT address shared by many people at
+    // once. 120 covered one visitor; 240 leaves room for a few behind one
+    // address before the counter starts silently undercounting them (a
+    // refused beacon is dropped with a 200, never an error, so the only cost
+    // of a cap that is too low is missing rows). Abuse ceiling is still
+    // small: 240 rows per five minutes per address. The window, the IP
+    // keying, and the fail-open behaviour are unchanged.
     const ip =
       clientIpFromHeaders(req.headers);
     const admin = createAdminClient();
     const { data: allowed } = await admin.rpc("rate_limit_hit", {
       p_bucket: `track:${ip ?? "unknown"}`,
-      p_limit: 60,
+      p_limit: 240,
       p_window_seconds: 300,
     });
     if (allowed === false) {

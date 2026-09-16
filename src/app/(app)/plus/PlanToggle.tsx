@@ -456,6 +456,12 @@ export default function PlanToggle({
             className="btn-primary w-full py-3"
             pendingLabel="Starting…"
             disabled={!consent}
+            // Usage analytics: the tap on the Plus checkout CTA. The server's
+            // checkout_started event fires only once the action reaches
+            // Stripe, so the difference between the two is how many buyers
+            // this button loses on the way (a failed consent check, a
+            // validation stop, a double tap the latch swallowed).
+            dataTrack="plus_checkout"
           >
             {buttonLabel}
           </SubmitButton>

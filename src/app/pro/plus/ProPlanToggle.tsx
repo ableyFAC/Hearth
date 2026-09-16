@@ -62,6 +62,10 @@ function CheckoutButton({
     <button
       className="btn-primary w-full"
       disabled={pending || disabled}
+      // Usage analytics: the pro twin of plus_checkout on /plus. Counts the
+      // tap; pro_checkout_started (server) counts the ones that reached
+      // Stripe.
+      data-track="pro_checkout"
       onClick={handleClick}
     >
       {pending && <InlineSpinner />}

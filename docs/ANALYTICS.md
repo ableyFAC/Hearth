@@ -152,6 +152,115 @@ group by 1, 2
 order by 1, 2;
 ```
 
+### Usage
+
+| Event | Fires | Side |
+|---|---|---|
+| `page_view` | `src/components/UsageTracker.tsx`, mounted once in the ROOT layout (`src/app/layout.tsx`), on mount and on every client navigation. `props: { path, side }` - `path` is a normalized route PATTERN, `side` is `pro`, `homeowner`, or `public`. One per route CHANGE, not per return to a backgrounded tab | Client |
+| `page_time` | `src/components/UsageTracker.tsx`, when a page is left: a route change, `visibilitychange` to hidden, or `pagehide`. `props: { path, side, duration_ms }` - visible milliseconds on that pattern, clamped to [0, 4h] | Client |
+| `ui_click` | `src/components/UsageTracker.tsx`, one delegated capture-phase listener on `document`. Fires only for a click inside an element carrying an explicit `data-track` attribute. `props: { id, path, side }` - `id` is the `data-track` value, `path` the pattern the click happened on | Client |
+
+#### Usage events
+
+Three rules make these three events safe to store, and all three live in
+`src/lib/usageTracking.ts` (unit-tested in `usageTracking.test.ts`).
+
+**`routePattern()` - never a raw path.** A pathname can carry a job id, an
+invite token, or a typed search term, so `path` is always a normalized pattern:
+the query string and hash are cut, and any segment that is a UUID, all digits,
+longer than 24 characters, or outside the sanitizer's alphabet collapses to
+`:id`. `/pro/leads/<uuid>` becomes `/pro/leads/:id`; `/search?q=roof` becomes
+`/search`. Short lowercase slugs (`/p/some-slug-name`, `/huntington-beach`)
+stay as themselves, because they behave like enums and are the thing worth
+comparing. This is deliberately NOT `normalizeRoutePattern()` from
+`src/lib/webVitals.ts`, which collapses any segment containing a digit or an
+uppercase letter - correct for a per-route latency number, but it would erase
+`/guides/roof-repair-2026`, exactly the page this data exists to measure. The
+result is capped at 64 characters, the sanitizer's `MAX_STRING`.
+
+**`data-track` and nothing else.** A click id is read only from an explicit
+`data-track` attribute a developer wrote, and it must match
+`^[a-z][a-z0-9_:/\-]{0,39}$`. There is no fallback to the button's label,
+`aria-label`, `href`, or class - every one of those can contain a string
+somebody typed (a pro's business name, a homeowner's job title), which the
+payload rule above forbids. An untagged control is simply not counted. Values
+are short snake_case (`landing_get_started`, `post_job_submit`) or a prefixed
+route pattern: `nav:` for the desktop header strip and `tab:` for the phone
+bottom bar (both in `src/components/NavLinks.tsx`), `menu:` for the ToolsMenu
+and ProfileMenu rows.
+
+**`page_time` measures VISIBLE time.** The clock starts on a `page_view`,
+stops when the page is hidden, and restarts - without a second `page_view` -
+when it comes back. So a `page_view` count and a `page_time` count for the same
+path are not the same number: one page can produce several `page_time` rows if
+the visitor kept tabbing away and back. Sum `duration_ms` per path rather than
+averaging one row per view. The 4-hour clamp exists so a laptop closed
+overnight on `/dashboard` lands a capped row instead of dragging every
+percentile with it, and a negative duration (a clock that went backwards) is
+clamped to 0 rather than written, because `percentile_cont` would happily
+average it in.
+
+These are the first HIGH-VOLUME events in `app_events`, and the table has no
+prune job. Housekeeping, run on whatever cadence the row count justifies:
+
+```sql
+delete from public.app_events where event in ('page_view', 'page_time', 'ui_click') and created_at < now() - interval '180 days';
+```
+
+**7. Clicks by id per week, last 8 weeks**
+
+```sql
+select
+  date_trunc('week', created_at) as week,
+  props ->> 'id'   as id,
+  props ->> 'side' as side,
+  count(*) as clicks
+from public.app_events
+where event = 'ui_click'
+  and created_at >= now() - interval '8 weeks'
+group by 1, 2, 3
+order by 1 desc, clicks desc;
+```
+
+**8. Page views by path per week, last 8 weeks**
+
+```sql
+select
+  date_trunc('week', created_at) as week,
+  props ->> 'path' as path,
+  props ->> 'side' as side,
+  count(*) as views
+from public.app_events
+where event = 'page_view'
+  and created_at >= now() - interval '8 weeks'
+group by 1, 2, 3
+order by 1 desc, views desc;
+```
+
+**9. Median and p90 time on page, by path, last 30 days**
+
+```sql
+select
+  props ->> 'path' as path,
+  props ->> 'side' as side,
+  count(*) as samples,
+  percentile_cont(0.5) within group (
+    order by (props ->> 'duration_ms')::numeric
+  ) as median_ms,
+  percentile_cont(0.9) within group (
+    order by (props ->> 'duration_ms')::numeric
+  ) as p90_ms
+from public.app_events
+where event = 'page_time'
+  and created_at >= now() - interval '30 days'
+group by 1, 2
+having count(*) >= 20
+order by samples desc;
+```
+
+(The `having` is not decoration: a median over three rows is noise, and these
+tables are read by eye. Drop it when you are chasing one specific path.)
+
 ## Querying the funnel
 
 Run these directly against the database (service-role / SQL editor only -

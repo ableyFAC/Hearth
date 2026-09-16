@@ -144,6 +144,12 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
               <Link
                 href="/emergency"
                 onClick={() => setOpen(false)}
+                // Usage analytics: "menu:" + the href, which is a static route
+                // pattern from the arrays above and so carries no free text
+                // (src/lib/usageTracking.ts). The dropdown and the phone sheet
+                // lower down share these ids on purpose - they are the same
+                // menu, laid out twice for two input methods.
+                data-track="menu:/emergency"
                 className="mx-1 flex items-center rounded-md px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/15"
               >
                 Emergency
@@ -158,6 +164,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
                   key={l.href}
                   href={l.href}
                   onClick={() => setOpen(false)}
+                  data-track={`menu:${l.href}`}
                   className="mx-1 flex items-center rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-bark-50 dark:text-stone-300 dark:hover:bg-stone-600"
                 >
                   {l.label}
@@ -173,6 +180,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
                   key={l.href}
                   href={l.href}
                   onClick={() => setOpen(false)}
+                  data-track={`menu:${l.href}`}
                   className={`mx-1 flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm hover:bg-bark-50 dark:hover:bg-stone-600 ${
                     hasPlus
                       ? "text-stone-700 dark:text-stone-300"
@@ -269,6 +277,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
                     <Link
                       href="/emergency"
                       onClick={closeAndRefocus}
+                      data-track="menu:/emergency"
                       // Phone only: 13px, not 14px. Three columns at 390px
                       // start wrapping the longer tile names above that.
                       className="flex min-h-[64px] flex-col items-center justify-center rounded-xl border border-red-200 bg-red-50 px-2 py-3 text-center text-xs font-medium text-red-600 max-sm:text-[13px] dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-400"
@@ -288,6 +297,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
                         key={l.href}
                         href={l.href}
                         onClick={closeAndRefocus}
+                        data-track={`menu:${l.href}`}
                         className="flex min-h-[64px] flex-col items-center justify-center rounded-xl border border-stone-200 bg-stone-50 px-2 py-3 text-center text-xs font-medium text-stone-700 hover:border-bark-300 hover:bg-bark-50 max-sm:text-[13px] dark:border-white/10 dark:bg-stone-700 dark:text-stone-300"
                       >
                         {l.label}
@@ -306,6 +316,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
                         key={l.href}
                         href={l.href}
                         onClick={closeAndRefocus}
+                        data-track={`menu:${l.href}`}
                         className={`flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-xl border px-2 py-3 text-center text-xs font-medium max-sm:text-[13px] ${
                           hasPlus
                             ? "border-stone-200 bg-stone-50 text-stone-700 hover:border-bark-300 hover:bg-bark-50 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300"

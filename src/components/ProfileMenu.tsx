@@ -305,6 +305,12 @@ export default function ProfileMenu({
               <Link
                 href={upgrade.href}
                 onClick={() => setOpen(false)}
+                // Usage analytics: a fixed "menu:upgrade", not "menu:" + the
+                // href, so the homeowner (/plus) and pro (/pro/plus) upsell
+                // rows count as the same control - "how often is the upgrade
+                // row tapped" is one question, and props.side already splits
+                // it by shell (src/lib/usageTracking.ts).
+                data-track="menu:upgrade"
                 // Accent-highlighted in BOTH states: the upsell ("Upgrade to
                 // X") and the active-member confirmation ("X ✓") both get the
                 // tinted row, so a paid member sees their membership stand out
@@ -372,6 +378,10 @@ export default function ProfileMenu({
                     key={l.href}
                     href={l.href}
                     onClick={() => setOpen(false)}
+                    // "menu:" + the href. Every entry in `links` is a static
+                    // route from Nav.tsx / ProNav.tsx, so the id is a route
+                    // pattern and never anything a person typed.
+                    data-track={`menu:${l.href}`}
                     className={rowClass}
                   >
                     {l.label}

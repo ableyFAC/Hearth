@@ -147,6 +147,11 @@ export default function PostJobButton({
       <button
         ref={btnRef}
         onClick={check}
+        // Usage analytics: counts the TAP, including the ones this button's
+        // own checks stop before a post happens. The post_job event
+        // (contractors/actions.ts, server-side) counts the successes, so the
+        // gap between the two is how often the form turns people away.
+        data-track="post_job_submit"
         className="btn-primary w-full"
         disabled={pending}
       >

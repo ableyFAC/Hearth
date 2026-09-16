@@ -133,6 +133,14 @@ export default function NavLinks({
             <Link
               key={l.href}
               href={l.href}
+              // Usage analytics (src/lib/usageTracking.ts). The href IS the id
+              // here - every one is a static route pattern from the LINKS
+              // arrays in Nav.tsx / ProNav.tsx, never anything a person typed,
+              // so it carries no free text. "tab:" rather than "nav:" because
+              // this variant is the phone/tablet bottom bar and the desktop
+              // strip below is a different navigation habit worth counting
+              // separately, not the same link seen twice.
+              data-track={`tab:${l.href}`}
               aria-current={active ? "page" : undefined}
               // 11px was the smallest primary-navigation text in the app.
               // 12px still fits five tabs at 360px (about 64px of label room
@@ -197,6 +205,10 @@ export default function NavLinks({
           <Link
             key={l.href}
             href={l.href}
+            // The desktop header strip. Same static-route-pattern id as the
+            // bottom bar above, under a "nav:" prefix so the two surfaces stay
+            // distinguishable in the click counts.
+            data-track={`nav:${l.href}`}
             aria-current={active ? "page" : undefined}
             className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ${
               active

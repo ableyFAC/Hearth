@@ -234,6 +234,11 @@ export default function ApplyJobButton({
       <button
         type="button"
         onClick={() => setConfirming(true)}
+        // Usage analytics: the lead card's Apply button, which OPENS the
+        // confirm step rather than spending the fee. The pro_apply event
+        // (server-side) counts the applications that actually completed, so
+        // these two together show how many pros back out at the fee.
+        data-track="lead_apply"
         className="btn-primary text-sm"
       >
         Apply · {fee}
