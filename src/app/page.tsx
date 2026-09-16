@@ -431,6 +431,11 @@ export default async function Home(props: {
               </Link>
               <Link
                 href="/pros"
+                // The header's pro door. Counted separately from the pro band
+                // lower down (landing_explore_pros) because they answer
+                // different questions: this one is found before reading,
+                // that one after the pitch.
+                data-track="landing_header_pros"
                 className="whitespace-nowrap rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-300 dark:hover:border-bark-500 dark:hover:text-stone-300"
               >
                 {/* At 390px the full label wrapped to two lines and made the
@@ -488,6 +493,11 @@ export default async function Home(props: {
                   click - this landing is itself the fork. */}
               <Link
                 href="/homeowner-signup"
+                // Same id as the closing-section CTA below: both are the one
+                // homeowner door on this page, and the number worth watching
+                // is "how many visitors took it", not which of the two
+                // identical buttons they happened to be next to.
+                data-track="landing_get_started"
                 className="btn-primary mt-8 px-6 py-3 text-base shadow-lift"
               >
                 Get started free
@@ -695,6 +705,9 @@ export default async function Home(props: {
         </h2>
         <Link
           href="/homeowner-signup"
+          // Deliberately the same id as the hero CTA above - one door, two
+          // placements. See the comment there.
+          data-track="landing_get_started"
           className="btn-primary mt-6 px-6 py-3 text-base shadow-lift"
         >
           Get started free
@@ -718,13 +731,36 @@ export default async function Home(props: {
         <h3 className="mt-2 text-xl font-semibold text-white">
           Fix homes for a living? Real local leads, honest pricing.
         </h3>
+        {/* PREVIEW MODE (Landen 2026-09-10 requests, landing page). Today's
+            paragraph describes the pay-per-apply lead fee and its credit
+            refund, which is still the live behaviour whenever preview mode is
+            OFF - so outside preview it stays verbatim, and /pros keeps
+            advertising the same thing. In preview the model is the 5% cut of
+            paid invoices, where a pro genuinely owes nothing until the job is
+            theirs, so the band leads with that. The h3 and the button make no
+            pricing claim and are shared by both branches.
+            WHEN THE CREDIT SYSTEM IS TORN DOWN this stops being a branch: the
+            "you don't pay until you get hired" line becomes the only
+            paragraph and this conditional is deleted. */}
         <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-stone-300">
-          The fee is on every job before you pay, and if the homeowner never
-          responds, it comes back automatically as wallet credit. No
-          subscription. You pay only when you apply.
+          {isHomeownerPreview() ? (
+            <>
+              You don&rsquo;t pay until you get hired. No subscription, no lead
+              fees, no bidding wars.
+            </>
+          ) : (
+            <>
+              The fee is on every job before you pay, and if the homeowner never
+              responds, it comes back automatically as wallet credit. No
+              subscription. You pay only when you apply.
+            </>
+          )}
         </p>
         <Link
           href="/pros"
+          // The pro band's own door, counted apart from the header link so the
+          // band's pitch can be judged on its own (see landing_header_pros).
+          data-track="landing_explore_pros"
           className="mt-5 inline-block rounded-lg border border-stone-500 px-6 py-2.5 font-medium text-white hover:border-white hover:bg-white/10"
         >
           Explore OakTend for Pros

@@ -2,6 +2,7 @@ import Link from "next/link";
 import Logo from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
 import HeroPhotoCycler from "@/components/HeroPhotoCycler";
+import { isHomeownerPreview } from "@/lib/previewMode";
 
 // The phone landing: everything a visitor who already downloaded the app
 // needs, plus just enough substance that the screen does not read as empty.
@@ -125,16 +126,38 @@ export default function PhoneLanding({
       <div className="mt-8 flex flex-col gap-3">
         <Link
           href="/homeowner-signup"
+          // The two role doors are the whole point of this screen, so the
+          // split between them is the one number that says whether the phone
+          // landing is sending people to the right place.
+          data-track="phone_landing_homeowner"
           className="btn-primary min-h-12 w-full text-base"
         >
           I&apos;m a homeowner
         </Link>
         <Link
           href="/contractor-signup"
+          data-track="phone_landing_contractor"
           className="btn-secondary min-h-12 w-full text-base"
         >
           I&apos;m a contractor
         </Link>
+        {/* PREVIEW MODE (Landen 2026-09-10 requests, landing page). A caption
+            under the contractor door rather than a fourth benefit row: the
+            benefits list below is homeowner-facing and this claim is only true
+            for the pro half, so it belongs next to the pro door. A caption
+            also keeps the door itself single-line, which the comment at the
+            top of this file requires (.btn centres one line inside its 44px
+            minimum and the fold budget has no room for a sub-line).
+            Preview-only because the pay-per-apply lead fee is still the live
+            model whenever preview mode is off, and /pros still advertises it.
+            WHEN THE CREDIT SYSTEM IS TORN DOWN the conditional goes and this
+            line is simply always there. Phone-only for free: this whole
+            component is sm:hidden, so the desktop landing is untouched. */}
+        {isHomeownerPreview() && (
+          <p className="text-center text-sm text-stone-500 dark:text-stone-400">
+            You don&rsquo;t pay until you get hired.
+          </p>
+        )}
       </div>
 
       {/* Three one-line reasons to pick a door. This is deliberately a list,
