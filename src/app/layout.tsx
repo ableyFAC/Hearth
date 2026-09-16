@@ -6,6 +6,8 @@ import FlashToast from "@/components/FlashToast";
 import StaleDeployRecovery from "@/components/StaleDeployRecovery";
 import NativeBootstrap from "@/components/native/NativeBootstrap";
 import ZoomLock from "@/components/ZoomLock";
+import CookieNotice from "@/components/CookieNotice";
+import UsageTracker from "@/components/UsageTracker";
 import { Analytics } from "@vercel/analytics/next";
 import { LAUNCH_CITY_NAMES } from "@/lib/serviceArea";
 import { isHomeownerPreview } from "@/lib/previewMode";
@@ -190,6 +192,26 @@ export default async function RootLayout({
             the native shell (see src/components/ZoomLock.tsx). Browser tabs
             stay zoomable. */}
         <ZoomLock />
+        {/* First-party click and page-time analytics - page_view, page_time
+            and ui_click into our own app_events table, no third-party product
+            analytics and no cookie (docs/ANALYTICS.md). Mounted HERE rather
+            than in the two app shells the way WebVitals is, because the
+            controls most worth counting are on the landing page and the signup
+            doors, which render neither shell. Safe for this file's "no
+            cookies()/headers()" rule: it is a client component, so it adds no
+            request-scoped read. */}
+        <UsageTracker />
+        {/* The one-time cookie card. Mounted HERE, in the root layout, so it
+            is shown once per browser across every surface - marketing, the
+            homeowner app, the pro app, the closed pro door - instead of once
+            per shell. It is informational and dismissible, NOT a consent gate:
+            OakTend sets only first-party functional cookies and uses the
+            cookieless counter below, so nothing waits on it and nothing is
+            blocked by it (see CookieNotice.tsx and the legal pages it cites).
+            Safe for this file's "no cookies()/headers()" rule: it is a client
+            component reading localStorage, so it adds no request-scoped read
+            and does not opt the build out of static generation. */}
+        <CookieNotice />
         {/* Cookieless page-view counter from the host (Vercel Web Analytics).
             It sets no cookies and does no cross-site tracking. Disclosed in the
             Analytics section of the privacy policy and in the cookie notice. */}

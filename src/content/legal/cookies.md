@@ -2,7 +2,7 @@
 
 Last updated: {{EFFECTIVE_DATE}}
 
-**Plain-language summary:** {{BRAND}} uses a small number of cookies and browser-storage items to keep you signed in and make the app work correctly. None of them are advertising cookies. We use a cookieless analytics service from our hosting provider that sets no cookie at all, and we do not need to show you a cookie-consent banner, because nothing we use requires one under California law. You can control or delete cookies through your own browser settings at any time.
+**Plain-language summary:** {{BRAND}} uses a small number of cookies and browser-storage items to keep you signed in and make the app work correctly. None of them are advertising cookies. We use a cookieless analytics service from our hosting provider that sets no cookie at all, and we do not need to show you a cookie-consent banner, because nothing we use requires one under California law. We show a short one-time notice about this anyway, so you know. You can control or delete cookies through your own browser settings at any time.
 
 This notice supplements our Privacy Policy and lists, specifically, the cookies and similar technologies {{BRAND}} uses.
 
